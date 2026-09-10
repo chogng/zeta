@@ -150,3 +150,38 @@ test('Feature map keys and queue edits are validated from the generated schema',
 		jsonrpc: '2.0', method: 'queue/changed', params: {},
 	});
 });
+
+test('Memory records and process memory diagnostics use disjoint generated methods', () => {
+	const add = {
+		commandId: 'memory-add',
+		memoryId: 'memory-1',
+		scope: { type: 'profile' },
+		title: 'Preferred editor',
+		body: 'Use Zeta for Rust work.',
+	};
+	assert.deepEqual(decodeAppServerRequestParams('memory/add', add), add);
+	assert.throws(
+		() => decodeAppServerRequestParams('memory/add', { ...add, memoryId: 'contains space' }),
+		AppServerProtocolDecodeError,
+	);
+	assert.throws(
+		() => decodeAppServerRequestParams('memory/add', { ...add, scope: { type: 'profile', extra: true } }),
+		AppServerProtocolDecodeError,
+	);
+	assert.deepEqual(
+		decodeAppServerRequestParams('memoryDiagnostics/read', { sessionId: 'diagnostic-1' }),
+		{ sessionId: 'diagnostic-1' },
+	);
+	assert.deepEqual(
+		decodeAppServerNotification({
+			jsonrpc: '2.0',
+			method: 'memory/changed',
+			params: { scope: { type: 'profile' }, catalogRevision: 2 },
+		}),
+		{
+			jsonrpc: '2.0',
+			method: 'memory/changed',
+			params: { scope: { type: 'profile' }, catalogRevision: 2 },
+		},
+	);
+});

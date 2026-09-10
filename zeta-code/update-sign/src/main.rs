@@ -14,6 +14,10 @@ use zeroize::Zeroizing;
 const SIGNING_KEY_ENVIRONMENT: &str = "ZETA_UPDATE_SIGNING_KEY";
 
 fn main() {
+    if let Err(error) = process_hardening::initialize() {
+        eprintln!("zeta-update-sign: process hardening failed: {error}");
+        std::process::exit(1);
+    }
     if let Err(error) = run(env::args().skip(1).collect()) {
         eprintln!("zeta-update-sign: {error}");
         std::process::exit(1);

@@ -26,6 +26,7 @@ use zeta_app_server_protocol::protocol::language::LanguageServerMessageNotificat
 use zeta_app_server_protocol::protocol::language::LanguageServerProgressNotification;
 use zeta_app_server_protocol::protocol::language::LanguageServerStateNotification;
 use zeta_app_server_protocol::protocol::marketplace::MarketplaceChanged;
+use zeta_app_server_protocol::protocol::memory::MemoryChanged;
 use zeta_app_server_protocol::protocol::plugins::PluginsChanged;
 use zeta_app_server_protocol::protocol::projects::ProjectChanged;
 use zeta_app_server_protocol::protocol::registry::ServerNotificationMethod;
@@ -817,6 +818,24 @@ impl UpdateBroker {
             ServerNotificationMethod::QueueChanged,
             &serde_json::json!({}),
         );
+    }
+
+    pub(crate) fn publish_memory_changed(&self, changed: MemoryChanged) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
+                return false;
+            };
+            if subscriber.product_host {
+                queue.push(notification(
+                    ServerNotificationMethod::MemoryChanged,
+                    &changed,
+                ));
+            }
+            true
+        });
     }
 
     pub(crate) fn publish_automation_changed(&self) {

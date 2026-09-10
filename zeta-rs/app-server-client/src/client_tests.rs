@@ -30,6 +30,7 @@ use zeta_app_server_protocol::protocol::language::LanguageLocationKindDto;
 use zeta_app_server_protocol::protocol::language::LanguageLocationsParams;
 use zeta_app_server_protocol::protocol::language::LanguagePositionDto;
 use zeta_app_server_protocol::protocol::language::LanguageSynchronizeParams;
+use zeta_app_server_protocol::protocol::memory::MemoryListParams;
 use zeta_app_server_protocol::protocol::session::{
     SessionCreateParams, SessionRequest, SessionRequestParams, SessionRequestResult,
     SessionThreadReadParams,
@@ -138,6 +139,34 @@ fn client_reads_directories_through_the_typed_contract() {
     assert_eq!(result.entries.len(), 1);
     assert_eq!(result.entries[0].name, "src");
     assert_eq!(result.entries[0].file_type, FsFileType::Directory);
+}
+
+#[test]
+fn client_validates_memory_page_scope() {
+    let response = |scope: &str| {
+        format!(
+            r#"{{"jsonrpc":"2.0","id":1,"result":{{"catalogRevision":1,"memories":[{{"memoryId":"memory-1","scope":{{"type":"{scope}"}},"revision":1,"title":"title","source":"user","createdAtUnixMs":1,"updatedAtUnixMs":1}}],"nextCursor":null}}}}"#
+        )
+    };
+    let mut matching = AppServerClient::new(MockTransport(VecDeque::from([response("profile")])));
+    let page = matching
+        .list_memories(MemoryListParams {
+            scope: ::memories::MemoryScope::Profile,
+            cursor: None,
+            limit: Some(20),
+        })
+        .unwrap();
+    assert_eq!(page.memories[0].memory_id.as_str(), "memory-1");
+
+    let mut mismatched = AppServerClient::new(MockTransport(VecDeque::from([response("profile")])));
+    let result = mismatched.list_memories(MemoryListParams {
+        scope: ::memories::MemoryScope::Project {
+            project_id: zeta_protocol::ProjectId::new("project-1").unwrap(),
+        },
+        cursor: None,
+        limit: Some(20),
+    });
+    assert!(matches!(result, Err(ClientError::Protocol(_))));
 }
 
 #[test]
@@ -618,6 +647,8 @@ fn embedded_startup_accepts_product_host_capabilities() {
         }),
     )
     .unwrap();
+
+    assert!(client.initialization().unwrap().capabilities.memories);
 
     drop(client);
     let _ = fs::remove_dir_all(state_root);

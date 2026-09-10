@@ -5,6 +5,10 @@ use zeta_collaboration_server::CollaborationServerOptions;
 use zeta_collaboration_server::run;
 
 fn main() {
+    if let Err(error) = process_hardening::initialize() {
+        eprintln!("zeta-collaboration-server: process hardening failed: {error}");
+        std::process::exit(1);
+    }
     if let Err(error) = run_from_environment() {
         eprintln!("zeta-collaboration-server: {error}");
         std::process::exit(1);

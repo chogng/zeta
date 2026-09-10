@@ -547,6 +547,16 @@ fn watch_dir(
 }
 
 fn watcher_backend(dir: &Dir) -> FileWatcherBackend {
+    #[cfg(test)]
+    {
+        // The App Server suite opens many independent environment runtimes concurrently. Polling
+        // preserves real invalidation behavior without exhausting platform watcher handles.
+        let _ = dir;
+        FileWatcherBackend::Polling {
+            interval: ALIASED_PATH_POLL_INTERVAL,
+        }
+    }
+    #[cfg(not(test))]
     if dir.requested_path() == dir.canonical_path() {
         FileWatcherBackend::Recommended
     } else {

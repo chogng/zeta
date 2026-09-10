@@ -1637,12 +1637,18 @@
         "QueueOperationFailed",
         "FeatureDisabled",
         "FeedbackOperationFailed",
+        "MemoryDiagnosticsUnavailable",
+        "MemoryDiagnosticsNotFound",
+        "MemoryDiagnosticsConflict",
+        "MemoryDiagnosticsCapacity",
+        "MemoryDiagnosticsStopped",
+        "MemoryDiagnosticsStale",
         "MemoryUnavailable",
         "MemoryNotFound",
+        "MemoryAlreadyExists",
         "MemoryConflict",
-        "MemoryCapacity",
-        "MemoryStopped",
-        "MemoryStale",
+        "MemoryCursorStale",
+        "MemoryOperationFailed",
         "AutomationUnavailable",
         "AutomationNotFound",
         "AutomationConflict",
@@ -2963,7 +2969,7 @@
         {
           "properties": {
             "method": {
-              "const": "memory/start",
+              "const": "memoryDiagnostics/start",
               "type": "string"
             },
             "params": {
@@ -2979,11 +2985,11 @@
         {
           "properties": {
             "method": {
-              "const": "memory/read",
+              "const": "memoryDiagnostics/read",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/MemorySessionParams"
+              "$ref": "#/$defs/MemoryDiagnosticsSessionParams"
             }
           },
           "required": [
@@ -2995,11 +3001,11 @@
         {
           "properties": {
             "method": {
-              "const": "memory/stop",
+              "const": "memoryDiagnostics/stop",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/MemorySessionParams"
+              "$ref": "#/$defs/MemoryDiagnosticsSessionParams"
             }
           },
           "required": [
@@ -3011,7 +3017,7 @@
         {
           "properties": {
             "method": {
-              "const": "memory/submit",
+              "const": "memoryDiagnostics/submit",
               "type": "string"
             },
             "params": {
@@ -3027,11 +3033,91 @@
         {
           "properties": {
             "method": {
-              "const": "memory/export",
+              "const": "memoryDiagnostics/export",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/MemorySessionParams"
+              "$ref": "#/$defs/MemoryDiagnosticsSessionParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/add",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/MemoryAddParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/MemoryListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/MemoryReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/search",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/MemorySearchParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/delete",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/MemoryDeleteParams"
             }
           },
           "required": [
@@ -6871,7 +6957,7 @@
         {
           "properties": {
             "method": {
-              "const": "memory/start",
+              "const": "memoryDiagnostics/start",
               "type": "string"
             },
             "result": {
@@ -6887,7 +6973,7 @@
         {
           "properties": {
             "method": {
-              "const": "memory/read",
+              "const": "memoryDiagnostics/read",
               "type": "string"
             },
             "result": {
@@ -6903,7 +6989,7 @@
         {
           "properties": {
             "method": {
-              "const": "memory/stop",
+              "const": "memoryDiagnostics/stop",
               "type": "string"
             },
             "result": {
@@ -6919,7 +7005,7 @@
         {
           "properties": {
             "method": {
-              "const": "memory/submit",
+              "const": "memoryDiagnostics/submit",
               "type": "string"
             },
             "result": {
@@ -6935,11 +7021,91 @@
         {
           "properties": {
             "method": {
-              "const": "memory/export",
+              "const": "memoryDiagnostics/export",
               "type": "string"
             },
             "result": {
               "$ref": "#/$defs/ResourceMetadataResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/add",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/MemoryMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/MemoryListPage"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/Memory"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/search",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/MemorySearchPage"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/delete",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/MemoryDeleteResult"
             }
           },
           "required": [
@@ -22103,6 +22269,171 @@
         }
       ]
     },
+    "Memory": {
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "createdAtUnixMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "memoryId": {
+          "$ref": "#/$defs/MemoryId"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scope": {
+          "$ref": "#/$defs/MemoryScope"
+        },
+        "source": {
+          "$ref": "#/$defs/MemorySource"
+        },
+        "title": {
+          "type": "string"
+        },
+        "updatedAtUnixMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "memoryId",
+        "scope",
+        "revision",
+        "title",
+        "body",
+        "source",
+        "createdAtUnixMs",
+        "updatedAtUnixMs"
+      ],
+      "type": "object"
+    },
+    "MemoryAddParams": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "maxLength": 16384,
+          "minLength": 1,
+          "type": "string"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "memoryId": {
+          "$ref": "#/$defs/MemoryId"
+        },
+        "scope": {
+          "$ref": "#/$defs/MemoryScope"
+        },
+        "title": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "commandId",
+        "memoryId",
+        "scope",
+        "title",
+        "body"
+      ],
+      "type": "object"
+    },
+    "MemoryChanged": {
+      "properties": {
+        "catalogRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scope": {
+          "$ref": "#/$defs/MemoryScope"
+        }
+      },
+      "required": [
+        "scope",
+        "catalogRevision"
+      ],
+      "type": "object"
+    },
+    "MemoryDeleteParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "memoryId": {
+          "$ref": "#/$defs/MemoryId"
+        },
+        "scope": {
+          "$ref": "#/$defs/MemoryScope"
+        }
+      },
+      "required": [
+        "commandId",
+        "memoryId",
+        "scope",
+        "expectedRevision"
+      ],
+      "type": "object"
+    },
+    "MemoryDeleteResult": {
+      "properties": {
+        "catalogRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "deletedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "disposition": {
+          "$ref": "#/$defs/MemoryMutationDisposition"
+        },
+        "memoryId": {
+          "$ref": "#/$defs/MemoryId"
+        },
+        "scope": {
+          "$ref": "#/$defs/MemoryScope"
+        }
+      },
+      "required": [
+        "disposition",
+        "catalogRevision",
+        "memoryId",
+        "scope",
+        "deletedRevision"
+      ],
+      "type": "object"
+    },
+    "MemoryDiagnosticsSessionParams": {
+      "additionalProperties": false,
+      "properties": {
+        "sessionId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "type": "object"
+    },
     "MemoryEvidence": {
       "additionalProperties": false,
       "properties": {
@@ -22140,6 +22471,64 @@
         "idleBaselineGrowth"
       ],
       "type": "string"
+    },
+    "MemoryId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._:-]+$",
+      "type": "string"
+    },
+    "MemoryListPage": {
+      "properties": {
+        "catalogRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "memories": {
+          "items": {
+            "$ref": "#/$defs/MemorySummary"
+          },
+          "type": "array"
+        },
+        "nextCursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "catalogRevision",
+        "memories"
+      ],
+      "type": "object"
+    },
+    "MemoryListParams": {
+      "additionalProperties": false,
+      "properties": {
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "scope": {
+          "$ref": "#/$defs/MemoryScope"
+        }
+      },
+      "required": [
+        "scope"
+      ],
+      "type": "object"
     },
     "MemoryMetric": {
       "additionalProperties": false,
@@ -22186,6 +22575,34 @@
         "tasks"
       ],
       "type": "string"
+    },
+    "MemoryMutationDisposition": {
+      "enum": [
+        "committed",
+        "replayed"
+      ],
+      "type": "string"
+    },
+    "MemoryMutationResult": {
+      "properties": {
+        "catalogRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "disposition": {
+          "$ref": "#/$defs/MemoryMutationDisposition"
+        },
+        "memory": {
+          "$ref": "#/$defs/Memory"
+        }
+      },
+      "required": [
+        "disposition",
+        "catalogRevision",
+        "memory"
+      ],
+      "type": "object"
     },
     "MemoryObservation": {
       "additionalProperties": false,
@@ -22249,6 +22666,22 @@
         "browser"
       ],
       "type": "string"
+    },
+    "MemoryReadParams": {
+      "additionalProperties": false,
+      "properties": {
+        "memoryId": {
+          "$ref": "#/$defs/MemoryId"
+        },
+        "scope": {
+          "$ref": "#/$defs/MemoryScope"
+        }
+      },
+      "required": [
+        "memoryId",
+        "scope"
+      ],
+      "type": "object"
     },
     "MemoryReport": {
       "properties": {
@@ -22344,19 +22777,155 @@
       ],
       "type": "object"
     },
-    "MemorySessionParams": {
-      "additionalProperties": false,
+    "MemoryScope": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "profile",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "projectId": {
+              "$ref": "#/$defs/ProjectId"
+            },
+            "type": {
+              "const": "project",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "projectId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "dirId": {
+              "$ref": "#/$defs/DirId"
+            },
+            "type": {
+              "const": "dir",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "dirId"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "MemorySearchMatch": {
       "properties": {
-        "sessionId": {
-          "maxLength": 128,
-          "minLength": 1,
+        "excerpt": {
           "type": "string"
+        },
+        "memoryId": {
+          "$ref": "#/$defs/MemoryId"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scope": {
+          "$ref": "#/$defs/MemoryScope"
+        },
+        "title": {
+          "type": "string"
+        },
+        "updatedAtUnixMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
-        "sessionId"
+        "memoryId",
+        "scope",
+        "revision",
+        "title",
+        "excerpt",
+        "updatedAtUnixMs"
       ],
       "type": "object"
+    },
+    "MemorySearchPage": {
+      "properties": {
+        "catalogRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "matches": {
+          "items": {
+            "$ref": "#/$defs/MemorySearchMatch"
+          },
+          "type": "array"
+        },
+        "nextCursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "catalogRevision",
+        "matches"
+      ],
+      "type": "object"
+    },
+    "MemorySearchParams": {
+      "additionalProperties": false,
+      "properties": {
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "query": {
+          "maxLength": 512,
+          "minLength": 1,
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/MemoryScope"
+        }
+      },
+      "required": [
+        "scope",
+        "query"
+      ],
+      "type": "object"
+    },
+    "MemorySource": {
+      "enum": [
+        "user"
+      ],
+      "type": "string"
     },
     "MemoryStart": {
       "additionalProperties": false,
@@ -22391,6 +22960,47 @@
         "targetsExited"
       ],
       "type": "string"
+    },
+    "MemorySummary": {
+      "properties": {
+        "createdAtUnixMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "memoryId": {
+          "$ref": "#/$defs/MemoryId"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scope": {
+          "$ref": "#/$defs/MemoryScope"
+        },
+        "source": {
+          "$ref": "#/$defs/MemorySource"
+        },
+        "title": {
+          "type": "string"
+        },
+        "updatedAtUnixMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "memoryId",
+        "scope",
+        "revision",
+        "title",
+        "source",
+        "createdAtUnixMs",
+        "updatedAtUnixMs"
+      ],
+      "type": "object"
     },
     "MemoryTargetReport": {
       "properties": {
@@ -25118,6 +25728,9 @@
         "mcpOAuth": {
           "type": "boolean"
         },
+        "memories": {
+          "type": "boolean"
+        },
         "plugins": {
           "type": "boolean"
         },
@@ -25153,6 +25766,7 @@
         "threads",
         "turns",
         "projects",
+        "memories",
         "resources",
         "attachments",
         "fileSystem",
@@ -25504,6 +26118,22 @@
             },
             "params": {
               "$ref": "#/$defs/ProjectChanged"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/changed",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/MemoryChanged"
             }
           },
           "required": [
@@ -32124,6 +32754,16 @@
           "additionalProperties": false,
           "properties": {
             "feedbackSubmitted": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "memoryAdded": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "memoryDeleted": {
               "format": "uint64",
               "minimum": 0,
               "type": "integer"

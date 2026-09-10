@@ -64,6 +64,7 @@ zeta-rs/
 ├── history/              # model-history + persisted Thread record domain types
 ├── thread-store/         # Thread persistence port + append/page validation
 ├── context-engine/       # provider-neutral context budget、token measurement 与边界判定
+├── memories/             # 用户控制的长期 Memory、作用域、读写、引用和存储 port
 ├── core/                 # reducers, coordinators, execution policy and recovery
 ├── rollout/              # local state repository + recovery composition（crate 名待清理）
 ├── rollout-trace/        # read-only export, diagnostics and evaluation artifact
@@ -71,6 +72,13 @@ zeta-rs/
 ├── app-server-transport/
 ├── app-server-client/
 ├── app-server/
+├── queue/                # 持久用户消息队列、租约和交付恢复
+├── features/             # 功能身份、阶段、默认值和用户覆盖
+├── diagnostics/          # 有界无内容诊断快照
+├── analytics/            # 默认关闭的固定使用计数
+├── feedback/             # 用户审阅并确认后的诊断上传
+├── build-info/           # 版本、commit、target 和 build identity
+├── process-hardening/    # 产品入口的 dump、debug attach 和 loader 环境保护
 ├── config/
 ├── secrets/              # provider-neutral secret persistence primitives
 ├── login/                # target interactive account-login control plane

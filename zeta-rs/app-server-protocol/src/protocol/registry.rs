@@ -494,7 +494,13 @@ use crate::protocol::mcp::McpServerRuntimeIntentResult;
 use crate::protocol::mcp::McpServerRuntimeStateDto;
 use crate::protocol::mcp::McpServerStatusDto;
 use crate::protocol::mcp::McpServerStatusResult;
-use crate::protocol::memory::MemorySessionParams;
+use crate::protocol::memory::MemoryAddParams;
+use crate::protocol::memory::MemoryChanged;
+use crate::protocol::memory::MemoryDeleteParams;
+use crate::protocol::memory::MemoryListParams;
+use crate::protocol::memory::MemoryReadParams;
+use crate::protocol::memory::MemorySearchParams;
+use crate::protocol::memory_diagnostics::MemoryDiagnosticsSessionParams;
 use crate::protocol::model::ModelCatalogEntry;
 use crate::protocol::model::ModelListResult;
 use crate::protocol::notification::ThreadTranscriptUpdateEnvelope;
@@ -1186,20 +1192,35 @@ client_methods! {
     FeedbackUpload => "feedback/upload" {
         params: FeedbackUploadParams, response: (), serialization: ConnectionExclusive("feedback"), cancellation: "operationId",
     },
-    MemoryStart => "memory/start" {
+    MemoryDiagnosticsStart => "memoryDiagnostics/start" {
         params: MemoryStart, response: MemoryReport, serialization: ConnectionExclusive("memory"),
     },
-    MemoryRead => "memory/read" {
-        params: MemorySessionParams, response: MemoryReport, serialization: ConnectionExclusive("memory"),
+    MemoryDiagnosticsRead => "memoryDiagnostics/read" {
+        params: MemoryDiagnosticsSessionParams, response: MemoryReport, serialization: ConnectionExclusive("memory"),
     },
-    MemoryStop => "memory/stop" {
-        params: MemorySessionParams, response: MemoryReport, serialization: ConnectionExclusive("memory"),
+    MemoryDiagnosticsStop => "memoryDiagnostics/stop" {
+        params: MemoryDiagnosticsSessionParams, response: MemoryReport, serialization: ConnectionExclusive("memory"),
     },
-    MemorySubmit => "memory/submit" {
+    MemoryDiagnosticsSubmit => "memoryDiagnostics/submit" {
         params: MemoryEvidence, response: (), serialization: ConnectionExclusive("memory"),
     },
-    MemoryExport => "memory/export" {
-        params: MemorySessionParams, response: ResourceMetadataResult, serialization: ConnectionExclusive("memory"),
+    MemoryDiagnosticsExport => "memoryDiagnostics/export" {
+        params: MemoryDiagnosticsSessionParams, response: ResourceMetadataResult, serialization: ConnectionExclusive("memory"),
+    },
+    MemoryAdd => "memory/add" {
+        params: MemoryAddParams, response: memories::MemoryMutationResult, serialization: GlobalExclusive,
+    },
+    MemoryList => "memory/list" {
+        params: MemoryListParams, response: memories::MemoryListPage, serialization: None,
+    },
+    MemoryRead => "memory/read" {
+        params: MemoryReadParams, response: memories::Memory, serialization: None,
+    },
+    MemorySearch => "memory/search" {
+        params: MemorySearchParams, response: memories::MemorySearchPage, serialization: None,
+    },
+    MemoryDelete => "memory/delete" {
+        params: MemoryDeleteParams, response: memories::MemoryDeleteResult, serialization: GlobalExclusive,
     },
 
     AutomationList => "automation/list" {
@@ -2627,6 +2648,9 @@ server_notifications! {
     ProjectChanged => "project/changed" {
         params: ProjectChanged,
     },
+    MemoryChanged => "memory/changed" {
+        params: MemoryChanged,
+    },
     QueueChanged => "queue/changed" { params: EmptyParams, },
     AutomationChanged => "automation/changed" {
         params: EmptyParams,
@@ -3212,7 +3236,24 @@ typescript_bindings! {
     FeatureState,
     FeatureStage,
     FeatureSource,
-    MemorySessionParams,
+    MemoryDiagnosticsSessionParams,
+    MemoryAddParams,
+    MemoryListParams,
+    MemoryReadParams,
+    MemorySearchParams,
+    MemoryDeleteParams,
+    MemoryChanged,
+    memories::MemoryId,
+    memories::MemoryScope,
+    memories::MemorySource,
+    memories::Memory,
+    memories::MemorySummary,
+    memories::MemoryListPage,
+    memories::MemorySearchMatch,
+    memories::MemorySearchPage,
+    memories::MemoryMutationDisposition,
+    memories::MemoryMutationResult,
+    memories::MemoryDeleteResult,
     MemoryProduct,
     MemoryStart,
     MemoryRole,

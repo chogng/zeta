@@ -18,6 +18,7 @@ type JsonSchema = boolean | {
 	readonly maximum?: number;
 	readonly minLength?: number;
 	readonly maxLength?: number;
+	readonly pattern?: string;
 	readonly minItems?: number;
 	readonly maxItems?: number;
 	readonly uniqueItems?: boolean;
@@ -186,6 +187,7 @@ function validateString(schema: Exclude<JsonSchema, boolean>, value: string, pat
 	const length = [...value].length;
 	if (schema.minLength !== undefined && length < schema.minLength) throw failure(path, `expected at least ${schema.minLength} characters`);
 	if (schema.maxLength !== undefined && length > schema.maxLength) throw failure(path, `expected at most ${schema.maxLength} characters`);
+	if (schema.pattern !== undefined && !new RegExp(schema.pattern, 'u').test(value)) throw failure(path, `expected string matching ${schema.pattern}`);
 }
 
 function validateArray(schema: Exclude<JsonSchema, boolean>, value: readonly unknown[], path: string): void {

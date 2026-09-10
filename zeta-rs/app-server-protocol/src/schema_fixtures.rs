@@ -107,12 +107,20 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("terminal/close"));
     assert!(methods.contains("plugin/request/upsert"));
     assert!(methods.contains("hook/upsert"));
+    assert!(methods.contains("memory/add"));
+    assert!(methods.contains("memory/list"));
+    assert!(methods.contains("memory/read"));
+    assert!(methods.contains("memory/search"));
+    assert!(methods.contains("memory/delete"));
+    assert!(methods.contains("memoryDiagnostics/start"));
+    assert!(!methods.contains("memory/start"));
     assert!(notifications.contains("session/changed"));
     assert!(notifications.contains("session/thread/update"));
     assert!(notifications.contains("agent/request"));
     assert!(!notifications.contains("thread/update"));
     assert!(notifications.contains("git/statusChanged"));
     assert!(notifications.contains("fs/changed"));
+    assert!(notifications.contains("memory/changed"));
     assert_eq!(
         host_methods,
         BTreeSet::from([
@@ -513,6 +521,7 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert_eq!(definitions["ThreadId"]["minLength"], 1);
     assert_eq!(definitions["SessionId"]["minLength"], 1);
     assert_eq!(definitions["CommandId"]["minLength"], 1);
+    assert_eq!(definitions["MemoryId"]["pattern"], "^[A-Za-z0-9._:-]+$");
     let start_turn_request = definitions["SessionRequest"]["oneOf"]
         .as_array()
         .expect("SessionRequest should be a tagged union")

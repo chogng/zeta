@@ -1,6 +1,7 @@
 [workspace]
 exclude = ["zeta-rs/vendor/mxc"]
 members = [
+    "zeta-rs/memories",
     "zeta-rs/ext/items",
     "zeta-rs/queue",
     "zeta-rs/analytics",
@@ -173,6 +174,7 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
+memories = { package = "zeta-memories", path = "zeta-rs/memories" }
 extension-items = { package = "zeta-extension-items", path = "zeta-rs/ext/items" }
 queue = { package = "zeta-queue", path = "zeta-rs/queue" }
 analytics = { package = "zeta-analytics", path = "zeta-rs/analytics" }

@@ -13,6 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 agent-graph-store = { workspace = true }
 message-history = { workspace = true }
+memories = { workspace = true }
 github = { workspace = true }
 fs2 = { workspace = true }
 rusqlite = { workspace = true }

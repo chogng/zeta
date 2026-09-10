@@ -16,5 +16,8 @@
 | `queue/cancel` | Session/Thread、commandId → QueuedMessage | 取消未交付消息；交付中或已开始使用 Turn 中断 |
 | `queue/edit` | Session/Thread、commandId、expectedRevision、action → QueuedMessage | pause、replace、move、send；冲突直接报错 |
 | `extension/items/list` | Session/Thread → items | 返回扩展自有文本展示项；校验身份和大小 |
+| `memory/add` / `memory/delete` | commandId、作用域、Memory 身份与 revision → mutation result | 用户显式写入或删除；命令可重放，删除立即移除正文 |
+| `memory/list` / `memory/read` / `memory/search` | 精确作用域、分页或 Memory 身份 → 有界结果 | 只允许产品 host；cursor 绑定 catalog revision 和查询 |
+| `memoryDiagnostics/start` / `read` / `submit` / `stop` / `export` | 诊断 Session → report/resource | 进程内存诊断，不读取长期 Memory |
 
-`queue/changed` 是无内容的失效通知。Config 的 Feature 来源由 `zeta-features` 解释。反馈待审阅包在 connection 关闭时释放，持久队列由 profile 后台调度器恢复。
+`memory/changed` 只向产品 host 发布作用域和新 catalog revision；客户端随后重新读取。`queue/changed` 是无内容的失效通知。Config 的 Feature 来源由 `zeta-features` 解释。反馈待审阅包在 connection 关闭时释放，持久队列由 profile 后台调度器恢复。

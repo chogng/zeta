@@ -14,6 +14,8 @@ use ts_rs::TS;
 pub enum UsageEvent {
     TurnStarted,
     MessageQueued,
+    MemoryAdded,
+    MemoryDeleted,
     FeedbackSubmitted,
 }
 

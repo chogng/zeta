@@ -27,7 +27,7 @@ export class AppServerMemoryDiagnosticsService extends Disposable implements IMe
 		this._register(toDisposable(() => {
 			const sessionId = this.sessionId;
 			this.invalidate();
-			if (sessionId && client.state === 'ready') { void client.request(APP_SERVER_METHODS['memory/stop'], { sessionId }).catch(error => console.warn('Memory diagnostic cleanup failed', error)); }
+			if (sessionId && client.state === 'ready') { void client.request(APP_SERVER_METHODS['memoryDiagnostics/stop'], { sessionId }).catch(error => console.warn('Memory diagnostic cleanup failed', error)); }
 		}));
 	}
 
@@ -44,7 +44,7 @@ export class AppServerMemoryDiagnosticsService extends Disposable implements IMe
 	private async begin(): Promise<MemoryDiagnosticSummary> {
 		this.assertNotDisposed();
 		if (this.sessionId) {
-			const report = await this.client.request(APP_SERVER_METHODS['memory/read'], { sessionId: this.sessionId });
+			const report = await this.client.request(APP_SERVER_METHODS['memoryDiagnostics/read'], { sessionId: this.sessionId });
 			this.assertNotDisposed();
 			if (report.status === 'recording') {
 				if (this.failure) { this.invalidate(); this.failure = undefined; this.schedule(this.generation, report.sampleIntervalMs, 0); }
@@ -54,9 +54,9 @@ export class AppServerMemoryDiagnosticsService extends Disposable implements IMe
 		this.invalidate();
 		const generation = this.generation;
 		const connectionGeneration = this.connectionGeneration;
-		const report = await this.client.request(APP_SERVER_METHODS['memory/start'], { requestId: generateUuid(), product: this.product, durationSecs: 1800 });
+		const report = await this.client.request(APP_SERVER_METHODS['memoryDiagnostics/start'], { requestId: generateUuid(), product: this.product, durationSecs: 1800 });
 		if (generation !== this.generation) {
-			if (connectionGeneration === this.connectionGeneration && this.client.state === 'ready') { await this.client.request(APP_SERVER_METHODS['memory/stop'], { sessionId: report.sessionId }); }
+			if (connectionGeneration === this.connectionGeneration && this.client.state === 'ready') { await this.client.request(APP_SERVER_METHODS['memoryDiagnostics/stop'], { sessionId: report.sessionId }); }
 			throw new Error('Memory diagnostic connection changed while starting.');
 		}
 		this.sessionId = report.sessionId;
@@ -70,7 +70,7 @@ export class AppServerMemoryDiagnosticsService extends Disposable implements IMe
 	public async read(): Promise<MemoryDiagnosticSummary> {
 		this.assertNotDisposed();
 		if (this.failure) { throw this.failure; }
-		return summarize(await this.client.request(APP_SERVER_METHODS['memory/read'], { sessionId: this.requireSession() }));
+		return summarize(await this.client.request(APP_SERVER_METHODS['memoryDiagnostics/read'], { sessionId: this.requireSession() }));
 	}
 
 	public stop(): Promise<MemoryDiagnosticSummary> {
@@ -87,7 +87,7 @@ export class AppServerMemoryDiagnosticsService extends Disposable implements IMe
 		// A failed collector must not prevent the explicit backend stop.
 		await this.sampling?.catch(() => undefined);
 		if (generation !== this.generation) { throw new Error('Memory diagnostic connection changed while stopping.'); }
-		const report = await this.client.request(APP_SERVER_METHODS['memory/stop'], { sessionId });
+		const report = await this.client.request(APP_SERVER_METHODS['memoryDiagnostics/stop'], { sessionId });
 		this.failure = undefined;
 		this.changed.fire();
 		return summarize(report);
@@ -96,7 +96,7 @@ export class AppServerMemoryDiagnosticsService extends Disposable implements IMe
 	public async export(): Promise<Uint8Array> {
 		this.assertNotDisposed();
 		const connectionGeneration = this.connectionGeneration;
-		const metadata = await this.client.request(APP_SERVER_METHODS['memory/export'], { sessionId: this.requireSession() });
+		const metadata = await this.client.request(APP_SERVER_METHODS['memoryDiagnostics/export'], { sessionId: this.requireSession() });
 		try {
 			this.assertNotDisposed();
 			if (connectionGeneration !== this.connectionGeneration) { throw new Error('Memory diagnostic connection changed during export.'); }
@@ -134,14 +134,14 @@ export class AppServerMemoryDiagnosticsService extends Disposable implements IMe
 
 	private async sample(generation: number, interval: number): Promise<void> {
 		const sessionId = this.requireSession();
-		const before = await this.client.request(APP_SERVER_METHODS['memory/read'], { sessionId });
+		const before = await this.client.request(APP_SERVER_METHODS['memoryDiagnostics/read'], { sessionId });
 		if (generation !== this.generation) { return; }
 		if (before.status !== 'recording') { this.changed.fire(); return; }
 		const observations = await this.collect();
 		if (generation !== this.generation) { return; }
-		await this.client.request(APP_SERVER_METHODS['memory/submit'], { sessionId, sequence: ++this.sequence, observations });
+		await this.client.request(APP_SERVER_METHODS['memoryDiagnostics/submit'], { sessionId, sequence: ++this.sequence, observations });
 		if (generation !== this.generation) { return; }
-		const report = await this.client.request(APP_SERVER_METHODS['memory/read'], { sessionId });
+		const report = await this.client.request(APP_SERVER_METHODS['memoryDiagnostics/read'], { sessionId });
 		if (generation !== this.generation) { return; }
 		this.changed.fire();
 		if (report.status === 'recording') { this.schedule(generation, interval, interval); }

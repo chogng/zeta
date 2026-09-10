@@ -290,7 +290,7 @@ fn memory_recording_collects_product_counters_exports_and_stops_for_rust_product
 #[test]
 fn dropping_memory_recording_stops_backend_without_closing_its_connection() {
     use crate::MemoryRecording;
-    use zeta_app_server_protocol::protocol::memory::MemorySessionParams;
+    use zeta_app_server_protocol::protocol::memory_diagnostics::MemoryDiagnosticsSessionParams;
     use zeta_memory_diagnostics::MemoryMetric;
     use zeta_memory_diagnostics::MemoryMetricKind;
     use zeta_memory_diagnostics::MemoryProduct;
@@ -322,7 +322,7 @@ fn dropping_memory_recording_stops_backend_without_closing_its_connection() {
     drop(recording);
     assert_eq!(
         client
-            .read_memory(MemorySessionParams { session_id })
+            .read_memory_diagnostics(MemoryDiagnosticsSessionParams { session_id })
             .unwrap()
             .status,
         MemoryStatus::Stopped
@@ -333,7 +333,7 @@ fn dropping_memory_recording_stops_backend_without_closing_its_connection() {
 #[test]
 fn failed_memory_evidence_remains_visible_after_backend_cleanup() {
     use crate::MemoryRecording;
-    use zeta_app_server_protocol::protocol::memory::MemorySessionParams;
+    use zeta_app_server_protocol::protocol::memory_diagnostics::MemoryDiagnosticsSessionParams;
     use zeta_memory_diagnostics::MemoryMetric;
     use zeta_memory_diagnostics::MemoryMetricKind;
     use zeta_memory_diagnostics::MemoryProduct;
@@ -367,7 +367,7 @@ fn failed_memory_evidence_remains_visible_after_backend_cleanup() {
     let deadline = Instant::now() + Duration::from_secs(3);
     loop {
         let report = client
-            .read_memory(MemorySessionParams {
+            .read_memory_diagnostics(MemoryDiagnosticsSessionParams {
                 session_id: recording.session_id().into(),
             })
             .unwrap();

@@ -29,6 +29,7 @@ pub mod language;
 pub mod marketplace;
 pub mod mcp;
 pub mod memory;
+pub mod memory_diagnostics;
 pub mod model;
 pub mod notification;
 pub mod plugins;

@@ -8,7 +8,7 @@ consumers:
   - desktop
   - cli
   - external-clients
-lastUpdated: 2026-09-09
+lastUpdated: 2026-09-10
 ```
 
 本文描述当前开发期的唯一 App Server 契约。项目不保留旧 wire API、旧 DTO 或旧持久化格式
@@ -29,6 +29,7 @@ Session、Thread、Turn 和更新流，不建立第二套领域模型。
 | --- | --- | --- |
 | 创建一次工作 | `session/create` 创建根 Thread 并返回按 `session_id` 聚合的 Session 视图，随后在该 Thread 上启动 Turn | 持久化身份与顺序始终属于 Thread |
 | 组织长期多根工作 | 受信产品 host 使用 `project/*` 保存根目录表并弱关联 Session | Project 不授予目录权限，也不改变 Thread 身份 |
+| 管理长期 Memory | 受信产品 host 使用 `memory/*` 在 Profile、Project 或 Dir 作用域显式读写 | 后端持久化正文；普通连接不可读取，删除后 live store 与命令回执不保留正文 |
 | 关闭一个 Session Tab | 前端通过 `session/request` 提交 `request.type = stop` | 枚举同一 `session_id` 的 Thread，持久化各 Thread 的停止事实并中断活动 Turn；不创建 Session 状态 |
 | 持续显示执行进度 | 订阅 Thread 更新并按序列消费 | 发现缺口时重新读取快照，不猜测丢失状态 |
 | 修改配置或资源 | 调用类型化方法并携带命令身份 | 重复命令可重放结果，冲突载荷会被拒绝 |
@@ -78,6 +79,8 @@ Session 是按 `sessionId` 聚合 Thread 的只读树视图，不保存独立状
 导入子 Thread，因此未完成的 Turn 和父 Thread 后续提交都不会进入已创建的分支。
 
 Project 是独立持久化领域，保存长期根目录表以及对 Session 的弱关联；它不复制 Thread 事件，也不改变 Session 只读聚合语义。多 Agent 工作只由同一 Session 的 Agent tree 表达。
+
+Memory 是独立 profile 持久化领域。它不属于 Thread transcript，也不因 Session 关闭而删除；Profile、Project 和 Dir 作用域使用各自稳定身份，Dir 作用域不保存路径。
 
 ## 2. 一致性模型
 
@@ -141,6 +144,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "threads": true,
     "turns": true,
     "projects": true,
+    "memories": true,
     "resources": true,
     "fileSystem": true,
     "directorySearch": true,
@@ -268,6 +272,8 @@ Desktop 当前实现和 Playwright 后续边界见
 | `project/create` / `project/details/update` / `project/archive` / `project/restore` | Project | 使用 Project revision 和命令回执修改元数据与生命周期 |
 | `project/root/add` / `project/root/update` / `project/root/remove` | Project + Session directory access | `add` 只接受 Session 已有的精确 `DirId`，Environment 和路径由 host 重建；操作不创建 Grant |
 | `project/session/link` / `project/session/unlink` | Project | 只建立或删除组织关系；目标 Session 必须真实存在 |
+| `memory/add` / `memory/delete` | Memory | 产品 host 使用 commandId、精确作用域和 record revision 显式修改；删除后的 live row、命令回执和 tombstone 不保留正文 |
+| `memory/list` / `memory/read` / `memory/search` | Memory | 读取有界摘要、精确正文或有界摘录；分页 cursor 绑定 catalog revision、作用域和查询 |
 | `codebase/configure` | config + Directory | 配置可选设备内模型与自动上下文行为；不保存索引数据 |
 | `languageServer/configure` / `languageServer/remove` | config | revision-safe 修改或恢复 language-server mode/path preference |
 | `provider/configure` / `provider/remove` | config | 新增自定义项分配并持久保存顺序，编辑保持顺序；删除拒绝内置项和仍被配置引用的项，并清理该连接密钥。自定义 API 类型支持 Responses、Chat Completions、Anthropic Messages；`contextWindow` 保存 Provider 的 272000／1000000 档位，`model` 留空时目录使用对应 API 类型的内置模型，填写时使用该 ID。 |
@@ -346,6 +352,14 @@ Connector account 是 GitHub、Slack 等外部产品账号，不是第 11 节的
 所有 mutation 都保存完整命令回执。相同 `commandId + typed payload` 返回原结果且不重复发布 notification；相同 `commandId` 的不同 payload 返回 `CommandConflict`。Project 根新增必须引用真实 Session 的现有 `DirId`，服务端从目录授权权威重建 Environment 与规范路径；Project 记录保留后续组织用途，但不能在 Grant 被删除后恢复访问。
 
 同一 Session 的 Agent 协作只通过 Thread tree、委托消息、等待和取消接口表达；Project 不建立第二套执行状态或跨 Session 工作关系。
+
+### Memory
+
+`initialize.capabilities.memories` 表示当前 App Server 安装了 Memory 后端。所有 `memory/*` 方法只接受服务端授予的产品 host 连接；协议对端不能通过 initialize 参数提升权限。
+
+首版只支持用户显式 add、list、read、search 和 delete，不自动读取历史、不调用模型抽取，也不把 Memory 注入模型上下文。add/delete 使用稳定 `commandId`；相同输入重放不会重复发布 `memory/changed`。删除后 live row、命令回执和 tombstone 都不保留 title/body，tombstone 只阻止 Memory ID 被重新使用。旧 add command 在删除后返回 `MemoryNotFound`，不会恢复正文。SQLite page、WAL 和外部备份的物理清理由存储维护策略负责，当前接口不把逻辑删除描述为介质擦除。
+
+list/search 默认每页 20 条，最大 50 条。cursor 绑定 catalog revision、精确作用域和搜索 query；任一 Memory 变化后继续使用旧 cursor 返回 `MemoryCursorStale`。list 不返回正文，search 只返回最多 1024 字符的摘录，read 才返回完整的最多 16 KiB 正文。
 
 ### Connector 外部账号连接
 
@@ -768,6 +782,7 @@ mutation gate 下重读 exact pending request，过期后持久化 `DeadlineElap
 - `git/statusChanged`，payload 为新的 directory Git status；
 - `fs/changed`，payload 为相对路径变化或 scoped rescan hint；
 - `project/changed`，payload 为已提交的完整 Project 视图，只投递产品 host。
+- `memory/changed`，payload 为发生变化的 Memory 作用域和 catalog revision，只投递产品 host；正文不进入通知。
 
 durable update 使用 `durableSequence`。Thread 的低延迟非 durable update 可额外携带
 `streamCursor { streamInstanceId, sequence }`，两者不能混为一个计数器：
@@ -900,6 +915,12 @@ Resource bytes 使用标准 RFC 4648 Base64；`decodedLength` 是原始 byte 数
 - `ProjectNotFound`
 - `ProjectRevisionConflict`
 - `ProjectOperationFailed`
+- `MemoryUnavailable`
+- `MemoryNotFound`
+- `MemoryAlreadyExists`
+- `MemoryConflict`
+- `MemoryCursorStale`
+- `MemoryOperationFailed`
 
 当前 `error.data` 为 `null`。客户端必须匹配稳定 code/name，不能解析人类错误文本。
 

@@ -1,6 +1,7 @@
 //! Reusable typed app-server client boundary and contract-test entry point.
 
 mod infrastructure;
+mod memories;
 mod memory;
 pub use memory::MemoryRecording;
 
@@ -1085,46 +1086,48 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::TypstCompile, params)
     }
 
-    pub fn start_memory(
+    pub fn start_memory_diagnostics(
         &mut self,
         params: zeta_memory_diagnostics::MemoryStart,
     ) -> Result<zeta_memory_diagnostics::MemoryReport, ClientError> {
-        self.call(ClientMethod::MemoryStart, params)
+        self.call(ClientMethod::MemoryDiagnosticsStart, params)
     }
 
-    pub fn read_memory(
+    pub fn read_memory_diagnostics(
         &mut self,
-        params: zeta_app_server_protocol::protocol::memory::MemorySessionParams,
+        params: zeta_app_server_protocol::protocol::memory_diagnostics::MemoryDiagnosticsSessionParams,
     ) -> Result<zeta_memory_diagnostics::MemoryReport, ClientError> {
-        self.call(ClientMethod::MemoryRead, params)
+        self.call(ClientMethod::MemoryDiagnosticsRead, params)
     }
 
-    pub fn stop_memory(
+    pub fn stop_memory_diagnostics(
         &mut self,
-        params: zeta_app_server_protocol::protocol::memory::MemorySessionParams,
+        params: zeta_app_server_protocol::protocol::memory_diagnostics::MemoryDiagnosticsSessionParams,
     ) -> Result<zeta_memory_diagnostics::MemoryReport, ClientError> {
-        self.call(ClientMethod::MemoryStop, params)
+        self.call(ClientMethod::MemoryDiagnosticsStop, params)
     }
 
-    pub fn submit_memory(
+    pub fn submit_memory_diagnostics(
         &mut self,
         params: zeta_memory_diagnostics::MemoryEvidence,
     ) -> Result<(), ClientError> {
-        self.call(ClientMethod::MemorySubmit, params)
+        self.call(ClientMethod::MemoryDiagnosticsSubmit, params)
     }
 
-    pub fn export_memory(
+    pub fn export_memory_diagnostics(
         &mut self,
-        params: zeta_app_server_protocol::protocol::memory::MemorySessionParams,
+        params: zeta_app_server_protocol::protocol::memory_diagnostics::MemoryDiagnosticsSessionParams,
     ) -> Result<ResourceMetadataResult, ClientError> {
-        self.call(ClientMethod::MemoryExport, params)
+        self.call(ClientMethod::MemoryDiagnosticsExport, params)
     }
 
     pub fn export_memory_bytes(&mut self, session_id: String) -> Result<Vec<u8>, String> {
         use base64::Engine;
         let metadata = self
-            .export_memory(
-                zeta_app_server_protocol::protocol::memory::MemorySessionParams { session_id },
+            .export_memory_diagnostics(
+                zeta_app_server_protocol::protocol::memory_diagnostics::MemoryDiagnosticsSessionParams {
+                    session_id,
+                },
             )
             .map_err(|error| error.to_string())?;
         let result = (|| {

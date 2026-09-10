@@ -2,7 +2,7 @@
 export const APP_SERVER_PROTOCOL_MAJOR = 3 as const;
 export const APP_SERVER_PROTOCOL_REVISION = 1 as const;
 export const APP_SERVER_CAPABILITY_VERSION = 4 as const;
-export const APP_SERVER_SCHEMA_HASH = "sha256:5366013683099cc2e61050e0083ab6f4833ee1f7a4870062d066231475e3728b" as const;
+export const APP_SERVER_SCHEMA_HASH = "sha256:22a2488ca8ec72aede6aaaa5a67c57a8eb9d78e02fd4ae27d49bc4951319d8c3" as const;
 export type JsonRpcVersion = "2.0";
 export type JsonRpcId = number | string | null;
 export type JsonRpcRequest<P> = { jsonrpc: JsonRpcVersion; id: JsonRpcId; method: string; params: P };
@@ -387,7 +387,7 @@ export type SlashCommandArgumentModeDto = "none" | "optional";
 export type SlashCommandDefinition = { name: string, description: string, argumentMode: SlashCommandArgumentModeDto, };
 export type ProtocolVersion = { major: number, revision: number, };
 export type CapabilityContract = { version: number, };
-export type ServerCapabilities = { agentInteractions: boolean, documentCollaboration: boolean, sessions: boolean, threads: boolean, turns: boolean, projects: boolean, resources: boolean, attachments: boolean, fileSystem: boolean, git: boolean, contentSearch: boolean, codebase: boolean, cloudCodebase: boolean, terminal: boolean, debugAdapter: boolean, typst: boolean, updateReplay: boolean, extensions: boolean, extensionHost: boolean, connectors: boolean, plugins: boolean, marketplace: boolean, mcp: boolean, mcpOAuth: boolean, contracts: { [key in string]: CapabilityContract }, };
+export type ServerCapabilities = { agentInteractions: boolean, documentCollaboration: boolean, sessions: boolean, threads: boolean, turns: boolean, projects: boolean, memories: boolean, resources: boolean, attachments: boolean, fileSystem: boolean, git: boolean, contentSearch: boolean, codebase: boolean, cloudCodebase: boolean, terminal: boolean, debugAdapter: boolean, typst: boolean, updateReplay: boolean, extensions: boolean, extensionHost: boolean, connectors: boolean, plugins: boolean, marketplace: boolean, mcp: boolean, mcpOAuth: boolean, contracts: { [key in string]: CapabilityContract }, };
 export type InitializeParams = { clientInfo: ClientInfo, capabilities: ClientCapabilities, };
 export type InitializeResult = { serverInfo: ServerInfo, protocolVersion: ProtocolVersion, schemaHash: SchemaHash, capabilities: ServerCapabilities, slashCommands: Array<SlashCommandDefinition>, };
 export type EnvCwdSetParams = { cwd: string, };
@@ -701,7 +701,7 @@ export type ActivitySummary = { count: number, failed: number, cancelled: number
 export type Observation = { activity: Activity, outcome: Outcome, elapsedMs: number, };
 export type Outcome = "succeeded" | "failed" | "cancelled";
 export type UsageSnapshot = { enabled: boolean, counts: { [key in UsageEvent]?: number }, };
-export type UsageEvent = "turnStarted" | "messageQueued" | "feedbackSubmitted";
+export type UsageEvent = "turnStarted" | "messageQueued" | "memoryAdded" | "memoryDeleted" | "feedbackSubmitted";
 export type PreparedFeedback = { digest: string, endpoint: string,
 /**
  * Exact JSON bytes the user reviews and authorizes for this destination.
@@ -712,7 +712,24 @@ export type Feature = "codeMode" | "queue" | "analytics";
 export type FeatureState = { feature: Feature, stage: FeatureStage, enabled: boolean, source: FeatureSource, };
 export type FeatureStage = "experimental" | "stable" | "deprecated" | "removed";
 export type FeatureSource = "default" | "user";
-export type MemorySessionParams = { sessionId: string, };
+export type MemoryDiagnosticsSessionParams = { sessionId: string, };
+export type MemoryAddParams = { commandId: CommandId, memoryId: MemoryId, scope: MemoryScope, title: string, body: string, };
+export type MemoryListParams = { scope: MemoryScope, cursor?: string | null, limit?: number | null, };
+export type MemoryReadParams = { memoryId: MemoryId, scope: MemoryScope, };
+export type MemorySearchParams = { scope: MemoryScope, query: string, cursor?: string | null, limit?: number | null, };
+export type MemoryDeleteParams = { commandId: CommandId, memoryId: MemoryId, scope: MemoryScope, expectedRevision: number, };
+export type MemoryChanged = { scope: MemoryScope, catalogRevision: number, };
+export type MemoryId = string;
+export type MemoryScope = { "type": "profile" } | { "type": "project", projectId: ProjectId, } | { "type": "dir", dirId: DirId, };
+export type MemorySource = "user";
+export type Memory = { memoryId: MemoryId, scope: MemoryScope, revision: number, title: string, body: string, source: MemorySource, createdAtUnixMs: number, updatedAtUnixMs: number, };
+export type MemorySummary = { memoryId: MemoryId, scope: MemoryScope, revision: number, title: string, source: MemorySource, createdAtUnixMs: number, updatedAtUnixMs: number, };
+export type MemoryListPage = { catalogRevision: number, memories: Array<MemorySummary>, nextCursor: string | null, };
+export type MemorySearchMatch = { memoryId: MemoryId, scope: MemoryScope, revision: number, title: string, excerpt: string, updatedAtUnixMs: number, };
+export type MemorySearchPage = { catalogRevision: number, matches: Array<MemorySearchMatch>, nextCursor: string | null, };
+export type MemoryMutationDisposition = "committed" | "replayed";
+export type MemoryMutationResult = { disposition: MemoryMutationDisposition, catalogRevision: number, memory: Memory, };
+export type MemoryDeleteResult = { disposition: MemoryMutationDisposition, catalogRevision: number, memoryId: MemoryId, scope: MemoryScope, deletedRevision: number, };
 export type MemoryProduct = "tui" | "rustGui" | "electron" | "browser";
 export type MemoryStart = { requestId: string, product: MemoryProduct, durationSecs: number, };
 export type MemoryRole = "backend" | "tool" | "tui" | "rustGui" | "electronMain" | "renderer" | "gpu" | "utility" | "extension";
@@ -1039,7 +1056,7 @@ export type DebugAdapterReadParams = { dirId?: string, sessionId: string, afterS
 export type DebugAdapterMessageDto = { sequence: number, message: unknown, };
 export type DebugAdapterReadResult = { messages: Array<DebugAdapterMessageDto>, nextSequence: number, outputGap: boolean, stderr: string, exited: boolean, exitCode: number | null, protocolError: string | null, };
 export type DebugAdapterCloseParams = { dirId?: string, sessionId: string, };
-export type AppServerErrorName = "ParseError" | "InvalidRequest" | "MethodNotFound" | "InvalidParams" | "InternalError" | "QueueUnavailable" | "QueueNotFound" | "QueueConflict" | "QueueBusy" | "QueueOperationFailed" | "FeatureDisabled" | "FeedbackOperationFailed" | "MemoryUnavailable" | "MemoryNotFound" | "MemoryConflict" | "MemoryCapacity" | "MemoryStopped" | "MemoryStale" | "AutomationUnavailable" | "AutomationNotFound" | "AutomationConflict" | "AutomationBusy" | "AutomationOperationFailed" | "ServerOverloaded" | "RequestCancelled" | "NotInitialized" | "AlreadyInitialized" | "CommandConflict" | "CoreOperationFailed" | "AgentInteractionNotOwner" | "AgentInteractionExpired" | "ResourceNotFound" | "ResourceNotOwner" | "ResourceTooLarge" | "InvalidResourceChunkSize" | "InvalidResourceOffset" | "FileSystemUnavailable" | "FileSystemOperationFailed" | "FileSystemNotFound" | "FileSystemRevisionConflict" | "IssueOperationFailed" | "GitUnavailable" | "GitNotRepository" | "GitOperationFailed" | "TurnChangesUnavailable" | "TurnChangesRevisionConflict" | "TurnChangesOperationFailed" | "WorkCoordinationUnavailable" | "WorkCoordinationNotFound" | "WorkCoordinationRevisionConflict" | "WorkCoordinationOperationFailed" | "ProjectsUnavailable" | "ProjectNotFound" | "ProjectRevisionConflict" | "ProjectOperationFailed" | "DiffOperationFailed" | "SyntaxAnalysisFailed" | "CodebaseUnavailable" | "CodebaseNotReady" | "CodebaseOperationFailed" | "CodebaseSymbolsUnavailable" | "CodebaseSymbolsNotReady" | "CodebaseSymbolsOperationFailed" | "CodebaseRetrievalOperationFailed" | "CloudCodebaseUnavailable" | "CloudCodebaseInvalidGrant" | "CloudCodebaseConsentConflict" | "CloudCodebaseEgressLimitExceeded" | "CloudCodebaseProviderUnavailable" | "CloudCodebaseOperationFailed" | "LanguageServiceUnavailable" | "LanguageRequestFailed" | "MarketplaceUnavailable" | "MarketplaceNotFound" | "MarketplaceUntrusted" | "MarketplaceIncompatible" | "MarketplaceInstallationInUse" | "MarketplaceOperationFailed" | "SearchUnavailable" | "SearchNotFound" | "SearchNotOwner" | "SearchBusy" | "TerminalUnavailable" | "TerminalNotFound" | "TerminalNotOwner" | "TerminalAttachRejected" | "TerminalBusy" | "TerminalOperationFailed" | "DebugAdapterUnavailable" | "DebugAdapterNotFound" | "DebugAdapterNotOwner" | "DebugAdapterBusy" | "DebugAdapterOperationFailed" | "ConfigUnavailable" | "ConfigRevisionConflict" | "ProviderCredentialsUnavailable" | "ProviderCredentialOperationFailed" | "McpRuntimeUnavailable" | "McpServerNotFound" | "McpOAuthUnavailable" | "McpOAuthInvalidCallback" | "McpOAuthExpired" | "McpOAuthOperationFailed" | "AccountUnavailable" | "AccountLoginNotFound" | "AccountLoginConflict" | "AccountOperationFailed" | "ConnectorsUnavailable" | "ConnectorGenerationConflict" | "ConnectorOperationFailed" | "ConnectorOAuthUnavailable" | "ConnectorOAuthInvalidCallback" | "ConnectorOAuthExpired" | "PluginsUnavailable" | "PluginRevisionConflict" | "PluginOperationFailed" | "ToolSearchUnavailable" | "SkillsUnavailable" | "SkillOperationFailed" | "SkillNotFound" | "EnvCwdSetUnavailable" | "EnvCwdSetBusy" | "EnvCwdSetFailed" | "RevisionConflict" | "PermissionRequired" | "ExtensionsUnavailable" | "ExtensionGenerationConflict" | "ExtensionNotFound" | "ExtensionResourceNotFound" | "ExtensionResourceInvalidPath" | "ExtensionOperationFailed" | "ExtensionHostUnavailable" | "ExtensionHostStale" | "ExtensionHostInvocationNotFound" | "ExtensionHostQuotaExceeded";
+export type AppServerErrorName = "ParseError" | "InvalidRequest" | "MethodNotFound" | "InvalidParams" | "InternalError" | "QueueUnavailable" | "QueueNotFound" | "QueueConflict" | "QueueBusy" | "QueueOperationFailed" | "FeatureDisabled" | "FeedbackOperationFailed" | "MemoryDiagnosticsUnavailable" | "MemoryDiagnosticsNotFound" | "MemoryDiagnosticsConflict" | "MemoryDiagnosticsCapacity" | "MemoryDiagnosticsStopped" | "MemoryDiagnosticsStale" | "MemoryUnavailable" | "MemoryNotFound" | "MemoryAlreadyExists" | "MemoryConflict" | "MemoryCursorStale" | "MemoryOperationFailed" | "AutomationUnavailable" | "AutomationNotFound" | "AutomationConflict" | "AutomationBusy" | "AutomationOperationFailed" | "ServerOverloaded" | "RequestCancelled" | "NotInitialized" | "AlreadyInitialized" | "CommandConflict" | "CoreOperationFailed" | "AgentInteractionNotOwner" | "AgentInteractionExpired" | "ResourceNotFound" | "ResourceNotOwner" | "ResourceTooLarge" | "InvalidResourceChunkSize" | "InvalidResourceOffset" | "FileSystemUnavailable" | "FileSystemOperationFailed" | "FileSystemNotFound" | "FileSystemRevisionConflict" | "IssueOperationFailed" | "GitUnavailable" | "GitNotRepository" | "GitOperationFailed" | "TurnChangesUnavailable" | "TurnChangesRevisionConflict" | "TurnChangesOperationFailed" | "WorkCoordinationUnavailable" | "WorkCoordinationNotFound" | "WorkCoordinationRevisionConflict" | "WorkCoordinationOperationFailed" | "ProjectsUnavailable" | "ProjectNotFound" | "ProjectRevisionConflict" | "ProjectOperationFailed" | "DiffOperationFailed" | "SyntaxAnalysisFailed" | "CodebaseUnavailable" | "CodebaseNotReady" | "CodebaseOperationFailed" | "CodebaseSymbolsUnavailable" | "CodebaseSymbolsNotReady" | "CodebaseSymbolsOperationFailed" | "CodebaseRetrievalOperationFailed" | "CloudCodebaseUnavailable" | "CloudCodebaseInvalidGrant" | "CloudCodebaseConsentConflict" | "CloudCodebaseEgressLimitExceeded" | "CloudCodebaseProviderUnavailable" | "CloudCodebaseOperationFailed" | "LanguageServiceUnavailable" | "LanguageRequestFailed" | "MarketplaceUnavailable" | "MarketplaceNotFound" | "MarketplaceUntrusted" | "MarketplaceIncompatible" | "MarketplaceInstallationInUse" | "MarketplaceOperationFailed" | "SearchUnavailable" | "SearchNotFound" | "SearchNotOwner" | "SearchBusy" | "TerminalUnavailable" | "TerminalNotFound" | "TerminalNotOwner" | "TerminalAttachRejected" | "TerminalBusy" | "TerminalOperationFailed" | "DebugAdapterUnavailable" | "DebugAdapterNotFound" | "DebugAdapterNotOwner" | "DebugAdapterBusy" | "DebugAdapterOperationFailed" | "ConfigUnavailable" | "ConfigRevisionConflict" | "ProviderCredentialsUnavailable" | "ProviderCredentialOperationFailed" | "McpRuntimeUnavailable" | "McpServerNotFound" | "McpOAuthUnavailable" | "McpOAuthInvalidCallback" | "McpOAuthExpired" | "McpOAuthOperationFailed" | "AccountUnavailable" | "AccountLoginNotFound" | "AccountLoginConflict" | "AccountOperationFailed" | "ConnectorsUnavailable" | "ConnectorGenerationConflict" | "ConnectorOperationFailed" | "ConnectorOAuthUnavailable" | "ConnectorOAuthInvalidCallback" | "ConnectorOAuthExpired" | "PluginsUnavailable" | "PluginRevisionConflict" | "PluginOperationFailed" | "ToolSearchUnavailable" | "SkillsUnavailable" | "SkillOperationFailed" | "SkillNotFound" | "EnvCwdSetUnavailable" | "EnvCwdSetBusy" | "EnvCwdSetFailed" | "RevisionConflict" | "PermissionRequired" | "ExtensionsUnavailable" | "ExtensionGenerationConflict" | "ExtensionNotFound" | "ExtensionResourceNotFound" | "ExtensionResourceInvalidPath" | "ExtensionOperationFailed" | "ExtensionHostUnavailable" | "ExtensionHostStale" | "ExtensionHostInvocationNotFound" | "ExtensionHostQuotaExceeded";
 export type AppServerErrorData = { kind: AppServerErrorName, };
 export type AppServerError = { code: number, message: string, data: AppServerErrorData, };
 export interface AppServerNotificationMap {
@@ -1063,6 +1080,7 @@ export interface AppServerNotificationMap {
   "git/statusChanged": GitStatusChanged;
   "turnChanges/changed": TurnChangesChanged;
   "project/changed": ProjectChanged;
+  "memory/changed": MemoryChanged;
   "queue/changed": Record<string, never>;
   "automation/changed": Record<string, never>;
   "fs/changed": FsChanged;
@@ -1088,11 +1106,16 @@ export interface AppServerRequestMap {
   "diagnostics/read": { params: Record<string, never>; response: DiagnosticSnapshot };
   "feedback/prepare": { params: FeedbackPrepareParams; response: PreparedFeedback };
   "feedback/upload": { params: FeedbackUploadParams; response: null };
-  "memory/start": { params: MemoryStart; response: MemoryReport };
-  "memory/read": { params: MemorySessionParams; response: MemoryReport };
-  "memory/stop": { params: MemorySessionParams; response: MemoryReport };
-  "memory/submit": { params: MemoryEvidence; response: null };
-  "memory/export": { params: MemorySessionParams; response: ResourceMetadataResult };
+  "memoryDiagnostics/start": { params: MemoryStart; response: MemoryReport };
+  "memoryDiagnostics/read": { params: MemoryDiagnosticsSessionParams; response: MemoryReport };
+  "memoryDiagnostics/stop": { params: MemoryDiagnosticsSessionParams; response: MemoryReport };
+  "memoryDiagnostics/submit": { params: MemoryEvidence; response: null };
+  "memoryDiagnostics/export": { params: MemoryDiagnosticsSessionParams; response: ResourceMetadataResult };
+  "memory/add": { params: MemoryAddParams; response: MemoryMutationResult };
+  "memory/list": { params: MemoryListParams; response: MemoryListPage };
+  "memory/read": { params: MemoryReadParams; response: Memory };
+  "memory/search": { params: MemorySearchParams; response: MemorySearchPage };
+  "memory/delete": { params: MemoryDeleteParams; response: MemoryDeleteResult };
   "automation/list": { params: Record<string, never>; response: AutomationListResult };
   "automation/write": { params: AutomationWriteParams; response: Automation };
   "automation/delete": { params: AutomationDeleteParams; response: null };
@@ -1344,11 +1367,16 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "diagnostics/read": { method: "diagnostics/read" },
   "feedback/prepare": { method: "feedback/prepare" },
   "feedback/upload": { method: "feedback/upload" },
-  "memory/start": { method: "memory/start" },
+  "memoryDiagnostics/start": { method: "memoryDiagnostics/start" },
+  "memoryDiagnostics/read": { method: "memoryDiagnostics/read" },
+  "memoryDiagnostics/stop": { method: "memoryDiagnostics/stop" },
+  "memoryDiagnostics/submit": { method: "memoryDiagnostics/submit" },
+  "memoryDiagnostics/export": { method: "memoryDiagnostics/export" },
+  "memory/add": { method: "memory/add" },
+  "memory/list": { method: "memory/list" },
   "memory/read": { method: "memory/read" },
-  "memory/stop": { method: "memory/stop" },
-  "memory/submit": { method: "memory/submit" },
-  "memory/export": { method: "memory/export" },
+  "memory/search": { method: "memory/search" },
+  "memory/delete": { method: "memory/delete" },
   "automation/list": { method: "automation/list" },
   "automation/write": { method: "automation/write" },
   "automation/delete": { method: "automation/delete" },
@@ -1608,6 +1636,7 @@ export const APP_SERVER_NOTIFICATIONS: {
   "git/statusChanged": { method: "git/statusChanged" },
   "turnChanges/changed": { method: "turnChanges/changed" },
   "project/changed": { method: "project/changed" },
+  "memory/changed": { method: "memory/changed" },
   "queue/changed": { method: "queue/changed" },
   "automation/changed": { method: "automation/changed" },
   "fs/changed": { method: "fs/changed" },

@@ -272,3 +272,106 @@ fn feature_overrides_gate_turns_and_revoking_analytics_clears_observations() {
         json!({"enabled":false,"counts":{}})
     );
 }
+
+#[test]
+fn memories_are_profile_owned_retry_safe_searchable_and_deletable() {
+    let root = tempfile::tempdir().unwrap();
+    let server = server()
+        .with_local_memories(&root.path().join("state.sqlite"))
+        .unwrap();
+
+    let mut regular = server.connection();
+    initialize(&server, &mut regular);
+    let denied = call(
+        &server,
+        &mut regular,
+        json!({"jsonrpc":"2.0","id":2,"method":"memory/list","params":{"scope":{"type":"profile"}}}),
+    );
+    assert_eq!(denied["error"]["message"], "PermissionRequired");
+
+    let mut host = server.product_host_connection();
+    initialize(&server, &mut host);
+    let mut observer = server.product_host_connection();
+    initialize(&server, &mut observer);
+    let notifications = server.connection_notifications(&observer);
+
+    let add = json!({
+        "commandId":"memory-add-rpc",
+        "memoryId":"memory-rpc",
+        "scope":{"type":"profile"},
+        "title":"Preferred editor",
+        "body":"Use Zeta for Rust work."
+    });
+    let added = call(
+        &server,
+        &mut host,
+        json!({"jsonrpc":"2.0","id":3,"method":"memory/add","params":add.clone()}),
+    );
+    assert_eq!(added["result"]["disposition"], "committed", "{added}");
+    assert_eq!(added["result"]["memory"]["revision"], 1);
+
+    let changed = notifications.drain();
+    assert_eq!(changed.len(), 1);
+    let changed: serde_json::Value = serde_json::from_str(&changed[0]).unwrap();
+    assert_eq!(changed["method"], "memory/changed");
+    assert_eq!(changed["params"]["catalogRevision"], 1);
+
+    let replayed = call(
+        &server,
+        &mut host,
+        json!({"jsonrpc":"2.0","id":4,"method":"memory/add","params":add.clone()}),
+    );
+    assert_eq!(replayed["result"]["disposition"], "replayed");
+    assert!(notifications.drain().is_empty());
+
+    let listed = call(
+        &server,
+        &mut host,
+        json!({"jsonrpc":"2.0","id":5,"method":"memory/list","params":{"scope":{"type":"profile"},"limit":10}}),
+    );
+    assert_eq!(listed["result"]["memories"][0]["memoryId"], "memory-rpc");
+    assert!(listed["result"]["memories"][0].get("body").is_none());
+
+    let searched = call(
+        &server,
+        &mut host,
+        json!({"jsonrpc":"2.0","id":6,"method":"memory/search","params":{"scope":{"type":"profile"},"query":"ZETA"}}),
+    );
+    assert_eq!(searched["result"]["matches"][0]["memoryId"], "memory-rpc");
+    assert!(
+        searched["result"]["matches"][0]["excerpt"]
+            .as_str()
+            .unwrap()
+            .contains("Zeta")
+    );
+
+    let read = call(
+        &server,
+        &mut host,
+        json!({"jsonrpc":"2.0","id":7,"method":"memory/read","params":{"scope":{"type":"profile"},"memoryId":"memory-rpc"}}),
+    );
+    assert_eq!(read["result"]["body"], "Use Zeta for Rust work.");
+
+    let deleted = call(
+        &server,
+        &mut host,
+        json!({"jsonrpc":"2.0","id":8,"method":"memory/delete","params":{
+            "commandId":"memory-delete-rpc","scope":{"type":"profile"},"memoryId":"memory-rpc","expectedRevision":1
+        }}),
+    );
+    assert_eq!(deleted["result"]["disposition"], "committed");
+    assert_eq!(notifications.drain().len(), 1);
+
+    let removed = call(
+        &server,
+        &mut host,
+        json!({"jsonrpc":"2.0","id":9,"method":"memory/read","params":{"scope":{"type":"profile"},"memoryId":"memory-rpc"}}),
+    );
+    assert_eq!(removed["error"]["message"], "MemoryNotFound");
+    let old_add = call(
+        &server,
+        &mut host,
+        json!({"jsonrpc":"2.0","id":10,"method":"memory/add","params":add}),
+    );
+    assert_eq!(old_add["error"]["message"], "MemoryNotFound");
+}

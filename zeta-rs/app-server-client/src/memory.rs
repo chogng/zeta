@@ -4,7 +4,7 @@ use std::sync::Condvar;
 use std::sync::Mutex;
 use std::thread::JoinHandle;
 use std::time::Duration;
-use zeta_app_server_protocol::protocol::memory::MemorySessionParams;
+use zeta_app_server_protocol::protocol::memory_diagnostics::MemoryDiagnosticsSessionParams;
 use zeta_memory_diagnostics::MemoryEvidence;
 use zeta_memory_diagnostics::MemoryMetric;
 use zeta_memory_diagnostics::MemoryProduct;
@@ -34,7 +34,7 @@ impl MemoryRecording {
         metrics: impl Fn() -> Vec<MemoryMetric> + Send + 'static,
     ) -> Result<Self, String> {
         let report = client
-            .start_memory(MemoryStart {
+            .start_memory_diagnostics(MemoryStart {
                 request_id,
                 product,
                 duration_secs: 1800,
@@ -68,7 +68,7 @@ impl MemoryRecording {
                         break;
                     }
                     let current = worker_client
-                        .read_memory(MemorySessionParams {
+                        .read_memory_diagnostics(MemoryDiagnosticsSessionParams {
                             session_id: worker_id.clone(),
                         })
                         .map_err(|error| error.to_string());
@@ -98,13 +98,13 @@ impl MemoryRecording {
                     sequence += 1;
                     let result = (|| {
                         if !observations.is_empty() {
-                            worker_client.submit_memory(MemoryEvidence {
+                            worker_client.submit_memory_diagnostics(MemoryEvidence {
                                 session_id: worker_id.clone(),
                                 sequence,
                                 observations,
                             })?;
                         }
-                        worker_client.read_memory(MemorySessionParams {
+                        worker_client.read_memory_diagnostics(MemoryDiagnosticsSessionParams {
                             session_id: worker_id.clone(),
                         })
                     })()
@@ -128,9 +128,11 @@ impl MemoryRecording {
                 }
                 // A canceled product operation may discard the handle while its connection lives.
                 // Release the backend resource on the collector worker, including on Drop.
-                if let Ok(report) = worker_client.stop_memory(MemorySessionParams {
-                    session_id: worker_id,
-                }) {
+                if let Ok(report) =
+                    worker_client.stop_memory_diagnostics(MemoryDiagnosticsSessionParams {
+                        session_id: worker_id,
+                    })
+                {
                     let mut snapshot = worker_snapshot.lock().unwrap();
                     if snapshot.is_ok() {
                         *snapshot = Ok(report);
@@ -140,7 +142,8 @@ impl MemoryRecording {
         let worker = match spawned {
             Ok(worker) => worker,
             Err(error) => {
-                let _ = client.stop_memory(MemorySessionParams { session_id: id });
+                let _ = client
+                    .stop_memory_diagnostics(MemoryDiagnosticsSessionParams { session_id: id });
                 return Err(error.to_string());
             }
         };
@@ -173,7 +176,7 @@ impl MemoryRecording {
         self.stop_collector();
         let result = self
             .client
-            .stop_memory(MemorySessionParams {
+            .stop_memory_diagnostics(MemoryDiagnosticsSessionParams {
                 session_id: self.id.clone(),
             })
             .map_err(|error| error.to_string());

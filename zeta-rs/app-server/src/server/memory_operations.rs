@@ -6,14 +6,14 @@ use super::result;
 use serde_json::Value;
 use std::time::Duration;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
-use zeta_app_server_protocol::protocol::memory::MemorySessionParams;
+use zeta_app_server_protocol::protocol::memory_diagnostics::MemoryDiagnosticsSessionParams;
 use zeta_app_server_protocol::protocol::resources::ResourceMetadataResult;
 use zeta_memory_diagnostics::MemoryDiagnosticsError;
 use zeta_memory_diagnostics::MemoryEvidence;
 use zeta_memory_diagnostics::MemoryStart;
 
 impl AppServer {
-    pub(super) fn memory_start(
+    pub(super) fn memory_diagnostics_start(
         &self,
         connection: &ConnectionState,
         params: &Value,
@@ -28,13 +28,13 @@ impl AppServer {
         let params: MemoryStart = decode(params)?;
         result(
             &self
-                .memory
+                .memory_diagnostics
                 .start(connection.connection_id, params)
                 .map_err(error)?,
         )
     }
 
-    pub(super) fn memory_read(
+    pub(super) fn memory_diagnostics_read(
         &self,
         connection: &ConnectionState,
         params: &Value,
@@ -46,16 +46,16 @@ impl AppServer {
         if state.closed {
             return Err(RpcError::new(-32800, AppServerErrorName::RequestCancelled));
         }
-        let params: MemorySessionParams = decode(params)?;
+        let params: MemoryDiagnosticsSessionParams = decode(params)?;
         result(
             &self
-                .memory
+                .memory_diagnostics
                 .read(connection.connection_id, &params.session_id)
                 .map_err(error)?,
         )
     }
 
-    pub(super) fn memory_stop(
+    pub(super) fn memory_diagnostics_stop(
         &self,
         connection: &ConnectionState,
         params: &Value,
@@ -67,16 +67,16 @@ impl AppServer {
         if state.closed {
             return Err(RpcError::new(-32800, AppServerErrorName::RequestCancelled));
         }
-        let params: MemorySessionParams = decode(params)?;
+        let params: MemoryDiagnosticsSessionParams = decode(params)?;
         result(
             &self
-                .memory
+                .memory_diagnostics
                 .stop(connection.connection_id, &params.session_id)
                 .map_err(error)?,
         )
     }
 
-    pub(super) fn memory_submit(
+    pub(super) fn memory_diagnostics_submit(
         &self,
         connection: &ConnectionState,
         params: &Value,
@@ -89,13 +89,13 @@ impl AppServer {
             return Err(RpcError::new(-32800, AppServerErrorName::RequestCancelled));
         }
         let params: MemoryEvidence = decode(params)?;
-        self.memory
+        self.memory_diagnostics
             .submit(connection.connection_id, params)
             .map_err(error)?;
         result(&())
     }
 
-    pub(super) fn memory_export(
+    pub(super) fn memory_diagnostics_export(
         &self,
         connection: &ConnectionState,
         params: &Value,
@@ -107,9 +107,9 @@ impl AppServer {
         if state.closed {
             return Err(RpcError::new(-32800, AppServerErrorName::RequestCancelled));
         }
-        let params: MemorySessionParams = decode(params)?;
+        let params: MemoryDiagnosticsSessionParams = decode(params)?;
         let bytes = self
-            .memory
+            .memory_diagnostics
             .export(connection.connection_id, &params.session_id)
             .map_err(error)?;
         let metadata = self
@@ -122,7 +122,7 @@ impl AppServer {
                 bytes,
                 Duration::from_secs(600),
             )
-            .map_err(|_| RpcError::new(-32112, AppServerErrorName::MemoryCapacity))?;
+            .map_err(|_| RpcError::new(-32112, AppServerErrorName::MemoryDiagnosticsCapacity))?;
         result(&ResourceMetadataResult {
             resource_id: metadata.resource_id,
             mime_type: metadata.mime_type,
@@ -135,12 +135,12 @@ impl AppServer {
 fn error(error: MemoryDiagnosticsError) -> RpcError {
     let name = match error {
         MemoryDiagnosticsError::Invalid => AppServerErrorName::InvalidParams,
-        MemoryDiagnosticsError::Capacity => AppServerErrorName::MemoryCapacity,
-        MemoryDiagnosticsError::NotFound => AppServerErrorName::MemoryNotFound,
-        MemoryDiagnosticsError::Conflict => AppServerErrorName::MemoryConflict,
-        MemoryDiagnosticsError::Stopped => AppServerErrorName::MemoryStopped,
-        MemoryDiagnosticsError::Stale => AppServerErrorName::MemoryStale,
-        MemoryDiagnosticsError::Unavailable => AppServerErrorName::MemoryUnavailable,
+        MemoryDiagnosticsError::Capacity => AppServerErrorName::MemoryDiagnosticsCapacity,
+        MemoryDiagnosticsError::NotFound => AppServerErrorName::MemoryDiagnosticsNotFound,
+        MemoryDiagnosticsError::Conflict => AppServerErrorName::MemoryDiagnosticsConflict,
+        MemoryDiagnosticsError::Stopped => AppServerErrorName::MemoryDiagnosticsStopped,
+        MemoryDiagnosticsError::Stale => AppServerErrorName::MemoryDiagnosticsStale,
+        MemoryDiagnosticsError::Unavailable => AppServerErrorName::MemoryDiagnosticsUnavailable,
     };
     RpcError::new(
         if name == AppServerErrorName::InvalidParams {

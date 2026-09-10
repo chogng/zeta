@@ -1,6 +1,7 @@
 use super::ConnectorsChanged;
 use super::ServerNotification;
 use super::decode_server_notification;
+use crate::protocol::memory::MemoryChanged;
 use crate::protocol::session::SessionDeleted;
 use serde_json::json;
 
@@ -34,6 +35,26 @@ fn registry_decodes_session_deleted_notification() {
         notification,
         ServerNotification::SessionDeleted(SessionDeleted {
             session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
+        })
+    );
+}
+
+#[test]
+fn registry_decodes_memory_change_without_content() {
+    let notification = decode_server_notification(
+        "memory/changed".into(),
+        json!({
+            "scope": { "type": "profile" },
+            "catalogRevision": 4,
+        }),
+    )
+    .expect("registered Memory notification should decode");
+
+    assert_eq!(
+        notification,
+        ServerNotification::MemoryChanged(MemoryChanged {
+            scope: memories::MemoryScope::Profile,
+            catalog_revision: 4,
         })
     );
 }

@@ -12,7 +12,8 @@ mod sqlite_runtime;
 
 pub use dir_index::{ClearOutcome, DirIndexKind, DirIndexLease, StateRuntime};
 pub use sqlite::{
-    SqliteProjectStore, SqliteThreadStore, SqliteTurnChangeStore, TurnChangeCommandOutcome,
+    SqliteMemoryStore, SqliteProjectStore, SqliteThreadStore, SqliteTurnChangeStore,
+    TurnChangeCommandOutcome,
 };
 pub use sqlite_runtime::{SqliteDurability, open_in_memory_database, open_sqlite_database};
 
@@ -27,3 +28,7 @@ mod graph_tests;
 #[cfg(test)]
 #[path = "project_store_tests.rs"]
 mod project_store_tests;
+
+#[cfg(test)]
+#[path = "memory_store_tests.rs"]
+mod memory_store_tests;

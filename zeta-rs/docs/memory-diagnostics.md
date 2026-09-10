@@ -78,7 +78,7 @@ flowchart LR
 
 共享实现位于 [memory-diagnostics](../memory-diagnostics/README.md)，包含[进程采样](../memory-diagnostics/src/process_resources.rs)、[会话与分析](../memory-diagnostics/src/session.rs)及有界导出。TUI 原 `src/host/process_resources.rs` 与对应测试已迁入该 crate，TUI 保留显示需求与[读数呈现](../../zeta-code/tui/src/status/resources.rs)。
 
-协议提供 `memory/start`、`memory/read`、`memory/submit`、`memory/stop`、`memory/export`，能力版本为 `memoryDiagnostics: 1`。导出复用有容量和过期时间的 `resource/read`、`resource/release`。App Server 按连接清理，并阻止断连后在途开始请求重新建立诊断。
+协议提供 `memoryDiagnostics/start`、`memoryDiagnostics/read`、`memoryDiagnostics/submit`、`memoryDiagnostics/stop`、`memoryDiagnostics/export`，能力版本为 `memoryDiagnostics: 1`。`memory/*` 专用于长期 Memory。导出复用有容量和过期时间的 `resource/read`、`resource/release`。App Server 按连接清理，并阻止断连后在途开始请求重新建立诊断。
 
 | 产品入口 | 当前证据 | 边界 |
 | --- | --- | --- |

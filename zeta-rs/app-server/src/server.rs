@@ -116,6 +116,7 @@ mod marketplace_projection;
 pub(crate) mod marketplace_runtime;
 mod marketplace_skill_sources;
 mod mcp_operations;
+mod memories_operations;
 mod memory_operations;
 pub(crate) mod multi_agent_tools;
 pub(crate) mod notification_queue;
@@ -182,7 +183,8 @@ pub struct AppServer {
     request_scheduler: RequestScheduler,
     request_cancellations: RequestCancellationRegistry,
     pub(super) resources: Arc<Mutex<ResourceStore>>,
-    memory: zeta_memory_diagnostics::MemoryDiagnostics,
+    memory_diagnostics: zeta_memory_diagnostics::MemoryDiagnostics,
+    memories: Option<Arc<memories::Memories>>,
     pub(super) attachment_uploads: Mutex<AttachmentUploadStore>,
     pub(super) collaboration: Mutex<collaboration_runtime::DocumentCollaborationStore>,
     pub(super) extensions: Mutex<ExtensionCatalog>,
@@ -500,7 +502,8 @@ impl AppServer {
             request_scheduler: RequestScheduler::default(),
             request_cancellations: RequestCancellationRegistry::default(),
             resources,
-            memory: zeta_memory_diagnostics::MemoryDiagnostics::default(),
+            memory_diagnostics: zeta_memory_diagnostics::MemoryDiagnostics::default(),
+            memories: None,
             attachment_uploads: Mutex::new(AttachmentUploadStore::default()),
             collaboration: Mutex::new(collaboration_runtime::DocumentCollaborationStore::default()),
             extensions: Mutex::new(ExtensionCatalog::default()),
@@ -648,6 +651,18 @@ impl AppServer {
         Ok(self)
     }
 
+    pub(crate) fn with_local_memories(
+        mut self,
+        database_path: &std::path::Path,
+    ) -> Result<Self, String> {
+        let store: Arc<dyn memories::MemoryStore> = Arc::new(
+            zeta_state::SqliteMemoryStore::open(database_path)
+                .map_err(|error| error.to_string())?,
+        );
+        self.memories = Some(Arc::new(memories::Memories::new(store)));
+        Ok(self)
+    }
+
     pub fn connection(&self) -> ConnectionState {
         self.open_connection(ConnectionAuthority::Client)
     }
@@ -764,7 +779,8 @@ impl AppServer {
         if !connection.mark_closed() {
             return;
         }
-        self.memory.close_owner(connection.connection_id);
+        self.memory_diagnostics
+            .close_owner(connection.connection_id);
         self.feedback.close(connection.connection_id);
         self.request_scheduler
             .cancel_connection(connection.connection_id);
@@ -1932,11 +1948,26 @@ impl AppServer {
             Some(ClientMethod::FeedbackUpload) => {
                 self.feedback_upload(connection, &request.params, cancellation)
             }
-            Some(ClientMethod::MemoryStart) => self.memory_start(connection, &request.params),
+            Some(ClientMethod::MemoryDiagnosticsStart) => {
+                self.memory_diagnostics_start(connection, &request.params)
+            }
+            Some(ClientMethod::MemoryDiagnosticsRead) => {
+                self.memory_diagnostics_read(connection, &request.params)
+            }
+            Some(ClientMethod::MemoryDiagnosticsStop) => {
+                self.memory_diagnostics_stop(connection, &request.params)
+            }
+            Some(ClientMethod::MemoryDiagnosticsSubmit) => {
+                self.memory_diagnostics_submit(connection, &request.params)
+            }
+            Some(ClientMethod::MemoryDiagnosticsExport) => {
+                self.memory_diagnostics_export(connection, &request.params)
+            }
+            Some(ClientMethod::MemoryAdd) => self.memory_add(connection, &request.params),
+            Some(ClientMethod::MemoryList) => self.memory_list(connection, &request.params),
             Some(ClientMethod::MemoryRead) => self.memory_read(connection, &request.params),
-            Some(ClientMethod::MemoryStop) => self.memory_stop(connection, &request.params),
-            Some(ClientMethod::MemorySubmit) => self.memory_submit(connection, &request.params),
-            Some(ClientMethod::MemoryExport) => self.memory_export(connection, &request.params),
+            Some(ClientMethod::MemorySearch) => self.memory_search(connection, &request.params),
+            Some(ClientMethod::MemoryDelete) => self.memory_delete(connection, &request.params),
             Some(ClientMethod::AutomationList) => self.automation_list(),
             Some(ClientMethod::AutomationWrite) => self.automation_write(&request.params),
             Some(ClientMethod::AutomationDelete) => self.automation_delete(&request.params),

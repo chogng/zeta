@@ -224,6 +224,7 @@ impl AppServer {
             threads: true,
             turns: true,
             projects: self.projects.is_some(),
+            memories: self.memories.is_some(),
             resources: true,
             attachments: true,
             file_system,

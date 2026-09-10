@@ -1279,6 +1279,9 @@ pub fn open_local_app_server_with_codebase_providers(
     server = server
         .with_local_projects(&database_path)
         .map_err(OpenAppServerError)?;
+    server = server
+        .with_local_memories(&database_path)
+        .map_err(OpenAppServerError)?;
     if let Some(profile) = &profile_runtime {
         server = server.with_automation_store(profile.automation_store());
     }
