@@ -22,28 +22,7 @@ pub(super) fn request(
     scope: &SandboxScope,
 ) -> Result<mxc_sdk::SandboxRequest, SandboxError> {
     validate_paths(command.working_directory(), scope)?;
-    let mut filesystem = FilesystemSection::default();
-    for grant in scope.grants() {
-        let root = text(grant.dir().canonical_path())?;
-        if policy.file_system() != FileSystemAccess::ReadOnly
-            && grant.access() == SandboxDirAccess::ReadWrite
-        {
-            filesystem.readwrite_paths.push(root);
-            for name in zeta_sandboxing::PROTECTED_DIR_METADATA_NAMES {
-                filesystem
-                    .readonly_paths
-                    .push(text(&grant.dir().canonical_path().join(name))?);
-            }
-        } else {
-            filesystem.readonly_paths.push(root);
-        }
-    }
-    filesystem.denied_paths = scope
-        .hidden_dirs()
-        .iter()
-        .map(|dir| text(dir.canonical_path()))
-        .collect::<Result<_, _>>()?;
-    filesystem.clear_policy_on_exit = Some(true);
+    let filesystem = filesystem(policy.file_system(), scope)?;
     let action = if policy.network() == NetworkAccess::Allowed {
         NetworkAction::Allow
     } else {
@@ -113,6 +92,43 @@ pub(super) fn request(
     Ok(request)
 }
 
+fn filesystem(
+    access: FileSystemAccess,
+    scope: &SandboxScope,
+) -> Result<FilesystemSection, SandboxError> {
+    let mut filesystem = FilesystemSection::default();
+    for grant in scope.grants() {
+        let root = text(grant.dir().canonical_path())?;
+        if access != FileSystemAccess::ReadOnly && grant.access() == SandboxDirAccess::ReadWrite {
+            filesystem.readwrite_paths.push(root);
+            for name in zeta_sandboxing::PROTECTED_DIR_METADATA_NAMES {
+                let path = grant.dir().canonical_path().join(name);
+                // The contract protects existing metadata. Do not ask an ACL
+                // backend to open absent paths, or hide inspection failures.
+                match std::fs::symlink_metadata(&path) {
+                    Ok(_) => filesystem.readonly_paths.push(text(&path)?),
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => {
+                        return Err(unavailable(format!(
+                            "cannot inspect protected path '{}': {error}",
+                            path.display()
+                        )));
+                    }
+                }
+            }
+        } else {
+            filesystem.readonly_paths.push(root);
+        }
+    }
+    filesystem.denied_paths = scope
+        .hidden_dirs()
+        .iter()
+        .map(|dir| text(dir.canonical_path()))
+        .collect::<Result<_, _>>()?;
+    filesystem.clear_policy_on_exit = Some(true);
+    Ok(filesystem)
+}
+
 pub(super) fn validate_paths(cwd: &Path, scope: &SandboxScope) -> Result<(), SandboxError> {
     for path in std::iter::once(cwd)
         .chain(
@@ -135,3 +151,7 @@ fn text(path: &Path) -> Result<String, SandboxError> {
         .map(str::to_owned)
         .ok_or_else(|| unavailable("MXC requires Unicode filesystem paths without NUL"))
 }
+
+#[cfg(test)]
+#[path = "policy_tests.rs"]
+mod tests;

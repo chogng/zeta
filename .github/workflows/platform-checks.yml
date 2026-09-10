@@ -122,7 +122,7 @@ jobs:
         run: |
           ${{ matrix.python }} -B scripts/cargo.py test -p zeta-mxc-sandbox --lib --target "${{ matrix.target }}"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          ${{ matrix.python }} -B scripts/cargo.py test -p zeta-mxc-sandbox --test windows --target "${{ matrix.target }}" -- --ignored --test-threads=1
+          ${{ matrix.python }} -B scripts/cargo.py test -p zeta-mxc-sandbox --test windows --target "${{ matrix.target }}" -- --include-ignored --test-threads=1
           exit $LASTEXITCODE
 
       - name: Build Zeta Code release package

@@ -30,6 +30,7 @@ Core / action-policy → tool-executor → sandboxing
 | 要求 | 当前行为 |
 | --- | --- |
 | 目录读写、隐藏存储和授权例外 | 转换为 SDK 文件策略；适配器在启动前重新检查规范路径 |
+| 保护元数据 | 构造请求时，将已存在的 `.git`、`.agents`、`.codex`、`.zeta` 文件或目录设为只读；不存在的路径不创建，其他检查错误拒绝请求 |
 | 宿主 ACL | `HostAclChanges::Denied` 禁止改动；`Scoped` 允许 SDK 为策略中的路径配置 ACL，并在正常关闭时撤销 |
 | 网络禁止 / 允许 | 传入 schema 0.8 的明确网络要求，由 SDK 判断后端能否完整实施 |
 | 受管网络 | 一个执行专属端口承载 HTTP、CONNECT、SOCKS；保持禁止直连及其他入站要求 |

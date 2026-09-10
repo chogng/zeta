@@ -134,6 +134,9 @@ fn scoped_execution_preserves_grants_metadata_and_exit_code_authenticity() {
     assert!(work.canonical_path().join("output").exists());
     assert!(!reference.canonical_path().join("modified").exists());
     assert!(!work.canonical_path().join(".git/modified").exists());
+    for name in [".agents", ".codex", ".zeta"] {
+        assert!(!work.canonical_path().join(name).exists());
+    }
 }
 
 #[test]
@@ -165,8 +168,8 @@ fn strict_managed_network_is_rejected_without_weakening_ingress_or_proxy_identit
 }
 
 #[test]
-#[ignore = "requires PSEC and the built runner"]
-fn timeout_and_cancellation_terminate_psec_descendants() {
+#[ignore = "requires Windows with MXC filesystem enforcement and scoped ACL permissions"]
+fn timeout_and_cancellation_terminate_descendants() {
     for mode in ["timeout", "cancel"] {
         let temp = tempfile::tempdir().unwrap();
         let dir = Dir::open_local(temp.path()).unwrap();
@@ -186,7 +189,7 @@ fn timeout_and_cancellation_terminate_psec_descendants() {
             None
         };
         let script = format!(
-            "$ErrorActionPreference='Stop'; $p=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList '-NoProfile','-Command','Start-Sleep 60' -PassThru; [IO.File]::WriteAllText({}, [string]$p.Id); Start-Sleep 60",
+            "$ErrorActionPreference='Stop'; $p=Start-Process -WindowStyle Hidden -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList '-NoProfile','-Command','Start-Sleep 60' -PassThru; [IO.File]::WriteAllText({}, [string]$p.Id); Start-Sleep 60",
             literal(&pid_file)
         );
         let timeout = Duration::from_secs(if mode == "cancel" { 15 } else { 8 });
