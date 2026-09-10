@@ -13,6 +13,38 @@ pub const REVIEW_PROMPT: PromptArtifact = PromptArtifact::new(
     REVIEW_PROMPT_TEXT,
 );
 
+/// The durable outcome of a completed review attempt, independent of the findings' verdict.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReviewOutcome {
+    Completed,
+    Interrupted,
+    Failed,
+}
+
+/// Selects a continuation notice without duplicating or promoting the review's output.
+pub fn review_exit_prompt(outcome: ReviewOutcome) -> PromptArtifact {
+    match outcome {
+        ReviewOutcome::Completed => PromptArtifact::new(
+            "prompts",
+            "review/exit/completed",
+            "review-exit-completed-v1",
+            include_str!("../templates/review/exit_success.xml"),
+        ),
+        ReviewOutcome::Interrupted => PromptArtifact::new(
+            "prompts",
+            "review/exit/interrupted",
+            "review-exit-interrupted-v1",
+            include_str!("../templates/review/exit_interrupted.xml"),
+        ),
+        ReviewOutcome::Failed => PromptArtifact::new(
+            "prompts",
+            "review/exit/failed",
+            "review-exit-failed-v1",
+            include_str!("../templates/review/exit_failed.xml"),
+        ),
+    }
+}
+
 /// Renders the user message that selects the change inspected by a review Turn.
 pub fn review_target_prompt(target: &ReviewTarget) -> Result<String, ReviewPromptError> {
     match target {

@@ -38,7 +38,6 @@ pub(crate) enum ChatInputQueueOutcome {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ChatInputItem {
     Text(String),
-    Issue { number: u64 },
     Image { url: String },
     Skill { skill: SkillRef },
 }
@@ -71,7 +70,6 @@ struct ChatInputDraft {
     vim: VimState,
     slash_command_element: Option<TextElementId>,
     skill_bindings: Vec<(TextElementId, SkillRef)>,
-    issue_bindings: Vec<(TextElementId, u64)>,
     pending_pastes: PendingPastes,
     attachments: Attachments,
 }
@@ -85,7 +83,6 @@ pub(crate) struct ChatInput {
     vim: VimState,
     pub(super) slash_command_element: Option<TextElementId>,
     pub(super) skill_bindings: Vec<(TextElementId, SkillRef)>,
-    issue_bindings: Vec<(TextElementId, u64)>,
     pub(super) pending_pastes: PendingPastes,
     pub(super) attachments: Attachments,
     history: Vec<String>,
@@ -107,7 +104,6 @@ impl ChatInput {
             vim: VimState::default(),
             slash_command_element: None,
             skill_bindings: Vec::new(),
-            issue_bindings: Vec::new(),
             pending_pastes: PendingPastes::default(),
             attachments: Attachments::default(),
             history: Vec::new(),
@@ -301,7 +297,6 @@ impl ChatInput {
         self.vim = draft.vim;
         self.slash_command_element = draft.slash_command_element;
         self.skill_bindings = draft.skill_bindings;
-        self.issue_bindings = draft.issue_bindings;
         self.pending_pastes = draft.pending_pastes;
         self.attachments = draft.attachments;
         self.sync_completion();
@@ -315,23 +310,6 @@ impl ChatInput {
                 .iter()
                 .any(|item| matches!(item, ChatInputItem::Skill { .. }))
         })
-    }
-
-    pub(crate) fn attach_issue(&mut self, number: u64) {
-        if number == 0
-            || self
-                .issue_bindings
-                .iter()
-                .any(|(id, value)| *value == number && self.textarea.has_element(*id))
-        {
-            return;
-        }
-        self.issue_bindings
-            .retain(|(id, _)| self.textarea.has_element(*id));
-        let id = self.textarea.insert_element(&format!("[issue #{number}]"));
-        self.textarea.insert_text(" ");
-        self.issue_bindings.push((id, number));
-        self.sync_completion();
     }
 
     fn prepare_submission(&self) -> Option<ChatSubmission> {
@@ -352,11 +330,6 @@ impl ChatInput {
                 input.push(ChatInputItem::Image {
                     url: url.to_owned(),
                 });
-            } else if let Some((_, number)) =
-                self.issue_bindings.iter().find(|(id, _)| *id == element_id)
-            {
-                push_text_input(&mut input, &mut text);
-                input.push(ChatInputItem::Issue { number: *number });
             } else {
                 text.push_str(&raw_text[range.clone()]);
                 if let Some(skill) = self
@@ -392,7 +365,6 @@ impl ChatInput {
             vim: std::mem::take(&mut self.vim),
             slash_command_element: self.slash_command_element.take(),
             skill_bindings: std::mem::take(&mut self.skill_bindings),
-            issue_bindings: std::mem::take(&mut self.issue_bindings),
             pending_pastes: std::mem::take(&mut self.pending_pastes),
             attachments: std::mem::take(&mut self.attachments),
         };
@@ -416,7 +388,6 @@ impl ChatInput {
         self.vim.reset_draft();
         self.slash_command_element = None;
         self.skill_bindings.clear();
-        self.issue_bindings.clear();
         self.pending_pastes.clear();
         self.attachments.clear();
         self.completion.clear();
@@ -461,7 +432,6 @@ impl ChatInput {
         self.attachments.clear();
         self.slash_command_element = None;
         self.skill_bindings.clear();
-        self.issue_bindings.clear();
         self.sync_completion();
     }
 

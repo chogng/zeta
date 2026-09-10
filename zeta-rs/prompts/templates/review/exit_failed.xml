@@ -1,0 +1,3 @@
+<review_end status="failed">
+The preceding review failed. Its partial output is not a completed assessment, and missing findings do not mean the changes are correct. Resolve the reported failure before retrying a review that the user still wants.
+</review_end>

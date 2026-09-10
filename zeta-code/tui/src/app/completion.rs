@@ -40,13 +40,9 @@ use zeta_protocol::TurnId;
 
 pub(super) enum Completion {
     Memory(crate::memory::Completion),
-    IssueContext {
-        thread_id: zeta_protocol::ThreadId,
-        result: Result<crate::issues::Event, String>,
-    },
     IssueCreated {
         generation: u64,
-        result: Result<(ConversationCompletion, Vec<u64>), String>,
+        result: Result<ConversationCompletion, String>,
     },
     ConfigRefreshed(Result<(ConfigReadResult, ModelListResult), String>),
     Sessions(SessionCompletion),
@@ -117,15 +113,12 @@ pub(super) fn apply_request_completion(
     }
     match completion {
         Completion::IssueCreated { generation, result } => match result {
-            Ok((
-                ConversationCompletion {
-                    conversation: next,
-                    change,
-                    subscription,
-                    switch,
-                },
-                numbers,
-            )) => {
+            Ok(ConversationCompletion {
+                conversation: next,
+                change,
+                subscription,
+                switch,
+            }) => {
                 *conversation = next;
                 *thread_subscription = subscription;
                 finish_conversation_change(
@@ -135,14 +128,11 @@ pub(super) fn apply_request_completion(
                     switch,
                     ConversationCompletionPresentation::Silent,
                 );
-                app.finish_issue_start(generation, Ok(numbers));
+                app.finish_issue_start(generation, Ok(()));
             }
             Err(error) => app.finish_issue_start(generation, Err(error)),
         },
         Completion::Memory(_) => unreachable!("memory completions are owned by AppDriver"),
-        Completion::IssueContext { .. } => {
-            unreachable!("issue context completions are owned by AppDriver")
-        }
         Completion::ConfigRefreshed(Ok((config, models))) => {
             apply_tui_config(config, Some(&models), app);
         }
@@ -281,7 +271,11 @@ pub(super) fn apply_request_completion(
                 command,
                 result: update.notice,
             });
-            if let Some(picker) = picker { app.update(ModelEvent::PickerUpdated(picker)); } else { app.update(AppEvent::CommandPanelClosed); }
+            if let Some(picker) = picker {
+                app.update(ModelEvent::PickerUpdated(picker));
+            } else {
+                app.update(AppEvent::CommandPanelClosed);
+            }
         }
         Completion::PreferredModelUpdated {
             command,

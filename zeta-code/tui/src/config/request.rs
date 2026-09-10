@@ -27,7 +27,6 @@ impl Command {
     pub(crate) const fn request_name(&self) -> &'static str {
         match self {
             Self::SetIssues(_) => "zeta-tui-configure-issues",
-            Self::LoadIssueModels { .. } => "zeta-tui-issue-models",
             Self::Connection(_) => "zeta-tui-provider-connection",
             Self::Subscription(_) => "zeta-tui-chatgpt-account",
             Self::OpenEditor => "zeta-tui-read-config",
@@ -43,21 +42,6 @@ where
     T: JsonRpcTransport,
 {
     match command {
-        Command::LoadIssueModels {
-            request_id,
-            expected_revision,
-        } => {
-            let result = (|| {
-                let config = client.read_config().map_err(|error| error.to_string())?;
-                if config.revision != expected_revision || !config.issues.recommend_merge {
-                    return Err("Issue settings changed; reopen model selection".into());
-                }
-                let language = TerminalSettings::from_tui(&config.tui)?.language();
-                let models = client.list_models().map_err(|error| error.to_string())?;
-                Ok(super::issues::model_choices(&config, models, language))
-            })();
-            return Ok(Event::IssueModels { request_id, result });
-        }
         Command::SetIssues(edit) => set_issue_settings(client, edit).map(Event::Updated),
         Command::Connection(request) => {
             let id = request.id.clone();
@@ -109,10 +93,7 @@ fn execute_connection<T: JsonRpcTransport>(
     mut request: super::provider::Request,
 ) -> Result<(ConfigChoices, Option<Result<Vec<String>, String>>), String> {
     let provider = request.config.provider.clone();
-    if matches!(
-        request.operation,
-        super::provider::Operation::Test
-    ) {
+    if matches!(request.operation, super::provider::Operation::Test) {
         use zeta_app_server_protocol::protocol::provider::ProviderProbeResult;
         let model = request.model.clone();
         let key = request.key.map(|key| key.into_parts().1);

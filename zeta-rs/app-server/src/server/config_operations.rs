@@ -109,19 +109,7 @@ impl AppServer {
             .as_ref()
             .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
         let config = zeta_config::IssueConfig {
-            repositories: store
-                .read_snapshot()
-                .map_err(config_error)?
-                .values
-                .issues
-                .repositories,
-            recommend_merge: params.config.recommend_merge,
             auto_refresh_minutes: params.config.auto_refresh_minutes,
-            analysis_model: params
-                .config
-                .analysis_model
-                .map(model_ref_from_dto)
-                .transpose()?,
         };
         let outcome = store
             .apply(ConfigCommandRequest {
@@ -626,9 +614,7 @@ fn config_read_result(
     };
     ConfigReadResult {
         issues: zeta_app_server_protocol::protocol::issues::IssueConfigDto {
-            recommend_merge: snapshot.values.issues.recommend_merge,
             auto_refresh_minutes: snapshot.values.issues.auto_refresh_minutes,
-            analysis_model: snapshot.values.issues.analysis_model.map(model_ref_dto),
         },
         revision: snapshot.revision.get(),
         generation: snapshot.generation.get(),

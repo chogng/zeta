@@ -36,9 +36,7 @@ pub(super) enum RequestKey {
     Git,
     Memory,
     Issues,
-    IssueContext,
     IssueControl,
-    IssueOverview,
 }
 
 #[derive(Default)]
@@ -137,7 +135,6 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         | AppCommand::Thread(ThreadCommand::CycleNextApprovalMode) => None,
         AppCommand::Config(
             ConfigCommand::SetIssues(_)
-            | ConfigCommand::LoadIssueModels { .. }
             | ConfigCommand::OpenEditor
             | ConfigCommand::Subscription(_)
             | ConfigCommand::Edit(_)
@@ -182,9 +179,6 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
             | ThreadCommand::SubmitQueuedTurn { .. }
             | ThreadCommand::SteerTurn { .. },
         ) => Some(RequestKey::Thread),
-        AppCommand::Issues(crate::issues::Command::Overview { .. }) => {
-            Some(RequestKey::IssueOverview)
-        }
         AppCommand::Issues(command) if command.is_control() => Some(RequestKey::IssueControl),
         AppCommand::Issues(_) => Some(RequestKey::Issues),
         AppCommand::Mcp(_) => Some(RequestKey::Mcp),

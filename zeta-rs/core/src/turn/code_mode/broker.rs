@@ -316,7 +316,7 @@ impl CodeModeBroker {
         // available through the JavaScript projection. Keep the runtime catalog independent from
         // the model-facing mode filter while retaining the exact activated registry snapshot.
         let frozen_catalog = self.inner.tools.model_catalog_snapshot(&activated)?;
-        let frozen_catalog = match &snapshot.agent_context_seed {
+        let frozen_catalog = match snapshot.agent_configuration() {
             Some(seed) => frozen_catalog.restrict_to_names(&seed.capability_scope.tools),
             None => frozen_catalog,
         };

@@ -77,6 +77,7 @@ fn thread_update_preserves_typed_scope_and_sequence() {
         stream_cursor: None,
         update: ThreadUpdate::Committed {
             event: ThreadEvent::ThreadCreated {
+                agent: None,
                 session_id,
                 thread_id,
                 title: "Thread".into(),

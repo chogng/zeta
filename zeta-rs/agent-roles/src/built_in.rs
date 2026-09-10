@@ -24,6 +24,11 @@ struct BuiltInRole {
     disallowed_tools: Vec<String>,
     #[serde(default)]
     required_tools: Vec<String>,
+    delegation_tools: Option<Vec<String>>,
+    #[serde(default)]
+    disallowed_delegation_tools: Vec<String>,
+    #[serde(default)]
+    required_delegation_tools: Vec<String>,
     skills: Option<Vec<String>>,
     #[serde(default)]
     required_skills: Vec<String>,
@@ -59,6 +64,13 @@ fn parse(path: &str, contents: &str) -> AgentRole {
     assert!(role.tools.as_deref().is_none_or(valid_references));
     assert!(valid_references(&role.disallowed_tools));
     assert!(valid_references(&role.required_tools));
+    assert!(
+        role.delegation_tools
+            .as_deref()
+            .is_none_or(valid_references)
+    );
+    assert!(valid_references(&role.disallowed_delegation_tools));
+    assert!(valid_references(&role.required_delegation_tools));
     assert!(role.skills.as_deref().is_none_or(valid_references));
     assert!(valid_references(&role.required_skills));
     assert!(valid_references(&role.instructions));
@@ -70,6 +82,17 @@ fn parse(path: &str, contents: &str) -> AgentRole {
     );
     assert!(role.tools.as_ref().is_none_or(|tools| {
         role.required_tools
+            .iter()
+            .all(|required| tools.contains(required))
+    }));
+    assert!(
+        !role
+            .required_delegation_tools
+            .iter()
+            .any(|required| role.disallowed_delegation_tools.contains(required))
+    );
+    assert!(role.delegation_tools.as_ref().is_none_or(|tools| {
+        role.required_delegation_tools
             .iter()
             .all(|required| tools.contains(required))
     }));
@@ -89,6 +112,9 @@ fn parse(path: &str, contents: &str) -> AgentRole {
         tools: role.tools,
         disallowed_tools: role.disallowed_tools,
         required_tools: role.required_tools,
+        delegation_tools: role.delegation_tools,
+        disallowed_delegation_tools: role.disallowed_delegation_tools,
+        required_delegation_tools: role.required_delegation_tools,
         skills: role.skills,
         required_skills: role.required_skills,
         instructions: role.instructions,

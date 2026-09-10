@@ -39,7 +39,7 @@ impl JsonRpcTransport for RecordingTransport {
 fn issue_config_write_uses_its_backend_contract_without_changing_tui_preferences() {
     let mut current = empty_config_snapshot();
     current.revision = 2;
-    current.issues.recommend_merge = false;
+    current.issues.auto_refresh_minutes = 30;
     let requests = Arc::new(Mutex::new(Vec::new()));
     let mut client = AppServerClient::new(RecordingTransport {
         requests: requests.clone(),
@@ -71,36 +71,10 @@ fn issue_config_write_uses_its_backend_contract_without_changing_tui_preferences
     assert_eq!(requests[0]["params"]["expectedRevision"], 1);
     assert_eq!(
         requests[0]["params"]["config"],
-        serde_json::json!({"recommendMerge":false,"autoRefreshMinutes":10,"analysisModel":null})
+        serde_json::json!({"autoRefreshMinutes":30})
     );
     assert!(requests[0]["params"].get("tui").is_none());
     assert!(requests[0]["params"].get("preferredModel").is_none());
-}
-
-#[test]
-fn issue_config_disabled_does_not_load_a_model_catalog() {
-    let mut config = empty_config_snapshot();
-    config.issues.recommend_merge = false;
-    let requests = Arc::new(Mutex::new(Vec::new()));
-    let mut client = AppServerClient::new(RecordingTransport {
-        requests: requests.clone(),
-        responses: VecDeque::from([response(1, serde_json::to_value(&config).unwrap())]),
-    });
-    let result = super::execute(
-        &mut client,
-        crate::config::Command::LoadIssueModels {
-            request_id: crate::client::new_command_id("test-issue-models"),
-            expected_revision: config.revision,
-        },
-    )
-    .unwrap();
-    assert!(matches!(
-        result,
-        crate::config::Event::IssueModels { result: Err(_), .. }
-    ));
-    let requests = requests.lock().unwrap();
-    assert_eq!(requests.len(), 1);
-    assert_eq!(requests[0]["method"], "config/read");
 }
 
 #[test]

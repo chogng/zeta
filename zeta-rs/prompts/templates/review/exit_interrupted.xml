@@ -1,0 +1,3 @@
+<review_end status="interrupted">
+The preceding review was interrupted. Its partial output is not a completed assessment, and missing findings do not mean the changes are correct. Tools may have partially executed; inspect their state before retrying. If a complete review is still requested, perform it again.
+</review_end>

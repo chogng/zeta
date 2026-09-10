@@ -6,6 +6,7 @@ use ts_rs::TS;
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketplacePackageRefDto {
+    /// Source-qualified plugin identity: `<name>@<marketplace>`.
     pub id: String,
     pub version: String,
     pub digest: String,
@@ -67,6 +68,7 @@ pub struct MarketplaceAvailableCapabilityDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketplacePackageSummaryDto {
+    /// Source-qualified plugin identity returned unchanged to lifecycle requests.
     pub id: String,
     pub version: String,
     pub package_type: String,
@@ -91,6 +93,7 @@ pub struct MarketplaceSearchResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketplaceGetParams {
+    /// Exact `<name>@<marketplace>` returned by search; unqualified names are rejected.
     pub package_id: String,
     pub version: Option<String>,
 }
@@ -134,6 +137,7 @@ pub struct MarketplaceUpstreamReferenceDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketplaceDownloadParams {
+    /// Exact `<name>@<marketplace>` returned by search; unqualified names are rejected.
     pub package_id: String,
     pub version: Option<String>,
 }
@@ -141,6 +145,7 @@ pub struct MarketplaceDownloadParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketplaceInstallParams {
+    /// Exact `<name>@<marketplace>` returned by search; unqualified names are rejected.
     pub package_id: String,
     pub version: Option<String>,
 }

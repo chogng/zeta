@@ -75,6 +75,9 @@ pub enum ToolExecutionAuthority {
 )]
 pub enum ThreadEvent {
     ThreadCreated {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        agent: Option<crate::AgentConfiguration>,
         session_id: SessionId,
         thread_id: ThreadId,
         title: String,

@@ -59,6 +59,7 @@ fn reducer_preserves_the_thread_creation_timestamp() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
+                agent: None,
                 session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 title: "test".into(),
@@ -79,6 +80,7 @@ fn reducer_preserves_when_and_why_a_thread_was_archived() {
             1,
             100,
             ThreadEvent::ThreadCreated {
+                agent: None,
                 session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
                 thread_id: thread_id.clone(),
                 title: "test".into(),
@@ -126,6 +128,7 @@ fn reducer_accumulates_terminal_turn_durations_and_keeps_the_active_turn_start()
             1,
             100,
             ThreadEvent::ThreadCreated {
+                agent: None,
                 session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
                 thread_id: thread_id.clone(),
                 title: "test".into(),
@@ -200,6 +203,7 @@ fn reducer_keeps_legacy_external_execution_attempts_readable() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
+                agent: None,
                 session_id: zeta_protocol::SessionId::new("session_1")
                     .expect("test ID is non-empty"),
                 thread_id: thread_id.clone(),
@@ -264,6 +268,7 @@ fn reducer_rebuilds_a_failed_turn_with_stable_error_details() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
+                agent: None,
                 session_id: zeta_protocol::SessionId::new("session_1")
                     .expect("test ID is non-empty"),
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
@@ -363,6 +368,7 @@ fn reducer_rebuilds_model_calibration_and_rejects_unknown_algorithm_revisions() 
         envelope(
             1,
             ThreadEvent::ThreadCreated {
+                agent: None,
                 session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 title: "test".into(),
@@ -438,6 +444,7 @@ fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
         envelope(
             1,
             ThreadEvent::ThreadCreated {
+                agent: None,
                 session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 title: "test".into(),
@@ -540,6 +547,7 @@ fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
 #[test]
 fn reducer_rejects_history_older_than_minimum_supported_schema() {
     let event = ThreadEvent::ThreadCreated {
+        agent: None,
         session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
         thread_id: ThreadId::new("thread_1").unwrap(),
         title: "legacy".into(),
@@ -560,6 +568,7 @@ fn reducer_requires_an_ordered_fork_import_to_complete_before_other_facts() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
+                agent: None,
                 session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
                 thread_id: thread_id.clone(),
                 title: "fork child".into(),
@@ -629,6 +638,7 @@ fn reducer_rejects_a_fork_import_with_an_incomplete_tool_exchange() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
+                agent: None,
                 session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
                 thread_id: thread_id.clone(),
                 title: "fork child".into(),
@@ -690,6 +700,7 @@ fn empty_fork_completion_preserves_the_source_thread_identity() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
+                agent: None,
                 session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
                 thread_id: thread_id.clone(),
                 title: "empty fork child".into(),
@@ -741,6 +752,7 @@ fn reducer_verifies_and_rebuilds_a_context_checkpoint() {
         envelope(
             1,
             ThreadEvent::ThreadCreated {
+                agent: None,
                 session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 title: "test".into(),
@@ -868,6 +880,7 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
+                agent: None,
                 session_id: zeta_protocol::SessionId::new("session_1")
                     .expect("test ID is non-empty"),
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
@@ -969,6 +982,7 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
         envelope(
             1,
             ThreadEvent::ThreadCreated {
+                agent: None,
                 session_id: zeta_protocol::SessionId::new("session_1")
                     .expect("test ID is non-empty"),
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
@@ -1071,6 +1085,7 @@ fn reducer_rejects_a_tool_result_without_its_tool_call() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
+                agent: None,
                 session_id: zeta_protocol::SessionId::new("session_1")
                     .expect("test ID is non-empty"),
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
@@ -1188,6 +1203,7 @@ fn started_sandboxed_tool_snapshot() -> ThreadSnapshot {
         envelope(
             1,
             ThreadEvent::ThreadCreated {
+                agent: None,
                 session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 title: "test".into(),

@@ -27,7 +27,6 @@ use zeta_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
 };
 
-const ISSUE_MODEL_ROW: &str = "issue-analysis-model";
 const ISSUE_REFRESH_ROW: &str = "issue-refresh";
 const ISSUE_REFRESH_INTERVALS: [u32; 5] = [0, 5, 10, 30, 60];
 
@@ -41,12 +40,8 @@ pub(crate) struct ConfigEdit {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ConfigSelectionAction {
-    OpenIssueWorkflow,
     SetIssues(super::IssueConfigEdit),
     AdjustIssueRefresh(super::IssueConfigEdit),
-    OpenIssueModels {
-        expected_revision: u64,
-    },
     OpenProvider(super::provider::Settings),
     Connection(super::provider::Request),
     OpenSubscription,
@@ -112,8 +107,6 @@ pub(crate) struct ProviderApiKeyPrompt {
 #[derive(Debug)]
 pub(crate) struct ConfigEditor {
     revision: u64,
-    issue_models: Option<ListSelection<ConfigSelectionAction>>,
-    issue_model_request: Option<zeta_protocol::CommandId>,
     selection: ListSelection<ConfigSelectionAction>,
     provider_panel: Option<super::provider::Panel>,
     subscription: Option<ListSelection<ConfigSelectionAction>>,
@@ -130,10 +123,6 @@ struct ProviderApiKeyPromptState {
 
 #[derive(Debug)]
 pub(crate) enum ConfigEditorOutcome {
-    LoadIssueModels {
-        request_id: zeta_protocol::CommandId,
-        expected_revision: u64,
-    },
     Action(ConfigSelectionAction),
     SaveApiKey(ProviderApiKeyEdit),
     Consumed,
@@ -151,8 +140,6 @@ impl ConfigEditor {
     pub(crate) fn new(spec: ConfigChoices) -> Self {
         Self {
             revision: config_revision(&spec),
-            issue_models: None,
-            issue_model_request: None,
             selection: ListSelection::new(spec.model, spec.actions),
             provider_panel: None,
             subscription: None,
@@ -165,15 +152,6 @@ impl ConfigEditor {
         let revision = config_revision(&spec);
         if revision < self.revision {
             return;
-        }
-        if revision != self.revision
-            || !spec
-                .actions
-                .values()
-                .any(|action| matches!(action, ConfigSelectionAction::OpenIssueModels { .. }))
-        {
-            self.issue_models = None;
-            self.issue_model_request = None;
         }
         self.revision = revision;
         if let Some(provider_panel) = &mut self.provider_panel {
@@ -194,19 +172,6 @@ impl ConfigEditor {
     }
 
     pub(crate) fn handle_key(&mut self, key: crossterm::event::KeyEvent) -> ConfigEditorOutcome {
-        if let Some(models) = self.issue_models.as_mut() {
-            return match models.handle_key(key) {
-                ListSelectionOutcome::Activate(action) => {
-                    self.issue_models = None;
-                    ConfigEditorOutcome::Action(action)
-                }
-                ListSelectionOutcome::Dismiss => {
-                    self.issue_models = None;
-                    ConfigEditorOutcome::Consumed
-                }
-                _ => ConfigEditorOutcome::Consumed,
-            };
-        }
         if let Some(subscription) = self.subscription.as_mut() {
             let outcome = subscription.handle_key(key);
             return self.handle_subscription_outcome(outcome);
@@ -276,16 +241,6 @@ impl ConfigEditor {
         outcome: ListSelectionOutcome<ConfigSelectionAction>,
     ) -> ConfigEditorOutcome {
         match outcome {
-            ListSelectionOutcome::Activate(ConfigSelectionAction::OpenIssueModels {
-                expected_revision,
-            }) => {
-                let request_id = crate::client::new_command_id("issue-models");
-                self.issue_model_request = Some(request_id.clone());
-                ConfigEditorOutcome::LoadIssueModels {
-                    request_id,
-                    expected_revision,
-                }
-            }
             ListSelectionOutcome::Activate(ConfigSelectionAction::SetLanguage(edit)) => {
                 language_outcome(edit, ListSelectionAdjustment::Next)
             }
@@ -308,8 +263,7 @@ impl ConfigEditor {
             }
             ListSelectionOutcome::Activate(action) => ConfigEditorOutcome::Action(action),
             ListSelectionOutcome::Adjust(action, adjustment) => match action {
-                ConfigSelectionAction::OpenIssueModels { .. }
-                | ConfigSelectionAction::OpenProviderApiKey { .. }
+                ConfigSelectionAction::OpenProviderApiKey { .. }
                 | ConfigSelectionAction::OpenProvider(_)
                 | ConfigSelectionAction::Connection(_)
                 | ConfigSelectionAction::OpenSubscription
@@ -337,10 +291,6 @@ impl ConfigEditor {
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
-        if let Some(models) = self.issue_models.as_mut() {
-            models.handle_paste(pasted);
-            return;
-        }
         if let Some(subscription) = self.subscription.as_mut() {
             subscription.handle_paste(pasted);
         } else if let Some(prompt) = self.prompt.as_mut() {
@@ -353,9 +303,6 @@ impl ConfigEditor {
     }
 
     pub(crate) fn page(&self) -> ConfigEditorPage<'_> {
-        if let Some(models) = &self.issue_models {
-            return ConfigEditorPage::Selection(models.state());
-        }
         if let Some(subscription) = &self.subscription {
             return ConfigEditorPage::Selection(subscription.state());
         }
@@ -369,9 +316,6 @@ impl ConfigEditor {
     }
 
     pub(crate) fn key_hints(&self) -> &str {
-        if let Some(models) = &self.issue_models {
-            return models.key_hints();
-        }
         if let Some(subscription) = &self.subscription {
             return subscription.key_hints();
         }
@@ -390,43 +334,10 @@ impl ConfigEditor {
     }
 
     pub(crate) fn selection(&self) -> Option<&crate::widgets::list_selection::ListSelectionState> {
-        if let Some(models) = &self.issue_models {
-            return Some(models.state());
-        }
         if let Some(subscription) = &self.subscription {
             return Some(subscription.state());
         }
         (self.prompt.is_none() && self.provider_panel.is_none()).then(|| self.selection.state())
-    }
-
-    pub(crate) fn finish_issue_models(
-        &mut self,
-        request_id: zeta_protocol::CommandId,
-        result: Result<ConfigChoices, String>,
-    ) {
-        if self.issue_model_request.as_ref() != Some(&request_id) {
-            return;
-        }
-        self.issue_model_request = None;
-        if self
-            .selection
-            .state()
-            .selected_item()
-            .and_then(ListSelectionItem::id)
-            != Some(&ListSelectionItemId::new(ISSUE_MODEL_ROW))
-        {
-            return;
-        }
-        match result {
-            Ok(spec) if config_revision(&spec) == self.revision => {
-                self.issue_models = Some(ListSelection::new(spec.model, spec.actions))
-            }
-            Ok(_) => self
-                .selection
-                .state_mut()
-                .set_message(Some("Configuration changed; reopen model selection".into())),
-            Err(error) => self.selection.state_mut().set_message(Some(error)),
-        }
     }
 
     pub(crate) fn open_subscription(&mut self, spec: ConfigChoices) {
@@ -658,42 +569,7 @@ pub(crate) fn config_choices(
             Message::ConfigStatusLineExpressiveDescription,
         ),
     };
-    let issue_merge_id = ListSelectionItemId::new("issue-merge-recommendations");
-    let mut toggled_issues = config.issues.clone();
-    toggled_issues.recommend_merge = !toggled_issues.recommend_merge;
-    actions.insert(
-        issue_merge_id.clone(),
-        ConfigSelectionAction::SetIssues(super::IssueConfigEdit {
-            expected_revision: config.revision,
-            config: toggled_issues,
-        }),
-    );
-    let issue_model_id = ListSelectionItemId::new(ISSUE_MODEL_ROW);
-    if config.issues.recommend_merge {
-        actions.insert(
-            issue_model_id.clone(),
-            ConfigSelectionAction::OpenIssueModels {
-                expected_revision: config.revision,
-            },
-        );
-    }
-    let model_label = config
-        .issues
-        .analysis_model
-        .as_ref()
-        .map(|model| format!("{}/{}", model.provider, model.model))
-        .unwrap_or_else(|| nls::text(language, Message::ConfigIssueModelMissing).into());
-    let model_item = ListSelectionItem::new(nls::text(language, Message::ConfigIssueModel))
-        .with_columns(
-            nls::text(language, Message::ConfigIssueModel),
-            nls::text(language, Message::ConfigIssueModelDescription),
-            model_label,
-        );
-    let mut issue_items = vec![if config.issues.recommend_merge {
-        model_item.with_id(issue_model_id)
-    } else {
-        model_item
-    }];
+    let mut issue_items = Vec::new();
     let issue_refresh_id = ListSelectionItemId::new(ISSUE_REFRESH_ROW);
     actions.insert(
         issue_refresh_id.clone(),
@@ -711,13 +587,6 @@ pub(crate) fn config_choices(
                 issue_refresh_label(config.issues.auto_refresh_minutes),
             ),
     );
-    let workflow_id = ListSelectionItemId::new("issue-workflow");
-    actions.insert(
-        workflow_id.clone(),
-        ConfigSelectionAction::OpenIssueWorkflow,
-    );
-    issue_items
-        .push(ListSelectionItem::new("Repository workflow and assignment").with_id(workflow_id));
     let issue_tab =
         ListSelectionGroup::new(nls::text(language, Message::ConfigIssues), issue_items);
     let config_items = vec![
@@ -769,13 +638,6 @@ pub(crate) fn config_choices(
                 nls::text(language, Message::ConfigLanguage),
                 nls::text(language, Message::ConfigLanguageDescription),
                 language.label(),
-            ),
-        ListSelectionItem::new(nls::text(language, Message::ConfigIssueMerge))
-            .with_id(issue_merge_id)
-            .with_columns(
-                nls::text(language, Message::ConfigIssueMerge),
-                nls::text(language, Message::ConfigIssueMergeDescription),
-                checkbox(config.issues.recommend_merge),
             ),
         ListSelectionItem::new(nls::text(language, Message::ConfigStatusLineStyle))
             .with_id(style_id)

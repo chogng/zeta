@@ -2,6 +2,8 @@
 
 > 状态：Proposed。本文件拥有 Zeta Agent Role 的产品边界、统一契约、内置清单和维护规则；当前实现见 [`zeta-agent-roles`](../zeta-rs/agent-roles/README.md)，委托运行与 Agent 树见 [`core-multi-agent.md`](core-multi-agent.md)，自定义对象和 `.zeta` 边界见 [`agent-customizations.md`](agent-customizations.md)，`/develop` 的阶段、产物和失效流程见 [`develop.md`](develop.md)。
 
+> 2026-09-09 设计复核：默认启动改为 `Default`，根与子 Thread 共用角色解析；共同规则、模型指导和 Role 的组合、Codex/Claude Code/VS Code 参考与性能评测统一维护在 [Agent 指令组合、模型专化与评测](../zeta-rs/docs/agent-instructions.md)。通用启动与组合已接入；本文第 8 节区分已实现能力和剩余产品契约。
+
 Zeta 只有一种 Agent 定义。内置 Agent 与 `.zeta/agents` 自定义 Agent 的差别是来源、可编辑性和发布周期；“根 Agent”“子 Agent”不是两种定义，只是某次运行在 Agent 树中的相对位置。代码和协议使用“会话入口运行”与“委托运行”表达关系，界面可以在树中把被委托节点简称为“子 Agent”。
 
 ## 快速理解
@@ -34,7 +36,7 @@ Agent 定义回答“使用什么职责、提示词、模型策略、工具和�
 
 定义不是正在运行的 Agent。会话入口和每次委托都使用同一种定义解析流程，并冻结角色提示词、专长、工具、能力、模型策略和上下文策略；委托另外创建拥有独立 `ThreadId`、Turn、上下文和取消域的 Thread。
 
-内置与自定义定义必须使用带来源的稳定身份，例如 `BuiltIn(explorer)` 与 `Directory(dir_id, explorer)`。内部不能再只用裸 `name` 标识定义；自定义同名项不能覆盖或伪装成内置定义，显式选择出现歧义时必须要求准确来源。默认 `general` 也应是一份普通内置定义，而不是被当作所谓“本体”的特殊运行时。
+内置与自定义定义必须使用带来源的稳定身份，例如 `BuiltIn(explorer)` 与 `Directory(dir_id, explorer)`。内部不能再只用裸 `name` 标识定义；自定义同名项不能覆盖或伪装成内置定义，显式选择出现歧义时必须要求准确来源。`Default` 表示不应用专用 Role，使用正常 Agent 配置；它与专用 Role 共用执行系统，不要求存在 `general.toml`。
 
 ## 2. `zeta-agent-roles` 统一拥有角色定义
 
@@ -46,8 +48,7 @@ zeta-rs/agent-roles/
 ├── README.md
 ├── assets/
 │   └── builtins/
-│       ├── general.toml
-│       └── <role>.toml
+│       └── <role>.toml    # 专用 Role；Default 不需要独立文件
 └── src/
     ├── built_in.rs
     ├── catalog.rs
@@ -58,10 +59,10 @@ zeta-rs/agent-roles/
 | Owner | 长期职责 | 明确不负责 |
 | --- | --- | --- |
 | `zeta-agent-roles` | 拥有统一 `AgentRole`、来源身份和启动策略；打包内置定义；扫描并归一化 `.zeta/agents/*.md`；校验并发布不可变 catalog | Thread、模型调用、工具执行、设置 UI、权限授予 |
-| `zeta-prompts` | 提供共享提示词 artifact 与冻结机制 | 集中保存每个内置角色的专用提示词 |
+| `zeta-prompts` | 拥有所有 Agent 共用的规则、共享流程模板、artifact 与冻结机制 | 每个 Role 的专用职责、模型特有差异 |
 | App Server | 合并 catalog；按会话、委托或工作流筛选定义；把 Agent 模型策略和启动请求交给 `zeta-models-manager`；解析工具与能力；创建冻结运行快照 | 自己维护模型候选排序、维护来源专属选择分支、把内置定义变成设置项、保存前端状态 |
-| `zeta-models-manager` | 维护 provider 无关的模型事实、可用性、能力筛选和确定性模型选择；按策略生成请求模型、实际模型与替换原因 | 解释 Agent 职责、读取 Agent 定义、调用模型、保存 Thread |
-| `zeta-core` | Thread 生命周期、委托上下文物化、消息、等待、取消和执行时能力收窄 | 扫描定义、选择产品角色 |
+| `zeta-models-manager` | 维护模型事实、能力筛选和模型选择；模型相关指令资产与选择入口见指令组合设计 | 解释 Agent 职责、读取 Agent 定义、调用模型、保存 Thread |
+| `zeta-core` | 最终上下文组装；Thread、委托、消息、等待、取消和执行时能力收窄 | 扫描定义、选择产品角色 |
 | `zeta-protocol` | 定义来源身份、冻结快照、启动来源、上下文模式和能力上限的跨边界结构 | 角色内容和选择策略 |
 | Desktop、TUI | 展示运行中的 Agent 树、状态、批准和结果；自定义设置只投影自定义 catalog | 解析或修改内置定义 |
 
@@ -69,7 +70,7 @@ zeta-rs/agent-roles/
 
 ## 3. 统一定义契约与内置格式
 
-每个内置 Agent 使用一个独立的 `assets/builtins/<role>.toml`。描述、能力配置和 `developer_instructions` 作为一个版本单元发布，不拼进所有角色共享的大提示词，也不允许通过设置修改。
+每个内置专用 Role 使用一个独立的 `assets/builtins/<role>.toml`。描述、能力配置和 `developer_instructions` 作为一个版本单元发布，不拼进所有角色共享的大提示词，也不允许通过设置修改。共同规则与当前 Role 在执行时组合，默认启动不附加专用 Role 正文。
 
 统一领域类型至少包含带来源的 `AgentRoleId`、选择 metadata、提示词、模型策略、工具与 Skill 上限、上下文策略、启动策略和带作用范围的执行能力上限。来源由 catalog loader 注入，不能由内置 Role TOML 或 `.zeta/agents/*.md` 自报。当前 `zeta-agent-roles::AgentRole` 已统一表达来源、内置版本、内容摘要、提示词及已有的模型、Tool、Skill、Instruction 声明；上下文策略、启动策略和带作用范围能力仍需继续补齐。
 
@@ -83,6 +84,9 @@ specialties = ["code.explore", "code.trace"]
 tools = ["read_file", "grep", "glob", "search_code"]
 required_tools = ["read_file", "grep", "glob"]
 disallowed_tools = []
+delegation_tools = []
+required_delegation_tools = []
+disallowed_delegation_tools = []
 skills = []
 required_skills = []
 developer_instructions = """
@@ -115,9 +119,10 @@ scope = "thread_dirs"
 - `description` 只用于选择，必须短、具体，并写清何时使用；完整行为规则放在同一 TOML 的 `developer_instructions`。
 - 内置格式的 `version` 是定义内容版本；提示词、工具、Skill、模型、上下文、启动范围或能力上限变化都必须提升，并与完整内容摘要一起冻结。自定义来源继续使用 catalog generation 与内容摘要表达版本身份。
 - `specialties` 描述角色擅长解决的问题，用于路由和评测，不产生执行权限。
-- `tools` 省略时继承调用方当前工具上限，存在时是精确白名单；`disallowed_tools` 从继承或白名单结果中删除工具，任何形式都不能扩大调用方上限。
+- `tools` 省略时继承调用方的下放工具上限，存在时是精确白名单；`disallowed_tools` 从继承或白名单结果中删除工具，任何形式都不能扩大调用方的下放上限。
 - `required_tools` 只做启动前检查，缺少任一工具就不创建；它不授予工具，也不改变最终可见集合。
-- `skills` 省略时继承调用方已经激活的 Skill，存在时只保留列出的 Skill；`required_skills` 同样只做启动前检查。
+- `delegation_tools`、`disallowed_delegation_tools` 和 `required_delegation_tools` 使用相同的白名单、黑名单和启动门禁语义，但只决定该 Agent 能向直接子 Agent 下放的工具上限；省略 `delegation_tools` 表示继承调用方的下放上限。自身 Tool 与下放 Tool 互不隐含，二者都不能越过任何祖先的下放上限。
+- 委托的 `skills` 省略时继承调用方已经激活的 Skill，存在时只保留列出的 Skill；根角色从已授权 catalog 解析声明的 Skill。`required_skills` 不授予权限，缺失时创建失败。
 - `capabilities` 是带作用范围的执行能力上限，使用现有 `CapabilityKind` 语义；它不能因为提示词或工具引用而扩大。
 - `model.default` 使用 `session` 或准确 `provider/model`。`session` 表示当前 Session 的模型与推理配置；没有 Session 的工作流改用自己的模型基线。委托不从中间调用者继承临时模型覆盖。
 - `model.allow_override` 独立决定本次启动能否请求其他模型；被禁止的覆盖是无效启动请求，不能被静默忽略。
@@ -145,14 +150,14 @@ Agent 定义本身不继承另一个 Agent。会话入口从会话已经解析�
 | --- | --- | --- |
 | 委托任务 | 始终传递 | 必须是完整、可独立执行的任务，不能只传一句角色名。 |
 | 专用提示词 | 始终使用该 Role 自己的 `developer_instructions` | 不能由调用方对话或设置替换；系统安全规则优先级更高。 |
-| 产品安全与基础规则 | 重新应用并冻结适用于委托 Thread 的规则 | 不是复制调用方整段系统提示词，定义提示词不能覆盖它们。当前协调器仍复制调用方 Turn 的 `TurnInstructions`，接入内置定义前必须改正。 |
+| 产品安全与基础规则 | 重新应用并冻结适用于委托 Thread 的规则 | 不是复制调用方整段系统提示词，定义提示词不能覆盖它们。新委托在创建前冻结自己的共享规则与模型指导，历史种子继续使用其已记录的内容。 |
 | 工作区 Instructions | 按委托 Thread 的准确目录和作用范围重新解析后冻结 | 同一环境且目录作用范围完全一致时可以复用已冻结基线；环境或目录变化时必须重新解析，不能复制无关调用方规则。 |
 | 调用方完整对话 | 默认不传递 | `full` 只允许显式请求，且定义必须声明允许；初始内置定义均不默认允许。 |
 | 选定消息、检查点和产物 | 按角色默认策略传递 | 创建时复制为不可变种子；不建立实时共享上下文。 |
 | 隐藏推理过程 | 不传递 | 传递结论、证据、计划或检查点，不依赖另一 Agent 的未公开推理。 |
 | 模型 | 默认使用当前 Session 已解析的模型作为启动基线 | 本次启动覆盖获准时优先于定义偏好；准确模型不可用时按定义策略选择兼容模型并警告。没有兼容候选或策略禁止替换时不创建。 |
 | 推理等级与服务等级 | 默认使用 Session 的模型调用配置作为启动基线 | 显式模型没有显式推理等级时使用该模型的默认值；最终配置仍受预算和产品策略限制并随运行冻结。 |
-| 工具 | 不整体继承 | 取定义白名单、调用方可见集合和环境可用集合的交集；缺少必需项就不创建。 |
+| 工具 | 自身与下放范围分别冻结 | 两组范围分别应用 Role 白名单、黑名单和启动门禁，并与调用方下放上限、环境可用集合求交集；自身不能调用只存在于下放范围的 Tool。 |
 | Skills | 只加载定义明确声明且当前已授权的 Skill | 不自动复制调用方全部已激活 Skill。 |
 | 能力与批准 | 只继承更窄的上限 | 调用方批准不是被委托方的永久批准；具体动作仍按策略审查。 |
 | Environment 与目录 | 默认使用调用方 Thread 的执行环境和已授权目录快照 | 切换环境必须显式选择并重新授权，不能通过定义暗中切换。 |
@@ -188,15 +193,15 @@ Agent 只声明默认值、覆盖权限、替换范围和能力要求。App Serv
 
 ## 5. 内置 Agent 清单
 
-目标形态中，默认 `general` 也是 `zeta-agent-roles` 打包的普通内置 Role，而不是特殊“本体”；当前仍由 App Server 生成 `general` fallback，尚待迁入统一 catalog。以下清单维护专化 Role。所有内置 Role 默认使用本次启动已经解析的模型调用配置；表格只列不同于通用规则的任务、上下文、工具和能力边界。
+普通会话与普通 worker 都选择 `Default`，不通过任务关键词寻找专用 Role，也不继承父 Role 的职责。当前 catalog 只打包 `issue.toml`，`general.toml` 已删除；根角色通过 `session/create.agent` 选择。以下清单维护专用 Role；所有内置 Role 默认使用本次启动已经解析的模型调用配置，表格只列不同于通用规则的任务、上下文、工具和能力边界。
 
 ### 5.1 普通可选 Agent
 
-这些定义允许用于会话入口和 Agent 委托，可以被用户显式选择或参与对应来源的自动选择，但仍不进入设置页。
+这些定义允许用于会话入口和 Agent 委托，可以被用户或模型显式选择，但仍不进入设置页。模型可以参考描述作出选择，执行框架不按任务文本重新替它选择角色。
 
 | ID | 允许启动来源 | 专长与自己的提示词重点 | 默认上下文 | 工具规则 | 执行能力上限 | 明确不做 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `issue` | 委托 | 读取 `[issue #N]` 引用，通过 GitHub Skill 管理 Issue 状态，并把实现分配给独立 Agent | `fresh` 加明确 Issue 引用 | 保留调用方工具上限；要求 `search_tools`、`call_mcp_tool`、`spawn_agent`、`send_agent_message`、`wait_agent` | 调用方已经授权的能力上限 | 直接修改代码、创建 Session、直接管理 worktree 或分支 |
+| `issue` | 会话、委托 | 读取 Issue 引用，通过 GitHub Skill 管理 Issue 状态，并把实现交给 Default worker | `fresh` 加明确 Issue 引用 | 自身只保留 GitHub 与协调 Tool；下放范围受会话与祖先上限约束 | 本次启动已经授权的能力上限 | 直接修改代码、拥有 Issue 专属执行状态机 |
 | `explorer` | 会话、委托 | 回答范围明确的代码问题；沿真实符号和调用链给出文件、行号、测试与不确定点 | 会话输入或 `selected` | `read_file`、`grep`、`glob`、`search_code` | 授权目录只读 | 修改文件、运行长任务、泛泛设计 |
 | `implementer` | 会话、委托 | 在明确文件或模块责任内完成代码修改；保留他人改动，运行最小验证并报告改动与测试 | 会话输入或 `checkpointAndTail` | `read_file`、`grep`、`glob`、`search_code`、`process_start`、`process_wait`、`process_terminate`、`apply_patch`、`edit`、`write_file` | 授权目录读写、受沙箱约束的进程 | 外部服务修改、凭据使用、超出分配范围的重构 |
 | `reviewer` | 会话、委托 | 独立审查目标、最终 diff 与验证证据；先报可操作问题、严重度和证据，再给摘要 | 会话输入或 `fresh` 加显式目标与证据 | `read_file`、`grep`、`glob`、`search_code`、`process_start`、`process_wait`、`process_terminate` | 源码只读、只读进程检查 | 修改代码、接受工作 Agent 的总结代替证据 |
@@ -257,7 +262,7 @@ flowchart LR
     BuiltIn[内置 catalog] --> Eligible
     Custom[.zeta/agents 自定义 catalog] --> Eligible
     Baseline[启动模型、工具、能力与环境基线] --> Eligible
-    Eligible --> Select[按启动来源显式选择或唯一自动匹配]
+    Eligible --> Select[Default 或准确来源的专用 Role]
     Select --> Freeze[冻结定义、模型、工具、能力与上下文]
     Freeze --> Thread[创建 Agent 的 Thread]
     Thread --> Record[运行树、批准、结果与失败记录]
@@ -267,10 +272,10 @@ flowchart LR
 
 选择规则：
 
-1. 先按 `launch` 筛选本次会话、委托或工作流允许的定义，再按所需工具、能力、模型和上下文模式计算可用集合；不可执行的定义不能参与匹配。
+1. 先按 `launch` 筛选本次会话、委托或工作流允许的定义，再按所需工具、能力、模型和上下文模式计算可用集合；不可执行的定义不能被启动。
 2. 委托来源继续检查准确调用方身份、Agent 树深度和预算；工作流来源继续检查工作流与阶段身份。
 3. 显式选择必须解析到唯一的来源身份；显式名称也不能绕过调用范围，内置名称不能被自定义定义覆盖。
-4. 自动选择只使用简短 `description` 和 `specialties` 做候选匹配；分数并列或证据不足时，会话入口要求用户明确选择，委托调用方重新给出明确目标，工作流按自身确定性规则停止。
+4. 省略专用角色表示 `Default`，不按任务关键词匹配，也不继承父 Role。描述和 `specialties` 可供用户或模型选择时参考；准确指定的定义不存在或有歧义时必须返回错误。
 5. 选择成功后冻结全部输入，再创建 Thread；不能先创建再补工具、权限或提示词。
 6. 内置 catalog 只投影给本次启动来源允许的选择器和运行观测，不进入设置服务、设置 schema 或自定义 Agent 管理页。
 
@@ -282,7 +287,7 @@ flowchart LR
 - **权限只收窄**：定义清单不是授权凭证；即使清单声明某项能力，也必须处于启动基线和系统授权之内。
 - **无同名覆盖**：自定义定义不能替换内置定义；迁移旧的裸名称前必须先增加来源身份。
 - **无身份特权**：位于根节点不会自动获得委托能力，被委托节点也不会自动失去委托能力；是否可以继续委托完全由冻结工具、允许目标、深度、预算和权限决定。
-- **递归委托必须显式**：只有协调型 Role 可以保留 `spawn_agent`、`send_agent_message` 和 `wait_agent`。当前 `issue` Role 已明确需要三者；允许调用哪些目标 Role 的结构化限制仍需补齐，不能只依赖提示词。
+- **委托能力显式受控**：自身 Tool 决定能否调用委托工具，下放 Tool 上限独立决定后代能获得什么；不能仅凭角色名称授予或禁止委托。当前 `issue` Role 已把自身协调 Tool 与实现 Tool 下放上限分离；目标限制、深度与预算仍由通用运行时检查，不能只依赖提示词。
 - **控制资源隔离**：Intent、Spec、Plan、验收记录、测试入口、项目指令、权限和验证配置不能通过普通文件写工具越权修改；修改控制资源的角色不能用修改后的规则批准自己的结果。
 - **无实时上下文共享**：委托运行只读冻结种子和有来源的后续消息；不能读取调用方实时草稿、未提交推理或其他 Agent 的内存。
 - **批准保持可见**：内置定义不可配置不代表可以绕过批准、沙箱、网络规则、凭据边界或外部修改审查。
@@ -293,28 +298,29 @@ flowchart LR
 | 能力 | 状态 | 证据或缺口 |
 | --- | --- | --- |
 | `.zeta/agents/*.md` 自定义定义 catalog | 已实现 | `zeta-agent-roles` 扫描、校验并发布不可变 snapshot。 |
-| 委托时显式/唯一 metadata 自动选择 | 已实现 | App Server 的 `agent_selection.rs` 在 `spawn_agent` 路径消费内置和目录 catalog。 |
+| 根与委托的准确角色选择 | 已实现 | `server/agent_selection.rs` 共用 Default/Exact 解析，不使用任务关键词路由。 |
 | 独立委托 Thread、消息、等待、取消与持久结果 | 已实现 | `zeta-core` 多代理运行时。 |
 | `fresh`、`selected`、`lastTurns`、`checkpointAndTail`、`full` | 已实现 | `spawn_agent` 当前默认 `fresh`，其他模式显式传入。 |
-| 委托工具只能从调用方当前集合中收窄 | 已实现 | `DelegatedCapabilityScope` 当前冻结工具与 Skill。 |
-| Role Tool 白名单、黑名单与启动门禁 | 已实现 | `tools` 省略即继承、存在即白名单，`disallowed_tools` 做减法，`required_tools` 缺失时拒绝创建；最终名称集合进入 `AgentContextSeed`，模型输入、直接工具调用和 Code Mode 内层工具都按同一集合收窄。 |
-| 自己调用与下放给子 Agent 的 Tool 上限分离 | 尚未完成 | 当前子 Agent 只能从父 Agent 自己的 Tool 集合继续收窄。`issue` 为了把实现 Tool 下放给工作 Agent，只能继承 Session Tool 上限，因此“自己不修改代码”目前仍依赖提示词；需要增加独立的委托 Tool 上限，并受 Session 与所有祖先上限约束。 |
+| 委托工具只能从调用方下放上限中收窄 | 已实现 | `AgentCapabilityScope` 分别冻结自身 Tool、下放 Tool 与 Skill；每一代都从父 Agent 的下放上限和当前环境可用集合求交集。 |
+| Role Tool 白名单、黑名单与启动门禁 | 已实现 | 自身与下放两组 Tool 都支持精确白名单、黑名单减法和 `required_*` 启动门禁；最终集合进入 `AgentContextSeed`，自身 Tool 继续约束模型输入、直接调用和 Code Mode 内层调用。 |
+| 自己调用与下放给子 Agent 的 Tool 上限分离 | 已实现 | `issue` 自身只拥有 GitHub 与协调 Tool，下放范围独立继承调用方上限；实现 Agent 可以获得写入 Tool，而 `issue` 本身不能调用。历史种子没有下放字段时按空集合读取，不获得新增的工具下放权限。 |
 | 委托运行使用完整模型调用基线 | 尚未完成 | 当前 Agent Role 选择明确冻结 `ModelRef`；推理等级和服务等级还需要作为同一模型策略核对并冻结。 |
 | Agent 模型继承、覆盖和兼容替换 | 尚未完成 | 当前委托只使用调用方当前 `ModelRef` 或定义中的准确模型；`zeta-models-manager` 目前只解析指定模型，没有跨 provider 候选选择、替换决定和用户警告。 |
-| 会话入口选择 Agent 定义 | 尚未完成 | 当前 `ThreadOrigin::Root` 创建路径不接收或冻结 `AgentRole`；需要与委托共用同一解析流程。 |
+| 会话入口选择 Agent 定义 | 已实现 | `session/create.agent` 接收带来源的选择，配置与 ThreadCreated 同批提交；重试复用原配置。 |
+| Default 与共同规则、模型指导、Role 组合 | 已实现 | 共同规则归 prompts，模型指导独立冻结，Role 通过统一 Thread 配置生效；见 [指令组合设计](../zeta-rs/docs/agent-instructions.md)。 |
 | 统一定义契约 | 部分具备 | 内置 TOML 和目录 Markdown 已统一产出 `AgentRole`；模型完整策略、上下文策略、启动范围和带作用范围能力仍需补齐。 |
 | 内置专化 catalog 与本文角色资源 | 部分具备 | `issue.toml` 已随 `zeta-agent-roles` 打包并进入委托选择；其他清单角色尚未加入。 |
 | 启动来源与 `/develop` 私有范围 | 尚未完成 | 需要统一启动来源、调用方身份、允许调用方、工作流阶段、候选领域工具和上下文包绑定，不能依赖提示词隔离。 |
 | 带来源的定义身份 | 已实现 | `AgentRole` 与 `FrozenAgentDefinitionRef` 都冻结 `BuiltIn` 或准确目录 ID，内置 Role 同时冻结版本与内容摘要。 |
-| 每个角色的带作用范围执行能力上限 | 尚未完成 | 当前 `DelegatedCapabilityScope` 只有工具和 Skill，需要冻结并执行检查 `Capability` 上限。 |
-| 委托 Thread Instructions 解析 | 尚未完成 | 当前协调器把调用方 Turn 的 `TurnInstructions` 直接带入委托 Turn；目标是按委托运行的准确目录和作用范围解析并冻结，只有作用范围完全一致时才能复用调用方基线。 |
+| 每个角色的带作用范围执行能力上限 | 尚未完成 | 当前 `AgentCapabilityScope` 已分离自身与下放 Tool，但仍需冻结并执行检查文件、进程、网络等 `Capability` 上限。 |
+| 委托基础指令与角色隔离 | 已实现 | 新委托冻结自己的共享规则和模型指导，不复制父 Role 或父 Turn 的专用审查模板；目录规则继续由实际环境提供。 |
 | 长时进程资源 | 尚未完成 | 当前 `shell-command` 默认 30 秒超时；需要可等待、可取消、可终止并能表达结果未知的进程资源，以及准确的构建产物写入范围。 |
 | 动态外部工具的动作 metadata | 尚未完成 | 当前 `ToolDefinition` 没有权威只读/修改分类；在来源签名、动作能力和摘要冻结完成前，专化角色不动态接入 Connector。 |
 | `/develop` 用户判断交互 | 尚未完成 | 阶段 Agent 应返回 `NeedsUserDecision`，由确定性工作流发起 server request 并恢复下一阶段运行；`request_user_input` 不是当前模型工具。 |
 | 内置不进设置、运行时仍可观察 | 尚未完成 | 需要分别测试设置投影和 Agent 树投影，不能共用一个“是否可见”字段代替两个行为。 |
-| 内置角色选择与评测 | 部分具备 | App Server 已合并内置 catalog，`issue` 覆盖自动选择、非目标反例、缺 Tool、缺 Skill、继承、白名单和黑名单；其他内置 Role 尚未加入。 |
+| 内置角色选择与评测 | 部分具备 | 已覆盖准确来源、Default、根角色、缺 Tool/Skill、白黑名单与恢复；真实模型任务质量评测仍未完成。 |
 
-当前代码里“委托 Role 未声明模型时使用调用方当前模型”和“未传上下文时使用 `fresh`”已经存在，但前者不是目标继承语义：目标是从 Session 基线、Role 偏好和获准的本次启动请求生成一个请求模型，再由统一模型目录选择并冻结实际模型。会话入口还不能选择并冻结 Agent Role；内置 catalog 当前只有 `issue`。后续应让会话、委托和工作流复用同一 `AgentRole` 解析契约；委托继续复用既有子 Thread、上下文种子和工具/Skill 冻结机制，不建立第二套运行时。
+当前代码里“委托 Role 未声明模型时使用调用方当前模型”和“未传上下文时使用 `fresh`”已经存在，但前者不是目标继承语义：目标是从 Session 基线、Role 偏好和获准的本次启动请求生成一个请求模型，再由统一模型目录选择并冻结实际模型。会话入口已可选择并冻结 Agent Role；内置 catalog 当前只有 `issue`，Default 不读取专用定义。会话与委托已复用同一解析契约；委托继续复用既有子 Thread、上下文种子和工具/Skill 冻结机制，不建立第二套运行时。
 
 ## 9. 维护与验收
 
@@ -322,12 +328,14 @@ flowchart LR
 
 1. 更新唯一的 `assets/builtins/<role>.toml`，提升定义版本并生成稳定摘要。
 2. 校验 ID、提示词非空与大小上限、工具引用、能力作用范围、模型策略、上下文策略和禁止递归规则。
-3. 增加路由正例与反例，证明该角色在该用时被选、不该用时不会抢任务。
+3. 增加 Default、准确来源选择、同名歧义和错误目标测试，证明任务文字不会改变已经确定的角色。
 4. 增加行为评测，覆盖结果格式、证据质量、禁止动作和工具最小化；只读角色必须有“不能修改”的执行测试。
 5. 增加权限交集、缺工具、准确模型、同 provider 替换、跨 provider 替换、无兼容候选、替换警告、上下文泄漏、恢复后摘要一致和取消传播测试。
 6. 验证设置页不出现内置定义，同时 Agent 树和运行记录能够显示真实执行身份。
 7. 工作流或私有定义还要验证普通选择器和错误调用方无法发现、选择或调用它们。
 8. 对照源码与测试更新本文件的状态表；不能只依据其他本地 Markdown 宣布完成。
+
+涉及提示词组合、模型专化或性能结论时，同时遵循 [评测与文档维护要求](../zeta-rs/docs/agent-instructions.md#文档与实验的维护)，保留对照结果、失败样本和适用版本。
 
 ## 10. 长期不变量
 
@@ -342,6 +350,8 @@ flowchart LR
 - 当前一个 Agent 运行由一个 Thread 表达；没有跨多个 Thread 延续的真实身份需求前，不增加第二套 Agent 运行聚合。
 
 ## 11. 外部参考与取舍
+
+Codex、Claude Code、VS Code 本地 Copilot 与 Copilot Agent Host 的指令组合、固定源码版本、采用范围和评测限制统一见 [外部产品参考](../zeta-rs/docs/agent-instructions.md#外部产品参考与采用范围)。
 
 - [OpenAI 模型指南](https://developers.openai.com/api/docs/guides/latest-model) 使用“多 Agent / 子 Agent”描述一个 Agent 协调多个执行者，说明该词首先表达运行时协作关系。Zeta 不从该术语推导独立定义类型。
 - [Claude Code 自定义子代理文档](https://code.claude.com/docs/en/sub-agents) 同时描述独立提示词、工具、模型与上下文，并明确同一 Agent 文件也可通过 `--agent` 或设置作为主会话 Agent 运行。Zeta 采用“定义与运行位置分离”的结论，但不复制其文件优先级和同名覆盖规则。

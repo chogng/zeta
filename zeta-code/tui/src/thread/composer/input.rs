@@ -36,7 +36,3 @@ pub(crate) use zeta_slash_commands::SlashCommandCatalog;
 #[cfg(test)]
 #[path = "input/completion_tests.rs"]
 mod completion_tests;
-
-#[cfg(test)]
-#[path = "input/issue_tests.rs"]
-mod issue_tests;

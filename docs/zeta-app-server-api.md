@@ -134,7 +134,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 ```json
 {
   "serverInfo": { "name": "zeta-app-server", "version": "0.1.0" },
-  "protocolVersion": { "major": 1, "revision": 20 },
+  "protocolVersion": { "major": 2, "revision": 1 },
   "schemaHash": "sha256:...",
   "capabilities": {
     "sessions": true,
@@ -152,10 +152,10 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "typst": true,
     "updateReplay": true,
     "contracts": {
-      "sessions": { "version": 3 },
-      "threads": { "version": 3 },
-      "turns": { "version": 3 },
-      "projects": { "version": 3 }
+      "sessions": { "version": 4 },
+      "threads": { "version": 4 },
+      "turns": { "version": 4 },
+      "projects": { "version": 4 }
     }
   },
   "slashCommands": [
@@ -389,7 +389,7 @@ endpoint policy 属于 host 注入的 provider adapter，不属于 App Server pr
 Plugin request 是 config intent；legacy Plugin lifecycle authority 是另一层事实。`plugin/list` 不把它们
 压成一个布尔值，而是分别返回 enabled、granted 与 effective，只有 exact installed package 同时 enabled
 且 granted 时才进入 activation。新的远端 package 只能通过 `marketplace/*` 方法进入
-`MarketplaceManager`；Plugin authority 不再拥有 Marketplace catalog 或安装入口。
+`PluginsManager`；Plugin authority 不再拥有 Marketplace catalog 或安装入口。
 
 同一 profile 的 App Server daemon 是 Marketplace mutation 的 single writer。成功的
 install/update/uninstall 在 consumer reconcile 后推进共享 generation，并向该 profile 的全部
@@ -592,13 +592,17 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
   "method": "session/create",
   "params": {
     "commandId": "command_session_1",
-    "title": "Investigate repository"
+    "title": "Investigate repository",
+    "agent": { "type": "default" }
   }
 }
 ```
 
-返回 `{ "session": Session }`。实现创建根 Thread；返回的 Session 由根 Thread 的 `sessionId`
-聚合得到。
+返回 `{ "session": Session, "agentTree": AgentTree }`。创建根 Thread，Session 由其 `sessionId` 聚合。
+
+`agent` 使用 `{ "type": "default" }` 或 `{ "type": "exact", "source": { "type": "builtIn" }, "name": "issue" }`；目录来源为 `{ "type": "directory", "id": "<authorized-directory-id>" }`。省略 agent 等同 Default，不按标题匹配。调用方不能提交角色正文或扩大工具权限。
+
+角色及必需 Skill/Tool 校验完成后，配置随 ThreadCreated 原子提交。相同 commandId、标题与角色选择返回原 Thread，不重新加载角色；改变选择或标题返回 CommandConflict。创建失败不留下半成品 Thread。协议主版本 2 阻止旧后端忽略 agent 字段；历史记录版本 15 阻止旧执行器绕过根角色配置。
 
 ### 创建 Thread
 
@@ -994,42 +998,22 @@ corepack pnpm run generate:protocol
 日期。PDF 字节沿用 `resource/metadata`、`resource/read` 和 `resource/release` 生命周期。
 跨进程所有权和计划演进见 [`typst.md`](typst.md)。
 
-## Issue 任务与 PR
+## Issue 浏览与 Agent Session
 
-CLI/TUI 的 Issue 功能使用以下类型化接口。业务数据与协议源见
-[`issues.rs`](../zeta-rs/app-server-protocol/src/protocol/issues.rs)。
-
-| 方法 | 契约 |
-| --- | --- |
-| `issue/list` | 从当前环境的 origin 按必填 `state: open | closed`、`page`、`query`、`mode` 读取最多 100 条上游记录并排除 PR；返回仓库、摘要、nextPage、cached、fetchedAt（Unix 秒）、refreshAfterSeconds（null 表示关闭）和 notice |
-| `issue/configure` | 按 commandId 和 expectedRevision 保存合并推荐开关、独立分析模型和 autoRefreshMinutes（0/5/10/30/60，默认 10）；ConfigReadResult.issues 返回同一份后端配置 |
-| `issue/read` | 校验调用方仓库仍匹配环境，读取所选 issue 的正文与评论 |
-| `issue/task/create` | 以 commandId 去重，固定提交与材料快照，通过现有 ThreadWorktreeBinder 创建一个 Session |
-| `issue/task/read` | 按 Session 返回持久关联；pendingInput 表示根 Thread 尚未发送 Turn |
-| `issue/pr/preview` | 返回发布标题、正文、分支、提交身份、文件范围、预期文件树及允许的方式 |
-| `issue/pr/create` | 核对预期文件树，复用 ChangeSet 提交流程、推送并创建 PR，按用户选择请求自动合并 |
-
-工作分配接口由 [`issue_assignment.rs`](../zeta-rs/app-server-protocol/src/protocol/issue_assignment.rs) 定义：
+Issue 浏览接口由 [`issues.rs`](../zeta-rs/app-server-protocol/src/protocol/issues.rs) 定义。
 
 | 方法 | 契约 |
 | --- | --- |
-| `issue/workflow/read` | 当前稳定仓库身份、Config revision、工作流、默认分支、标签和可分配账号 |
-| `issue/workflow/configure` | 按 commandId/expectedRevision 保存该仓库工作流，验证标签/负责人及显式自动领取范围 |
-| `issue/label/create` | 显式创建标签；同名同色重放，修改现有颜色需要 expectedColor 匹配 |
-| `issue/plan` | numbers 与 branch/combined/distributed；固定材料和提交，返回可审阅的完整工作项分区 |
-| `issue/assignment/start` | commandId、完整 plan 和 createBranch/claim/execute；按整组原子领取和稳定资源回执准备 |
-| `issue/assignments/list` | 当前仓库归属及执行阶段、同步、分支、PR 和精确结果 |
-| `issue/assignment/action` | commandId、assignmentId、expectedRevision、expectedEpoch；pause/resume/release/cancel/transfer/retrySync/verify/deliver |
-| `issue/assignment/notice` | 重要变化通知：assignmentId、message；普通心跳不发通知 |
+| `issue/list` | 按 state、page、query、mode 读取当前仓库，返回摘要、分页、缓存时间和刷新提示 |
+| `issue/read` | 校验仓库身份，读取所选 Issue 正文和评论 |
+| `issue/configure` | 按 commandId/expectedRevision 保存 autoRefreshMinutes，允许 0/5/10/30/60，默认 10 |
 
-暂停、取消和释放使用独立客户端请求通道，不等待长时间验证；本地停止按执行 epoch 校验；verify 以当前封存结果重新准备，仅要求 epoch 一致，避免普通状态同步打断验收；交付及其他变更同时核对 revision。归属与步骤回执由协调服务的 SQLite 保存，GitHub 不是原子锁。单项/批次的规则、Agent 定义及规划额度固定，外部变更不能被页面缓存隐藏。协议 DTO 与共享领域类型在边界做机械转换。
+`issue/list.mode` 为 cached、auto、refresh 或 clearCache。普通列表分页、编号精确查询、关键词搜索与失败保留缓存的行为不变。
 
-`issue/list.mode` 为 `cached`（优先返回已存页面）、`auto`（按当前配置决定是否重取）、`refresh`（强制重取）或 `clearCache`（清除当前仓库全部列表缓存并读取第一页）。空 query 普通分页；编号精确查询；关键词搜索最多 10 页，上限或不完整结果通过 notice 明示。成功刷新第一页使该查询的旧后续页失效；失败不覆盖已有缓存。
+TUI 选择 Issue 后调用通用 `session/create`，指定内置 `issue`；随后以稳定的首 Turn commandId 调用 `session/request.startTurn`，把准确 Issue URL 作为用户输入。一个或多个 Issue 使用同一路径。工作目录、委托、停止与恢复由既有 Session/Thread/Agent 能力拥有，GitHub 状态修改由获准的 Plugin 工具执行。
 
-`InputItem.type = issue` 携带编号；后端只从接收 Session 的已存关联中解析材料，转换为现有
-Context 输入。界面标签不是身份来源。Issue 查询不占用全局写锁，PR 操作按 Session 串行；
-任务创建沿用根 Thread 的全局创建顺序。
+`InputItem.type = issue` 只把正整数编号转换成带来源的任务上下文，不再查询 Issue task 存储。需要准确仓库定位时传入完整 URL。TUI `/pr` 提交普通 Agent 任务，不使用专属发布状态机。
 
-`zeta-github` 隔离 GitHub CLI 的外部依赖；`zeta-state` 分别保存 issue_tasks 关联和有界 issue_pages 缓存；Git/worktree
-继续拥有代码与工作目录，app-server 负责跨能力协调。创建 PR 与自动合并分别记录结果，
-自动合并失败仍返回已创建的 PR；状态刷新失败显式标注不可用。
+Issue Workflow、plan、assignment、task、专属 PR 发布接口及对应存储已退出生产调用链；这些旧 method 返回 MethodNotFound。配置文件 schemaVersion 1 升级到 2 时移除 issues.repositories、recommendMerge 和 analysisModel，保留浏览刷新偏好；SQLite 配置文档版本为 10。已有用户数据库中的旧 Issue 表不会在后台被自动删除。
+
+指令组合和外部参考见 [Agent 指令系统](../zeta-rs/docs/agent-instructions.md)，模型和权限选择不能由 Issue 页面另建一套规则。

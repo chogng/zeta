@@ -190,7 +190,6 @@ where
     let mut input = Vec::with_capacity(submission.input.len());
     for item in submission.input {
         input.push(match item {
-            ChatInputItem::Issue { number } => InputItem::Issue { number },
             ChatInputItem::Text(text) => InputItem::Text { text },
             ChatInputItem::Image { url } => InputItem::ImageAttachment {
                 attachment: materialize_image(client, &url)?,

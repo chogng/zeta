@@ -191,9 +191,21 @@ impl CommandPanel {
             Self::Keymap(content) => CommandPanelOutcome::Keymap(content.handle_key(key)),
             Self::Mcp(content) => map_selection(content.handle_key(key), CommandPanelOutcome::Mcp),
             Self::Model(content) => {
-                if key.kind == crossterm::event::KeyEventKind::Press && key.modifiers.is_empty() && key.code == crossterm::event::KeyCode::Char('p') && content.state().items_focused() {
-                    if let Some(ModelSelectionAction::Select { preference, pinned }) = content.state().selected_item().and_then(|item| item.id()).and_then(|id| content.action(id)) {
-                        return CommandPanelOutcome::Model(ModelSelectionAction::Pin { preference: preference.clone(), pinned: !pinned });
+                if key.kind == crossterm::event::KeyEventKind::Press
+                    && key.modifiers.is_empty()
+                    && key.code == crossterm::event::KeyCode::Char('p')
+                    && content.state().items_focused()
+                {
+                    if let Some(ModelSelectionAction::Select { preference, pinned }) = content
+                        .state()
+                        .selected_item()
+                        .and_then(|item| item.id())
+                        .and_then(|id| content.action(id))
+                    {
+                        return CommandPanelOutcome::Model(ModelSelectionAction::Pin {
+                            preference: preference.clone(),
+                            pinned: !pinned,
+                        });
                     }
                 }
                 map_selection(content.handle_key(key), CommandPanelOutcome::Model)
@@ -340,16 +352,6 @@ impl CommandPanel {
     ) {
         if let Self::Dirs(content) = self {
             content.finish_add(request_id, result);
-        }
-    }
-
-    pub(crate) fn finish_issue_models(
-        &mut self,
-        request_id: zeta_protocol::CommandId,
-        result: Result<ConfigChoices, String>,
-    ) {
-        if let Self::Config(content) = self {
-            content.finish_issue_models(request_id, result);
         }
     }
 

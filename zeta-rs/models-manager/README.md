@@ -9,7 +9,7 @@
 `STATIC_MODEL_CATALOG` 经 `ProviderConfigRegistry::builtin()` 投影为 `ProviderDefinition.models` 静态
 seed，再把 provider discovery observation 合并到按 scope 隔离的
 内存目录，并发布带 generation 的 immutable snapshot。它拥有 freshness、singleflight、字段级 merge、
-筛选、typed resolution 和模型基础 instructions 资产；不拥有 provider HTTP DTO、credential、模型调用、prompt/context cache、
+筛选、typed resolution 和模型专化指令的选择；不拥有 provider HTTP DTO、credential、模型调用、prompt/context cache、
 Config persistence 或 UI。
 
 ## 公共契约
@@ -26,7 +26,8 @@ Config persistence 或 UI。
 | `DiscoveredCatalog` | source 的一次完整提交 | `CompleteAgentCatalog` 缺席可下架；`Partial` 缺席不改变 availability |
 | `ModelMetadataPatch` | provider 明确返回的字段 | `Unknown` 不覆盖已有 known metadata |
 | `ResolvedModel` | exact model + catalog generation + warnings | `AllowUnlisted` 产生 unverified synthetic metadata |
-| `BASE_INSTRUCTIONS` | 当前支持模型的基础行为资产 | App Server 在普通 Turn 创建前冻结；本 crate 拥有文本和 revision |
+| `ModelInstructionCatalog` | 按准确 provider/model 选择指导 | 返回 Generic 或冻结的专化资产；拒绝重复与无效定义 |
+| `ModelInstructionProfile` | 登记代码维护的模型指导 | 记录准确模型和有版本的 PromptArtifact，不授予工具或权限 |
 
 `CatalogSourceScopeId` 不是 endpoint 或 credential reference。Host 必须先对 normalized endpoint、tenant、
 credential revision 和 provider config revision 生成不可逆、无秘密的稳定指纹；任一输入变化都使用新
@@ -42,7 +43,7 @@ src/
 ├── snapshot.rs     # immutable snapshot、generation、provenance、warning
 ├── merge.rs        # seed/live 字段级合并与 complete/partial availability
 ├── filter.rs       # capability/availability query 与 resolution checks
-├── instructions.rs # 模型基础 instructions 资产与 revision
+├── instructions.rs # 准确模型的指令选择与资产校验
 ├── policy.rs       # freshness/read named policy
 ├── scope.rs        # opaque scope identity
 ├── error.rs        # typed manager failures
@@ -130,7 +131,7 @@ Explicit `refresh` 仍返回 typed error，调用方可另行读取 last-known s
 ## 测试、修改影响与当前限制
 
 ```text
-cargo test -p zeta-models-manager
+just test zeta-models-manager
 bazel test //zeta-rs/models-manager:models-manager-unit-tests
 ```
 
@@ -142,3 +143,32 @@ App Server DTO/schema fixture。
 当前实现只有进程内 memory cache，没有 persisted observation、全局/per-provider 并发上限、退避抖动或用户 trust/policy override。Ollama 已通过 provider runtime 接入 `/api/tags` 与 `/api/show`；其他 provider 动态目录仍未实现。App Server 的 `model/list` DTO 投影 identity、display name、access、context、capabilities 与 defaults；本 crate 的 availability、generation、freshness 和 warnings 都不进入产品模型列表，也不作为发送消息的门禁。App Server 还没有 `model/refresh` / `model/updated` wire method。
 
 跨 provider 模型选择同样尚未实现：当前 `ModelsManager::resolve` 只校验一个准确 `ModelRef`，没有候选排序、`ModelSelectionDecision`、替换原因或客户端警告。计划实现必须复用本 crate 的同一批 snapshot 与 `ModelRequirements`，只在 Agent 或工作流运行创建前选择一次；准确模型不可用时先检查同 catalog scope 的已验证兼容候选，再检查同 provider 的其他允许 scope，最后检查其他允许 provider。选择结果冻结后，catalog refresh 或真实调用失败都不能触发后台换模型。完整行为与类型边界见 [`docs/models-manager.md`](../../docs/models-manager.md#103-模型选择与替换)。
+
+## Agent 指令边界
+
+- 共同规则归 `zeta-prompts::AGENT_INSTRUCTIONS`；这里的模板只补充模型表达和工具调用指导。
+- `ModelInstructionCatalog::built_in()` 返回共享的内置初版目录，当前覆盖静态模型目录中的 17 个准确 provider/model 身份。
+- `ModelInstructionCatalog::new` 校验自定义目录；`default()` 明确创建空目录，已知模型也使用 Generic。
+- `resolve` 只做准确匹配，不按 provider、型号前缀、显示名或 API 地址推断；同一正文可以由多个准确条目共用。
+- App Server 和委托工具默认使用内置目录。嵌入方可在环境创建前通过 `with_model_instructions` 整体替换它，包含用空目录建立 Generic 对照。
+- 每次选择记录准确模型、正文、id/revision 和摘要；结构校验通过不代表模型效果已评测。
+
+### 初版模板与修改入口
+
+| 文件 | 当前登记 | 指导重点 |
+| --- | --- | --- |
+| [gpt.md](templates/instructions/gpt.md) | OpenAI 的 GPT-6 Astra、GPT-5.6/sol/terra/luna、GPT-5.5、GPT-5.4 | 结果与范围、适量验证、保留交付证据 |
+| [claude.md](templates/instructions/claude.md) | `anthropic/claude-sonnet-4-20250514` | 从建议推进到所需产物，限制额外抽象和改动 |
+| [gemini.md](templates/instructions/gemini.md) | `google/gemini-3.6-flash` | 长上下文中的当前任务、直接输出与证据定位 |
+| [function_calling.md](templates/instructions/function_calling.md) | 当前 Grok、Qwen、Kimi、DeepSeek、GLM、MiniMax、MiMo 共 8 个准确条目 | 结构化调用、参数与自然语言分开、收到结果后继续 |
+
+完整登记项与 revision 在 [instructions.rs](src/instructions.rs) 的 `BUILT_INS`。工具调用模板是框架适配初稿，不表示这些模型有相同的内部行为或已经完成各自的优化。
+
+1. 调整措辞：编辑对应 Markdown，并提升同一组 `PromptArtifact` 的 revision。
+2. 单独适配某个模型：增加一份 Markdown 和一个登记组，把该模型的准确条目移入新组；不能让同一模型同时属于两个组。
+3. 编译并重启宿主。普通 Default 根会话的新 Turn 重新选择指导；已冻结的角色/子 Agent 继续使用旧快照，验证新内容时创建新的相应 Agent。
+4. 运行 `just test zeta-models-manager`、`just test zeta-app-server built_in_model_guidance` 和 `just check zeta-app-server`。测试检查静态目录覆盖、重复/无效条目、准确匹配、主/子 Agent 接线与共同规则保留。
+
+初版已按当前需求启用，质量、延迟和成本收益尚未实测。来源、假设与后续评测见 [模型初版指导](../docs/agent-instructions.md#内置模型指导初版)。供应商请求参数、推理元数据、历史重放与工具协议由 provider adapter 和 Core 拥有，模板不替代它们。
+
+新增资产由 `BUILD.bazel` 的 `templates/instructions/*.md` 清单编译打包，`.gitattributes` 固定 LF。正文上限 64 KiB；模型族匹配、工具条件模板和运行时模板语言不在本接口中。

@@ -1,6 +1,13 @@
 use super::SqliteThreadStore;
 use super::SqliteTurnChangeStore;
 use super::TurnChangeCommandOutcome;
+use git_turn_changes::ChangeSetId;
+use git_turn_changes::MessageState;
+use git_turn_changes::TerminalTurnState;
+use git_turn_changes::TurnChangeSet;
+use git_turn_changes::TurnChangeSetDraft;
+use git_turn_changes::TurnChangeStore;
+use git_turn_changes::TurnChangeStoreError;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 use zeta_history::CURRENT_STORED_EVENT_SCHEMA_VERSION;
@@ -18,13 +25,6 @@ use zeta_thread_store::ThreadCatalogRecord;
 use zeta_thread_store::ThreadEventBatch;
 use zeta_thread_store::ThreadStore;
 use zeta_thread_store::ThreadStoreError;
-use git_turn_changes::ChangeSetId;
-use git_turn_changes::MessageState;
-use git_turn_changes::TerminalTurnState;
-use git_turn_changes::TurnChangeSet;
-use git_turn_changes::TurnChangeSetDraft;
-use git_turn_changes::TurnChangeStore;
-use git_turn_changes::TurnChangeStoreError;
 
 fn database_path(label: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
@@ -95,6 +95,7 @@ fn append_created_thread(
                 recorded_at: Timestamp(u128::from(ordinal)),
                 command: None,
                 event: ThreadEvent::ThreadCreated {
+                    agent: None,
                     session_id: session_id.clone(),
                     thread_id: thread_id.clone(),
                     title: "Primary".into(),
@@ -197,6 +198,7 @@ fn sqlite_thread_store_recovers_typed_events() {
         recorded_at: Timestamp(2),
         command: None,
         event: ThreadEvent::ThreadCreated {
+            agent: None,
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),
             title: "Primary".into(),
@@ -275,6 +277,7 @@ fn sqlite_thread_catalog_rejects_index_metadata_mismatch() {
                 recorded_at: Timestamp(2),
                 command: None,
                 event: ThreadEvent::ThreadCreated {
+                    agent: None,
                     session_id: session_id.clone(),
                     thread_id: thread_id.clone(),
                     title: "Primary".into(),
@@ -312,6 +315,7 @@ fn sqlite_thread_append_is_atomic_and_sequence_checked() {
         recorded_at: Timestamp(1),
         command: None,
         event: ThreadEvent::ThreadCreated {
+            agent: None,
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),
             title: "Primary".into(),
@@ -360,6 +364,7 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
         recorded_at: Timestamp(1),
         command: None,
         event: ThreadEvent::ThreadCreated {
+            agent: None,
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),
             title: "Primary".into(),

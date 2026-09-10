@@ -25,9 +25,9 @@ fn session_scope_uses_the_declared_session_identity() {
 }
 
 #[test]
-fn issue_pr_preview_excludes_concurrent_shared_ref_updates() {
-    let scope = definition("issue/pr/preview")
-        .serialization_scope(&serde_json::json!({ "sessionId": "session-1" }))
+fn environment_changes_exclude_concurrent_global_reads() {
+    let scope = definition("env/cwd/set")
+        .serialization_scope(&serde_json::json!({ "cwd": "/workspace" }))
         .unwrap();
 
     assert_eq!(

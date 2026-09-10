@@ -747,6 +747,7 @@ pub struct ToolExecutionFacts {
     execution: Option<ToolExecutionIdentity>,
     read_paths: BTreeSet<PathBuf>,
     available_tools: BTreeSet<zeta_protocol::ToolName>,
+    delegation_tools: BTreeSet<zeta_protocol::ToolName>,
     activated_skills: Vec<zeta_protocol::FrozenSkillActivation>,
 }
 
@@ -762,19 +763,43 @@ impl ToolExecutionFacts {
             .find(|turn| &turn.turn_id == turn_id)
             .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
         let mut calls = std::collections::BTreeMap::new();
-        let mut available_tools = available_tools.into_iter().collect::<BTreeSet<_>>();
+        let mut host_tools = available_tools.into_iter().collect::<BTreeSet<_>>();
         if turn.tool_mode.requires_code_mode() {
-            available_tools.insert(
+            host_tools.insert(
                 zeta_protocol::ToolName::new("exec").expect("Code Mode Tool name is valid"),
             );
-            available_tools.insert(
+            host_tools.insert(
                 zeta_protocol::ToolName::new("wait").expect("Code Mode Tool name is valid"),
             );
         }
-        if let Some(seed) = &snapshot.agent_context_seed {
-            let ceiling = seed.capability_scope.tools.iter().collect::<BTreeSet<_>>();
-            available_tools.retain(|name| ceiling.contains(name));
-        }
+        let (available_tools, delegation_tools) = match snapshot.agent_configuration() {
+            Some(seed) => {
+                let own_ceiling = seed.capability_scope.tools.iter().collect::<BTreeSet<_>>();
+                let delegation_ceiling = seed
+                    .capability_scope
+                    .delegation_tools
+                    .iter()
+                    .collect::<BTreeSet<_>>();
+                (
+                    host_tools
+                        .iter()
+                        .filter(|name| {
+                            own_ceiling.contains(name)
+                                || (!own_ceiling.is_empty()
+                                    && turn.tool_mode.requires_code_mode()
+                                    && matches!(name.as_str(), "exec" | "wait"))
+                        })
+                        .cloned()
+                        .collect(),
+                    host_tools
+                        .iter()
+                        .filter(|name| delegation_ceiling.contains(name))
+                        .cloned()
+                        .collect(),
+                )
+            }
+            None => (host_tools.clone(), host_tools),
+        };
         let mut facts = Self {
             execution: Some(ToolExecutionIdentity {
                 session_id: snapshot.session_id.clone(),
@@ -786,6 +811,7 @@ impl ToolExecutionFacts {
             }),
             read_paths: BTreeSet::new(),
             available_tools,
+            delegation_tools,
             activated_skills: turn.activated_skills.clone(),
         };
         for item in &snapshot.items {
@@ -829,9 +855,14 @@ impl ToolExecutionFacts {
         self.execution.as_ref()
     }
 
-    /// Returns the host tool names from which the child capability ceiling may be derived.
+    /// Returns the exact tools this Agent may invoke.
     pub fn available_tools(&self) -> impl Iterator<Item = &zeta_protocol::ToolName> {
         self.available_tools.iter()
+    }
+
+    /// Returns the host-backed ceiling from which a child Agent's two tool scopes are derived.
+    pub fn delegation_tools(&self) -> impl Iterator<Item = &zeta_protocol::ToolName> {
+        self.delegation_tools.iter()
     }
 
     /// Returns the exact Skill versions already frozen for the current Turn.

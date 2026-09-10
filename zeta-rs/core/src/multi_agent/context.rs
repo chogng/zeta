@@ -10,17 +10,28 @@ use zeta_protocol::ToolDefinition;
 
 pub(crate) fn agent_context_fragments(snapshot: &ThreadSnapshot) -> Vec<InstructionFragment> {
     let mut fragments = Vec::new();
-    if let Some(seed) = &snapshot.agent_context_seed {
+    if let Some(role) = snapshot
+        .agent_configuration()
+        .and_then(|agent| agent.role.as_ref())
+    {
+        let revision = zeta_protocol::ContentDigest::sha256(role.instructions.as_bytes());
         fragments.push(InstructionFragment::new(
-            InstructionSource::new("agent-role", seed.role.name.clone(), seed.digest.as_str()),
+            InstructionSource::new("agent-role", role.name.clone(), revision.as_str()),
             InstructionLayer::Product,
             InstructionRetention::Required,
             format!(
-                "<agent-role name=\"{}\" delegation=\"{}\">\n{}\n</agent-role>",
-                xml_escape(&seed.role.name),
-                seed.delegation_id,
-                seed.role.instructions.trim()
+                "<agent-role name=\"{}\">\n{}\n</agent-role>",
+                xml_escape(&role.name),
+                role.instructions.trim()
             ),
+        ));
+    }
+    if let Some(seed) = &snapshot.agent_context_seed {
+        fragments.push(InstructionFragment::new(
+            InstructionSource::new("agent-delegation", seed.delegation_id.to_string(), seed.digest.as_str()),
+            InstructionLayer::Directory,
+            InstructionRetention::Required,
+            format!("This is delegated work from Agent Thread {}. Complete the assigned task within your own role and permissions, and return the result and verification evidence to the caller.", seed.parent_thread_id),
         ));
         fragments.extend(seed.materialized_context.iter().map(|materialized| {
             let (source_thread_id, source_sequence, source_kind, source_id) =
@@ -131,9 +142,10 @@ fn materialized_content_text(content: &AgentContextContent) -> String {
 
 pub(crate) fn scope_agent_tools(
     snapshot: &ThreadSnapshot,
+    tool_mode: zeta_protocol::ToolMode,
     tools: Vec<ToolDefinition>,
 ) -> Vec<ToolDefinition> {
-    let Some(seed) = &snapshot.agent_context_seed else {
+    let Some(seed) = snapshot.agent_configuration() else {
         return tools;
     };
     let allowed = seed
@@ -144,7 +156,12 @@ pub(crate) fn scope_agent_tools(
         .collect::<BTreeSet<_>>();
     tools
         .into_iter()
-        .filter(|tool| allowed.contains(&tool.name))
+        .filter(|tool| {
+            allowed.contains(&tool.name)
+                || (!allowed.is_empty()
+                    && tool_mode.requires_code_mode()
+                    && matches!(tool.name.as_str(), "exec" | "wait"))
+        })
         .collect()
 }
 

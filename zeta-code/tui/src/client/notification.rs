@@ -13,7 +13,6 @@ pub(crate) enum ClientEvent {
     Account(crate::config::SubscriptionEvent),
     AgentRequest(Box<AgentRequestEnvelope>),
     ConfigChanged,
-    IssueNotice(String),
     ConnectionClosed(ConnectionCloseReason),
     GitStatusChanged(GitStatusResult),
     ConnectorsChanged,
@@ -43,9 +42,6 @@ fn project_notification(notification: ServerNotification) -> Option<ClientEvent>
             Some(ClientEvent::AgentRequest(Box::new(request)))
         }
         ServerNotification::ConnectorsChanged(_) => Some(ClientEvent::ConnectorsChanged),
-        ServerNotification::IssueAssignmentNotice(notice) => {
-            Some(ClientEvent::IssueNotice(notice.message))
-        }
         ServerNotification::ConfigChanged(_) => Some(ClientEvent::ConfigChanged),
         ServerNotification::MarketplaceChanged(_) | ServerNotification::PluginsChanged(_) => {
             Some(ClientEvent::PackageSourcesChanged)

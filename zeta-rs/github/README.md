@@ -1,5 +1,6 @@
 # GitHub
 
-- Reads repository Issues, labels, assignees and comments through bounded authenticated GitHub CLI requests.
-- Owns GitHub Issue workflow, planning, claims, leases, stage synchronization and delivery receipts.
-- Creates pull requests and enables the selected merge method; Git operations and Agent lifecycle stay with their existing owners.
+- 通过有界、已认证的 GitHub CLI 请求读写 GitHub 对象，包括 Issue、评论、标签、负责人和 PR。
+- 保留 GitHub 参数与返回值校验，不拥有 Agent、Thread、工作目录或模型调用。
+- 不维护 Issue Workflow、assignment、领取租约、执行阶段或交付状态机。
+- Issue 浏览缓存由 `zeta-state` 维护；执行通过通用 Session/Agent API，Agent 使用获准的 Plugin 工具处理外部操作。

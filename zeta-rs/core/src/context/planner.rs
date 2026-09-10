@@ -22,7 +22,7 @@ use zeta_protocol::ToolCallId;
 use zeta_protocol::ToolDefinition;
 use zeta_protocol::TurnId;
 
-pub(crate) const CONTEXT_ESTIMATOR_REVISION: &str = "deterministic-bytes-v1";
+pub(crate) const CONTEXT_ESTIMATOR_REVISION: &str = "deterministic-bytes-v2";
 const TEXT_ITEM_OVERHEAD: u32 = 6;
 const TOOL_ITEM_OVERHEAD: u32 = 12;
 const IMAGE_TOKEN_ESTIMATE: u32 = 1_024;
@@ -67,7 +67,7 @@ impl ContextPlanner {
             .iter()
             .find(|group| &group.turn_id == input.current_turn_id());
         let current_turn_tokens = match current_group {
-            Some(group) => estimate_items(&group.items),
+            Some(group) => estimate_group(input, group),
             None if input.allow_empty_current_turn() => ContextTokenCount::ZERO,
             None => {
                 return Err(ContextPreparationError::UnsupportedContextShape(format!(
@@ -84,7 +84,7 @@ impl ContextPlanner {
         let history_tokens = history_groups
             .iter()
             .fold(ContextTokenCount::ZERO, |total, group| {
-                total.saturating_add(estimate_items(&group.items))
+                total.saturating_add(estimate_group(input, group))
             })
             .saturating_add(estimate_checkpoint(checkpoint.as_ref()));
         let all_evidence_tokens = estimate_evidence(input.evidence());
@@ -116,7 +116,7 @@ impl ContextPlanner {
                         omitted_instructions: Vec::new(),
                         checkpoint,
                         selected_items,
-                        interrupted_turns: input.interrupted_turns().clone(),
+                        turn_endings: input.turn_endings().clone(),
                         evidence: input.evidence().to_vec(),
                         tools: input.tools().to_vec(),
                         budget: ContextBudgetReport::ProviderManaged {
@@ -164,7 +164,12 @@ impl ContextPlanner {
             estimator_revision: CONTEXT_ESTIMATOR_REVISION,
         };
         if history_tokens > after_current {
-            let checkpoint_capacity = after_current
+            let checkpoint_overhead = estimate_bytes(
+                zeta_prompts::checkpoint_prompt_overhead(super::CHECKPOINT_ID_BYTES),
+                0,
+            );
+            let summary_capacity = subtract(after_current, checkpoint_overhead);
+            let checkpoint_capacity = summary_capacity
                 .get()
                 .min(budget.reserved_output().get())
                 .min(2_048);
@@ -174,12 +179,12 @@ impl ContextPlanner {
                 });
             }
             let summary_reserve = ContextTokenCount::new(
-                (after_current.get() / 3)
+                (summary_capacity.get() / 3)
                     .clamp(MIN_CHECKPOINT_TOKENS, 2_048)
                     .min(checkpoint_capacity),
             );
-            let retained_budget = subtract(after_current, summary_reserve);
-            let required_covered_turns = compaction_prefix(&history_groups, retained_budget);
+            let retained_budget = subtract(summary_capacity, summary_reserve);
+            let required_covered_turns = compaction_prefix(input, &history_groups, retained_budget);
             let covered_turns = bounded_compaction_prefix(
                 input,
                 checkpoint.as_ref(),
@@ -282,7 +287,7 @@ impl ContextPlanner {
                 omitted_instructions,
                 checkpoint,
                 selected_items,
-                interrupted_turns: input.interrupted_turns().clone(),
+                turn_endings: input.turn_endings().clone(),
                 evidence: selected_evidence,
                 tools: input.tools().to_vec(),
                 budget: final_report,
@@ -604,9 +609,23 @@ fn validate_items(items: &[ThreadItem]) -> Result<(), ContextPreparationError> {
     Ok(())
 }
 
+fn estimate_group(input: &ContextInput, group: &TurnGroup) -> ContextTokenCount {
+    estimate_items(&group.items).saturating_add(
+        input
+            .turn_endings()
+            .get(&group.turn_id)
+            .map_or(ContextTokenCount::ZERO, |prompt| {
+                estimate_bytes(prompt.body().trim().len(), TEXT_ITEM_OVERHEAD)
+            }),
+    )
+}
+
 fn estimate_checkpoint(checkpoint: Option<&ContextCheckpoint>) -> ContextTokenCount {
     checkpoint.map_or(ContextTokenCount::ZERO, |checkpoint| {
-        estimate_bytes(checkpoint.summary.len(), TEXT_ITEM_OVERHEAD)
+        estimate_bytes(
+            zeta_prompts::checkpoint_prompt(checkpoint).body().len(),
+            TEXT_ITEM_OVERHEAD,
+        )
     })
 }
 
@@ -650,11 +669,15 @@ fn tool_group_is_complete(items: &[ThreadItem]) -> bool {
     calls == results
 }
 
-fn compaction_prefix(groups: &[&TurnGroup], available: ContextTokenCount) -> Vec<TurnId> {
+fn compaction_prefix(
+    input: &ContextInput,
+    groups: &[&TurnGroup],
+    available: ContextTokenCount,
+) -> Vec<TurnId> {
     let mut retained = ContextTokenCount::ZERO;
     let mut first_retained = groups.len();
     for (index, group) in groups.iter().enumerate().rev() {
-        let group_tokens = estimate_items(&group.items);
+        let group_tokens = estimate_group(input, group);
         if retained.saturating_add(group_tokens) > available {
             break;
         }

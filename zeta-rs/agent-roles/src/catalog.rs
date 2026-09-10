@@ -30,6 +30,11 @@ struct AgentFrontmatter {
     disallowed_tools: Vec<String>,
     #[serde(default)]
     required_tools: Vec<String>,
+    delegation_tools: Option<Vec<String>>,
+    #[serde(default)]
+    disallowed_delegation_tools: Vec<String>,
+    #[serde(default)]
+    required_delegation_tools: Vec<String>,
     skills: Option<Vec<String>>,
     #[serde(default)]
     required_skills: Vec<String>,
@@ -266,13 +271,29 @@ fn load_entry(
     let tools = validate_optional_references(frontmatter.tools);
     let disallowed_tools = validate_references(frontmatter.disallowed_tools);
     let required_tools = validate_references(frontmatter.required_tools);
+    let delegation_tools = validate_optional_references(frontmatter.delegation_tools);
+    let disallowed_delegation_tools = validate_references(frontmatter.disallowed_delegation_tools);
+    let required_delegation_tools = validate_references(frontmatter.required_delegation_tools);
     let skills = validate_optional_references(frontmatter.skills);
     let required_skills = validate_references(frontmatter.required_skills);
     let instructions = validate_references(frontmatter.instructions);
-    let (tools, disallowed_tools, required_tools, skills, required_skills, instructions) = match (
+    let (
         tools,
         disallowed_tools,
         required_tools,
+        delegation_tools,
+        disallowed_delegation_tools,
+        required_delegation_tools,
+        skills,
+        required_skills,
+        instructions,
+    ) = match (
+        tools,
+        disallowed_tools,
+        required_tools,
+        delegation_tools,
+        disallowed_delegation_tools,
+        required_delegation_tools,
         skills,
         required_skills,
         instructions,
@@ -281,6 +302,9 @@ fn load_entry(
             Some(tools),
             Some(disallowed_tools),
             Some(required_tools),
+            Some(delegation_tools),
+            Some(disallowed_delegation_tools),
+            Some(required_delegation_tools),
             Some(skills),
             Some(required_skills),
             Some(instructions),
@@ -288,6 +312,9 @@ fn load_entry(
             tools,
             disallowed_tools,
             required_tools,
+            delegation_tools,
+            disallowed_delegation_tools,
+            required_delegation_tools,
             skills,
             required_skills,
             instructions,
@@ -306,6 +333,14 @@ fn load_entry(
         .any(|required| disallowed_tools.contains(required))
         || tools.as_ref().is_some_and(|tools| {
             required_tools
+                .iter()
+                .any(|required| !tools.contains(required))
+        })
+        || required_delegation_tools
+            .iter()
+            .any(|required| disallowed_delegation_tools.contains(required))
+        || delegation_tools.as_ref().is_some_and(|tools| {
+            required_delegation_tools
                 .iter()
                 .any(|required| !tools.contains(required))
         })
@@ -342,6 +377,9 @@ fn load_entry(
         tools,
         disallowed_tools,
         required_tools,
+        delegation_tools,
+        disallowed_delegation_tools,
+        required_delegation_tools,
         skills,
         required_skills,
         instructions,

@@ -22,6 +22,7 @@ fn stored_event_round_trip_preserves_history_contract() {
             },
         }),
         event: ThreadEvent::ThreadCreated {
+            agent: None,
             session_id: SessionId::new("session_1").unwrap(),
             thread_id: thread_id.clone(),
             title: "Primary".into(),

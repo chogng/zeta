@@ -220,95 +220,81 @@ fn configuring_provider_without_builtin_models_does_not_invent_a_model() {
 }
 
 #[test]
-fn issue_config_defaults_on_and_preserves_its_model_across_disable_and_restart() {
+fn issue_refresh_settings_survive_restart_and_reject_stale_writes() {
     let path = config_path("issues");
     let store = ConfigStore::open(&path).unwrap();
     assert_eq!(
-        store.read_snapshot().unwrap().values.issues,
-        IssueConfig {
-            repositories: Default::default(),
-            auto_refresh_minutes: 10,
-            recommend_merge: true,
-            analysis_model: None
-        }
+        store
+            .read_snapshot()
+            .unwrap()
+            .values
+            .issues
+            .auto_refresh_minutes,
+        10
     );
-    let invalid = store.apply(ConfigCommandRequest {
-        command_id: CommandId::new("unknown-issue-model").unwrap(),
-        expected_revision: ConfigRevision::INITIAL,
-        command: UserConfigCommand::ConfigureIssues {
-            config: IssueConfig {
-                repositories: Default::default(),
-                auto_refresh_minutes: 10,
-                recommend_merge: true,
-                analysis_model: Some(model_ref("missing", "small")),
-            },
-        },
-    });
-    assert!(matches!(invalid, Err(ConfigCommandError::Config(_))));
-    let configured = configure_provider(&store, 0, "ollama");
-    let chat = model_ref("ollama", "chat-model");
-    let preferred = store
-        .apply(ConfigCommandRequest {
-            command_id: CommandId::new("chat-model").unwrap(),
-            expected_revision: configured.revision,
-            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
-                preferred_model: Patch::Value(chat.clone()),
-                ..Default::default()
-            }),
-        })
-        .unwrap();
-    let analysis = model_ref("ollama", "issue-model");
-    let disabled = IssueConfig {
-        repositories: Default::default(),
-        auto_refresh_minutes: 10,
-        recommend_merge: false,
-        analysis_model: Some(analysis.clone()),
-    };
     let outcome = store
         .apply(ConfigCommandRequest {
-            command_id: CommandId::new("disable-issue-recommendations").unwrap(),
-            expected_revision: preferred.revision,
+            command_id: CommandId::new("issue-refresh").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::ConfigureIssues {
-                config: disabled.clone(),
+                config: IssueConfig {
+                    auto_refresh_minutes: 30,
+                },
             },
         })
         .unwrap();
-    assert_eq!(store.read_snapshot().unwrap().values.issues, disabled);
     assert!(
         store
             .apply(ConfigCommandRequest {
-                command_id: CommandId::new("stale-issue-settings").unwrap(),
-                expected_revision: preferred.revision,
+                command_id: CommandId::new("stale-refresh").unwrap(),
+                expected_revision: ConfigRevision::INITIAL,
                 command: UserConfigCommand::ConfigureIssues {
                     config: IssueConfig::default()
                 },
             })
             .is_err()
     );
-    let enabled = IssueConfig {
-        repositories: Default::default(),
-        auto_refresh_minutes: 10,
-        recommend_merge: true,
-        analysis_model: Some(analysis),
-    };
-    store
-        .apply(ConfigCommandRequest {
-            command_id: CommandId::new("enable-issue-recommendations").unwrap(),
-            expected_revision: outcome.revision,
-            command: UserConfigCommand::ConfigureIssues {
-                config: enabled.clone(),
-            },
-        })
-        .unwrap();
     drop(store);
     let reopened = ConfigStore::open(&path).unwrap();
-    let snapshot = reopened.read_snapshot().unwrap();
-    assert_eq!(snapshot.values.issues, enabled);
-    assert_eq!(snapshot.values.preferred_model, Some(chat));
-    assert!(snapshot.values.tui.is_empty());
-    assert!(persisted_config_document(&path).contains("[issues]"));
+    assert_eq!(reopened.read_snapshot().unwrap().revision, outcome.revision);
+    assert_eq!(
+        reopened
+            .read_snapshot()
+            .unwrap()
+            .values
+            .issues
+            .auto_refresh_minutes,
+        30
+    );
     drop(reopened);
     remove_config_files(&path);
+}
+
+#[test]
+fn issue_execution_settings_are_removed_once_from_versioned_configuration() {
+    let source = "schemaVersion = 1\n[issues]\nautoRefreshMinutes = 30\nrecommendMerge = true\n[issues.analysisModel]\nprovider = 'old'\nmodel = 'old'\n[issues.repositories.legacy]\nworker_agent = 'worker'\n";
+    let decoded = crate::document_migration::decode(source).unwrap();
+    assert!(decoded.rewrite_required);
+    assert_eq!(decoded.document.issues.auto_refresh_minutes, 30);
+    let encoded = crate::document_migration::encode(&decoded.document).unwrap();
+    for removed in [
+        "recommendMerge",
+        "analysisModel",
+        "repositories",
+        "worker_agent",
+    ] {
+        assert!(!encoded.contains(removed));
+    }
+    assert!(encoded.contains("schemaVersion = 2"));
+    assert!(
+        !crate::document_migration::decode(&encoded)
+            .unwrap()
+            .rewrite_required
+    );
+    assert!(
+        crate::document_migration::decode("schemaVersion = 2\n[issues]\nrecommendMerge = true\n")
+            .is_err()
+    );
 }
 
 #[test]
@@ -465,7 +451,7 @@ type = "disabled"
     );
 
     let persisted = persisted_config_document(&database_path);
-    assert!(persisted.contains("schemaVersion = 1"));
+    assert!(persisted.contains("schemaVersion = 2"));
     assert!(persisted.contains("[codebase]"));
     assert!(persisted.contains("[dirPermissions.entries]"));
     assert!(!persisted.contains("semanticCodeIndex"));
@@ -578,11 +564,11 @@ fn versioned_config_keeps_unknown_fields_strict() {
 #[test]
 fn newer_file_schema_is_rejected_explicitly() {
     let database_path = config_path("newer-file-schema");
-    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 2\n").unwrap();
+    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 3\n").unwrap();
 
     let error = ConfigStore::open(&database_path).err().unwrap();
 
-    assert!(error.0.contains("newer than supported version 1"));
+    assert!(error.0.contains("newer than supported version 2"));
     remove_config_files(&database_path);
 }
 
@@ -1092,7 +1078,7 @@ fn additive_document_schema_upgrade_keeps_revision_and_generation() {
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(document_schema_version, 9);
+    assert_eq!(document_schema_version, 10);
     drop(store);
     remove_config_files(&path);
 }
@@ -2094,7 +2080,6 @@ fn issue_refresh_settings_validate_persist_and_reject_stale_writes() {
         let revision = store.read_snapshot().unwrap().revision;
         let mut config = IssueConfig::default();
         config.auto_refresh_minutes = minutes;
-        config.recommend_merge = false;
         store
             .apply(ConfigCommandRequest {
                 command_id: CommandId::new(format!("refresh-{index}")).unwrap(),

@@ -30,7 +30,7 @@
 
 | 环节 | 可用 harness 需要 | Zeta 现状 |
 | --- | --- | --- |
-| Model instructions | 每次调用注入身份、策略和通用工作行为 | ✅ `zeta-models-manager::BASE_INSTRUCTIONS` 在普通 Turn 创建时冻结并持久化，Core 通过 `ContextPlan` 注入 |
+| Model instructions | 每次调用注入身份、策略和通用工作行为 | ✅ `zeta-prompts::AGENT_INSTRUCTIONS` 与所选模型指导在 Turn 创建前冻结，Core 通过 `ContextPlan` 与当前 Role 组合 |
 | 环境上下文 | cwd、平台、日期、git 状态、目录指令 | ✅ Local Environment host 在 model safe point 提供环境与 `.zeta/instructions` snapshot |
 | 工具面 | 读/搜/改/执行闭环 | ✅ `coding-v1` 在 Turn 接受时冻结模型中立的 exact 工具定义；canonical direct 文件工具、`apply_patch`、shell 与 durable `update_plan` 已进入本地闭环 |
 | 模型失败弹性 | 429/5xx 退避重试、溢出压缩重试、空响应处理 | ✅ 类型化错误、退避、单次溢出恢复、空响应重试、Refusal 完成语义和对话内错误动作已接通 |

@@ -45,10 +45,8 @@ use zeta_protocol::ToolDefinition;
 use zeta_protocol::ToolExecutionOutput;
 use zeta_protocol::ToolName;
 
-pub(super) mod agent_selection;
-
-use agent_selection::ResolvedAgentSelection;
-use agent_selection::resolve_agent_selection;
+pub(super) use super::agent_selection::ResolvedAgentSelection;
+use super::agent_selection::resolve_agent_selection;
 
 pub(crate) const SPAWN_AGENT_TOOL_NAME: &str = "spawn_agent";
 pub(crate) const SEND_AGENT_MESSAGE_TOOL_NAME: &str = "send_agent_message";
@@ -62,6 +60,7 @@ pub(super) struct MultiAgentToolService {
     definitions: Vec<ToolDefinition>,
     action_policy_revision: ActionPolicyRevision,
     customizations: Option<Arc<super::dir_contributions::DirContributions>>,
+    model_instructions: Arc<zeta_models_manager::ModelInstructionCatalog>,
 }
 
 impl MultiAgentToolService {
@@ -77,7 +76,16 @@ impl MultiAgentToolService {
             definitions: vec![spawn_definition(), send_definition(), wait_definition()],
             action_policy_revision: local_policy_revision(),
             customizations: None,
+            model_instructions: zeta_models_manager::ModelInstructionCatalog::built_in(),
         }
+    }
+
+    pub(super) fn with_model_instructions(
+        mut self,
+        catalog: Arc<zeta_models_manager::ModelInstructionCatalog>,
+    ) -> Self {
+        self.model_instructions = catalog;
+        self
     }
 
     pub(super) fn with_action_policy_revision(mut self, revision: ActionPolicyRevision) -> Self {
@@ -107,34 +115,62 @@ impl MultiAgentToolService {
         })?;
         match call.name.as_str() {
             SPAWN_AGENT_TOOL_NAME => {
-                let arguments: SpawnArguments = decode_arguments(&call.arguments)?;
-                let selection = self.resolve_agent(&arguments, facts)?;
                 let delegation_id = DelegationId::new(format!("tool:{}", call.id))
                     .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
-                let spawned = self.coordinator.spawn(SpawnAgentRequest {
-                    delegation_id: delegation_id.clone(),
-                    session_id: identity.session_id().clone(),
-                    parent_thread_id: identity.thread_id().clone(),
-                    parent_turn_id: identity.turn_id().clone(),
-                    task: DelegatedTask {
-                        title: arguments.name.unwrap_or_else(|| "subagent".into()),
-                        instructions: arguments.task,
-                    },
-                    role: selection.role.clone(),
-                    inheritance: spawn_context(arguments.context)?,
-                    policy_ceiling: DelegatedPolicyCeiling {
-                        policy_revision: identity.policy_revision().into(),
-                    },
-                    capability_scope: selection.capability_scope,
-                })?;
-                self.turn_backend
-                    .start(&spawned.child_thread_id, &spawned.child_turn_id)?;
+                // Core already bound this Tool Call's arguments durably. A retry must not
+                // reselect its role or model from catalogs that may have changed meanwhile.
+                let parent = self.threads.read_thread(identity.thread_id())?;
+                let spawned = if parent.delegations.contains_key(&delegation_id) {
+                    self.coordinator
+                        .resume_delegation(identity.thread_id(), &delegation_id)?
+                } else {
+                    let arguments: SpawnArguments = decode_arguments(&call.arguments)?;
+                    let selection = self.resolve_agent(&arguments, facts)?;
+                    self.coordinator.spawn(SpawnAgentRequest {
+                        delegation_id: delegation_id.clone(),
+                        session_id: identity.session_id().clone(),
+                        parent_thread_id: identity.thread_id().clone(),
+                        parent_turn_id: identity.turn_id().clone(),
+                        task: DelegatedTask {
+                            title: arguments.name.unwrap_or_else(|| "subagent".into()),
+                            instructions: arguments.task,
+                        },
+                        role: selection.role.clone(),
+                        base_instructions: zeta_prompts::AGENT_INSTRUCTIONS
+                            .freeze()
+                            .with_model_guidance(
+                                self.model_instructions.resolve(
+                                    selection
+                                        .role
+                                        .as_ref()
+                                        .and_then(|role| role.model.as_ref())
+                                        .or(identity.model()),
+                                ),
+                            ),
+                        inheritance: spawn_context(arguments.context)?,
+                        policy_ceiling: DelegatedPolicyCeiling {
+                            policy_revision: identity.policy_revision().into(),
+                        },
+                        capability_scope: selection.capability_scope,
+                    })?
+                };
+                let child = self.threads.read_thread(&spawned.child_thread_id)?;
+                let status = child
+                    .turns
+                    .iter()
+                    .find(|turn| turn.turn_id == spawned.child_turn_id)
+                    .ok_or_else(|| CoreError::NotFound(spawned.child_turn_id.to_string()))?
+                    .status;
+                if status == zeta_protocol::TurnStatus::Running {
+                    self.turn_backend
+                        .start(&spawned.child_thread_id, &spawned.child_turn_id)?;
+                }
                 success(json!({
                     "delegation_id": delegation_id,
                     "child_thread_id": spawned.child_thread_id,
                     "child_turn_id": spawned.child_turn_id,
-                    "agent": selection.role.definition,
-                    "status": "running"
+                    "agent": spawned.context_seed.agent.role.as_ref().and_then(|role| role.definition.as_ref()),
+                    "status": status
                 }))
             }
             SEND_AGENT_MESSAGE_TOOL_NAME => {
@@ -205,10 +241,9 @@ impl MultiAgentToolService {
             .map(|customizations| customizations.instruction_snapshots_for(identity.session_id()))
             .unwrap_or_default();
         resolve_agent_selection(
-            arguments.agent.as_deref(),
-            &arguments.task,
+            &arguments.agent,
             identity.model(),
-            facts.available_tools().cloned().collect(),
+            facts.delegation_tools().cloned().collect(),
             facts.activated_skills(),
             &agent_snapshots,
             &instruction_snapshots,
@@ -354,7 +389,8 @@ impl ToolService for MultiAgentToolService {
 struct SpawnArguments {
     task: String,
     name: Option<String>,
-    agent: Option<String>,
+    #[serde(default)]
+    agent: zeta_protocol::AgentRoleSelection,
     context: Option<SpawnContextArguments>,
 }
 
@@ -621,7 +657,7 @@ fn spawn_definition() -> ToolDefinition {
         .collect::<Vec<_>>()
         .join("\n");
     let agent_description = format!(
-        "An optional exact Agent role name. null lets the host select one unique metadata match or use the general fallback. Available built-in roles:\n{built_in_roles}"
+        "Select normal Agent behavior with type=default, or an exact role using type=exact, source and name. Omitted selects default and never inherits the parent role. Available built-in roles:\n{built_in_roles}"
     );
     definition(
         SPAWN_AGENT_TOOL_NAME,
@@ -638,8 +674,18 @@ fn spawn_definition() -> ToolDefinition {
                     "description": "An optional short label for the delegation and child Thread."
                 },
                 "agent": {
-                    "type": ["string", "null"],
-                    "description": agent_description
+                    "description": agent_description,
+                    "anyOf": [
+                        { "type": "object", "properties": { "type": { "const": "default" } }, "required": ["type"], "additionalProperties": false },
+                        { "type": "object", "properties": {
+                            "type": { "const": "exact" },
+                            "name": { "type": "string", "minLength": 1 },
+                            "source": { "anyOf": [
+                                { "type": "object", "properties": { "type": { "const": "builtIn" } }, "required": ["type"], "additionalProperties": false },
+                                { "type": "object", "properties": { "type": { "const": "directory" }, "id": { "type": "string", "minLength": 1 } }, "required": ["type", "id"], "additionalProperties": false }
+                            ] }
+                        }, "required": ["type", "name", "source"], "additionalProperties": false }
+                    ]
                 },
                 "context": {
                     "type": ["object", "null"],

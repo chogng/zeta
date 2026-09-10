@@ -2,6 +2,9 @@ use super::BatchCommand;
 use super::ThreadController;
 use crate::CoreError;
 use crate::ThreadSnapshot;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::Weak;
 use zeta_protocol::AgentContextSeed;
 use zeta_protocol::AgentJoin;
 use zeta_protocol::AgentJoinId;
@@ -22,6 +25,23 @@ pub struct CreateAgentThreadRequest {
 }
 
 impl ThreadController {
+    pub(crate) fn agent_spawn_gate(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Arc<Mutex<()>>, CoreError> {
+        let mut gates = self
+            .agent_spawn_gates
+            .lock()
+            .map_err(|_| CoreError::Journal("Agent spawn gates poisoned".into()))?;
+        gates.retain(|_, gate| gate.strong_count() > 0);
+        if let Some(gate) = gates.get(session_id).and_then(Weak::upgrade) {
+            return Ok(gate);
+        }
+        let gate = Arc::new(Mutex::new(()));
+        gates.insert(session_id.clone(), Arc::downgrade(&gate));
+        Ok(gate)
+    }
+
     /// Creates an Agent child Thread and commits its context seed before the Thread is visible.
     ///
     /// Repeating the exact request is idempotent. An existing ordinary Thread or a child with a
@@ -31,6 +51,12 @@ impl ThreadController {
         binder: &dyn crate::ThreadWorktreeBinder,
         request: CreateAgentThreadRequest,
     ) -> Result<ThreadSnapshot, CoreError> {
+        request
+            .context_seed
+            .agent
+            .validate()
+            .map_err(|error| CoreError::InvalidInput(error.into()))?;
+        crate::multi_agent::validate_context_seed_digest(&request.context_seed)?;
         binder.provision(&crate::ThreadWorktreeBindingRequest {
             session_id: request.session_id.clone(),
             thread_id: request.thread_id.clone(),
@@ -64,6 +90,7 @@ impl ThreadController {
             &thread_id,
             vec![
                 ThreadEvent::ThreadCreated {
+                    agent: None,
                     session_id: request.session_id,
                     thread_id: thread_id.clone(),
                     title: request.title,

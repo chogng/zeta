@@ -64,7 +64,7 @@ impl TuiSlashCommandAction {
 
     pub(crate) fn description(self) -> &'static str {
         match self {
-            Self::Pr => "create or inspect this issue task pull request",
+            Self::Pr => "ask the Agent to create or inspect a pull request",
             Self::Issue => "select issues to develop together",
             Self::Status => "show the active session, thread, and model",
             Self::StatusLine => "choose the items shown in the status line",
@@ -145,10 +145,7 @@ impl SlashCommandInvocation {
             Some(ChatInputItem::Text(text)) => {
                 *text = format!("{command_text} {text}");
             }
-            Some(ChatInputItem::Image { .. })
-            | Some(ChatInputItem::Skill { .. })
-            | Some(ChatInputItem::Issue { .. })
-            | None => {
+            Some(ChatInputItem::Image { .. }) | Some(ChatInputItem::Skill { .. }) | None => {
                 self.arguments.insert(0, ChatInputItem::Text(command_text));
             }
         }

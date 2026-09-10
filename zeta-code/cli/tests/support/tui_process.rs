@@ -114,33 +114,6 @@ impl Fixture {
         fs::set_permissions(script, fs::Permissions::from_mode(0o700)).unwrap();
     }
 
-    #[cfg(unix)]
-    pub fn prepare_issue_remote(&self) {
-        let bin = self._root.path().join("bin");
-        let remote = bin.join("origin.git");
-        assert!(
-            std::process::Command::new("/usr/bin/git")
-                .args(["init", "--bare", "--quiet"])
-                .arg(&remote)
-                .status()
-                .unwrap()
-                .success()
-        );
-        assert!(
-            std::process::Command::new("/usr/bin/git")
-                .arg("push")
-                .arg(&remote)
-                .arg("main")
-                .current_dir(&self.workspace)
-                .status()
-                .unwrap()
-                .success()
-        );
-        let script = bin.join("git");
-        fs::write(&script, format!("#!/usr/bin/env python3\nimport os,sys\nargs=sys.argv[1:]\nif 'fetch' in args or 'push' in args: args=[{0:?} if arg=='origin' else arg for arg in args]\nos.execv('/usr/bin/git',['git']+args)\n", remote.to_string_lossy())).unwrap();
-        fs::set_permissions(script, fs::Permissions::from_mode(0o700)).unwrap();
-    }
-
     pub fn write_config(&self, base_url: &str) {
         fs::write(
             self.profile.join("config.toml"),
@@ -517,33 +490,6 @@ impl TuiProcess {
         }
     }
 
-    pub fn wait_for_transcript(&mut self, expected: &str) {
-        let deadline = Instant::now() + STATE_TIMEOUT;
-        loop {
-            let (text, revision) = {
-                let capture = self.capture.lock().unwrap();
-                (capture.transcript(), capture.revision())
-            };
-            if text.contains(expected) {
-                thread::sleep(REDRAW_QUIET_PERIOD);
-                let capture = self.capture.lock().unwrap();
-                if capture.revision() == revision && capture.transcript().contains(expected) {
-                    return;
-                }
-            }
-            if let Some(status) = self.child.try_wait().unwrap() {
-                panic!("TUI exited before emitting {expected:?}: {status:?}");
-            }
-            if Instant::now() >= deadline {
-                panic!(
-                    "TUI transcript did not contain {expected:?}; transcript:\n{text}\nraw:\n{}",
-                    self.capture.lock().unwrap().raw_text()
-                );
-            }
-            thread::sleep(Duration::from_millis(20));
-        }
-    }
-
     pub fn wait_for_output(&mut self, expected: &str) {
         let deadline = Instant::now() + STATE_TIMEOUT;
         loop {
@@ -897,17 +843,6 @@ impl TerminalCapture {
             .grid()
             .lines()
             .iter()
-            .map(|line| line.text())
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
-    fn transcript(&self) -> String {
-        self.core
-            .grid()
-            .scrollback_lines()
-            .iter()
-            .chain(self.core.grid().lines().iter())
             .map(|line| line.text())
             .collect::<Vec<_>>()
             .join("\n")

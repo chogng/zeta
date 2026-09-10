@@ -125,16 +125,11 @@ fn registry_method_and_notification_names_are_unique() {
 }
 
 #[test]
-fn issue_config_and_workflow_method_types_are_declared_in_typescript() {
+fn issue_browser_and_agent_session_types_are_declared_without_workflow_methods() {
     let output = typescript();
     for name in [
         "IssueConfigDto",
         "IssueConfigureParams",
-        "IssueStartPoint",
-        "IssueTaskCreateParams",
-        "IssueTaskReadParams",
-        "IssueTaskResult",
-        "IssueTask",
         "IssueRepository",
         "IssueSummary",
         "IssueState",
@@ -143,10 +138,6 @@ fn issue_config_and_workflow_method_types_are_declared_in_typescript() {
         "IssueReadParams",
         "IssueReadResult",
         "IssueComment",
-        "IssuePrMode",
-        "IssuePrPreview",
-        "IssuePrCreateParams",
-        "IssuePrStatus",
     ] {
         assert!(
             output.contains(&format!("export type {name} =")),
@@ -156,6 +147,17 @@ fn issue_config_and_workflow_method_types_are_declared_in_typescript() {
     assert!(output.contains(
         "\"issue/configure\": { params: IssueConfigureParams; response: ConfigCommandResult }"
     ));
+    for removed in [
+        "issue/workflow/",
+        "issue/assignment/",
+        "issue/assignments/",
+        "issue/task/",
+        "issue/pr/",
+        "issue/plan",
+    ] {
+        assert!(!output.contains(removed));
+    }
+    assert!(output.contains("AgentRoleSelection"));
 }
 
 #[test]

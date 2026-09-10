@@ -118,6 +118,7 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
         started_tool_calls: BTreeSet::new(),
         tool_execution_starts: BTreeMap::new(),
         escalated_tool_calls: BTreeSet::new(),
+        agent: None,
         agent_context_seed: None,
         delegations: BTreeMap::new(),
         agent_cancellations_received: BTreeSet::new(),

@@ -23,6 +23,8 @@ use zeta_thread_transcript::ThreadTranscriptSnapshot;
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionCreateParams {
+    #[serde(default)]
+    pub agent: zeta_protocol::AgentRoleSelection,
     pub command_id: CommandId,
     pub title: String,
 }

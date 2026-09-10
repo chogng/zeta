@@ -1,0 +1,173 @@
+use super::*;
+use crate::InMemoryThreadStore;
+use crate::SequenceExpectation;
+use crate::StartThreadRequest;
+use crate::StartTurnRequest;
+use crate::ThreadController;
+use crate::thread_controller::PrepareModelInvocationRequest;
+use std::hint::black_box;
+use std::sync::Arc;
+use std::time::Instant;
+use zeta_protocol::AgentCapabilityScope;
+use zeta_protocol::AgentConfiguration;
+use zeta_protocol::AgentRoleSnapshot;
+use zeta_protocol::CommandId;
+use zeta_protocol::ModelRequest;
+use zeta_protocol::ThreadId;
+use zeta_protocol::ToolDefinition;
+use zeta_protocol::ToolName;
+use zeta_protocol::TurnId;
+use zeta_protocol::TurnInstructions;
+use zeta_protocol::UserInput;
+
+struct Fixture {
+    controller: ThreadController,
+    thread: ThreadId,
+    turn: TurnId,
+    tools: Vec<ToolDefinition>,
+}
+impl Fixture {
+    fn new(
+        tools: Vec<ToolDefinition>,
+        agent: Option<AgentConfiguration>,
+        instructions: TurnInstructions,
+    ) -> Self {
+        let controller = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+        let thread = controller
+            .start_thread(
+                &crate::NoThreadWorktreeBinder,
+                StartThreadRequest {
+                    agent,
+                    command_id: CommandId::new("benchmark-root").unwrap(),
+                    title: "benchmark".into(),
+                },
+            )
+            .unwrap();
+        let turn = controller
+            .start_turn(
+                &thread.thread_id,
+                StartTurnRequest {
+                    command_id: CommandId::new("benchmark-turn").unwrap(),
+                    expected_sequence: SequenceExpectation::Exact(1),
+                    model: None,
+                    kind: zeta_protocol::TurnKind::Coding,
+                    instructions,
+                    policy_revision: "benchmark-v1".into(),
+                    approval_mode: zeta_protocol::ApprovalMode::default(),
+                    tool_mode: zeta_protocol::ToolMode::Direct,
+                    tool_profile: None,
+                    activated_skills: Vec::new(),
+                    input: vec![UserInput::Text {
+                        text: "Inspect the parser.".into(),
+                    }],
+                },
+            )
+            .unwrap();
+        Self {
+            controller,
+            thread: thread.thread_id,
+            turn: turn.turn_id,
+            tools,
+        }
+    }
+    fn request(&self) -> ModelRequest {
+        let ModelInvocationPreparation::Ready(invocation) = self
+            .controller
+            .prepare_model_invocation(
+                &self.thread,
+                PrepareModelInvocationRequest {
+                    turn_id: &self.turn,
+                    harness_context: &HarnessContext::default(),
+                    extension_fragments: Vec::new(),
+                    evidence: Vec::new(),
+                    tools: self.tools.clone(),
+                    budget: ContextBudget::provider_managed(),
+                },
+            )
+            .unwrap()
+        else {
+            panic!("benchmark context must fit")
+        };
+        ContextAssembler::assemble(invocation.context()).unwrap()
+    }
+}
+
+#[test]
+#[ignore = "offline instruction benchmark; run explicitly with --ignored --nocapture --test-threads=1"]
+fn instruction_benchmark_composition() {
+    const SAMPLES: usize = 1000;
+    for (tool_count, role_bytes) in [(16, 1024), (128, 1024), (512, 1024), (128, 8192)] {
+        let tools = (0..tool_count).map(|index| ToolDefinition {
+            name: ToolName::new(format!("tool_{index}")).unwrap(), description: "A benchmark tool.".into(),
+            parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"],"additionalProperties":false}), strict: true,
+        }).collect::<Vec<_>>();
+        let base = zeta_prompts::AGENT_INSTRUCTIONS.freeze();
+        let composed = Fixture::new(
+            tools.clone(),
+            Some(AgentConfiguration {
+                role: Some(AgentRoleSnapshot {
+                    name: "benchmark".into(),
+                    instructions: "x".repeat(role_bytes),
+                    model: None,
+                    definition: None,
+                }),
+                capability_scope: AgentCapabilityScope {
+                    tools: tools.iter().map(|tool| tool.name.clone()).collect(),
+                    delegation_tools: Vec::new(),
+                    skills: Vec::new(),
+                },
+                base_instructions: Some(base.clone()),
+            }),
+            base,
+        );
+        let expected = composed.request();
+        // The host inserts the same permission prefix in both variants.
+        let permission_prefix =
+            zeta_prompts::permissions_instructions(zeta_protocol::ApprovalMode::default())
+                .into_iter()
+                .map(|asset| asset.body().trim())
+                .collect::<Vec<_>>()
+                .join("\n\n")
+                + "\n\n";
+        let flat_body = expected
+            .instructions
+            .as_ref()
+            .unwrap()
+            .strip_prefix(&permission_prefix)
+            .expect("host permissions precede Agent instructions")
+            .to_owned();
+        let flat = Fixture::new(
+            tools,
+            None,
+            TurnInstructions::new("benchmark", "flat", "v1", flat_body).unwrap(),
+        );
+        assert_eq!(
+            flat.request(),
+            expected,
+            "control must emit the exact same request"
+        );
+        let request_bytes = serde_json::to_vec(&expected).unwrap().len();
+        for _ in 0..100 {
+            black_box(flat.request());
+            black_box(composed.request());
+        }
+        let mut times = [Vec::with_capacity(SAMPLES), Vec::with_capacity(SAMPLES)];
+        for sample in 0..SAMPLES {
+            for index in [sample % 2, 1 - sample % 2] {
+                let fixture = if index == 0 { &flat } else { &composed };
+                let started = Instant::now();
+                let request = black_box(fixture.request());
+                times[index].push(started.elapsed().as_nanos() as u64);
+                black_box(request);
+            }
+        }
+        for (variant, mut samples) in ["flat", "composed"].into_iter().zip(times) {
+            let raw = samples.clone();
+            samples.sort_unstable();
+            println!(
+                "{}",
+                serde_json::json!({"benchmark":"instruction_composition","variant":variant,"tool_count":tool_count,"role_bytes":role_bytes,"request_bytes":request_bytes,"samples":SAMPLES,"samples_ns":raw,"warmup":100,"p50_ns":samples[SAMPLES/2],"p95_ns":samples[SAMPLES*95/100],"p99_ns":samples[SAMPLES*99/100],"debug_assertions":cfg!(debug_assertions),"network":false})
+            );
+        }
+    }
+}

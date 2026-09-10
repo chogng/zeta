@@ -29,8 +29,6 @@ pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
         commit_message_active_dir_authorized: false,
         issues: zeta_app_server_protocol::protocol::issues::IssueConfigDto {
             auto_refresh_minutes: 10,
-            recommend_merge: true,
-            analysis_model: None,
         },
         tool_mode: zeta_protocol::ToolMode::Direct,
         agent_grep_backend: AgentGrepBackendDto::Ripgrep,

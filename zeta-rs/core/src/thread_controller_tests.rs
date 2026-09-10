@@ -116,6 +116,7 @@ fn create_thread(controller: &ThreadController, title: &str) -> ThreadId {
     .expect("test ID is non-empty");
     controller
         .create_thread(CreateThreadRequest {
+            agent: None,
             session_id: SessionId::new("session_1").expect("test ID is non-empty"),
             thread_id: thread_id.clone(),
             title: title.into(),
@@ -134,6 +135,7 @@ fn restoring_a_session_replays_durably_without_reopening_children() {
     for id in [&root, &child] {
         threads
             .create_thread(CreateThreadRequest {
+                agent: None,
                 session_id: session_id.clone(),
                 thread_id: id.clone(),
                 title: id.to_string(),
@@ -188,6 +190,7 @@ fn deleting_a_session_forgets_loaded_threads_and_keeps_other_sessions() {
     let kept = ThreadId::new("thread_kept").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            agent: None,
             session_id: kept_session.clone(),
             thread_id: kept.clone(),
             title: "Kept".into(),
@@ -954,6 +957,7 @@ fn failed_thread_creation_does_not_register_a_projection() {
     assert!(
         threads
             .create_thread(CreateThreadRequest {
+                agent: None,
                 session_id: SessionId::new("session_1").expect("test ID is non-empty"),
                 thread_id,
                 title: "test".into(),

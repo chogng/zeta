@@ -2,10 +2,11 @@
 source: zeta-code/tui/src/app/frame_tests.rs
 expression: "render(&app, 100, 21)"
 ---
+    ▄  ▄     Zeta Code v0.1.0                                                                       
+  ▗█▛██▜█▖   Automatic model · Access unknown                                                       
+  ▝▜████▛▘   .                                                                                      
+    ▝  ▘                                                                                            
                                                                                                     
-  Zeta Code v0.1.0                                                                                  
-  Automatic model · Access unknown                                                                  
-  .                                                                                                 
 ─ 配 置  ─────────────────────────────────────────────────────────────────────────────────────────────
                                                                                                     
    通 用     提 供 商     语 言 服 务 器     Issues                                                           
@@ -19,7 +20,6 @@ expression: "render(&app, 100, 21)"
   自 动 更 新                选 择 版 本 更 新 节 奏                                                     最 新    
   以 差 异 显 示  Git 更 改     显 示 新 增 和 删 除 的 行 ， 而 不 是 已 更 改 的 文 件                               [   ]  
   语 言                    切 换 界 面 语 言                                                         中 文    
-  推 荐 合 并 处 理            推 荐 适 合 一 起 解 决 的  issue                                            [ ✔ ]  
   状 态 栏 风 格              文 字 与 数 值 ， 清 爽 易 读                                                 简 洁    
                                                                                                     
   Enter/Space to change  ·  Tab/Shift+Tab to switch  ·  / to search  ·  Esc to close

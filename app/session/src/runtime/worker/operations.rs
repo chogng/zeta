@@ -157,6 +157,7 @@ fn initialize_session(
 fn create_session(client: &mut AppServerRequestHandle, cwd: &Path) -> Result<Session> {
     client
         .create_session(SessionCreateParams {
+            agent: zeta_protocol::AgentRoleSelection::Default,
             command_id: next_command_id("session"),
             title: cwd_title(cwd),
         })

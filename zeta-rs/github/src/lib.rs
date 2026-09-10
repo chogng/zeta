@@ -2,29 +2,11 @@
 
 mod issues;
 mod process;
-mod workflow;
 pub use issues::IssueAssignee;
 pub use issues::IssueLabel;
 pub use issues::IssueMetadata;
 pub use issues::IssueRepositoryInfo;
 pub use issues::LinkedIssueBranch;
-pub use workflow::IssueAssignment;
-pub use workflow::IssueAssignmentCommand;
-pub use workflow::IssueAssignmentPlan;
-pub use workflow::IssueAutoClaim;
-pub use workflow::IssueBranchPublication;
-pub use workflow::IssueControl;
-pub use workflow::IssueDelivery;
-pub use workflow::IssueDeliveryReceipt;
-pub use workflow::IssueIdentity;
-pub use workflow::IssueLabels;
-pub use workflow::IssueOwnership;
-pub use workflow::IssueRepositoryIdentity;
-pub use workflow::IssueStage;
-pub use workflow::IssueSyncState;
-pub use workflow::IssueWorkItem;
-pub use workflow::IssueWorkScope;
-pub use workflow::IssueWorkflow;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -115,23 +97,6 @@ pub struct Comment {
 pub struct IssueSnapshot {
     pub issue: Issue,
     pub comments: Vec<Comment>,
-}
-
-/// Persisted association between one combined issue selection and its development Session.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct IssueTask {
-    pub command_id: String,
-    pub fingerprint: String,
-    pub session_id: String,
-    pub repository: Repository,
-    pub issues: Vec<IssueSnapshot>,
-    pub source_root: PathBuf,
-    pub start_commit: String,
-    pub start_tree: String,
-    pub branch: String,
-    pub target_branch: String,
-    pub read_at: u64,
-    pub pull_request: Option<PullRequest>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

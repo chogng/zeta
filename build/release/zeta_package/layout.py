@@ -437,9 +437,7 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
     if "cli" in components:
         artifacts["cli"] = package / "bin" / spec.cli_name
     if metadata.get("javascriptRuntime") == {"kind": "packagedNode"}:
-        artifacts["node"] = (
-            package / "zeta-resources" / "node" / "bin" / spec.node_name
-        )
+        artifacts["node"] = package / "zeta-resources" / "node" / "bin" / spec.node_name
     if spec.is_windows:
         artifacts["windowsCommandRunner"] = (
             package / "zeta-resources" / COMMAND_RUNNER_NAME
@@ -466,7 +464,9 @@ def record_system_signing(
         raise RuntimeError("Invalid package component metadata")
     expected = system_signing_artifacts(package, spec)
     if set(signed_artifacts) != set(expected):
-        raise RuntimeError("System signing record does not cover every package executable")
+        raise RuntimeError(
+            "System signing record does not cover every package executable"
+        )
     records = []
     for name, path in sorted(expected.items()):
         record = signed_artifacts[name]

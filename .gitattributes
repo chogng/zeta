@@ -1,6 +1,10 @@
 # Keep the Just entrypoint in the formatter's canonical line ending.
 /justfile text eol=lf
 
+# Embed identical shared prompt assets on every platform.
+/zeta-rs/prompts/templates/** text eol=lf
+/zeta-rs/models-manager/templates/instructions/** text eol=lf
+
 # Keep generated design-token artifacts byte-stable across platforms.
 /resources/design-tokens/* text eol=lf
 

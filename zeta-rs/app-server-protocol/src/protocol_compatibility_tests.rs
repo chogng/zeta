@@ -90,3 +90,13 @@ fn unsupported_required_capability_version_is_fatal() {
         }) if received == unsupported
     ));
 }
+
+#[test]
+fn an_old_backend_cannot_silently_ignore_a_requested_root_role() {
+    let mut initialized = initialization();
+    initialized.protocol_version.major = 1;
+    assert!(matches!(
+        ensure_protocol_compatible(&initialized, REQUIRED_SESSION_CAPABILITIES),
+        Err(ProtocolCompatibilityError::MajorVersion { .. })
+    ));
+}

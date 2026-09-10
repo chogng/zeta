@@ -1,12 +1,12 @@
+use crate::AgentConfiguration;
 use crate::AgentJoinId;
 use crate::AgentMessageId;
 use crate::ContentDigest;
 use crate::ContextCheckpointId;
 use crate::DelegationId;
-use crate::FrozenSkillActivation;
+use crate::FrozenAgentDefinitionRef;
 use crate::ImageAttachmentRef;
 use crate::ItemId;
-use crate::ModelRef;
 use crate::ModelUsageSummary;
 use crate::ThreadGoal;
 use crate::ThreadId;
@@ -24,54 +24,6 @@ use ts_rs::TS;
 pub struct DelegatedTask {
     pub title: String,
     pub instructions: String,
-}
-
-/// Explains how one exact Agent definition was selected for a delegation.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub enum AgentDefinitionSelectionReason {
-    Explicit,
-    Automatic,
-}
-
-/// Stable source of an Agent role selected for one run.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(
-    tag = "type",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum AgentRoleSource {
-    BuiltIn,
-    Directory { id: String },
-}
-
-/// Durable identity of the exact Agent definition consumed by a child seed.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct FrozenAgentDefinitionRef {
-    pub name: String,
-    pub source: AgentRoleSource,
-    #[ts(type = "number | null")]
-    pub version: Option<u64>,
-    #[ts(type = "number")]
-    pub catalog_generation: u64,
-    pub content_digest: ContentDigest,
-    pub selection_reason: AgentDefinitionSelectionReason,
-}
-
-/// Frozen Agent role instructions selected before a child Thread is created.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentRoleSnapshot {
-    pub name: String,
-    pub instructions: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub model: Option<ModelRef>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub definition: Option<FrozenAgentDefinitionRef>,
 }
 
 /// Canonical execution state rendered for one Agent-tree node.
@@ -243,14 +195,6 @@ pub struct DelegatedPolicyCeiling {
     pub policy_revision: String,
 }
 
-/// Frozen upper bound on the tools and Skill instructions visible to a child Agent.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct DelegatedCapabilityScope {
-    pub tools: Vec<ToolName>,
-    pub skills: Vec<FrozenSkillActivation>,
-}
-
 macro_rules! sha256_digest {
     ($name:ident, $error:ident, $label:literal) => {
         #[derive(Clone, Debug, Eq, JsonSchema, PartialEq, TS)]
@@ -330,12 +274,12 @@ pub struct AgentContextSeed {
     #[ts(type = "number")]
     pub parent_sequence: u64,
     pub task: DelegatedTask,
-    pub role: AgentRoleSnapshot,
+    #[serde(flatten)]
+    pub agent: AgentConfiguration,
     pub inheritance: AgentContextMode,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub materialized_context: Vec<AgentMaterializedContext>,
     pub policy_ceiling: DelegatedPolicyCeiling,
-    pub capability_scope: DelegatedCapabilityScope,
     pub digest: ContextSeedDigest,
 }
 

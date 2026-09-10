@@ -17,7 +17,7 @@ use zeta_file_access::Permissions;
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_protocol::ProviderId;
 
-const CURRENT_FILE_SCHEMA_VERSION: i64 = 1;
+const CURRENT_FILE_SCHEMA_VERSION: i64 = 2;
 // Raise this only when the product support window no longer includes the removed versions.
 const MIN_SUPPORTED_FILE_SCHEMA_VERSION: i64 = 1;
 
@@ -76,11 +76,15 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
     let rewrite_required = match version {
         None => {
             migrate_unversioned(root)?;
+            remove_issue_workflow(root);
             true
         }
         Some(toml::Value::Integer(version)) => {
             validate_version(version)?;
-            false
+            if version < 2 {
+                remove_issue_workflow(root);
+            }
+            version != CURRENT_FILE_SCHEMA_VERSION
         }
         Some(_) => {
             return Err(ConfigError(
@@ -318,4 +322,29 @@ enum LegacyWorkspaceTrustSetting {
     #[default]
     Restricted,
     Trusted,
+}
+
+const REMOVED_ISSUE_FIELDS: &[&str] = &["repositories", "recommendMerge", "analysisModel"];
+
+fn remove_issue_workflow(root: &mut toml::map::Map<String, toml::Value>) {
+    if let Some(issues) = root.get_mut("issues").and_then(toml::Value::as_table_mut) {
+        for field in REMOVED_ISSUE_FIELDS {
+            issues.remove(*field);
+        }
+    }
+}
+
+pub(crate) fn decode_legacy_json(source: &str) -> Result<UserConfigDocument, ConfigError> {
+    let mut value: serde_json::Value = serde_json::from_str(source)
+        .map_err(|error| ConfigError(format!("invalid legacy config document: {error}")))?;
+    if let Some(issues) = value
+        .get_mut("issues")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        for field in REMOVED_ISSUE_FIELDS {
+            issues.remove(*field);
+        }
+    }
+    serde_json::from_value(value)
+        .map_err(|error| ConfigError(format!("invalid legacy config document: {error}")))
 }

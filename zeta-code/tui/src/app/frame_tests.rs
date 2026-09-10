@@ -74,6 +74,30 @@ use zeta_slash_commands::SlashCommandArgumentMode;
 use zeta_slash_commands::SlashCommandDefinition;
 
 #[test]
+fn pull_request_command_submits_an_ordinary_agent_task() {
+    let mut app = App::new();
+    app.update(ThreadEvent::ContextChanged {
+        session_id: SessionId::new("pr-session").unwrap(),
+        thread_id: ThreadId::new("pr-thread").unwrap(),
+    });
+    app.insert_text("/pr");
+    let Some(AppCommand::Thread(ThreadCommand::SubmitTurn { submission })) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("PR command must use the normal Agent submission path");
+    };
+    assert_eq!(
+        submission.input,
+        vec![crate::thread::composer::ChatInputItem::Text(
+            submission.display_text.clone()
+        )]
+    );
+    assert!(submission.display_text.contains("pull request"));
+    assert!(app.input().is_empty());
+    assert_snapshot!("pull_request_agent_task", render(&app, 100, 20));
+}
+
+#[test]
 fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
     let rendered = render(&App::new(), 80, 20);
 
@@ -1703,7 +1727,7 @@ fn config_general_tab_uses_localized_label() {
 fn config_issues_tab_shows_one_auto_refresh_value() {
     let mut app = App::new();
     let mut config = crate::test_support::empty_config_snapshot();
-    config.issues.recommend_merge = false;
+    config.issues.auto_refresh_minutes = 0;
     config.issues.auto_refresh_minutes = 0;
     app.update(crate::config::Event::EditorOpened(
         crate::config::config_choices(
@@ -1767,7 +1791,10 @@ fn short_provider_panel_uses_space_below_base_url() {
     assert_eq!(buffer[(2, 8)].symbol(), "│");
     assert!(output.contains("> Base URL"));
     assert_snapshot!("short_provider_panel", output);
-    assert!(output.contains("API key"), "the next field fits when no status message is present");
+    assert!(
+        output.contains("API key"),
+        "the next field fits when no status message is present"
+    );
 }
 
 #[test]
@@ -1901,7 +1928,13 @@ fn detail_overlay_keeps_content_above_the_shared_hitbar_at_every_height() {
 fn issue_manager_reserves_page_height_when_the_transcript_is_empty() {
     let mut app = App::new();
     app.insert_text("/issue");
-    assert!(matches!(app.handle_key(crossterm::event::KeyEvent::new(crossterm::event::KeyCode::Enter, crossterm::event::KeyModifiers::NONE)), Some(crate::app::AppCommand::Issues(_))));
+    assert!(matches!(
+        app.handle_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::NONE
+        )),
+        Some(crate::app::AppCommand::Issues(_))
+    ));
     for (width, height) in [(100, 32), (60, 16)] {
         let screen = ratatui::layout::Rect::new(0, 0, width, height);
         assert_eq!(super::layout(&app, screen).session.bottom.bottom(), height);
@@ -1909,34 +1942,73 @@ fn issue_manager_reserves_page_height_when_the_transcript_is_empty() {
     }
 }
 
-fn custom_model_choices(pins: Vec<zeta_app_server_protocol::protocol::config::ModelRefDto>) -> crate::models::ModelChoices {
+fn custom_model_choices(
+    pins: Vec<zeta_app_server_protocol::protocol::config::ModelRefDto>,
+) -> crate::models::ModelChoices {
     use zeta_app_server_protocol::protocol::config::CustomProviderConfigDto;
     use zeta_app_server_protocol::protocol::config::CustomProviderProtocolDto;
     use zeta_app_server_protocol::protocol::config::ProviderConfigDto;
     let mut config = crate::test_support::empty_config_snapshot();
-    config.tui.0.insert("pinnedModels".into(), serde_json::to_value(pins).unwrap());
-    config.providers.insert("custom-gateway".into(), ProviderConfigDto {
-        provider: "custom-gateway".into(), base_url: Some("https://example.test/v1".into()), max_output_tokens: None, model_context: Default::default(),
-        custom: Some(CustomProviderConfigDto { context_window: 272_000, order: 1, name: "My gateway".into(), model: Some("gateway-model".into()), protocol: CustomProviderProtocolDto::Responses }),
-    });
-    let catalog = zeta_app_server_protocol::protocol::model::ModelListResult { models: vec![
-        zeta_app_server_protocol::protocol::model::ModelCatalogEntry {
-            model: zeta_protocol::ModelRef::new(zeta_protocol::ProviderId::new("custom-gateway").unwrap(), zeta_protocol::ModelId::new("gateway-model").unwrap()),
-            display_name: "gateway-model".into(), access: zeta_protocol::ModelAccess::ApiKey,
-            output_transport: zeta_protocol::ModelOutputTransport::Unary, context_window: Some(272_000), auto_compact_token_limit: None,
-            available_context_window: Some(240_000), capabilities: zeta_protocol::ModelCapabilities::UNKNOWN,
-            supported_reasoning_efforts: vec![], default_reasoning_effort: None, default_personality: None,
-        }
-    ]};
-    crate::models::model_choices(&catalog, &config, &zeta_app_server_protocol::protocol::provider::ProviderListResult { providers: vec![] }).unwrap()
+    config
+        .tui
+        .0
+        .insert("pinnedModels".into(), serde_json::to_value(pins).unwrap());
+    config.providers.insert(
+        "custom-gateway".into(),
+        ProviderConfigDto {
+            provider: "custom-gateway".into(),
+            base_url: Some("https://example.test/v1".into()),
+            max_output_tokens: None,
+            model_context: Default::default(),
+            custom: Some(CustomProviderConfigDto {
+                context_window: 272_000,
+                order: 1,
+                name: "My gateway".into(),
+                model: Some("gateway-model".into()),
+                protocol: CustomProviderProtocolDto::Responses,
+            }),
+        },
+    );
+    let catalog = zeta_app_server_protocol::protocol::model::ModelListResult {
+        models: vec![
+            zeta_app_server_protocol::protocol::model::ModelCatalogEntry {
+                model: zeta_protocol::ModelRef::new(
+                    zeta_protocol::ProviderId::new("custom-gateway").unwrap(),
+                    zeta_protocol::ModelId::new("gateway-model").unwrap(),
+                ),
+                display_name: "gateway-model".into(),
+                access: zeta_protocol::ModelAccess::ApiKey,
+                output_transport: zeta_protocol::ModelOutputTransport::Unary,
+                context_window: Some(272_000),
+                auto_compact_token_limit: None,
+                available_context_window: Some(240_000),
+                capabilities: zeta_protocol::ModelCapabilities::UNKNOWN,
+                supported_reasoning_efforts: vec![],
+                default_reasoning_effort: None,
+                default_personality: None,
+            },
+        ],
+    };
+    crate::models::model_choices(
+        &catalog,
+        &config,
+        &zeta_app_server_protocol::protocol::provider::ProviderListResult { providers: vec![] },
+    )
+    .unwrap()
 }
 
 #[test]
 fn model_favorites_empty_state_explains_pinning_from_provider_tabs() {
     let mut app = App::new();
     app.update(ModelEvent::PickerOpened(custom_model_choices(vec![])));
-    assert_eq!(app.list_selection().unwrap().active_tab().label(), "Favorites");
-    assert_eq!(app.list_selection().unwrap().tabs()[1].label(), "My gateway");
+    assert_eq!(
+        app.list_selection().unwrap().active_tab().label(),
+        "Favorites"
+    );
+    assert_eq!(
+        app.list_selection().unwrap().tabs()[1].label(),
+        "My gateway"
+    );
     assert_snapshot!("model_favorites_empty", render(&app, 100, 18));
 }
 
@@ -1947,30 +2019,76 @@ fn model_provider_tab_pins_without_changing_the_selected_model() {
     for code in [KeyCode::Tab, KeyCode::Down] {
         app.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
     }
-    assert_eq!(app.list_selection().unwrap().active_tab().label(), "My gateway");
-    assert_eq!(app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE)), Some(AppCommand::Models(crate::models::Command::Pin { preference: "custom-gateway/gateway-model".into(), pinned: true })));
-    app.update(ModelEvent::PickerUpdated(custom_model_choices(vec![ModelRefDto { provider: "custom-gateway".into(), model: "gateway-model".into() }])));
-    assert_eq!(app.list_selection().unwrap().active_tab().label(), "My gateway");
-    assert_eq!(app.list_selection().unwrap().selected_item().unwrap().label(), "gateway-model");
+    assert_eq!(
+        app.list_selection().unwrap().active_tab().label(),
+        "My gateway"
+    );
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE)),
+        Some(AppCommand::Models(crate::models::Command::Pin {
+            preference: "custom-gateway/gateway-model".into(),
+            pinned: true
+        }))
+    );
+    app.update(ModelEvent::PickerUpdated(custom_model_choices(vec![
+        ModelRefDto {
+            provider: "custom-gateway".into(),
+            model: "gateway-model".into(),
+        },
+    ])));
+    assert_eq!(
+        app.list_selection().unwrap().active_tab().label(),
+        "My gateway"
+    );
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .label(),
+        "gateway-model"
+    );
     assert_snapshot!("model_provider_pinned", render(&app, 100, 18));
 }
 
 #[test]
 fn model_favorites_reopens_with_saved_pins_and_unpin_action() {
     let mut app = App::new();
-    app.update(ModelEvent::PickerOpened(custom_model_choices(vec![ModelRefDto { provider: "custom-gateway".into(), model: "gateway-model".into() }])));
-    assert_eq!(app.list_selection().unwrap().active_tab().label(), "Favorites");
-    assert_eq!(app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE)), Some(AppCommand::Models(crate::models::Command::Pin { preference: "custom-gateway/gateway-model".into(), pinned: false })));
+    app.update(ModelEvent::PickerOpened(custom_model_choices(vec![
+        ModelRefDto {
+            provider: "custom-gateway".into(),
+            model: "gateway-model".into(),
+        },
+    ])));
+    assert_eq!(
+        app.list_selection().unwrap().active_tab().label(),
+        "Favorites"
+    );
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE)),
+        Some(AppCommand::Models(crate::models::Command::Pin {
+            preference: "custom-gateway/gateway-model".into(),
+            pinned: false
+        }))
+    );
     assert_snapshot!("model_favorites_pinned", render(&app, 100, 18));
 }
 
 #[test]
 fn model_tab_from_items_moves_the_visible_focus_to_the_tab_bar() {
     let mut app = App::new();
-    app.update(ModelEvent::PickerOpened(custom_model_choices(vec![ModelRefDto { provider: "custom-gateway".into(), model: "gateway-model".into() }])));
+    app.update(ModelEvent::PickerOpened(custom_model_choices(vec![
+        ModelRefDto {
+            provider: "custom-gateway".into(),
+            model: "gateway-model".into(),
+        },
+    ])));
     assert!(app.list_selection().unwrap().items_focused());
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    assert_eq!(app.list_selection().unwrap().active_tab().label(), "My gateway");
+    assert_eq!(
+        app.list_selection().unwrap().active_tab().label(),
+        "My gateway"
+    );
     assert!(app.list_selection().unwrap().tabs_focused());
     let buffer = render_buffer(&app, 100, 18);
     assert_ne!(buffer[(0, 15)].symbol(), ">");

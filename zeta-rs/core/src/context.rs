@@ -16,6 +16,8 @@ pub(crate) use calibration::CONTEXT_CALIBRATION_REVISION;
 pub(crate) use calibration::ContextCalibration;
 pub(crate) use calibration::calibrated_budget;
 pub(crate) use calibration::next_context_calibrations;
+pub(crate) use compaction::CHECKPOINT_ID_BYTES;
+pub(crate) use compaction::CHECKPOINT_ID_PREFIX;
 pub use compaction::ContextCompactionRequest;
 pub use compaction::ContextCompactionResult;
 pub use compaction::ContextCompactionService;
@@ -51,3 +53,7 @@ pub use zeta_context_engine::ContextTokenCount;
 pub use zeta_context_engine::ContextTokenMeasurementCapability;
 pub use zeta_context_engine::ContextTokenMeasurementOutcome;
 pub use zeta_context_engine::ResolvedContextBudget;
+
+#[cfg(test)]
+#[path = "context/benchmarks.rs"]
+mod benchmarks;

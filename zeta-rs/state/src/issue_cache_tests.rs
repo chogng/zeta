@@ -159,8 +159,9 @@ fn issue_cache_refresh_invalidates_continuation_and_clear_preserves_other_reposi
             .unwrap()
             .is_none()
     );
-    let _tasks = crate::SqliteIssueTaskStore::open(&path).unwrap();
     let connection = Connection::open(&path).unwrap();
+    // A legacy execution table is unrelated to the browser cache and must stay intact.
+    connection.execute("CREATE TABLE issue_tasks (command_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, fingerprint TEXT NOT NULL, task TEXT NOT NULL)", []).unwrap();
     connection
         .execute(
             "INSERT INTO issue_tasks VALUES ('command','session','fingerprint','context')",

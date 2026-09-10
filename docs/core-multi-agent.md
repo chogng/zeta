@@ -5,8 +5,9 @@
 > exact-once delivery、结构性 tree budget，以及 App Server 的 `spawn_agent`、
 > `send_agent_message`、`wait_agent` 工具已落地。`Selected/ForkedPrefix` 在 spawn 时物化并进入
 > immutable seed；All/Any/Quorum join、向下 cancellation tree 与 canonical Agent-tree projection
-> 均使用 durable Thread/Session facts。Directory Agent definition 的显式/唯一 metadata 自动选择会
-> 冻结 generation、digest、reason 与工具/Skill 上限；Desktop 只消费 canonical tree 并可精确
+> 均使用 durable Thread/Session facts。Agent role 按 Default 或精确 source/name 选择，会
+> 冻结 generation、digest、reason、自身 Tool、下放 Tool 与 Skill 上限；每一代委托只能从祖先下放
+> 上限继续收窄。Desktop 只消费 canonical tree 并可精确
 > 中断单个节点。S6 的 child failure、parent cancel、join timeout、any/quorum、恢复、预算耗尽与
 > mailbox isolation 矩阵已覆盖；late-result/UnknownOutcome 等更广故障注入仍按后续需求演进。原落地顺序分为契约冻结
 > （[阶段 D](zeta-agent-runtime-architecture.md#阶段-d多-agent-契约冻结已完成)）与运行时
@@ -201,14 +202,15 @@ struct AgentContextSeed {
     parent_turn_id: TurnId,
     parent_sequence: u64,
     task: DelegatedTask,
-    role: AgentRoleSnapshot,
+    agent: AgentConfiguration,
     inheritance: AgentContextMode,
     materialized_context: Vec<AgentMaterializedContext>,
     policy_ceiling: DelegatedPolicyCeiling,
-    capability_scope: DelegatedCapabilityScope,
     digest: ContextSeedDigest,
 }
 ```
+
+`AgentConfiguration` 同时保存可选角色、能力上限与共享/模型指令。Default 的角色为空；共享指令仍然生效。角色定义更新不会改写已有配置。三种历史继承方式都使用子 Agent 自己的共享指令，不继承父 Agent 的 Review 等任务指令。
 
 ### 5.1 继承模式
 
@@ -253,7 +255,11 @@ effective child policy
 
 Child 可以被进一步收紧，不能静默获得 parent 没有的 capability 或放宽 approval。
 
-**当前限制。** `DelegatedCapabilityScope` 目前只冻结工具名与 Skill，尚未携带带作用范围的 `Capability` 集合。因此“只读审查”“只允许构建目录写入”等角色限制目前不能只靠该结构强制执行；内置专化角色接线前必须按 [`agents.md`](agents.md#8-当前实现与缺口) 补齐定义身份、启动范围和执行能力上限。
+`AgentCapabilityScope.tools` 是 child 自己可以调用的准确 Tool 集合；
+`AgentCapabilityScope.delegation_tools` 是 child 可以继续向下一代下放的准确上限。两者从
+parent 的 `delegation_tools` 独立收窄，互不隐含。根 Thread 的角色配置保存在 `ThreadCreated.agent`，子 Thread 的配置保存在 `AgentContextSeed.agent`；Core 通过同一个配置访问入口限制工具与 Skill。Default 根 Thread 使用当前环境工具，明确选择角色的根 Thread 使用创建时冻结的上限；历史 seed 缺少 `delegation_tools` 时按空集合读取。
+
+**当前限制。** `AgentCapabilityScope` 目前冻结两组工具名与 Skill，尚未携带带作用范围的 `Capability` 集合。因此“只读审查”“只允许构建目录写入”等角色限制目前不能只靠该结构强制执行；工具名允许列表可以执行约束，文件路径等细粒度限制仍由 action policy 负责，不能把角色文本当作授权机制。详见 [`agents.md`](agents.md#8-当前实现与缺口)。
 
 ### 5.3 种子持久化
 
@@ -446,6 +452,8 @@ Agent tree budget 至少包含：
 - cumulative token/cost budget；
 - deadline；
 - optional per-role quota。
+
+当前 spawn 使用共享 ThreadController 的 Session 门锁串行检查和提交 admission，避免并发请求同时占用最后一个名额；多个环境协调器共享同一个 Session 门锁，不同 Session 不共享门锁。名额预留写入后即释放门锁，工作树创建不阻塞其他预留。live children 包括尚未创建完的预留和未终结的 child，已经终结的 child 释放 live 名额，但仍计入 total descendants。重试从已保存的 seed 恢复，不重新选择角色或读取角色文件。
 
 Reservation 必须在 spawn 前完成。并发 slot 是进程内资源，可以在 crash 后重建；已经消耗的
 usage 和 durable delegation 状态不能只存在内存。

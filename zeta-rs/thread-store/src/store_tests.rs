@@ -21,6 +21,7 @@ fn batch(expected_sequence: u64, event_sequence: u64) -> ThreadEventBatch {
             recorded_at: Timestamp(1),
             command: None,
             event: ThreadEvent::ThreadCreated {
+                agent: None,
                 session_id: zeta_protocol::SessionId::new("session_1")
                     .expect("test ID is non-empty"),
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),

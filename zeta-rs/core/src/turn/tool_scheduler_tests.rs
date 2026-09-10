@@ -1040,6 +1040,7 @@ fn fixture_with_approval_mode(
     let thread_id = ThreadId::new("thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            agent: None,
             session_id: SessionId::new("session").unwrap(),
             thread_id: thread_id.clone(),
             title: "scheduler".into(),

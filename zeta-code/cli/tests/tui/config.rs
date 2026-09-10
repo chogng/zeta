@@ -109,43 +109,40 @@ fn actual_tui_automatic_update_policy_cycles_and_persists_across_restart() {
 }
 
 #[test]
-fn actual_tui_issue_config_switch_gates_its_tab() {
+fn actual_tui_issue_refresh_setting_persists_across_restart() {
     let fixture = Fixture::new();
     let server = ScenarioServer::start([]);
     fixture.write_config(&server.base_url());
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_screen("Zeta Code v");
     process.submit("/config");
-    process.wait_for_screen("Recommend issue grouping");
+    process.wait_for_screen("Enhanced TUI");
     process.up();
     process.up();
     process.back_tab();
-    process.wait_for_screen("Not configured - choose a model");
-    process.tab();
-    process.enter();
-    for _ in 0..5 { process.down(); }
-    process.enter();
-    assert!(fixture.config_source().contains("recommendMerge = false"));
-    process.send(b"\x1b[H");
-    process.up();
-    process.up();
-    process.back_tab();
-    process.wait_for_screen("No language servers configured");
-    process.tab();
-    process.enter();
-    for _ in 0..5 { process.down(); }
-    process.enter();
-    assert!(fixture.config_source().contains("recommendMerge = true"));
-    process.send(b"\x1b[H");
-    process.up();
-    process.up();
-    process.back_tab();
-    process.wait_for_screen("Not configured - choose a model");
-    process.resize(SMALL_SIZE);
-    process.wait_for_screen("Analysis model");
+    process.wait_for_screen("Auto refresh");
+    process.down();
+    process.down();
+    process.right();
+    wait_for_config(&fixture, "autoRefreshMinutes = 30");
+    process.wait_for_screen("30m");
     process.escape();
     process.quit();
-    assert!(server.request_bodies().is_empty(), "configuring the feature must not invoke a model");
+
+    let mut reopened = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    reopened.wait_for_screen("Zeta Code v");
+    reopened.submit("/config");
+    reopened.wait_for_screen("Enhanced TUI");
+    reopened.up();
+    reopened.up();
+    reopened.back_tab();
+    reopened.wait_for_screen("Auto refresh");
+    assert!(reopened.screen().contains("30m"));
+    reopened.resize(SMALL_SIZE);
+    reopened.wait_for_screen("Auto refresh");
+    reopened.escape();
+    reopened.quit();
+    assert!(server.request_bodies().is_empty());
 }
 
 #[test]
@@ -159,11 +156,20 @@ fn actual_tui_provider_autosaves_and_tests_without_fetching_models() {
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     open_provider(&mut process, "New custom provider");
     process.wait_for_screen("> Provider name");
-    for (index, value) in ["PTY service", &format!("{}/", server.base_url()), "pty-synthetic-key"].into_iter().enumerate() {
+    for (index, value) in [
+        "PTY service",
+        &format!("{}/", server.base_url()),
+        "pty-synthetic-key",
+    ]
+    .into_iter()
+    .enumerate()
+    {
         process.enter();
         process.type_text(value);
         process.enter();
-        if index > 0 { process.wait_for_screen("Saved"); }
+        if index > 0 {
+            process.wait_for_screen("Saved");
+        }
         process.down();
     }
     assert!(fixture.config_source().contains("PTY service"));
@@ -214,7 +220,9 @@ fn actual_tui_provider_autosaves_and_tests_without_fetching_models() {
     process.down();
     process.wait_for_screen("Key saved");
     process.resize(SMALL_SIZE);
-    for _ in 0..4 { process.down(); }
+    for _ in 0..4 {
+        process.down();
+    }
     process.wait_for_screen("Test");
     process.escape();
     process.send(b"\x1b[3~");

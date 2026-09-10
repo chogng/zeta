@@ -161,7 +161,7 @@ pub(crate) struct ContextInput {
     items: Vec<ThreadItem>,
     checkpoints: Vec<ContextCheckpoint>,
     terminal_turns: BTreeSet<TurnId>,
-    interrupted_turns: BTreeSet<TurnId>,
+    turn_endings: BTreeMap<TurnId, zeta_prompts::PromptArtifact>,
     item_sequences: BTreeMap<ItemId, u64>,
     tools: Vec<ToolDefinition>,
     budget: ContextBudget,
@@ -206,11 +206,28 @@ impl ContextInput {
                 })
                 .map(|turn| turn.turn_id.clone())
                 .collect(),
-            interrupted_turns: snapshot
+            turn_endings: snapshot
                 .turns
                 .iter()
-                .filter(|turn| turn.status == zeta_protocol::TurnStatus::Interrupted)
-                .map(|turn| turn.turn_id.clone())
+                .filter_map(|turn| {
+                    use zeta_prompts::ReviewOutcome;
+                    use zeta_protocol::TurnKind;
+                    use zeta_protocol::TurnStatus;
+                    let prompt = match (turn.kind, turn.status) {
+                        (TurnKind::Review, TurnStatus::Completed) => {
+                            zeta_prompts::review_exit_prompt(ReviewOutcome::Completed)
+                        }
+                        (TurnKind::Review, TurnStatus::Interrupted) => {
+                            zeta_prompts::review_exit_prompt(ReviewOutcome::Interrupted)
+                        }
+                        (TurnKind::Review, TurnStatus::Failed) => {
+                            zeta_prompts::review_exit_prompt(ReviewOutcome::Failed)
+                        }
+                        (_, TurnStatus::Interrupted) => zeta_prompts::TURN_INTERRUPTED_PROMPT,
+                        _ => return None,
+                    };
+                    Some((turn.turn_id.clone(), prompt))
+                })
                 .collect(),
             item_sequences: snapshot.item_sequences.clone(),
             tools,
@@ -261,8 +278,8 @@ impl ContextInput {
         self.terminal_turns.contains(turn_id)
     }
 
-    pub(crate) fn interrupted_turns(&self) -> &BTreeSet<TurnId> {
-        &self.interrupted_turns
+    pub(crate) fn turn_endings(&self) -> &BTreeMap<TurnId, zeta_prompts::PromptArtifact> {
+        &self.turn_endings
     }
 
     pub(crate) fn item_sequence(&self, item_id: &ItemId) -> Option<u64> {

@@ -11,8 +11,8 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
-const CONFIG_DOCUMENT_SCHEMA_VERSION: u32 = 9;
-const OLDEST_SUPPORTED_CONFIG_DOCUMENT_SCHEMA_VERSION: u32 = 7;
+const CONFIG_DOCUMENT_SCHEMA_VERSION: u32 = 10;
+pub(crate) const OLDEST_SUPPORTED_CONFIG_DOCUMENT_SCHEMA_VERSION: u32 = 7;
 const CONFIG_AUTHORITY_ID: i64 = 1;
 
 /// Failure while loading, validating, or persisting the user configuration authority.
@@ -111,8 +111,7 @@ impl ConfigStore {
                     legacy.schema_version
                 )));
             }
-            document = serde_json::from_str(&legacy.document_json)
-                .map_err(|error| ConfigError(format!("invalid legacy config document: {error}")))?;
+            document = crate::document_migration::decode_legacy_json(&legacy.document_json)?;
             document.validate()?;
             crate::store_file::write_document(&config_path, &document)?;
             replace_content_digest(&connection, &crate::store_file::document_digest(&document)?)?;

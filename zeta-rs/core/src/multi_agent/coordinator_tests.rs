@@ -18,6 +18,7 @@ use crate::context::ModelInvocationPreparation;
 use crate::project_agent_tree;
 use crate::thread_controller::PrepareModelInvocationRequest;
 use std::sync::Arc;
+use zeta_protocol::AgentCapabilityScope;
 use zeta_protocol::AgentContextMode;
 use zeta_protocol::AgentContextSource;
 use zeta_protocol::AgentJoin;
@@ -29,7 +30,6 @@ use zeta_protocol::AgentMessageProvenance;
 use zeta_protocol::AgentRoleSnapshot;
 use zeta_protocol::CommandId;
 use zeta_protocol::ContentDigest;
-use zeta_protocol::DelegatedCapabilityScope;
 use zeta_protocol::DelegatedPolicyCeiling;
 use zeta_protocol::DelegatedTask;
 use zeta_protocol::DelegationId;
@@ -125,6 +125,7 @@ fn spawn_creates_seeded_child_thread_and_initial_turn_idempotently() {
         [
             ToolName::new("allowed").unwrap(),
             ToolName::new("blocked").unwrap(),
+            ToolName::new("delegated").unwrap(),
         ],
     )
     .unwrap();
@@ -134,6 +135,13 @@ fn spawn_creates_seeded_child_thread_and_initial_turn_idempotently() {
             .map(ToolName::as_str)
             .collect::<Vec<_>>(),
         vec!["allowed"]
+    );
+    assert_eq!(
+        facts
+            .delegation_tools()
+            .map(ToolName::as_str)
+            .collect::<Vec<_>>(),
+        vec!["delegated"]
     );
     assert!(child.items.iter().any(|item| {
         matches!(item, ThreadItem::UserMessage { text, .. } if text == "Review the change")
@@ -161,6 +169,7 @@ fn code_mode_agent_scope_keeps_controls_and_limits_nested_tools() {
         [
             ToolName::new("allowed").unwrap(),
             ToolName::new("blocked").unwrap(),
+            ToolName::new("delegated").unwrap(),
         ],
     )
     .unwrap();
@@ -169,7 +178,14 @@ fn code_mode_agent_scope_keeps_controls_and_limits_nested_tools() {
             .available_tools()
             .map(ToolName::as_str)
             .collect::<Vec<_>>(),
-        vec!["allowed", "blocked", "exec", "wait"]
+        vec!["allowed", "blocked", "delegated", "exec", "wait"]
+    );
+    assert_eq!(
+        parent_facts
+            .delegation_tools()
+            .map(ToolName::as_str)
+            .collect::<Vec<_>>(),
+        vec!["allowed", "blocked", "delegated", "exec", "wait"]
     );
 
     let mut request = spawn_request(&fixture);
@@ -218,6 +234,7 @@ fn code_mode_agent_scope_keeps_controls_and_limits_nested_tools() {
         [
             ToolName::new("allowed").unwrap(),
             ToolName::new("blocked").unwrap(),
+            ToolName::new("delegated").unwrap(),
         ],
     )
     .unwrap();
@@ -227,6 +244,13 @@ fn code_mode_agent_scope_keeps_controls_and_limits_nested_tools() {
             .map(ToolName::as_str)
             .collect::<Vec<_>>(),
         vec!["allowed", "exec", "wait"]
+    );
+    assert_eq!(
+        child_facts
+            .delegation_tools()
+            .map(ToolName::as_str)
+            .collect::<Vec<_>>(),
+        vec!["delegated"]
     );
 }
 
@@ -573,6 +597,7 @@ fn cancelling_a_parent_delegation_interrupts_every_live_descendant() {
     let grandchild = fixture
         .coordinator
         .spawn(SpawnAgentRequest {
+            base_instructions: zeta_prompts::AGENT_INSTRUCTIONS.freeze(),
             delegation_id: DelegationId::new("delegation-grandchild").unwrap(),
             session_id: fixture.session_id.clone(),
             parent_thread_id: child.child_thread_id.clone(),
@@ -581,18 +606,19 @@ fn cancelling_a_parent_delegation_interrupts_every_live_descendant() {
                 title: "nested".into(),
                 instructions: "Check one nested detail".into(),
             },
-            role: AgentRoleSnapshot {
+            role: Some(AgentRoleSnapshot {
                 name: "nested".into(),
                 instructions: "Return the nested detail.".into(),
                 model: None,
                 definition: None,
-            },
+            }),
             inheritance: AgentContextMode::Fresh,
             policy_ceiling: DelegatedPolicyCeiling {
                 policy_revision: "policy-v1".into(),
             },
-            capability_scope: DelegatedCapabilityScope {
+            capability_scope: AgentCapabilityScope {
                 tools: Vec::new(),
+                delegation_tools: Vec::new(),
                 skills: Vec::new(),
             },
         })
@@ -962,6 +988,13 @@ fn fixture() -> Fixture {
 }
 
 fn fixture_with_tool_mode(tool_mode: zeta_protocol::ToolMode) -> Fixture {
+    fixture_with_agent(tool_mode, None)
+}
+
+fn fixture_with_agent(
+    tool_mode: zeta_protocol::ToolMode,
+    agent: Option<zeta_protocol::AgentConfiguration>,
+) -> Fixture {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
@@ -969,6 +1002,7 @@ fn fixture_with_tool_mode(tool_mode: zeta_protocol::ToolMode) -> Fixture {
         .start_thread(
             &crate::NoThreadWorktreeBinder,
             StartThreadRequest {
+                agent,
                 command_id: CommandId::new("create-parent").unwrap(),
                 title: "parent".into(),
             },
@@ -979,7 +1013,7 @@ fn fixture_with_tool_mode(tool_mode: zeta_protocol::ToolMode) -> Fixture {
             &parent.thread_id,
             StartTurnRequest {
                 kind: zeta_protocol::TurnKind::Coding,
-                instructions: crate::test_turn_instructions(),
+                instructions: zeta_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("start-parent").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
@@ -1009,6 +1043,7 @@ fn spawn_request(fixture: &Fixture) -> SpawnAgentRequest {
 
 fn spawn_request_with_id(fixture: &Fixture, delegation_id: &str) -> SpawnAgentRequest {
     SpawnAgentRequest {
+        base_instructions: zeta_prompts::AGENT_INSTRUCTIONS.freeze(),
         delegation_id: DelegationId::new(delegation_id).unwrap(),
         session_id: fixture.session_id.clone(),
         parent_thread_id: fixture.parent_thread_id.clone(),
@@ -1017,18 +1052,19 @@ fn spawn_request_with_id(fixture: &Fixture, delegation_id: &str) -> SpawnAgentRe
             title: "reviewer".into(),
             instructions: "Review the change".into(),
         },
-        role: AgentRoleSnapshot {
+        role: Some(AgentRoleSnapshot {
             name: "reviewer".into(),
             instructions: "Review code and report concrete findings.".into(),
             model: None,
             definition: None,
-        },
+        }),
         inheritance: AgentContextMode::Fresh,
         policy_ceiling: DelegatedPolicyCeiling {
             policy_revision: "policy-v1".into(),
         },
-        capability_scope: DelegatedCapabilityScope {
+        capability_scope: AgentCapabilityScope {
             tools: vec![ToolName::new("allowed").unwrap()],
+            delegation_tools: vec![ToolName::new("delegated").unwrap()],
             skills: vec![test_activation()],
         },
     }
@@ -1064,4 +1100,177 @@ fn message_request(fixture: &Fixture, child_thread_id: &ThreadId) -> SendAgentMe
         text: "Also inspect cancellation handling".into(),
         provenance: AgentMessageProvenance::Agent,
     }
+}
+
+#[test]
+fn root_role_and_default_worker_share_rules_without_inheriting_responsibilities() {
+    for tool_mode in [
+        zeta_protocol::ToolMode::Direct,
+        zeta_protocol::ToolMode::CodeModeOnly,
+    ] {
+        let fixture = fixture_with_agent(
+            tool_mode,
+            Some(zeta_protocol::AgentConfiguration {
+                role: Some(AgentRoleSnapshot {
+                    name: "coordinator".into(),
+                    instructions:
+                        "PARENT_ROLE_ONLY_MARKER: coordinate work without implementing it.".into(),
+                    model: None,
+                    definition: None,
+                }),
+                capability_scope: AgentCapabilityScope {
+                    tools: vec![ToolName::new("allowed").unwrap()],
+                    delegation_tools: vec![
+                        ToolName::new("allowed").unwrap(),
+                        ToolName::new("delegated").unwrap(),
+                    ],
+                    skills: vec![test_activation()],
+                },
+                base_instructions: Some(zeta_prompts::AGENT_INSTRUCTIONS.freeze()),
+            }),
+        );
+        let mut forbidden = spawn_request_with_id(&fixture, "too-broad");
+        forbidden
+            .capability_scope
+            .tools
+            .push(ToolName::new("blocked").unwrap());
+        assert!(fixture.coordinator.spawn(forbidden).is_err());
+        assert!(
+            fixture
+                .threads
+                .read_thread(&fixture.parent_thread_id)
+                .unwrap()
+                .delegations
+                .is_empty()
+        );
+        let mut request = spawn_request(&fixture);
+        request.role = None;
+        request.inheritance = AgentContextMode::ForkedPrefix {
+            selection: ForkedAgentContext::Full,
+        };
+        let spawned = fixture.coordinator.spawn(request).unwrap();
+        let child = fixture
+            .threads
+            .read_thread(&spawned.child_thread_id)
+            .unwrap();
+        assert!(child.agent_configuration().unwrap().role.is_none());
+        for (thread_id, turn_id, expects_parent_role) in [
+            (&fixture.parent_thread_id, &fixture.parent_turn_id, true),
+            (&spawned.child_thread_id, &spawned.child_turn_id, false),
+        ] {
+            let ModelInvocationPreparation::Ready(invocation) = fixture
+                .threads
+                .prepare_model_invocation(
+                    thread_id,
+                    PrepareModelInvocationRequest {
+                        turn_id,
+                        harness_context: &HarnessContext::default(),
+                        extension_fragments: Vec::new(),
+                        evidence: Vec::new(),
+                        tools: ["allowed", "blocked", "exec", "wait"]
+                            .into_iter()
+                            .map(tool_definition)
+                            .collect(),
+                        budget: ContextBudget::provider_managed(),
+                    },
+                )
+                .unwrap()
+            else {
+                panic!("fixture context should fit")
+            };
+            let body = invocation
+                .context()
+                .instructions()
+                .iter()
+                .map(|fragment| fragment.body())
+                .collect::<Vec<_>>()
+                .join("\n");
+            assert!(body.contains("Shared working rules"));
+            assert!(body.contains("## Tool permissions"));
+            assert!(body.contains("Approval mode is `askPermissions`"));
+            assert_eq!(
+                body.contains("PARENT_ROLE_ONLY_MARKER"),
+                expects_parent_role
+            );
+            let tools = invocation
+                .context()
+                .tools()
+                .iter()
+                .map(|tool| tool.name.as_str())
+                .collect::<Vec<_>>();
+            assert!(!tools.contains(&"blocked"));
+            assert_eq!(tools.contains(&"exec"), tool_mode.requires_code_mode());
+        }
+    }
+}
+
+#[test]
+fn completed_children_release_live_capacity_and_recorded_delegations_keep_their_configuration() {
+    let mut fixture = fixture();
+    fixture.coordinator = MultiAgentCoordinator::new(
+        fixture.threads.clone(),
+        AgentTreeLimits::new(4, 1, 4).unwrap(),
+    );
+    let first = fixture
+        .coordinator
+        .spawn(spawn_request_with_id(&fixture, "first-completed"))
+        .unwrap();
+    fixture
+        .threads
+        .complete_turn(&first.child_thread_id, &first.child_turn_id, "done".into())
+        .unwrap();
+    let before = fixture.threads.read_thread(&first.child_thread_id).unwrap();
+    let resumed = fixture
+        .coordinator
+        .resume_delegation(&fixture.parent_thread_id, &first.delegation_id)
+        .unwrap();
+    assert_eq!(resumed.context_seed, first.context_seed);
+    assert_eq!(
+        fixture.threads.read_thread(&first.child_thread_id).unwrap(),
+        before
+    );
+    assert!(
+        fixture
+            .coordinator
+            .spawn(spawn_request_with_id(&fixture, "second-live"))
+            .is_ok()
+    );
+}
+
+#[test]
+fn concurrent_spawns_reserve_capacity_once_per_session() {
+    let fixture = fixture();
+    let barrier = std::sync::Barrier::new(8);
+    let succeeded = std::thread::scope(|scope| {
+        let handles = (0..8)
+            .map(|index| {
+                let fixture = &fixture;
+                let barrier = &barrier;
+                scope.spawn(move || {
+                    let coordinator = MultiAgentCoordinator::new(
+                        fixture.threads.clone(),
+                        AgentTreeLimits::new(4, 2, 8).unwrap(),
+                    );
+                    barrier.wait();
+                    coordinator
+                        .spawn(spawn_request_with_id(fixture, &format!("parallel-{index}")))
+                        .is_ok()
+                })
+            })
+            .collect::<Vec<_>>();
+        handles
+            .into_iter()
+            .map(|handle| usize::from(handle.join().unwrap()))
+            .sum::<usize>()
+    });
+    assert_eq!(succeeded, 2);
+    assert_eq!(
+        fixture
+            .threads
+            .read_thread(&fixture.parent_thread_id)
+            .unwrap()
+            .delegations
+            .len(),
+        2
+    );
 }

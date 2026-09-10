@@ -87,6 +87,7 @@ fn tool_call_durably_updates_the_running_turn_plan() {
     let thread_id = ThreadId::new("plan-thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            agent: None,
             session_id: SessionId::new("plan-session").unwrap(),
             thread_id: thread_id.clone(),
             title: "plan".into(),
@@ -97,7 +98,7 @@ fn tool_call_durably_updates_the_running_turn_plan() {
             &thread_id,
             StartTurnRequest {
                 kind: zeta_protocol::TurnKind::Coding,
-                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
+                instructions: zeta_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("plan-start").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,

@@ -82,9 +82,9 @@ fn build_node(
             .unwrap_or_else(ModelUsageSummary::default),
         goal: thread.goal.clone(),
         role: thread
-            .agent_context_seed
-            .as_ref()
-            .and_then(|seed| seed.role.definition.clone()),
+            .agent_configuration()
+            .and_then(|agent| agent.role.as_ref())
+            .and_then(|role| role.definition.clone()),
         result: results.get(thread_id).cloned(),
         joins: thread.agent_joins.values().cloned().collect(),
         children: children

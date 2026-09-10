@@ -314,15 +314,7 @@ impl App {
             self.pointer.clear();
         }
         if self.issues.is_open() {
-            return self.issues.handle_key(key).map(|command| match command {
-                crate::issues::Command::OpenWork { session_id } => {
-                    AppCommand::Sessions(crate::sessions::Command::Resume {
-                        session_id: session_id.to_string(),
-                        preferred_thread_id: None,
-                    })
-                }
-                command => command.into(),
-            });
+            return self.issues.handle_key(key).map(Into::into);
         }
         let overlay_area = frame::transient_area(self, terminal_area);
         if let Some(overlay) = self.overlay_mut() {
@@ -692,28 +684,9 @@ impl App {
     ) -> Option<AppCommand> {
         match outcome {
             crate::config::ConfigEditorOutcome::Action(
-                ConfigSelectionAction::OpenIssueWorkflow,
-            ) => {
-                self.close_command_panel();
-                Some(self.issues.open_workflow().into())
-            }
-            crate::config::ConfigEditorOutcome::LoadIssueModels {
-                request_id,
-                expected_revision,
-            } => Some(
-                ConfigCommand::LoadIssueModels {
-                    request_id,
-                    expected_revision,
-                }
-                .into(),
-            ),
-            crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::SetIssues(edit)
                 | ConfigSelectionAction::AdjustIssueRefresh(edit),
             ) => Some(ConfigCommand::SetIssues(edit).into()),
-            crate::config::ConfigEditorOutcome::Action(
-                ConfigSelectionAction::OpenIssueModels { .. },
-            ) => None,
 
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(
                 request,
@@ -1453,20 +1426,8 @@ impl App {
         self.issues.is_open().then_some(&self.issues)
     }
 
-    pub(crate) fn finish_issue_start(&mut self, generation: u64, result: Result<Vec<u64>, String>) {
-        match result {
-            Ok(numbers) => {
-                self.issues.finish_start(generation, None);
-                for number in numbers {
-                    self.thread_presentations
-                        .active_mut()
-                        .input
-                        .attach_issue(number);
-                }
-                self.chat_panel.start_input();
-            }
-            Err(error) => self.issues.finish_start(generation, Some(error)),
-        }
+    pub(crate) fn finish_issue_start(&mut self, generation: u64, result: Result<(), String>) {
+        self.issues.finish_start(generation, result.err());
     }
 
     pub(crate) fn session_manager_view(&self) -> Option<SessionManagerView<'_>> {
@@ -1704,22 +1665,6 @@ impl App {
             self.pointer.clear();
         }
         match event {
-            AppEvent::Issues(crate::issues::Event::ContextReceived {
-                session_id,
-                numbers,
-            }) => {
-                if self.sessions.active_session_id() == Some(&session_id)
-                    && self.thread_presentations.active_id().as_str() == session_id.as_str()
-                    && !self.thread.has_user_message()
-                {
-                    for number in numbers {
-                        self.thread_presentations
-                            .active_mut()
-                            .input
-                            .attach_issue(number);
-                    }
-                }
-            }
             AppEvent::Issues(event) => self.issues.update(event),
             AppEvent::Dirs(event) => self.apply_dir_event(event),
             AppEvent::Host(event) => self.apply_host_event(event),
@@ -2001,9 +1946,6 @@ impl App {
 
     fn apply_config_event(&mut self, event: ConfigEvent) {
         match event {
-            ConfigEvent::IssueModels { request_id, result } => {
-                self.chat_panel.finish_issue_models(request_id, result)
-            }
             ConfigEvent::Connection(reply) => {
                 if let Err(error) = &reply.result {
                     self.thread
@@ -2545,9 +2487,17 @@ impl App {
         if invocation.origin == SlashCommandOrigin::Local && invocation.arguments.is_empty() {
             match local {
                 Some(TuiSlashCommandAction::Pr) => {
-                    let session_id = self.sessions.active_session_id()?.clone();
+                    self.sessions.active_session_id()?;
                     self.close_transient_surfaces();
-                    return self.issues.open_pr(session_id).map(Into::into);
+                    let text = "Prepare and create a pull request for the current changes using the connected GitHub tools. Verify the target branch and checks, and report the pull request link.".to_owned();
+                    let submission = crate::thread::composer::ChatSubmission {
+                        display_text: text.clone(),
+                        input: vec![crate::thread::composer::ChatInputItem::Text(text)],
+                    };
+                    return self.handle_chat_composer_outcome(
+                        ChatComposerOutcome::Submit(submission),
+                        Instant::now(),
+                    );
                 }
                 Some(TuiSlashCommandAction::Issue) => {
                     self.close_transient_surfaces();

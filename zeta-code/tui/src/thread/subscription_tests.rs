@@ -469,6 +469,7 @@ fn update(session_id: &str, thread_id: &str, durable_sequence: u64) -> ThreadUpd
         stream_cursor: None,
         update: ThreadUpdate::Committed {
             event: ThreadEvent::ThreadCreated {
+                agent: None,
                 session_id,
                 thread_id,
                 title: "Thread".into(),

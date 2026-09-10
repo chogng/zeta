@@ -3,6 +3,25 @@ use super::review_target_prompt;
 use zeta_protocol::ReviewTarget;
 
 #[test]
+fn review_exit_notices_keep_completed_interrupted_and_failed_assessments_distinct() {
+    for (outcome, status) in [
+        (super::ReviewOutcome::Completed, "completed"),
+        (super::ReviewOutcome::Interrupted, "interrupted"),
+        (super::ReviewOutcome::Failed, "failed"),
+    ] {
+        let prompt = super::review_exit_prompt(outcome);
+        prompt.freeze().validate().unwrap();
+        assert!(
+            prompt
+                .body()
+                .contains(&format!("<review_end status=\"{status}\">"))
+        );
+        assert_eq!(prompt.body().matches("</review_end>").count(), 1);
+        assert!(!prompt.body().contains("{{"));
+    }
+}
+
+#[test]
 fn review_asset_requires_structured_findings_and_read_only_behavior() {
     assert_eq!(REVIEW_PROMPT.owner(), "prompts");
     assert!(REVIEW_PROMPT.body().contains("overall_correctness"));

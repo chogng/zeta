@@ -184,6 +184,7 @@ pub(crate) struct EnvRuntimeControl {
     tools: Arc<EnvToolPorts>,
     threads: Arc<ThreadController>,
     multi_agent: Arc<MultiAgentCoordinator>,
+    model_instructions: Arc<zeta_models_manager::ModelInstructionCatalog>,
     turn_backend: Arc<dyn zeta_core::TurnExecutionBackend>,
     updates: Arc<super::update_broker::UpdateBroker>,
     hooks: Arc<DeclarativeHookRuntime>,
@@ -280,6 +281,7 @@ impl EnvRuntimeControl {
         local = append_multi_agent_tools(
             local,
             &self.multi_agent,
+            &self.model_instructions,
             &self.threads,
             &self.turn_backend,
             customizations.as_ref(),
@@ -456,6 +458,7 @@ impl EnvRuntimeControl {
         let local = append_multi_agent_tools(
             local,
             &self.multi_agent,
+            &self.model_instructions,
             &self.threads,
             &turn_backend,
             Some(&customizations),
@@ -1179,6 +1182,7 @@ impl AppServer {
             tools: Arc::clone(&host.tools),
             threads: self.threads.clone(),
             multi_agent: Arc::clone(&self.multi_agent),
+            model_instructions: Arc::clone(&self.model_instructions),
             turn_backend: self.turn_backend.clone(),
             updates: Arc::clone(&self.updates),
             hooks: Arc::clone(&host.hooks),
@@ -1982,6 +1986,7 @@ impl AppServer {
         let local = append_multi_agent_tools(
             local,
             &self.multi_agent,
+            &self.model_instructions,
             &self.threads,
             &turn_backend,
             Some(&customizations),
@@ -2680,6 +2685,7 @@ fn ensure_session_exists(
 fn append_multi_agent_tools(
     local: crate::local_tools::LocalToolComposition,
     coordinator: &Arc<MultiAgentCoordinator>,
+    model_instructions: &Arc<zeta_models_manager::ModelInstructionCatalog>,
     threads: &Arc<ThreadController>,
     turn_backend: &Arc<dyn zeta_core::TurnExecutionBackend>,
     customizations: Option<&Arc<DirContributions>>,
@@ -2704,7 +2710,8 @@ fn append_multi_agent_tools(
         Arc::clone(threads),
         Arc::clone(turn_backend),
     )
-    .with_action_policy_revision(action_policy_revision);
+    .with_action_policy_revision(action_policy_revision)
+    .with_model_instructions(Arc::clone(model_instructions));
     if let Some(customizations) = customizations {
         multi_agent = multi_agent.with_dir_contributions(Arc::clone(customizations));
     }

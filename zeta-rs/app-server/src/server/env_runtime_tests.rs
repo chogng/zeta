@@ -303,12 +303,14 @@ fn dirs_are_session_scoped_and_removable() {
         .unwrap();
     let first = server
         .start_thread(StartThreadRequest {
+            agent: None,
             command_id: CommandId::new("create-add-dir-session").unwrap(),
             title: "first".into(),
         })
         .unwrap();
     let second = server
         .start_thread(StartThreadRequest {
+            agent: None,
             command_id: CommandId::new("create-other-add-dir-session").unwrap(),
             title: "second".into(),
         })
@@ -355,6 +357,7 @@ fn cwd_directory_can_be_added_explicitly() {
         .unwrap();
     let session = server
         .start_thread(StartThreadRequest {
+            agent: None,
             command_id: CommandId::new("create-primary-add-dir-session").unwrap(),
             title: "session".into(),
         })
@@ -384,6 +387,7 @@ fn dir_mutation_requires_a_dir_permissions_host_connection() {
         .unwrap();
     let session = server
         .start_thread(StartThreadRequest {
+            agent: None,
             command_id: CommandId::new("create-capability-add-dir-session").unwrap(),
             title: "session".into(),
         })
@@ -434,6 +438,7 @@ fn dir_permissions_are_revision_bound_and_filter_capability_snapshots() {
         .unwrap();
     let session = server
         .start_thread(StartThreadRequest {
+            agent: None,
             command_id: CommandId::new("create-permission-add-dir-session").unwrap(),
             title: "session".into(),
         })
@@ -935,6 +940,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
     assert!(server.terminal_service().is_ok());
     let thread = server
         .start_thread(StartThreadRequest {
+            agent: None,
             command_id: CommandId::new("create-revocation-thread").unwrap(),
             title: "revocation".into(),
         })
@@ -945,7 +951,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
             &thread.thread_id,
             StartTurnRequest {
                 kind: zeta_protocol::TurnKind::Coding,
-                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
+                instructions: zeta_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("start-revocation-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
@@ -1189,6 +1195,7 @@ fn active_turn_blocks_env_cwd_set_without_changing_authority() {
         .unwrap();
     let thread = server
         .start_thread(StartThreadRequest {
+            agent: None,
             command_id: CommandId::new("create-thread").unwrap(),
             title: "thread".into(),
         })
@@ -1199,7 +1206,7 @@ fn active_turn_blocks_env_cwd_set_without_changing_authority() {
             &thread.thread_id,
             StartTurnRequest {
                 kind: zeta_protocol::TurnKind::Coding,
-                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
+                instructions: zeta_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("start-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
@@ -1244,6 +1251,7 @@ fn active_turn_accepts_session_access_changes_and_revokes_old_snapshots() {
         .unwrap();
     let thread = server
         .start_thread(StartThreadRequest {
+            agent: None,
             command_id: CommandId::new("create-active-add-dir-thread").unwrap(),
             title: "thread".into(),
         })
@@ -1254,7 +1262,7 @@ fn active_turn_accepts_session_access_changes_and_revokes_old_snapshots() {
             &thread.thread_id,
             StartTurnRequest {
                 kind: zeta_protocol::TurnKind::Coding,
-                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
+                instructions: zeta_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("start-active-add-dir-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,

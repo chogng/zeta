@@ -462,6 +462,18 @@ fn inherited_checkpoint_uses_item_provenance_and_preserves_the_raw_tail() {
     };
 
     assert_eq!(plan.checkpoint().unwrap().summary, "old history summary");
+    let super::super::ContextBudgetReport::CoreManaged { history_tokens, .. } = plan.budget()
+    else {
+        panic!("core budget required");
+    };
+    assert!(
+        history_tokens.get() as usize
+            >= zeta_prompts::checkpoint_prompt(plan.checkpoint().unwrap())
+                .body()
+                .len()
+                / 4,
+        "the checkpoint prefix, escaped body and wrapper must all count toward the history budget"
+    );
     assert_eq!(
         plan.selected_items()
             .iter()
@@ -604,6 +616,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         started_tool_calls: BTreeSet::new(),
         tool_execution_starts: BTreeMap::new(),
         escalated_tool_calls: BTreeSet::new(),
+        agent: None,
         agent_context_seed: None,
         delegations: BTreeMap::new(),
         agent_cancellations_received: BTreeSet::new(),
@@ -636,4 +649,69 @@ impl_test_id!(ItemId, SessionId, ThreadId, ToolCallId, TurnId);
 
 fn id<T: TestId>(value: &str) -> T {
     T::from_test(value)
+}
+
+#[test]
+fn a_maximum_sized_checkpoint_fits_the_reserved_continuation_space() {
+    let old = id::<TurnId>("old");
+    let recent = id::<TurnId>("recent");
+    let current = id::<TurnId>("current");
+    let mut state = snapshot(
+        current.clone(),
+        vec![
+            user_item("old", old.clone(), &"a".repeat(4_000)),
+            user_item("recent", recent.clone(), &"b".repeat(1_400)),
+            user_item("current", current.clone(), "now"),
+        ],
+    );
+    let limits = ContextBudget::core_managed(
+        ContextTokenCount::new(6_000),
+        ContextTokenCount::new(200),
+        ContextTokenCount::ZERO,
+        ContextCompactionLimit::Tokens(ContextTokenCount::new(800)),
+    );
+    let ContextPreparation::NeedsCompaction(compaction) = ContextPlanner::prepare(
+        &ContextInput::new(&state, current.clone(), Vec::new(), Vec::new(), limits),
+    )
+    .unwrap() else {
+        panic!("history must need compaction");
+    };
+    assert_eq!(
+        compaction.covered_turns,
+        vec![old, recent],
+        "keeping the recent turn would leave too little room for a framed checkpoint"
+    );
+    state.context_checkpoints.push(ContextCheckpoint {
+        checkpoint_id: ContextCheckpointId::new("c".repeat(super::super::CHECKPOINT_ID_BYTES))
+            .unwrap(),
+        source_thread_id: state.thread_id.clone(),
+        covered: compaction.covered,
+        referenced_items: compaction
+            .source_items
+            .iter()
+            .map(|item| item.item_id().clone())
+            .collect(),
+        source_digest: ContextSourceDigest::new(format!("sha256:{}", "a".repeat(64))).unwrap(),
+        summary: "x".repeat((compaction.target_tokens.get() as usize - 6) * 4),
+        schema_revision: "context-checkpoint-v1".into(),
+        prompt_revision: "compaction-v2".into(),
+        context_policy_revision: "context-policy-v2".into(),
+        generator_model: None,
+        created_at_unix_ms: 1,
+        verification: ContextCheckpointVerification::Verified,
+    });
+    let ContextPreparation::Ready(plan) = ContextPlanner::prepare(&ContextInput::new(
+        &state,
+        current,
+        Vec::new(),
+        Vec::new(),
+        limits,
+    ))
+    .unwrap() else {
+        panic!("the accepted summary and its framing must fit without another compaction");
+    };
+    assert!(plan.budget().total_input().get() <= 600);
+    assert!(super::super::ContextAssembler::assemble(&plan).unwrap().input.iter().any(|item| {
+        matches!(item, zeta_protocol::InputItem::Message(message) if message.content.iter().any(|content| matches!(content, zeta_protocol::ContentPart::Text(text) if text.contains("context_checkpoint"))))
+    }));
 }

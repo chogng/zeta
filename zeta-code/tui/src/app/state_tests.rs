@@ -874,7 +874,7 @@ fn config_show_git_changes_as_diff_toggles_on_enter() {
         TerminalSettings::default(),
         StatusLineSettings::default(),
     )));
-    for _ in 0..4 {
+    for _ in 0..5 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
 
@@ -896,7 +896,7 @@ fn config_language_change_emits_a_profile_setting_edit() {
         TerminalSettings::default(),
         StatusLineSettings::default(),
     )));
-    for _ in 0..5 {
+    for _ in 0..6 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
 
@@ -931,7 +931,7 @@ fn saved_language_rebuilds_the_open_config_page() {
     let selection = app.list_selection().unwrap();
     assert_eq!(selection.title(), "配置");
     assert_eq!(
-        selection.visible_items()[5].description(),
+        selection.visible_items()[6].description(),
         Some("切换界面语言 中文")
     );
 }
@@ -1105,7 +1105,10 @@ fn chatgpt_subscription_keeps_pending_login_across_navigation_and_cancels_by_id(
         )))
     );
     app.update(ConfigEvent::Subscription(SubscriptionEvent::Read(
-        AccountReadResult { revision: 1, accounts: vec![] },
+        AccountReadResult {
+            revision: 1,
+            accounts: vec![],
+        },
     )));
     for _ in 0..3 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
@@ -2088,29 +2091,6 @@ fn sessions_and_agents_commands_open_the_manager_screen() {
         );
         assert!(app.session_manager_view().is_some());
     }
-}
-
-#[test]
-fn late_issue_context_does_not_restore_tags_after_the_user_has_sent() {
-    let mut app = App::new();
-    let session_id = SessionId::new("issue-context").unwrap();
-    app.update(ThreadEvent::ContextChanged {
-        session_id: session_id.clone(),
-        thread_id: ThreadId::new(session_id.to_string()).unwrap(),
-    });
-    app.update(crate::issues::Event::ContextReceived {
-        session_id: session_id.clone(),
-        numbers: vec![3, 5],
-    });
-    assert_eq!(app.input(), "[issue #3] [issue #5] ");
-    app.insert_text("implement together");
-    assert!(matches!(app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)), Some(AppCommand::Thread(ThreadCommand::SubmitTurn { .. }))));
-    assert_eq!(app.input(), "");
-    app.update(crate::issues::Event::ContextReceived {
-        session_id,
-        numbers: vec![3, 5],
-    });
-    assert_eq!(app.input(), "");
 }
 
 #[test]

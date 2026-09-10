@@ -74,7 +74,7 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 
 	async create(title: string, model?: ModelRef): Promise<IActiveSessionThread> {
 		if (model) await this.setPreferredModel(model);
-		const created = await this.host.session.create({ commandId: commandId("session"), title });
+		const created = await this.host.session.create({ commandId: commandId("session"), title, agent: { type: "default" } });
 		const thread = await this.host.session.createThread({ commandId: commandId("thread"), sessionId: created.session.sessionId, title: "Main" });
 		const preferredModel = model ?? await this.host.model?.readPreferred();
 		const session = await this.subscribe({ ...toSession(thread.session), model: preferredModel ?? null });

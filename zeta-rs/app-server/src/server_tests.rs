@@ -2662,6 +2662,15 @@ fn review_turn_freezes_review_rubric_and_renders_the_requested_target() {
     wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
     let requests = model.requests();
     assert_eq!(requests.len(), 1);
+    assert_eq!(
+        requests[0]
+            .instructions
+            .as_deref()
+            .unwrap()
+            .matches("## Shared working rules")
+            .count(),
+        1
+    );
     assert!(
         requests[0]
             .instructions
@@ -2680,6 +2689,10 @@ fn review_turn_freezes_review_rubric_and_renders_the_requested_target() {
     assert_eq!(snapshot.turns[0].kind, zeta_protocol::TurnKind::Review);
     assert_eq!(instructions.owner(), "prompts");
     assert_eq!(instructions.id(), "review/code");
+    assert_eq!(
+        instructions.shared(),
+        &[zeta_prompts::AGENT_INSTRUCTIONS.freeze().as_text()]
+    );
 }
 
 #[test]
@@ -3910,7 +3923,7 @@ fn interaction_resolution_uses_the_durable_identity_and_resumes_the_turn() {
             &thread_id,
             StartTurnRequest {
                 kind: zeta_protocol::TurnKind::Coding,
-                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
+                instructions: zeta_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("agent-turn").unwrap(),
                 expected_sequence: zeta_core::SequenceExpectation::Exact(1),
                 model: None,
@@ -4270,7 +4283,7 @@ fn expired_interaction_is_cancelled_and_fails_the_turn() {
             &thread_id,
             StartTurnRequest {
                 kind: zeta_protocol::TurnKind::Coding,
-                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
+                instructions: zeta_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("deadline-turn").unwrap(),
                 expected_sequence: zeta_core::SequenceExpectation::Exact(1),
                 model: None,
@@ -4361,7 +4374,7 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
             &thread_id,
             StartTurnRequest {
                 kind: zeta_protocol::TurnKind::Coding,
-                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
+                instructions: zeta_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("approval-turn").unwrap(),
                 expected_sequence: zeta_core::SequenceExpectation::Exact(1),
                 model: None,
@@ -4475,7 +4488,7 @@ fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
             &thread_id,
             StartTurnRequest {
                 kind: zeta_protocol::TurnKind::Coding,
-                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
+                instructions: zeta_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("approval-turn-owner-check").unwrap(),
                 expected_sequence: zeta_core::SequenceExpectation::Exact(1),
                 model: None,

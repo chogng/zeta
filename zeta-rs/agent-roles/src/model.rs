@@ -21,6 +21,9 @@ pub struct AgentRole {
     tools: Option<Vec<String>>,
     disallowed_tools: Vec<String>,
     required_tools: Vec<String>,
+    delegation_tools: Option<Vec<String>>,
+    disallowed_delegation_tools: Vec<String>,
+    required_delegation_tools: Vec<String>,
     skills: Option<Vec<String>>,
     required_skills: Vec<String>,
     instructions: Vec<String>,
@@ -38,6 +41,9 @@ pub(crate) struct AgentRoleFields {
     pub(crate) tools: Option<Vec<String>>,
     pub(crate) disallowed_tools: Vec<String>,
     pub(crate) required_tools: Vec<String>,
+    pub(crate) delegation_tools: Option<Vec<String>>,
+    pub(crate) disallowed_delegation_tools: Vec<String>,
+    pub(crate) required_delegation_tools: Vec<String>,
     pub(crate) skills: Option<Vec<String>>,
     pub(crate) required_skills: Vec<String>,
     pub(crate) instructions: Vec<String>,
@@ -57,6 +63,9 @@ impl AgentRole {
             tools: fields.tools,
             disallowed_tools: fields.disallowed_tools,
             required_tools: fields.required_tools,
+            delegation_tools: fields.delegation_tools,
+            disallowed_delegation_tools: fields.disallowed_delegation_tools,
+            required_delegation_tools: fields.required_delegation_tools,
             skills: fields.skills,
             required_skills: fields.required_skills,
             instructions: fields.instructions,
@@ -102,6 +111,18 @@ impl AgentRole {
 
     pub fn required_tools(&self) -> &[String] {
         &self.required_tools
+    }
+
+    pub fn delegation_tools(&self) -> Option<&[String]> {
+        self.delegation_tools.as_deref()
+    }
+
+    pub fn disallowed_delegation_tools(&self) -> &[String] {
+        &self.disallowed_delegation_tools
+    }
+
+    pub fn required_delegation_tools(&self) -> &[String] {
+        &self.required_delegation_tools
     }
 
     pub fn skills(&self) -> Option<&[String]> {

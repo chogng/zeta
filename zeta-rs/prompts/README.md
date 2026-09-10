@@ -1,41 +1,20 @@
 # `zeta-prompts`
 
-`zeta-prompts` 是共享提示词库，不是全项目提示词目录。它只收跨产品流程复用、需要统一审计的稳定提示词；模型和具体功能仍然拥有自己的提示词。
+`zeta-prompts` 隔离共享提示词资产与渲染依赖，供根 Agent、子 Agent 和共享流程使用。
 
-## 职责
+- `AGENT_INSTRUCTIONS`：所有 Agent 的共同工作与报告规则。
+- `permissions_instructions`：工具授权说明与当前 Turn 的三种批准模式。
+- `COMPACTION_PROMPT`、`checkpoint_prompt`：生成摘要，以及压缩后的续接说明和来源边界。
+- `REVIEW_PROMPT`、`review_target_prompt`：审查规则与明确的审查目标。
+- `review_exit_prompt`、`TURN_INTERRUPTED_PROMPT`：审查完成、中断、失败及普通 Turn 中断后的续接说明。
+- `PromptArtifact`、`RenderedPrompt`：正文、来源、版本与渲染结果；摘要大小接口供 Core 使用相同编码计算预算。
 
-- 提供 `PromptArtifact`、动态渲染绑定和冻结为 `TurnInstructions` 的统一方式。
-- 拥有 context compaction 和代码 review 的共享提示词、target 渲染与测试。
-- 不读取 Thread、Config、Workspace、Skill 或 provider runtime，也不决定最终 context 的组装顺序。
+Core 按实际运行状态选择模板、分配上下文预算并组装请求。角色正文归 `agent-roles`，模型指导归 `models-manager`；本 crate 不读取配置、访问 Git、判断授权或调用模型。
 
-## 所有权规则
+权限说明按 Turn 已保存的 `approval_mode` 选择。Zeta 的沙箱和授权按每次工具调用判定，因此使用自身的动作授权模板。不会注入 Codex 的 `sandbox_permissions`、`prefix_rule` 等参数，也不会把批准旁路说明为全盘访问。
 
-| 内容 | Owner |
-| --- | --- |
-| 模型基础 instructions | `zeta-models-manager` |
-| context compaction、通用代码 review | `zeta-prompts` |
-| Thread Goal、动态 context fragment | `zeta-core` 对应功能模块 |
-| 自动审查协议提示词 | `zeta-auto-review` |
-| Skill、扩展和工具描述 | 各能力 crate |
-| 其他跨多个产品流程复用且语义稳定的模板 | 满足真实复用需求后放入本 crate |
+审查结果继续保留在原 Assistant 消息中；结束模板只说明实际状态。摘要正文与 ID 做标记转义，来源摘要保持可追溯；Core 在接受压缩结果和规划后续请求时计入编码后的正文、续接说明和包装开销。
 
-新提示词默认放在功能 owner 的 `templates/` 下，由 owner 定义变量、escaping、revision 和测试。只有出现明确的共享产品流程时才放入这里；不能仅因为一段文本会被模型看到就集中存放。
+Codex `prompts` 的逐项参考、实时语音差异、实际调用位置与维护规则见 [共享模板对应关系](../docs/agent-instructions.md#共享模板与-codex-的对应关系)。共享库中的模板按场景使用，不会全部注入每个请求。
 
-依赖方向保持为：
-
-```text
-models-manager / feature owner -> zeta-prompts::PromptArtifact
-App Server -> PromptArtifact::freeze -> durable TurnInstructions
-Core context pipeline -> frozen TurnInstructions + dynamic fragments
-```
-
-普通 Turn 在 App Server 接受请求前冻结 `models-manager` 的基础 instructions；review Turn 冻结 `REVIEW_PROMPT`。Core 只读取 Turn 内已经持久化的快照，重启或后续模型配置变化不能改变它。
-
-## 修改与测试
-
-修改提示词正文时，在 owner crate 同步 revision、渲染测试和最终 context 组装测试。修改共享契约时运行：
-
-```text
-cargo test -p zeta-prompts
-bazel test //zeta-rs/prompts:prompts-unit-tests
-```
+验证：`just test zeta-prompts`、`just check zeta-prompts`；真实上下文组装与恢复由 `just test zeta-core` 覆盖。编译资源由 `BUILD.bazel` 的 `templates/**` 清单维护。

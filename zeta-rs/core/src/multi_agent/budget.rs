@@ -54,14 +54,40 @@ pub(super) fn validate_spawn_capacity(
             "Agent tree maximum depth has been reached".into(),
         ));
     }
+    let materialized = threads
+        .iter()
+        .filter_map(|thread| {
+            thread
+                .agent_context_seed
+                .as_ref()
+                .map(|seed| &seed.delegation_id)
+        })
+        .collect::<BTreeSet<_>>();
+    let pending = |thread: &ThreadSnapshot| {
+        thread
+            .delegations
+            .keys()
+            .filter(|id| !materialized.contains(id))
+            .count() as u32
+    };
+    let reserved_children = threads
+        .iter()
+        .filter(|thread| &thread.thread_id == parent_thread_id)
+        .map(pending)
+        .sum::<u32>();
     let live_children = threads
         .iter()
         .filter(|thread| {
             &thread.session_id == session_id
                 && thread.parent_thread_id.as_ref() == Some(parent_thread_id)
+                && (thread.turns.is_empty()
+                    || thread
+                        .turns
+                        .iter()
+                        .any(|turn| !super::coordinator::is_terminal_turn(turn.status)))
         })
         .count() as u32;
-    if live_children >= limits.max_live_children {
+    if live_children.saturating_add(reserved_children) >= limits.max_live_children {
         return Err(CoreError::InvalidInput(
             "Agent parent maximum live-child count has been reached".into(),
         ));
@@ -77,7 +103,16 @@ pub(super) fn validate_spawn_capacity(
                     .is_ok_and(|candidate| candidate == root)
         })
         .count() as u32;
-    if descendants >= limits.max_total_descendants {
+    let reserved_descendants = threads
+        .iter()
+        .filter(|thread| {
+            &thread.session_id == session_id
+                && agent_root(threads, session_id, &thread.thread_id)
+                    .is_ok_and(|candidate| candidate == root)
+        })
+        .map(pending)
+        .sum::<u32>();
+    if descendants.saturating_add(reserved_descendants) >= limits.max_total_descendants {
         return Err(CoreError::InvalidInput(
             "Agent tree maximum descendant count has been reached".into(),
         ));

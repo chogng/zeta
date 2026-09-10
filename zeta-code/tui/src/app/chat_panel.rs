@@ -206,16 +206,6 @@ impl ChatPanel {
         }
     }
 
-    pub(crate) fn finish_issue_models(
-        &mut self,
-        request_id: zeta_protocol::CommandId,
-        result: Result<ConfigChoices, String>,
-    ) {
-        if let Some(command) = self.command.as_mut() {
-            command.finish_issue_models(request_id, result);
-        }
-    }
-
     pub(crate) fn replace_config(&mut self, choices: ConfigChoices) {
         if let Some(command) = self.command.as_mut() {
             command.replace_config(choices);
@@ -253,7 +243,9 @@ impl ChatPanel {
     }
 
     pub(crate) fn replace_model(&mut self, choices: crate::models::ModelChoices) {
-        if let Some(CommandPanel::Model(selection)) = self.command.as_mut() { selection.replace(choices.model, choices.actions); }
+        if let Some(CommandPanel::Model(selection)) = self.command.as_mut() {
+            selection.replace(choices.model, choices.actions);
+        }
     }
 
     pub(crate) fn replace_mcp(&mut self, choices: McpChoices) {

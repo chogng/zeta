@@ -334,26 +334,11 @@ use crate::protocol::initialize::InitializeParams;
 use crate::protocol::initialize::InitializeResult;
 use crate::protocol::initialize::ProtocolVersion;
 use crate::protocol::initialize::ServerCapabilities;
-use crate::protocol::issue_assignment::IssueAssignmentActionParams;
-use crate::protocol::issue_assignment::IssueAssignmentStartParams;
-use crate::protocol::issue_assignment::IssueAssignmentsResult;
-use crate::protocol::issue_assignment::IssueLabelCreateParams;
-use crate::protocol::issue_assignment::IssueLabelDto;
-use crate::protocol::issue_assignment::IssuePlanParams;
-use crate::protocol::issue_assignment::IssuePlanResult;
-use crate::protocol::issue_assignment::IssueWorkflowConfigureParams;
-use crate::protocol::issue_assignment::IssueWorkflowReadResult;
 use crate::protocol::issues::IssueConfigureParams;
 use crate::protocol::issues::IssueListParams;
 use crate::protocol::issues::IssueListResult;
-use crate::protocol::issues::IssuePrCreateParams;
-use crate::protocol::issues::IssuePrPreview;
-use crate::protocol::issues::IssuePrStatus;
 use crate::protocol::issues::IssueReadParams;
 use crate::protocol::issues::IssueReadResult;
-use crate::protocol::issues::IssueTaskCreateParams;
-use crate::protocol::issues::IssueTaskReadParams;
-use crate::protocol::issues::IssueTaskResult;
 use crate::protocol::language::LanguageCancelParams;
 use crate::protocol::language::LanguageCancelResult;
 use crate::protocol::language::LanguageCancelStatusDto;
@@ -685,6 +670,7 @@ use zeta_protocol::ActionApprovalCapabilityKind;
 use zeta_protocol::ActionApprovalDecision;
 use zeta_protocol::ActionApprovalRequest;
 use zeta_protocol::ActionApprovalResponse;
+use zeta_protocol::AgentCapabilityScope;
 use zeta_protocol::AgentContextContent;
 use zeta_protocol::AgentContextMode;
 use zeta_protocol::AgentContextSeed;
@@ -726,7 +712,6 @@ use zeta_protocol::ContextCheckpointVerification;
 use zeta_protocol::ContextSeedDigest;
 use zeta_protocol::ContextSourceDigest;
 use zeta_protocol::ContextSourceRange;
-use zeta_protocol::DelegatedCapabilityScope;
 use zeta_protocol::DelegatedPolicyCeiling;
 use zeta_protocol::DelegatedTask;
 use zeta_protocol::DelegationArtifactRef;
@@ -2072,61 +2057,6 @@ client_methods! {
         response: (),
         serialization: GlobalExclusive,
     },
-    IssuePrPreview => "issue/pr/preview" {
-        params: IssueTaskReadParams,
-        response: IssuePrPreview,
-        serialization: GlobalExclusive,
-    },
-    IssuePrCreate => "issue/pr/create" {
-        params: IssuePrCreateParams,
-        response: IssuePrStatus,
-        serialization: SessionExclusive,
-    },
-    IssueTaskCreate => "issue/task/create" {
-        params: IssueTaskCreateParams,
-        response: IssueTaskResult,
-        serialization: GlobalExclusive,
-    },
-    IssueTaskRead => "issue/task/read" {
-        params: IssueTaskReadParams,
-        response: IssueTaskResult,
-        serialization: SessionSharedRead,
-    },
-    IssueWorkflowRead => "issue/workflow/read" {
-        params: EmptyParams,
-        response: IssueWorkflowReadResult,
-        serialization: None,
-    },
-    IssueWorkflowConfigure => "issue/workflow/configure" {
-        params: IssueWorkflowConfigureParams,
-        response: ConfigCommandResult,
-        serialization: None,
-    },
-    IssueLabelCreate => "issue/label/create" {
-        params: IssueLabelCreateParams,
-        response: IssueLabelDto,
-        serialization: None,
-    },
-    IssuePlan => "issue/plan" {
-        params: IssuePlanParams,
-        response: IssuePlanResult,
-        serialization: None,
-    },
-    IssueAssignmentStart => "issue/assignment/start" {
-        params: IssueAssignmentStartParams,
-        response: IssueAssignmentsResult,
-        serialization: None,
-    },
-    IssueAssignmentsList => "issue/assignments/list" {
-        params: EmptyParams,
-        response: IssueAssignmentsResult,
-        serialization: None,
-    },
-    IssueAssignmentAction => "issue/assignment/action" {
-        params: IssueAssignmentActionParams,
-        response: IssueAssignmentsResult,
-        serialization: None,
-    },
     IssueConfigure => "issue/configure" {
         params: IssueConfigureParams,
         response: ConfigCommandResult,
@@ -2635,9 +2565,6 @@ server_notifications! {
     TurnChangesChanged => "turnChanges/changed" {
         params: TurnChangesChanged,
     },
-    IssueAssignmentNotice => "issue/assignment/notice" {
-        params: crate::protocol::issue_assignment::IssueAssignmentNotice,
-    },
     ProjectChanged => "project/changed" {
         params: ProjectChanged,
     },
@@ -2676,42 +2603,12 @@ macro_rules! typescript_bindings {
 }
 
 typescript_bindings! {
-    crate::protocol::issue_assignment::IssueRepositoryIdentityDto,
-    crate::protocol::issue_assignment::IssueIdentityDto,
-    crate::protocol::issue_assignment::IssueStageDto,
-    crate::protocol::issue_assignment::IssueLabelsDto,
-    crate::protocol::issue_assignment::IssueBranchPublicationDto,
-    crate::protocol::issue_assignment::IssueDeliveryDto,
-    crate::protocol::issue_assignment::IssueDeliveryReceiptDto,
-    crate::protocol::issue_assignment::IssueWorkflowDto,
-    crate::protocol::issue_assignment::IssueAutoClaimDto,
-    crate::protocol::issue_assignment::IssueWorkScopeDto,
-    crate::protocol::issue_assignment::IssueWorkItemDto,
-    crate::protocol::issue_assignment::IssueAssignmentNotice,
-    crate::protocol::issue_assignment::IssueAssignmentPlanDto,
-    crate::protocol::issue_assignment::IssueOwnershipDto,
-    crate::protocol::issue_assignment::IssueSyncStateDto,
-    crate::protocol::issue_assignment::IssueAssignmentDto,
-    crate::protocol::issue_assignment::IssueWorkflowReadResult,
-    crate::protocol::issue_assignment::IssueLabelDto,
-    crate::protocol::issue_assignment::IssueWorkflowConfigureParams,
-    crate::protocol::issue_assignment::IssueLabelCreateParams,
-    crate::protocol::issue_assignment::IssuePlanMode,
-    crate::protocol::issue_assignment::IssuePlanParams,
-    crate::protocol::issue_assignment::IssuePlanResult,
-    crate::protocol::issue_assignment::IssueAssignmentStartAction,
-    crate::protocol::issue_assignment::IssueAssignmentStartParams,
-    crate::protocol::issue_assignment::IssueAssignmentView,
-    crate::protocol::issue_assignment::IssueAssignmentsResult,
-    crate::protocol::issue_assignment::IssueAssignmentAction,
-    crate::protocol::issue_assignment::IssueAssignmentActionParams,
+    zeta_protocol::AgentConfiguration,
+    zeta_protocol::AgentRoleSelection,
+    zeta_protocol::InstructionText,
+    zeta_protocol::ModelInstructionSelection,
     crate::protocol::issues::IssueConfigDto,
     crate::protocol::issues::IssueConfigureParams,
-    crate::protocol::issues::IssueStartPoint,
-    crate::protocol::issues::IssueTaskCreateParams,
-    crate::protocol::issues::IssueTaskReadParams,
-    crate::protocol::issues::IssueTaskResult,
-    crate::protocol::issues::IssueTask,
     crate::protocol::issues::IssueRepository,
     crate::protocol::issues::IssueSummary,
     crate::protocol::issues::IssueState,
@@ -2721,10 +2618,6 @@ typescript_bindings! {
     crate::protocol::issues::IssueReadParams,
     crate::protocol::issues::IssueReadResult,
     crate::protocol::issues::IssueComment,
-    crate::protocol::issues::IssuePrMode,
-    crate::protocol::issues::IssuePrPreview,
-    crate::protocol::issues::IssuePrCreateParams,
-    crate::protocol::issues::IssuePrStatus,
     AccountDto,
     AccountLoginCancelParams,
     AccountLoginCancelResult,
@@ -2948,7 +2841,7 @@ typescript_bindings! {
     ForkedAgentContext,
     AgentContextMode,
     DelegatedPolicyCeiling,
-    DelegatedCapabilityScope,
+    AgentCapabilityScope,
     ContextSeedDigest,
     AgentContextSeed,
     ThreadSequenceRange,

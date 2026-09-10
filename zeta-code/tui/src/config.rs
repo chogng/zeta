@@ -1,6 +1,4 @@
 mod editor;
-mod issues;
-pub(crate) use issues::IssueConfigEdit;
 pub(crate) mod provider;
 mod request;
 mod settings;
@@ -24,6 +22,12 @@ pub(crate) use request::execute;
 pub(crate) use request::set_settings;
 pub(crate) use settings::TerminalSettings;
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct IssueConfigEdit {
+    pub(crate) expected_revision: u64,
+    pub(crate) config: zeta_app_server_protocol::protocol::issues::IssueConfigDto,
+}
+
 pub(crate) struct ConfigEditResult {
     pub(crate) terminal: TerminalSettings,
     pub(crate) status_line: crate::status::StatusLineSettings,
@@ -32,10 +36,6 @@ pub(crate) struct ConfigEditResult {
 
 /// A completed configuration operation delivered to the TUI state owner.
 pub(crate) enum Event {
-    IssueModels {
-        request_id: zeta_protocol::CommandId,
-        result: Result<ConfigChoices, String>,
-    },
     Connection(provider::Reply),
     Subscription(SubscriptionEvent),
     SettingsReceived(TerminalSettings),
@@ -50,10 +50,6 @@ pub(crate) enum Event {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
     SetIssues(IssueConfigEdit),
-    LoadIssueModels {
-        request_id: zeta_protocol::CommandId,
-        expected_revision: u64,
-    },
     Connection(provider::Request),
     Subscription(SubscriptionCommand),
     OpenEditor,

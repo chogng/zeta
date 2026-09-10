@@ -21,6 +21,7 @@ fn idle_lane_evicts_projection_and_a_later_load_gets_a_new_incarnation() {
     let thread_id = ThreadId::new("thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            agent: None,
             session_id: SessionId::new("session").unwrap(),
             thread_id: thread_id.clone(),
             title: "test".into(),
@@ -183,6 +184,7 @@ fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
         started_tool_calls: BTreeSet::new(),
         tool_execution_starts: BTreeMap::new(),
         escalated_tool_calls: BTreeSet::new(),
+        agent: None,
         agent_context_seed: None,
         delegations: BTreeMap::new(),
         agent_cancellations_received: BTreeSet::new(),

@@ -825,7 +825,7 @@ impl AppServer {
             tool_mode,
             input,
             zeta_protocol::TurnKind::Coding,
-            zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
+            zeta_prompts::AGENT_INSTRUCTIONS.freeze(),
         )
     }
 
@@ -892,10 +892,35 @@ impl AppServer {
         )? {
             return Ok(replayed);
         }
-        let model = self
-            .model_catalog
-            .configured_default()
-            .map_err(core_error)?;
+        let model = match thread_before
+            .agent_configuration()
+            .and_then(|agent| agent.model())
+        {
+            Some(model) => Some(model.clone()),
+            None => self
+                .model_catalog
+                .configured_default()
+                .map_err(core_error)?,
+        };
+        let base = thread_before
+            .agent_configuration()
+            .and_then(|agent| agent.base_instructions.clone())
+            .unwrap_or_else(|| zeta_prompts::AGENT_INSTRUCTIONS.freeze());
+        let guidance = base
+            .model_guidance()
+            .filter(|guidance| guidance.model() == model.as_ref())
+            .cloned()
+            .unwrap_or_else(|| self.model_instructions.resolve(model.as_ref()));
+        let instructions = if kind == zeta_protocol::TurnKind::Coding {
+            base
+        } else {
+            instructions.with_shared(&base)
+        }
+        .with_model_guidance(guidance);
+        let activated_skills = thread_before
+            .agent_configuration()
+            .map(|agent| agent.capability_scope.skills.clone())
+            .unwrap_or_default();
         let _env_runtime = self
             .env_runtime_gate
             .lock()
@@ -919,7 +944,7 @@ impl AppServer {
                     approval_mode,
                     tool_mode,
                     tool_profile: Some(tool_profile),
-                    activated_skills: Vec::new(),
+                    activated_skills,
                     input,
                 },
             )
@@ -1751,14 +1776,24 @@ fn thread_mutation(mutation: SessionMutation, expected_sequence: u64) -> ThreadM
 impl AppServer {
     fn normalize_input(
         &self,
-        session_id: &zeta_protocol::SessionId,
+        _session_id: &zeta_protocol::SessionId,
         input: Vec<InputItem>,
     ) -> Result<Vec<UserInput>, RpcError> {
         input
             .into_iter()
             .map(|item| {
                 Ok(match item {
-                    InputItem::Issue { number } => self.issue_input(session_id, number)?,
+                    InputItem::Issue { number } => {
+                        if number == 0 {
+                            return Err(core_error(zeta_core::CoreError::InvalidInput(
+                                "Issue number must be positive".into(),
+                            )));
+                        }
+                        UserInput::Context {
+                            name: "issue".into(),
+                            content: format!("[issue #{number}]"),
+                        }
+                    }
                     InputItem::Text { text } => UserInput::Text { text },
                     InputItem::Context { name, content } => UserInput::Context { name, content },
                     InputItem::ImageAttachment { attachment } => {

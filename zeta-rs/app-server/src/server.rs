@@ -63,6 +63,7 @@ use zeta_typst::TypstCompiler;
 
 mod account_operations;
 mod agent_environment_source;
+mod agent_selection;
 mod attachment_operations;
 mod automation_execution;
 mod automation_operations;
@@ -96,12 +97,8 @@ mod git_turn_changes_operations;
 mod git_turn_changes_runtime;
 pub(crate) mod goal_tool;
 mod interaction_runtime;
-mod issue_assignment;
-mod issue_assignment_operations;
 mod issue_operations;
-mod issue_pr;
 mod issue_runtime;
-mod issue_tasks;
 mod language_document_features;
 mod language_operations;
 mod language_runtime;
@@ -172,6 +169,7 @@ pub struct AppServer {
     pub(super) multi_agent: Arc<MultiAgentCoordinator>,
     model: Arc<dyn ModelService>,
     model_catalog: Arc<dyn ModelCatalog>,
+    model_instructions: Arc<zeta_models_manager::ModelInstructionCatalog>,
     request_scheduler: RequestScheduler,
     request_cancellations: RequestCancellationRegistry,
     pub(super) resources: Arc<Mutex<ResourceStore>>,
@@ -231,9 +229,6 @@ pub struct AppServer {
     _interaction_deadline_watcher: interaction_runtime::InteractionDeadlineWatcher,
     git_turn_changes: Option<Arc<git_turn_changes_runtime::GitTurnChangesRuntime>>,
     issue_runtime: Option<Arc<issue_runtime::IssueRuntime>>,
-    issue_tasks: Option<Arc<zeta_state::SqliteIssueTaskStore>>,
-    issue_assignments: Option<Arc<zeta_state::SqliteIssueAssignmentStore>>,
-    issue_repository_cache: Mutex<Option<issue_assignment::IssueRepositoryCache>>,
     issue_cache: Option<Arc<Mutex<zeta_state::SqliteIssueCache>>>,
     projects: Option<Arc<zeta_projects::ProjectCoordinator>>,
     automation: Option<Arc<zeta_automation::AutomationStore>>,
@@ -484,6 +479,7 @@ impl AppServer {
             multi_agent,
             model,
             model_catalog: unavailable_model_catalog(),
+            model_instructions: zeta_models_manager::ModelInstructionCatalog::built_in(),
             request_scheduler: RequestScheduler::default(),
             request_cancellations: RequestCancellationRegistry::default(),
             resources,
@@ -547,9 +543,6 @@ impl AppServer {
             _interaction_deadline_watcher: interaction_deadline_watcher,
             git_turn_changes: None,
             issue_runtime: None,
-            issue_tasks: None,
-            issue_assignments: None,
-            issue_repository_cache: Mutex::new(None),
             issue_cache: None,
             projects: None,
             automation: None,
@@ -623,12 +616,6 @@ impl AppServer {
         server.issue_cache = Some(Arc::new(Mutex::new(zeta_state::SqliteIssueCache::open(
             database_path,
         )?)));
-        server.issue_assignments = Some(Arc::new(zeta_state::SqliteIssueAssignmentStore::open(
-            database_path,
-        )?));
-        server.issue_tasks = Some(Arc::new(zeta_state::SqliteIssueTaskStore::open(
-            database_path,
-        )?));
         Ok(server)
     }
 
@@ -1348,6 +1335,20 @@ impl AppServer {
             .start_thread(self.thread_worktree_binder.as_ref(), request)
     }
 
+    /// Installs validated model guidance before environment tools are composed.
+    pub fn with_model_instructions(
+        mut self,
+        catalog: zeta_models_manager::ModelInstructionCatalog,
+    ) -> Result<Self, CoreError> {
+        if self.local_env_host.is_some() {
+            return Err(CoreError::InvalidInput(
+                "Model instructions must be installed before the environment runtime".into(),
+            ));
+        }
+        self.model_instructions = Arc::new(catalog);
+        Ok(self)
+    }
+
     pub fn threads(&self) -> &Arc<ThreadController> {
         &self.threads
     }
@@ -1815,25 +1816,6 @@ impl AppServer {
             Some(ClientMethod::DocumentCollaborationPresenceRead) => {
                 self.document_collaboration_presence_read(&request.params)
             }
-            Some(ClientMethod::IssuePrPreview) => self.issue_pr_preview(&request.params),
-            Some(ClientMethod::IssuePrCreate) => self.issue_pr_create(&request.params),
-            Some(ClientMethod::IssueTaskCreate) => {
-                self.issue_task_create(connection, &request.params)
-            }
-            Some(ClientMethod::IssueTaskRead) => self.issue_task_read(&request.params),
-            Some(ClientMethod::IssueWorkflowRead) => self.issue_workflow_read(),
-            Some(ClientMethod::IssueWorkflowConfigure) => {
-                self.issue_workflow_configure(&request.params)
-            }
-            Some(ClientMethod::IssueLabelCreate) => self.issue_label_create(&request.params),
-            Some(ClientMethod::IssueAssignmentStart) => {
-                self.issue_assignment_start(&request.params)
-            }
-            Some(ClientMethod::IssueAssignmentsList) => self.issue_assignments_list(),
-            Some(ClientMethod::IssueAssignmentAction) => {
-                self.issue_assignment_action(&request.params)
-            }
-            Some(ClientMethod::IssuePlan) => self.issue_plan(&request.params),
             Some(ClientMethod::IssueConfigure) => self.issue_configure(&request.params),
             Some(ClientMethod::IssueList) => self.issue_list(&request.params),
             Some(ClientMethod::IssueRead) => self.issue_read(&request.params),
@@ -2376,3 +2358,11 @@ fn resource_error(error: ResourceError) -> String {
     }
     .into()
 }
+
+#[cfg(test)]
+#[path = "server/agent_session_tests.rs"]
+mod agent_session_tests;
+
+#[cfg(test)]
+#[path = "server/agent_benchmarks.rs"]
+mod agent_benchmarks;

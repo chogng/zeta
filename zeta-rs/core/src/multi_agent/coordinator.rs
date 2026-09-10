@@ -15,6 +15,7 @@ use sha2::Sha256;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::RwLock;
+use zeta_protocol::AgentCapabilityScope;
 use zeta_protocol::AgentContextContent;
 use zeta_protocol::AgentContextMode;
 use zeta_protocol::AgentContextSeed;
@@ -32,7 +33,6 @@ use zeta_protocol::AgentRoleSnapshot;
 use zeta_protocol::CommandId;
 use zeta_protocol::ContentDigest;
 use zeta_protocol::ContextSeedDigest;
-use zeta_protocol::DelegatedCapabilityScope;
 use zeta_protocol::DelegatedPolicyCeiling;
 use zeta_protocol::DelegatedTask;
 use zeta_protocol::DelegationArtifactRef;
@@ -65,10 +65,11 @@ pub struct SpawnAgentRequest {
     pub parent_thread_id: ThreadId,
     pub parent_turn_id: TurnId,
     pub task: DelegatedTask,
-    pub role: AgentRoleSnapshot,
+    pub role: Option<AgentRoleSnapshot>,
+    pub base_instructions: zeta_protocol::TurnInstructions,
     pub inheritance: AgentContextMode,
     pub policy_ceiling: DelegatedPolicyCeiling,
-    pub capability_scope: DelegatedCapabilityScope,
+    pub capability_scope: AgentCapabilityScope,
 }
 
 /// Durable child identities returned after the spawn saga and initial Turn acceptance complete.
@@ -154,6 +155,10 @@ impl MultiAgentCoordinator {
     /// Commits a parent request, creates and seeds its child Thread, then accepts the initial Turn.
     pub fn spawn(&self, request: SpawnAgentRequest) -> Result<SpawnedAgent, CoreError> {
         validate_spawn_request(&request)?;
+        let gate = self.threads.agent_spawn_gate(&request.session_id)?;
+        let permit = gate
+            .lock()
+            .map_err(|_| CoreError::Journal("Agent spawn gate poisoned".into()))?;
         let parent = self.threads.read_thread(&request.parent_thread_id)?;
         if parent.session_id != request.session_id {
             return Err(CoreError::InvalidInput(
@@ -163,7 +168,49 @@ impl MultiAgentCoordinator {
         if let Some(existing) = parent.delegations.get(&request.delegation_id) {
             validate_replayed_spawn(&request, &existing.seed)?;
             validate_context_seed_digest(&existing.seed)?;
+            drop(permit);
             return self.finish_spawn(existing.seed.clone());
+        }
+        let parent_turn = parent
+            .turns
+            .iter()
+            .find(|turn| turn.turn_id == request.parent_turn_id)
+            .ok_or_else(|| CoreError::NotFound(request.parent_turn_id.to_string()))?;
+        if !matches!(
+            parent_turn.status,
+            TurnStatus::Created | TurnStatus::Running
+        ) || parent_turn.policy_revision != request.policy_ceiling.policy_revision
+        {
+            return Err(CoreError::Policy(
+                "A new delegation requires its active parent Turn and policy".into(),
+            ));
+        }
+        if let Some(agent) = parent.agent_configuration() {
+            let ceiling = agent
+                .capability_scope
+                .delegation_tools
+                .iter()
+                .collect::<BTreeSet<_>>();
+            if request
+                .capability_scope
+                .tools
+                .iter()
+                .chain(&request.capability_scope.delegation_tools)
+                .any(|tool| !ceiling.contains(tool))
+            {
+                return Err(CoreError::Policy(
+                    "Child tools exceed the parent delegation ceiling".into(),
+                ));
+            }
+            if request.capability_scope.skills.iter().any(|skill| {
+                !agent.capability_scope.skills.iter().any(|allowed| {
+                    allowed.id == skill.id && allowed.content_digest == skill.content_digest
+                })
+            }) {
+                return Err(CoreError::Policy(
+                    "Child Skills exceed the parent capability ceiling".into(),
+                ));
+            }
         }
         let threads = self.threads.list_session_threads(&request.session_id)?;
         validate_spawn_capacity(
@@ -177,7 +224,22 @@ impl MultiAgentCoordinator {
             build_context_seed_with_materialized(request, parent.sequence, materialized_context)?;
         self.threads
             .record_delegation_requested(&seed.parent_thread_id, seed.clone())?;
+        drop(permit);
         self.finish_spawn(seed)
+    }
+
+    /// Resumes a recorded delegation using its original immutable configuration.
+    pub fn resume_delegation(
+        &self,
+        parent_thread_id: &ThreadId,
+        delegation_id: &DelegationId,
+    ) -> Result<SpawnedAgent, CoreError> {
+        let parent = self.threads.read_thread(parent_thread_id)?;
+        let delegation = parent
+            .delegations
+            .get(delegation_id)
+            .ok_or_else(|| CoreError::NotFound(delegation_id.to_string()))?;
+        self.finish_spawn(delegation.seed.clone())
     }
 
     /// Commits one child result, delivers it exactly once, and records the parent projection.
@@ -465,12 +527,6 @@ impl MultiAgentCoordinator {
             .ok_or_else(|| CoreError::NotFound(seed.parent_turn_id.to_string()))?;
         let parent_tool_profile = parent_turn.tool_profile.clone();
         let parent_tool_mode = parent_turn.tool_mode;
-        let parent_instructions = parent_turn.instructions.clone().ok_or_else(|| {
-            CoreError::Context(format!(
-                "parent Turn {} has no frozen instructions",
-                parent_turn.turn_id
-            ))
-        })?;
         let binder = self
             .thread_worktree_binder
             .read()
@@ -495,14 +551,26 @@ impl MultiAgentCoordinator {
             StartTurnRequest {
                 command_id: initial_turn_command_id(&seed.delegation_id)?,
                 expected_sequence: SequenceExpectation::Any,
-                model: seed.role.model.clone(),
-                kind: parent_turn.kind,
-                instructions: parent_instructions,
+                model: seed
+                    .agent
+                    .role
+                    .as_ref()
+                    .and_then(|role| role.model.clone())
+                    .or_else(|| parent_turn.model.clone()),
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: seed
+                    .agent
+                    .base_instructions
+                    .clone()
+                    .or_else(|| parent_turn.instructions.clone())
+                    .ok_or_else(|| {
+                        CoreError::Context("Agent has no recorded base instructions".into())
+                    })?,
                 policy_revision: seed.policy_ceiling.policy_revision.clone(),
                 approval_mode: parent_turn.approval_mode,
                 tool_mode: parent_tool_mode,
                 tool_profile: parent_tool_profile,
-                activated_skills: seed.capability_scope.skills.clone(),
+                activated_skills: seed.agent.capability_scope.skills.clone(),
                 input: vec![UserInput::Text {
                     text: seed.task.instructions.clone(),
                 }],
@@ -986,13 +1054,19 @@ fn source_identity(source: &AgentContextSource) -> (&ThreadId, u64) {
 }
 
 fn validate_spawn_request(request: &SpawnAgentRequest) -> Result<(), CoreError> {
+    request
+        .base_instructions
+        .validate()
+        .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
     if request.task.title.trim().is_empty()
         || request.task.title.len() > 256
         || request.task.instructions.trim().is_empty()
         || request.task.instructions.len() > MAX_TASK_BYTES
-        || request.role.name.trim().is_empty()
-        || request.role.instructions.trim().is_empty()
-        || request.role.instructions.len() > MAX_ROLE_BYTES
+        || request.role.as_ref().is_some_and(|role| {
+            role.name.trim().is_empty()
+                || role.instructions.trim().is_empty()
+                || role.instructions.len() > MAX_ROLE_BYTES
+        })
         || request.policy_ceiling.policy_revision.trim().is_empty()
     {
         return Err(CoreError::InvalidInput(
@@ -1019,6 +1093,17 @@ fn validate_spawn_request(request: &SpawnAgentRequest) -> Result<(), CoreError> 
             "Agent capability scope contains duplicate tools".into(),
         ));
     }
+    let mut delegation_tools = BTreeSet::new();
+    if request
+        .capability_scope
+        .delegation_tools
+        .iter()
+        .any(|tool| !delegation_tools.insert(tool))
+    {
+        return Err(CoreError::InvalidInput(
+            "Agent capability scope contains duplicate delegation tools".into(),
+        ));
+    }
     let mut skills = BTreeSet::new();
     if request
         .capability_scope
@@ -1041,10 +1126,15 @@ fn validate_replayed_spawn(
         || seed.parent_thread_id != request.parent_thread_id
         || seed.parent_turn_id != request.parent_turn_id
         || seed.task != request.task
-        || seed.role != request.role
+        || seed.agent.role != request.role
+        || seed
+            .agent
+            .base_instructions
+            .as_ref()
+            .is_some_and(|instructions| instructions != &request.base_instructions)
         || seed.inheritance != request.inheritance
         || seed.policy_ceiling != request.policy_ceiling
-        || seed.capability_scope != request.capability_scope
+        || seed.agent.capability_scope != request.capability_scope
     {
         return Err(CoreError::CommandConflict);
     }
@@ -1070,11 +1160,14 @@ fn build_context_seed_with_materialized(
         parent_turn_id: request.parent_turn_id,
         parent_sequence,
         task: request.task,
-        role: request.role,
+        agent: zeta_protocol::AgentConfiguration {
+            role: request.role,
+            base_instructions: Some(request.base_instructions),
+            capability_scope: request.capability_scope,
+        },
         inheritance: request.inheritance,
         materialized_context,
         policy_ceiling: request.policy_ceiling,
-        capability_scope: request.capability_scope,
         digest: ContextSeedDigest::new(format!("sha256:{}", "0".repeat(64)))
             .expect("static context seed digest placeholder is valid"),
     };
@@ -1090,12 +1183,14 @@ struct ContextSeedMaterial<'a> {
     parent_turn_id: &'a TurnId,
     parent_sequence: u64,
     task: &'a DelegatedTask,
-    role: &'a AgentRoleSnapshot,
+    role: &'a Option<AgentRoleSnapshot>,
     inheritance: &'a AgentContextMode,
     #[serde(skip_serializing_if = "<[AgentMaterializedContext]>::is_empty")]
     materialized_context: &'a [AgentMaterializedContext],
     policy_ceiling: &'a DelegatedPolicyCeiling,
-    capability_scope: &'a DelegatedCapabilityScope,
+    capability_scope: &'a AgentCapabilityScope,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    base_instructions: &'a Option<zeta_protocol::TurnInstructions>,
 }
 
 fn context_seed_digest(seed: &AgentContextSeed) -> Result<ContextSeedDigest, CoreError> {
@@ -1105,11 +1200,12 @@ fn context_seed_digest(seed: &AgentContextSeed) -> Result<ContextSeedDigest, Cor
         parent_turn_id: &seed.parent_turn_id,
         parent_sequence: seed.parent_sequence,
         task: &seed.task,
-        role: &seed.role,
+        role: &seed.agent.role,
         inheritance: &seed.inheritance,
         materialized_context: &seed.materialized_context,
         policy_ceiling: &seed.policy_ceiling,
-        capability_scope: &seed.capability_scope,
+        capability_scope: &seed.agent.capability_scope,
+        base_instructions: &seed.agent.base_instructions,
     };
     let bytes = serde_json::to_vec(&material).map_err(|error| {
         CoreError::Journal(format!("cannot encode Agent context seed: {error}"))
@@ -1181,7 +1277,7 @@ fn result_message_id(delegation_id: &DelegationId) -> Result<AgentMessageId, Cor
         .map_err(|error| CoreError::InvalidInput(error.to_string()))
 }
 
-fn is_terminal_turn(status: TurnStatus) -> bool {
+pub(super) fn is_terminal_turn(status: TurnStatus) -> bool {
     matches!(
         status,
         TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted

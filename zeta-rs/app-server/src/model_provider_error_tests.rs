@@ -103,6 +103,7 @@ fn provider_context_overflow_compacts_and_retries_through_the_product_boundary()
     let thread_id = ThreadId::new("provider-overflow-thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            agent: None,
             session_id: SessionId::new("provider-overflow-session").unwrap(),
             thread_id: thread_id.clone(),
             title: "provider overflow".into(),
@@ -113,7 +114,7 @@ fn provider_context_overflow_compacts_and_retries_through_the_product_boundary()
             &thread_id,
             StartTurnRequest {
                 kind: zeta_protocol::TurnKind::Coding,
-                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
+                instructions: zeta_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("provider-overflow-history").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
@@ -137,7 +138,7 @@ fn provider_context_overflow_compacts_and_retries_through_the_product_boundary()
             &thread_id,
             StartTurnRequest {
                 kind: zeta_protocol::TurnKind::Coding,
-                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
+                instructions: zeta_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("provider-overflow-current").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
@@ -237,6 +238,7 @@ fn run_provider_failure(failure: ProviderFailure) -> (StableTurnErrorCode, bool,
     let thread_id = ThreadId::new("provider-error-thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            agent: None,
             session_id: SessionId::new("provider-error-session").unwrap(),
             thread_id: thread_id.clone(),
             title: "provider error".into(),
@@ -247,7 +249,7 @@ fn run_provider_failure(failure: ProviderFailure) -> (StableTurnErrorCode, bool,
             &thread_id,
             StartTurnRequest {
                 kind: zeta_protocol::TurnKind::Coding,
-                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
+                instructions: zeta_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("provider-error-start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,

@@ -180,126 +180,29 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
 }
 
 #[test]
-fn issue_config_switch_keeps_refresh_settings_available_without_clearing_the_model() {
-    use crate::widgets::list_selection::ListSelectionItemId;
-    use crate::widgets::tab_list::TabListItem;
-    let mut config = empty_config_snapshot();
-    config.issues.analysis_model = Some(zeta_app_server_protocol::protocol::config::ModelRefDto {
-        provider: "ollama".into(),
-        model: "small".into(),
-    });
-    let choices = |config: &_| {
-        config_choices(
-            config,
-            &providers(),
-            TerminalSettings::default(),
-            StatusLineSettings::default(),
-        )
-    };
-    let spec = choices(&config);
-    let switch = ListSelectionItemId::new("issue-merge-recommendations");
-    let model_row = ListSelectionItemId::new("issue-analysis-model");
-    let Some(ConfigSelectionAction::SetIssues(off)) = spec.actions.get(&switch) else {
-        panic!("root switch must update Issue settings");
-    };
-    assert!(!off.config.recommend_merge);
-    assert_eq!(off.config.analysis_model, config.issues.analysis_model);
-    let mut editor = super::ConfigEditor::new(spec);
-    assert!(editor.selection.state().tabs()[3].tab_enabled());
-    assert!(editor.selection.state_mut().focus_item(&model_row));
-    assert_eq!(editor.selection.state().active_tab().label(), "Issues");
-    config.revision += 1;
-    config.issues.recommend_merge = false;
-    editor.replace(choices(&config));
-    assert_eq!(editor.selection.state().tabs()[3].label(), "Issues");
-    assert!(editor.selection.state().tabs()[3].tab_enabled());
-    assert_eq!(editor.selection.state().active_tab().label(), "Issues");
-    assert!(!editor.selection.state_mut().focus_item(&model_row));
-    config.revision += 1;
-    config.issues.recommend_merge = true;
-    editor.replace(choices(&config));
-    assert!(editor.selection.state_mut().focus_item(&model_row));
-    assert!(
-        editor.selection.state().visible_items()[0]
-            .description()
-            .unwrap()
-            .contains("ollama/small")
-    );
-}
-
-#[test]
-fn issue_config_has_no_implicit_model_and_ignores_a_disabled_tabs_pending_picker() {
-    use crate::widgets::list_selection::ListSelectionItemId;
-    let mut config = empty_config_snapshot();
-    config.preferred_model = Some(zeta_app_server_protocol::protocol::config::ModelRefDto {
-        provider: "ollama".into(),
-        model: "conversation".into(),
-    });
-    let choices = |config: &_| {
-        config_choices(
-            config,
-            &providers(),
-            TerminalSettings::default(),
-            StatusLineSettings::default(),
-        )
-    };
-    let mut editor = super::ConfigEditor::new(choices(&config));
-    assert!(
-        editor
-            .selection
-            .state_mut()
-            .focus_item(&ListSelectionItemId::new("issue-analysis-model"))
-    );
-    assert!(
-        editor.selection.state().visible_items()[0]
-            .description()
-            .unwrap()
-            .contains("Not configured")
-    );
-    let super::ConfigEditorOutcome::LoadIssueModels { request_id, .. } =
-        editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-    else {
-        panic!("model chooser must load its own catalog");
-    };
-    config.revision += 1;
-    config.issues.recommend_merge = false;
-    editor.replace(choices(&config));
-    editor.finish_issue_models(request_id, Err("late result".into()));
-    assert!(editor.issue_models.is_none());
-    assert!(editor.selection.state().message().is_none());
-    assert_eq!(editor.selection.state().active_tab().label(), "Issues");
-}
-
-#[test]
-fn issue_config_model_response_does_not_reopen_after_leaving_the_tab() {
-    use crate::widgets::list_selection::ListSelectionItemId;
-    let mut editor = super::ConfigEditor::new(config_choices(
+fn issue_settings_only_control_browser_refresh() {
+    let spec = config_choices(
         &empty_config_snapshot(),
         &providers(),
         TerminalSettings::default(),
         StatusLineSettings::default(),
+    );
+    for id in [
+        "issue-workflow",
+        "issue-merge-recommendations",
+        "issue-analysis-model",
+    ] {
+        assert!(!spec.actions.contains_key(
+            &crate::widgets::list_selection::ListSelectionItemId::new(id)
+        ));
+    }
+    assert!(matches!(
+        spec.actions
+            .get(&crate::widgets::list_selection::ListSelectionItemId::new(
+                "issue-refresh"
+            )),
+        Some(ConfigSelectionAction::AdjustIssueRefresh(_))
     ));
-    assert!(
-        editor
-            .selection
-            .state_mut()
-            .focus_item(&ListSelectionItemId::new("issue-analysis-model"))
-    );
-    let super::ConfigEditorOutcome::LoadIssueModels { request_id, .. } =
-        editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-    else {
-        panic!("expected catalog request");
-    };
-    assert!(
-        editor
-            .selection
-            .state_mut()
-            .focus_item(&ListSelectionItemId::new("language"))
-    );
-    editor.finish_issue_models(request_id, Err("late error".into()));
-    assert!(editor.issue_models.is_none());
-    assert!(editor.selection.state().message().is_none());
-    assert_eq!(editor.selection.state().active_tab().label(), "General");
 }
 
 #[test]

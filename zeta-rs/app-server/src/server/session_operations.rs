@@ -27,12 +27,41 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: SessionCreateParams = decode(params)?;
-        let created = self
-            .start_thread(StartThreadRequest {
+        let created = if let Some(existing) = self
+            .threads
+            .read_started_thread(&params.command_id)
+            .map_err(core_error)?
+        {
+            let selected = existing
+                .agent_configuration()
+                .and_then(|agent| agent.role.as_ref())
+                .and_then(|role| role.definition.as_ref());
+            let matches = match (&params.agent, selected) {
+                (zeta_protocol::AgentRoleSelection::Default, None) => true,
+                (zeta_protocol::AgentRoleSelection::Exact { source, name }, Some(definition)) => {
+                    source == &definition.source && name == &definition.name
+                }
+                _ => false,
+            };
+            if !matches || params.title != existing.title {
+                return Err(core_error(zeta_core::CoreError::CommandConflict));
+            }
+            existing
+        } else {
+            let agent = self.resolve_root_agent(&params.agent).map_err(|error| {
+                let mut response = core_error(error.clone());
+                if let zeta_core::CoreError::InvalidInput(detail) = error {
+                    response.detail = Some(detail);
+                }
+                response
+            })?;
+            self.start_thread(StartThreadRequest {
                 command_id: params.command_id,
                 title: params.title,
+                agent,
             })
-            .map_err(core_error)?;
+            .map_err(core_error)?
+        };
         self.updates.bind_session_scope(created.session_id.clone());
         self.threads
             .install_session_extensions(

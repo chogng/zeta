@@ -5,10 +5,6 @@ mod issue_cache;
 pub use issue_cache::CachedIssuePage;
 pub use issue_cache::IssueCacheKey;
 pub use issue_cache::SqliteIssueCache;
-mod issue_assignments;
-pub use issue_assignments::SqliteIssueAssignmentStore;
-mod issue_tasks;
-pub use issue_tasks::SqliteIssueTaskStore;
 mod sqlite;
 mod sqlite_runtime;
 
@@ -25,7 +21,3 @@ mod tests;
 #[cfg(test)]
 #[path = "project_store_tests.rs"]
 mod project_store_tests;
-
-#[cfg(test)]
-#[path = "issue_tasks_tests.rs"]
-mod issue_tasks_tests;

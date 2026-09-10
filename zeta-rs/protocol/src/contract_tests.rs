@@ -60,6 +60,25 @@ fn durable_thread_event_serializes_without_a_runtime_message_wrapper() {
 }
 
 #[test]
+fn historical_agent_capability_scope_cannot_pass_tools_to_descendants() {
+    let scope: AgentCapabilityScope = serde_json::from_value(json!({
+        "tools": ["read_file"],
+        "skills": []
+    }))
+    .unwrap();
+
+    assert_eq!(scope.tools, [ToolName::new("read_file").unwrap()]);
+    assert!(scope.delegation_tools.is_empty());
+    assert_eq!(
+        serde_json::to_value(scope).unwrap(),
+        json!({
+            "tools": ["read_file"],
+            "skills": []
+        })
+    );
+}
+
+#[test]
 fn model_usage_preserves_partial_reports_and_aggregate_completeness() {
     let legacy_usage: ModelUsage = serde_json::from_value(json!({
         "inputTokens": 5,
@@ -1006,4 +1025,28 @@ fn model_metadata_caps_auto_compaction_at_ninety_percent_of_context() {
     model.auto_compact_token_limit = Some(95_000);
 
     assert_eq!(model.effective_auto_compact_token_limit(), Some(90_000));
+}
+
+#[test]
+fn root_and_child_agent_configurations_share_the_same_role_size_bound() {
+    let mut agent = AgentConfiguration {
+        role: Some(AgentRoleSnapshot {
+            name: "reviewer".into(),
+            instructions: "x".repeat(64 * 1024),
+            model: None,
+            definition: None,
+        }),
+        capability_scope: AgentCapabilityScope {
+            tools: Vec::new(),
+            delegation_tools: Vec::new(),
+            skills: Vec::new(),
+        },
+        base_instructions: None,
+    };
+    agent.validate().unwrap();
+    agent.role.as_mut().unwrap().instructions.push('x');
+    assert_eq!(
+        agent.validate(),
+        Err("Agent role instructions exceed 64 KiB")
+    );
 }

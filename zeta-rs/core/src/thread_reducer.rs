@@ -96,6 +96,8 @@ pub struct ThreadSnapshot {
     pub started_tool_calls: BTreeSet<ToolCallId>,
     pub tool_execution_starts: BTreeMap<ToolCallId, ToolExecutionStartSnapshot>,
     pub escalated_tool_calls: BTreeSet<ToolCallId>,
+    /// Root/fork configuration. Delegated Threads carry the same configuration in their seed.
+    pub agent: Option<zeta_protocol::AgentConfiguration>,
     pub agent_context_seed: Option<AgentContextSeed>,
     pub delegations: BTreeMap<DelegationId, DelegationSnapshot>,
     pub agent_cancellations_received: BTreeSet<DelegationId>,
@@ -119,6 +121,14 @@ pub(crate) struct ForkImportSnapshot {
 }
 
 impl ThreadSnapshot {
+    /// Returns the single configuration selected when this Thread was created.
+    pub fn agent_configuration(&self) -> Option<&zeta_protocol::AgentConfiguration> {
+        self.agent_context_seed
+            .as_ref()
+            .map(|seed| &seed.agent)
+            .or(self.agent.as_ref())
+    }
+
     pub(crate) fn context_calibration(
         &self,
         model: &ModelRef,
@@ -345,10 +355,16 @@ pub fn reduce_thread_event(
         }
         return match &envelope.event {
             ThreadEvent::ThreadCreated {
+                agent,
                 session_id,
                 title,
                 thread_id,
             } => {
+                if let Some(agent) = agent {
+                    agent
+                        .validate()
+                        .map_err(|error| CoreError::Journal(error.into()))?;
+                }
                 let created_at_unix_ms = u64::try_from(envelope.recorded_at.0).map_err(|_| {
                     CoreError::Journal("Thread creation timestamp exceeds u64".into())
                 })?;
@@ -382,6 +398,7 @@ pub fn reduce_thread_event(
                     started_tool_calls: BTreeSet::new(),
                     tool_execution_starts: BTreeMap::new(),
                     escalated_tool_calls: BTreeSet::new(),
+                    agent: agent.clone(),
                     agent_context_seed: None,
                     delegations: BTreeMap::new(),
                     agent_cancellations_received: BTreeSet::new(),
@@ -604,6 +621,7 @@ pub fn reduce_thread_event(
             require_no_command(envelope)?;
             if snapshot.sequence != 1
                 || snapshot.agent_context_seed.is_some()
+                || snapshot.agent.is_some()
                 || seed.parent_thread_id == snapshot.thread_id
                 || seed.parent_sequence == 0
             {
@@ -1734,8 +1752,6 @@ fn validate_agent_context_seed(seed: &AgentContextSeed) -> Result<(), CoreError>
     if seed.parent_sequence == 0
         || seed.task.title.trim().is_empty()
         || seed.task.instructions.trim().is_empty()
-        || seed.role.name.trim().is_empty()
-        || seed.role.instructions.trim().is_empty()
         || seed.policy_ceiling.policy_revision.trim().is_empty()
     {
         return Err(CoreError::Journal(
@@ -1782,6 +1798,9 @@ fn validate_agent_context_seed(seed: &AgentContextSeed) -> Result<(), CoreError>
             ));
         }
     }
+    seed.agent
+        .validate()
+        .map_err(|error| CoreError::Journal(error.into()))?;
     validate_context_seed_digest(seed)
 }
 

@@ -6,7 +6,8 @@ use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadId;
 
 /// Schema version written for newly persisted Thread history records.
-pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 14;
+/// Version 15 adds root Agent configurations and composed model instructions; older readers must reject them.
+pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 15;
 
 /// Oldest Thread history record schema accepted during recovery.
 pub const MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION: u32 = 12;

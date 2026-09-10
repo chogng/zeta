@@ -29,6 +29,7 @@ fn trace_groups_thread_streams_by_session_id() {
         .recover_threads()
         .unwrap()
         .create_thread(CreateThreadRequest {
+            agent: None,
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),
             title: "Primary branch".into(),

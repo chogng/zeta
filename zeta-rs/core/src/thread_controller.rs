@@ -15,6 +15,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
+use std::sync::Weak;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::SystemTime;
@@ -168,12 +169,14 @@ pub struct StartContextCompactionRequest {
 }
 
 pub struct CreateThreadRequest {
+    pub agent: Option<zeta_protocol::AgentConfiguration>,
     pub session_id: SessionId,
     pub thread_id: ThreadId,
     pub title: String,
 }
 
 pub struct StartThreadRequest {
+    pub agent: Option<zeta_protocol::AgentConfiguration>,
     pub command_id: CommandId,
     pub title: String,
 }
@@ -427,6 +430,7 @@ pub struct ThreadController {
     store: Arc<dyn ThreadStore>,
     writer_lease: Option<Arc<dyn WriterLease<ThreadId>>>,
     loaded_threads: Arc<loaded_thread::LoadedThreads>,
+    agent_spawn_gates: Mutex<BTreeMap<SessionId, Weak<Mutex<()>>>>,
     execution_mailboxes: mailbox::ThreadExecutionMailboxes,
     pub(crate) live_interactions: live_interaction::LiveInteractionWaiters,
     extensions: RwLock<ExtensionRegistries>,
@@ -453,6 +457,7 @@ impl ThreadController {
             extensions: RwLock::new(ExtensionRegistries::default()),
             image_attachments,
             loaded_threads,
+            agent_spawn_gates: Mutex::new(BTreeMap::new()),
             next_id: AtomicU64::new(1),
         }
     }
@@ -485,6 +490,7 @@ impl ThreadController {
             extensions: RwLock::new(ExtensionRegistries::default()),
             image_attachments,
             loaded_threads,
+            agent_spawn_gates: Mutex::new(BTreeMap::new()),
             next_id: AtomicU64::new(1),
         }
     }
@@ -528,6 +534,11 @@ impl ThreadController {
     /// Repeating the same request is safe when the durable Thread identity, owner, and title all
     /// match. A conflicting existing stream is rejected.
     pub fn create_thread(&self, request: CreateThreadRequest) -> Result<ThreadSnapshot, CoreError> {
+        if let Some(agent) = &request.agent {
+            agent
+                .validate()
+                .map_err(|error| CoreError::InvalidInput(error.into()))?;
+        }
         let slot = self.loaded_threads.slot(&request.thread_id)?;
         let _permit = slot.enter_mutation()?;
         let _lease = self.acquire_writer_lease(&request.thread_id)?;
@@ -549,6 +560,7 @@ impl ThreadController {
             None,
             &request.thread_id,
             vec![ThreadEvent::ThreadCreated {
+                agent: request.agent,
                 session_id: request.session_id,
                 thread_id: request.thread_id.clone(),
                 title: request.title,
@@ -580,6 +592,11 @@ impl ThreadController {
         request: StartThreadRequest,
     ) -> Result<ThreadSnapshot, CoreError> {
         validate_thread_title(&request.command_id, &request.title)?;
+        if let Some(agent) = &request.agent {
+            agent
+                .validate()
+                .map_err(|error| CoreError::InvalidInput(error.into()))?;
+        }
         let thread_id = command_thread_id("thread", &request.command_id)?;
         let session_id = SessionId::new(thread_id.as_str().to_owned())
             .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
@@ -589,6 +606,7 @@ impl ThreadController {
             origin: ThreadOrigin::Root,
         })?;
         self.create_thread(CreateThreadRequest {
+            agent: request.agent,
             session_id,
             thread_id,
             title: request.title,
@@ -612,6 +630,7 @@ impl ThreadController {
             origin: ThreadOrigin::Root,
         })?;
         self.create_thread(CreateThreadRequest {
+            agent: None,
             session_id: request.session_id,
             thread_id,
             title: request.title,
@@ -702,6 +721,7 @@ impl ThreadController {
             turn.usage = zeta_protocol::ModelUsageSummary::default();
         }
         let created = self.create_thread(CreateThreadRequest {
+            agent: source.agent_configuration().cloned(),
             session_id: request.session_id,
             thread_id: request.thread_id.clone(),
             title: request.title,
@@ -747,6 +767,7 @@ impl ThreadController {
         let imported_turns = fork_snapshot_turns(source.public_thread().turns);
         let context_checkpoint = inherited_fork_checkpoint(&source, &imported_turns)?;
         let created = self.create_thread(CreateThreadRequest {
+            agent: source.agent_configuration().cloned(),
             session_id: request.session_id,
             thread_id: request.thread_id.clone(),
             title: request.title,
@@ -801,10 +822,22 @@ impl ThreadController {
             .instructions
             .validate()
             .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+        if request
+            .instructions
+            .model_guidance()
+            .is_some_and(|guidance| guidance.model() != request.model.as_ref())
+        {
+            return Err(CoreError::InvalidInput(
+                "Model guidance does not match the Turn model".into(),
+            ));
+        }
         let normalized_input =
             user_input::normalize_images(&request.input, &self.image_attachments)?;
         let thread = self.read_thread(thread_id)?;
         let session_id = thread.session_id.clone();
+        let agent_skill_ceiling = thread
+            .agent_configuration()
+            .map(|agent| agent.capability_scope.skills.clone());
         if let Some(existing) = thread
             .commands
             .into_iter()
@@ -848,10 +881,6 @@ impl ThreadController {
                 disposition: StartTurnDisposition::Replayed,
             });
         }
-        let agent_skill_ceiling = thread
-            .agent_context_seed
-            .as_ref()
-            .map(|seed| seed.capability_scope.skills.clone());
         if request
             .activated_skills
             .iter()
@@ -2538,6 +2567,7 @@ fn matching_created_thread(
     if snapshot.session_id == request.session_id
         && snapshot.thread_id == request.thread_id
         && snapshot.title == request.title
+        && snapshot.agent.as_ref() == request.agent.as_ref()
     {
         Ok(snapshot.clone())
     } else {

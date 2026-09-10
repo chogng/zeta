@@ -37,11 +37,8 @@ impl ContextAssembler {
 
         for item in plan.selected_items() {
             if previous_turn.as_ref() != Some(item.turn_id()) {
-                if previous_turn
-                    .as_ref()
-                    .is_some_and(|turn_id| plan.is_interrupted_turn(turn_id))
-                {
-                    append_interrupted_marker(&mut input);
+                if let Some(ending) = previous_turn.as_ref().and_then(|id| plan.turn_ending(id)) {
+                    append_turn_ending(&mut input, *ending);
                     active_user_turn = None;
                 }
                 previous_turn = Some(item.turn_id().clone());
@@ -174,11 +171,8 @@ impl ContextAssembler {
                 }
             }
         }
-        if previous_turn
-            .as_ref()
-            .is_some_and(|turn_id| plan.is_interrupted_turn(turn_id))
-        {
-            append_interrupted_marker(&mut input);
+        if let Some(ending) = previous_turn.as_ref().and_then(|id| plan.turn_ending(id)) {
+            append_turn_ending(&mut input, *ending);
         }
         if prompt_cache_prefix_end.is_none() {
             prompt_cache_prefix_end = input
@@ -219,10 +213,10 @@ impl ContextAssembler {
     }
 }
 
-fn append_interrupted_marker(input: &mut Vec<InputItem>) {
+fn append_turn_ending(input: &mut Vec<InputItem>, prompt: zeta_prompts::PromptArtifact) {
     input.push(InputItem::Message(Message::text(
         MessageRole::User,
-        "<turn_aborted>\nThe user interrupted the previous turn on purpose. If any tools or commands were stopped, they may have partially executed.\n</turn_aborted>",
+        prompt.body().trim(),
     )));
 }
 
@@ -283,12 +277,7 @@ fn checkpoint_message(plan: &ContextPlan) -> Option<InputItem> {
     plan.checkpoint().map(|checkpoint| {
         InputItem::Message(Message::text(
             MessageRole::User,
-            format!(
-                "<context_checkpoint id=\"{}\" source_digest=\"{}\">\n{}\n</context_checkpoint>",
-                checkpoint.checkpoint_id,
-                checkpoint.source_digest.as_str(),
-                checkpoint.summary.trim()
-            ),
+            zeta_prompts::checkpoint_prompt(checkpoint).body(),
         ))
     })
 }

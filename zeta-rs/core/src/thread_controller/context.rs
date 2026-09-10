@@ -20,6 +20,10 @@ use zeta_protocol::ThreadId;
 use zeta_protocol::TurnId;
 use zeta_thread_store::ThreadStoreError;
 
+#[cfg(test)]
+#[path = "context_tests.rs"]
+mod tests;
+
 impl ThreadController {
     pub(crate) fn commit_context_checkpoint(
         &self,
@@ -69,8 +73,10 @@ impl ThreadController {
                 }));
             }
             let checkpoint = ContextCheckpoint {
-                checkpoint_id: ContextCheckpointId::new(self.next_identifier("context-checkpoint"))
-                    .expect("generated context checkpoint ID is non-empty"),
+                checkpoint_id: ContextCheckpointId::new(
+                    self.next_identifier(crate::context::CHECKPOINT_ID_PREFIX),
+                )
+                .expect("generated context checkpoint ID is non-empty"),
                 source_thread_id: snapshot.thread_id.clone(),
                 covered: request.covered,
                 referenced_items: snapshot
@@ -263,6 +269,57 @@ impl ThreadController {
                 crate::context::InstructionRetention::Required,
                 instructions.body(),
             )];
+            let mut shared_fragments = instructions
+                .shared()
+                .iter()
+                .map(|asset| {
+                    crate::context::InstructionFragment::new(
+                        crate::context::InstructionSource::new(
+                            asset.owner.clone(),
+                            asset.id.clone(),
+                            asset.revision.clone(),
+                        ),
+                        crate::context::InstructionLayer::System,
+                        crate::context::InstructionRetention::Required,
+                        asset.body.clone(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            shared_fragments.append(&mut instruction_fragments);
+            instruction_fragments = shared_fragments;
+            instruction_fragments.splice(
+                0..0,
+                zeta_prompts::permissions_instructions(turn.approval_mode)
+                    .into_iter()
+                    .map(|asset| {
+                        crate::context::InstructionFragment::new(
+                            crate::context::InstructionSource::new(
+                                asset.owner(),
+                                asset.id(),
+                                asset.revision(),
+                            ),
+                            crate::context::InstructionLayer::System,
+                            crate::context::InstructionRetention::Required,
+                            asset.body(),
+                        )
+                    }),
+            );
+            if let Some(zeta_protocol::ModelInstructionSelection::Specialized {
+                instructions: asset,
+                ..
+            }) = instructions.model_guidance()
+            {
+                instruction_fragments.push(crate::context::InstructionFragment::new(
+                    crate::context::InstructionSource::new(
+                        asset.owner.clone(),
+                        asset.id.clone(),
+                        asset.revision.clone(),
+                    ),
+                    crate::context::InstructionLayer::Product,
+                    crate::context::InstructionRetention::Required,
+                    asset.body.clone(),
+                ));
+            }
             instruction_fragments
                 .extend(request.harness_context.instructions().context_fragments());
             if let Some(goal) = loaded.snapshot.goal.as_ref().filter(|goal| {
@@ -295,7 +352,11 @@ impl ThreadController {
                     .map(crate::context::InstructionFragment::try_from)
                     .collect::<Result<Vec<_>, _>>()?,
             );
-            let tools = crate::multi_agent::scope_agent_tools(&loaded.snapshot, request.tools);
+            let tools = crate::multi_agent::scope_agent_tools(
+                &loaded.snapshot,
+                turn.tool_mode,
+                request.tools,
+            );
             let mut input = ContextInput::new(
                 &loaded.snapshot,
                 request.turn_id.clone(),

@@ -49,17 +49,6 @@ pub(crate) fn apply_command(
         }
         UserConfigCommand::RemoveProvider { provider } => {
             if document
-                .issues
-                .analysis_model
-                .as_ref()
-                .is_some_and(|model| model.provider == *provider)
-            {
-                return Err(ConfigError(format!(
-                    "cannot remove provider '{}' while Issue analysis uses it",
-                    provider
-                )));
-            }
-            if document
                 .agent
                 .preferred_model
                 .as_ref()
