@@ -10,7 +10,6 @@ use crate::CatalogWarningCode;
 use crate::ModelCatalogEntry;
 use crate::ModelCatalogSnapshot;
 use crate::ModelCatalogSource;
-use crate::ModelMetadataProvenance;
 use crate::ModelRequirements;
 use crate::ModelsManagerError;
 use crate::ResolvedModel;
@@ -25,17 +24,15 @@ use crate::filter::matches_query;
 use crate::filter::validate_requirements;
 use crate::merge::apply_discovery;
 use crate::merge::mark_unverified;
+use crate::model_info::unlisted_entry;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::RwLock;
 use zeta_model_provider_config::ModelCatalogPolicy;
 use zeta_model_provider_config::ProviderConfigRegistry;
-use zeta_protocol::ModelAvailability;
 use zeta_protocol::ModelCatalogFreshness;
 use zeta_protocol::ModelId;
-use zeta_protocol::ModelInfo;
-use zeta_protocol::ModelLifecycle;
 use zeta_protocol::ModelMetadataQuality;
 use zeta_protocol::ModelRef;
 use zeta_protocol::ProviderId;
@@ -414,27 +411,6 @@ impl ModelsManager {
         let freshness = classify_freshness(&state, self.inner.clock.now(), self.inner.freshness);
         rebuild_snapshot(scope, &mut state, freshness);
     }
-}
-
-fn unlisted_entry(provider: &ProviderId, model: &ModelId) -> ModelCatalogEntry {
-    ModelCatalogEntry::new(
-        ModelRef::new(provider.clone(), model.clone()),
-        ModelInfo::new(model.clone(), model.as_str()),
-        ModelAvailability::Unverified,
-        ModelLifecycle::Unknown,
-        ModelMetadataQuality::Unknown,
-        ModelMetadataProvenance {
-            display_name: None,
-            context_window: None,
-            auto_compact_token_limit: None,
-            capabilities: Default::default(),
-            supported_reasoning_efforts: None,
-            default_reasoning_effort: None,
-            default_personality: None,
-            lifecycle: None,
-        },
-        Vec::new(),
-    )
 }
 
 fn warning_for_error(error: &ModelsManagerError) -> (CatalogWarningCode, String, bool) {

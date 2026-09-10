@@ -208,18 +208,6 @@ impl ModelInfo {
             default_personality: None,
         }
     }
-
-    pub fn effective_auto_compact_token_limit(&self) -> Option<u32> {
-        let context_limit = match self.context_window {
-            ContextWindow::Known(tokens) => Some(tokens.saturating_mul(9) / 10),
-            ContextWindow::Unknown => None,
-        };
-        match (context_limit, self.auto_compact_token_limit) {
-            (Some(context), Some(configured)) => Some(context.min(configured)),
-            (Some(context), None) => Some(context),
-            (None, configured) => configured,
-        }
-    }
 }
 
 pub type Model = ModelInfo;

@@ -85,10 +85,10 @@ ProviderConfigRegistry::normalize(config)
 └─ NormalizedModelProviderConfig
 ```
 
-`model_context` 不进入 `NormalizedModelProviderConfig`，因为它不改变 transport endpoint。Local App
-Server 在冻结一次模型调用预算时，按 selected `ModelId` 读取该 map；配置值优先于 built-in
-`ModelInfo.context_window`。没有可信窗口时 Core 使用 provider-managed，不在本 crate 猜测模型
-规格。
+`model_context` 不进入 `NormalizedModelProviderConfig`，因为它不改变 transport endpoint。本 crate
+负责配置声明与校验；`zeta-models-manager::ModelCatalogEntry::model_info` 按准确模型身份合并配置，
+以目录已知窗口为上限裁剪，并给出压缩阈值建议。Local App Server 将有效信息转换为 Core 预算。
+没有可信窗口时由供应商管理上下文，不在本 crate 猜测模型规格。
 
 ```text
 ProviderConfigRegistry::merge(incoming, policy)

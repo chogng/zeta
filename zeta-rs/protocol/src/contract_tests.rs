@@ -1019,15 +1019,6 @@ fn model_request_final_gate_sanitizes_message_and_tool_result_images() {
 }
 
 #[test]
-fn model_metadata_caps_auto_compaction_at_ninety_percent_of_context() {
-    let mut model = ModelInfo::new(ModelId::new("zeta-large").unwrap(), "Zeta Large");
-    model.context_window = ContextWindow::Known(100_000);
-    model.auto_compact_token_limit = Some(95_000);
-
-    assert_eq!(model.effective_auto_compact_token_limit(), Some(90_000));
-}
-
-#[test]
 fn root_and_child_agent_configurations_share_the_same_role_size_bound() {
     let mut agent = AgentConfiguration {
         role: Some(AgentRoleSnapshot {

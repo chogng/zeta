@@ -5,12 +5,11 @@
 > [`zeta-model-provider-config`](../model-provider-config/README.md)，调用 runtime 见
 > [`zeta-model-provider`](../model-provider/README.md)。
 
-`zeta-models-manager` 是 provider-independent 的模型目录控制面。它从
-`STATIC_MODEL_CATALOG` 经 `ProviderConfigRegistry::builtin()` 投影为 `ProviderDefinition.models` 静态
-seed，再把 provider discovery observation 合并到按 scope 隔离的
-内存目录，并发布带 generation 的 immutable snapshot。它拥有 freshness、singleflight、字段级 merge、
-筛选、typed resolution 和模型专化指令的选择；不拥有 provider HTTP DTO、credential、模型调用、prompt/context cache、
-Config persistence 或 UI。
+- 从 `ProviderDefinition.models` 读取静态模型，合并按 scope 隔离的动态发现结果。
+- 管理目录刷新、缓存、并发请求合并和 snapshot generation。
+- 负责模型筛选、准确模型解析和配置生效后的模型信息。
+- 选择模型专化指令；共同 Agent 规则由 `zeta-prompts` 拥有。
+- 不持有凭据、调用客户端、Config 存储或 UI 状态。
 
 ## 公共契约
 
@@ -26,6 +25,7 @@ Config persistence 或 UI。
 | `DiscoveredCatalog` | source 的一次完整提交 | `CompleteAgentCatalog` 缺席可下架；`Partial` 缺席不改变 availability |
 | `ModelMetadataPatch` | provider 明确返回的字段 | `Unknown` 不覆盖已有 known metadata |
 | `ResolvedModel` | exact model + catalog generation + warnings | `AllowUnlisted` 产生 unverified synthetic metadata |
+| `ModelCatalogEntry::model_info` | 取得配置生效后的 `ModelInfo` | 校验 provider 身份、裁剪上下文和压缩阈值；不修改原始条目 |
 | `ModelInstructionCatalog` | 按准确 provider/model 选择指导 | 返回 Generic 或冻结的专化资产；拒绝重复与无效定义 |
 | `ModelInstructionProfile` | 登记代码维护的模型指导 | 记录准确模型和有版本的 PromptArtifact，不授予工具或权限 |
 
@@ -41,6 +41,7 @@ src/
 ├── cache.rs        # per-scope state、clock/freshness 与 snapshot generation rebuild
 ├── source.rs       # consumer-owned discovery port 与 observation patch
 ├── snapshot.rs     # immutable snapshot、generation、provenance、warning
+├── model_info.rs   # 解析结果、未收录模型信息、配置覆盖和压缩阈值建议
 ├── merge.rs        # seed/live 字段级合并与 complete/partial availability
 ├── filter.rs       # capability/availability query 与 resolution checks
 ├── instructions.rs # 准确模型的指令选择与资产校验
@@ -143,6 +144,27 @@ App Server DTO/schema fixture。
 当前实现只有进程内 memory cache，没有 persisted observation、全局/per-provider 并发上限、退避抖动或用户 trust/policy override。Ollama 已通过 provider runtime 接入 `/api/tags` 与 `/api/show`；其他 provider 动态目录仍未实现。App Server 的 `model/list` DTO 投影 identity、display name、access、context、capabilities 与 defaults；本 crate 的 availability、generation、freshness 和 warnings 都不进入产品模型列表，也不作为发送消息的门禁。App Server 还没有 `model/refresh` / `model/updated` wire method。
 
 跨 provider 模型选择同样尚未实现：当前 `ModelsManager::resolve` 只校验一个准确 `ModelRef`，没有候选排序、`ModelSelectionDecision`、替换原因或客户端警告。计划实现必须复用本 crate 的同一批 snapshot 与 `ModelRequirements`，只在 Agent 或工作流运行创建前选择一次；准确模型不可用时先检查同 catalog scope 的已验证兼容候选，再检查同 provider 的其他允许 scope，最后检查其他允许 provider。选择结果冻结后，catalog refresh 或真实调用失败都不能触发后台换模型。完整行为与类型边界见 [`docs/models-manager.md`](../../docs/models-manager.md#103-模型选择与替换)。
+
+## 有效模型信息与职责
+
+- `entry.info()` 返回原始目录信息；`entry.model_info(&provider_config)` 返回配置生效后的独立副本。
+- 先校验 provider 身份和配置。自定义连接的窗口优先，否则按准确 ModelId 读取 `model_context`。
+- 配置窗口不能超过目录已知窗口。未配置压缩阈值时建议使用有效窗口的 90%；显式阈值同样受此上限限制。
+- 未知窗口保持未知，除非配置明确提供。配置不推断工具能力、不改变 availability，也不改写 snapshot、provenance 或 generation。
+- App Server 的模型列表使用当前条目计算有效信息；调用预算使用共享 manager 的静态解析结果。输出预留、安全余量和真正执行压缩由 App Server/Core 负责。
+- `ModelInfo` 的序列化字段仍由 protocol 定义；压缩建议的计算从 protocol 移入本 crate。
+
+与 Codex 的职责对应：
+
+| Codex 位置 | Zeta 归属 |
+| --- | --- |
+| `model-provider-info` 的供应商声明、默认值和校验 | `model-provider-config` |
+| `model-provider-info` 的凭据读取、请求 Header 和 API target 转换 | `model-provider`、登录服务和 client |
+| `models-manager/model_info` 的模型信息与配置覆盖 | 本 crate 的 `model_info.rs` |
+| 模型专化指导 | 本 crate 的 `instructions.rs`；共同规则在 `prompts` |
+
+现有 crate 已提供供应商配置和调用依赖隔离，无需再建立同职能的 `model-provider-info`。
+Codex 针对未知模型写入的固定规格不适用于这里的多供应商目录。
 
 ## Agent 指令边界
 

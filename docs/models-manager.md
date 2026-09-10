@@ -71,7 +71,7 @@ model provider 负责“如何用已选模型执行一次调用”
 | --- | --- | --- |
 | `zeta-protocol::model::catalog` | identity、`ModelInfo`、capability、availability/freshness/lifecycle/quality value | 请求调度、缓存、provider DTO、refresh state |
 | `zeta-model-provider-config` | provider definition、endpoint/default、静态 seed models、配置归一化 | HTTP、凭据读取、动态 discovery、TTL |
-| `zeta-models-manager` | scope、静态 seed、memory cache、source port、singleflight、merge/filter/resolve、snapshot generation；长期拥有 provider 无关的模型候选选择 | provider DTO、secret、调用、Agent 定义解析、Config persistence、UI |
+| `zeta-models-manager` | scope、静态 seed、memory cache、source port、singleflight、merge/filter/resolve、有效模型信息和 snapshot generation；长期拥有 provider 无关的模型候选选择 | provider DTO、secret、调用、Agent 定义解析、Config persistence、UI |
 | `zeta-model-provider` | provider runtime、adapter 选择、模型调用、manager static resolution consumer | catalog policy、跨 provider merge、UI 查询 |
 | `zeta-api` | endpoint/request/event 的 Provider wire codec | transport、retry、catalog authority、用户筛选 |
 | `zeta-http-client` | HTTP execution 与共享 proxy/TLS/target policy | Provider DTO、catalog policy、模型选择 |
@@ -93,6 +93,7 @@ model provider 负责“如何用已选模型执行一次调用”
 | 动态 source port、scope 校验、partial/complete merge | ✅ | `ModelCatalogSource`、`commit_discovery`、`apply_discovery` |
 | per-scope memory cache、freshness、singleflight | ✅ | `ManagedScope`、`ScopeState`、`ModelsManager::{read,refresh}` |
 | 字段 provenance 与 Unknown 保留 | ✅ | `CatalogRecord`、`ModelMetadataProvenance` |
+| 配置生效后的模型信息、上下文裁剪和压缩建议 | ✅ | `ModelCatalogEntry::model_info`；保留原始目录证据，App Server 消费结果 |
 | model-provider/App Server 静态目录统一 | ✅ | `ModelProviderRuntime::models_manager`、`ConfigBackedModelService` |
 | 真实 provider discovery adapters | 部分具备 | Ollama `/api/tags` + `/api/show` 已接入；其他 provider 留在 Phase 2 |
 | Agent 启动时的继承、覆盖和跨 provider 替换 | 尚未完成 | 当前 `resolve` 只校验一个准确 `ModelRef`；尚无统一候选选择、替换记录和客户端警告 |
@@ -800,9 +801,11 @@ ModelSubstitution
 Availability、freshness、source quality 和 warnings 属于 `ModelCatalogEntry/Snapshot`，不塞进
 可跨 scope 复用的 `ModelInfo`。
 
-当前 `effective_auto_compact_token_limit()` 使用 context 的 90% 推导，只能作为临时 fallback。
-长期 context builder 应从明确的 input/context/output limits 和预留策略计算 budget；manager
-提供事实和 recommendation，不执行 compaction。
+`ModelCatalogEntry::model_info` 在 `models-manager/model_info.rs` 合并配置并计算压缩建议，protocol
+只保留序列化模型字段。已知窗口限制用户配置窗口；未给出压缩阈值时采用有效窗口的 90%，显式
+阈值也受此上限限制。调用方在独立副本上获得有效信息，不改写目录事实和来源。
+Context builder 根据有效信息、输出预留和安全余量计算可用输入预算；manager 不执行压缩。
+职责对照和当前静态调用预算边界见 [crate 说明](../zeta-rs/models-manager/README.md#有效模型信息与职责)。
 
 ### 11.2 App Server API
 

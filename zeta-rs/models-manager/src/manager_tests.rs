@@ -162,6 +162,42 @@ fn static_catalog_is_sorted_and_honors_provider_listing_policy() {
 }
 
 #[tokio::test]
+async fn effective_model_info_uses_the_live_window_without_rewriting_the_scope() {
+    let manager = ModelsManager::new(registry());
+    let scope = dynamic_scope("strict", "account-a");
+    let source = Arc::new(QueueSource::new([Ok(modified(
+        &scope,
+        DiscoveryCoverage::Partial,
+        [
+            DiscoveredModel::new(model_id("alpha")).with_metadata(ModelMetadataPatch {
+                context_window: Some(ContextWindow::Known(64_000)),
+                ..Default::default()
+            }),
+        ],
+    ))]));
+    let snapshot = manager.refresh(scope.clone(), source).await.unwrap();
+    let mut config = zeta_model_provider_config::ModelProviderConfig::new(provider_id("strict"));
+    config.model_context.insert(
+        model_id("alpha"),
+        zeta_model_provider_config::ModelContextConfig {
+            context_window: 100_000,
+            auto_compact_token_limit: Some(90_000),
+        },
+    );
+    let resolved = manager
+        .resolve(&scope, &model_id("alpha"), &ModelRequirements::agent())
+        .unwrap();
+    let info = resolved.entry().model_info(&config).unwrap();
+    assert_eq!(info.context_window, ContextWindow::Known(64_000));
+    assert_eq!(info.auto_compact_token_limit, Some(57_600));
+    assert_eq!(
+        resolved.entry().provenance().context_window,
+        Some(crate::MetadataSource::ProviderLive)
+    );
+    assert_eq!(manager.snapshot(&scope).unwrap(), snapshot);
+}
+
+#[tokio::test]
 async fn partial_absence_is_preserved_but_complete_absence_is_unavailable() {
     let manager = ModelsManager::new(registry());
     let scope = dynamic_scope("strict", "account-a");

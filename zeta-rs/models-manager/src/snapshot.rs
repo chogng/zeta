@@ -218,36 +218,3 @@ impl ModelCatalogSnapshot {
             && self.warnings == other.warnings
     }
 }
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ResolvedModel {
-    entry: ModelCatalogEntry,
-    generation: CatalogGeneration,
-    warnings: Vec<CatalogWarning>,
-}
-
-impl ResolvedModel {
-    pub(crate) fn new(
-        entry: ModelCatalogEntry,
-        generation: CatalogGeneration,
-        warnings: Vec<CatalogWarning>,
-    ) -> Self {
-        Self {
-            entry,
-            generation,
-            warnings,
-        }
-    }
-
-    pub fn entry(&self) -> &ModelCatalogEntry {
-        &self.entry
-    }
-
-    pub fn generation(&self) -> CatalogGeneration {
-        self.generation
-    }
-
-    pub fn warnings(&self) -> &[CatalogWarning] {
-        &self.warnings
-    }
-}

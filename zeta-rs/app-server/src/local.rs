@@ -1749,7 +1749,11 @@ impl ModelService for ConfigBackedModelService {
     }
 
     fn context_budget(&self, selection: ModelSelection<'_>) -> Result<ContextBudget, CoreError> {
-        context_budget_for_config(&self.config_for_selection(selection)?)
+        context_budget_for_config(
+            &self.config_for_selection(selection)?,
+            &self.provider_configs,
+            &self.models_manager,
+        )
     }
 
     fn image_input_policy(
@@ -1850,24 +1854,14 @@ impl ModelCatalog for ConfigBackedModelService {
         self.catalog_runtime
             .block_on(manager.refresh(binding.scope().clone(), binding.source()))
             .map_err(ModelCatalogRefreshError::from)?;
-        let definition = registry
-            .get(provider)
-            .ok_or(ModelCatalogRefreshError::InvalidConfiguration)?;
         manager
             .list(&[binding.scope().clone()], &CatalogQuery::all())
             .map_err(ModelCatalogRefreshError::from)?
             .into_iter()
             .filter(|entry| entry.availability() == zeta_protocol::ModelAvailability::Available)
             .map(|entry| {
-                runtime_catalog_entry(
-                    zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
-                        entry.model().clone(),
-                        entry.info(),
-                        definition.output_transport,
-                    ),
-                    &config,
-                )
-                .map_err(|_| ModelCatalogRefreshError::InvalidConfiguration)
+                runtime_catalog_entry(&entry, &config, &registry)
+                    .map_err(|_| ModelCatalogRefreshError::InvalidConfiguration)
             })
             .collect()
     }
@@ -1928,19 +1922,7 @@ impl ModelCatalog for ConfigBackedModelService {
             .list(&scopes, &CatalogQuery::all())
             .map_err(|error| CoreError::Model(error.to_string()))?
             .into_iter()
-            .map(|entry| {
-                runtime_catalog_entry(
-                    zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
-                        entry.model().clone(),
-                        entry.info(),
-                        registry
-                            .get(&entry.model().provider)
-                            .expect("listed model provider came from the same registry")
-                            .output_transport,
-                    ),
-                    &config,
-                )
-            })
+            .map(|entry| runtime_catalog_entry(&entry, &config, &registry))
             .collect::<Result<Vec<_>, CoreError>>()?;
         for provider in config
             .providers
@@ -1959,18 +1941,7 @@ impl ModelCatalog for ConfigBackedModelService {
                 let resolved = manager
                     .resolve_static(&model, &ModelRequirements::agent())
                     .map_err(|error| CoreError::Model(error.to_string()))?;
-                let transport = registry
-                    .get(&provider.provider)
-                    .expect("configured provider")
-                    .output_transport;
-                models.push(runtime_catalog_entry(
-                    zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
-                        model,
-                        resolved.entry().info(),
-                        transport,
-                    ),
-                    &config,
-                )?);
+                models.push(runtime_catalog_entry(resolved.entry(), &config, &registry)?);
             }
         }
         if let Some(preferred) = config.preferred_model.clone()
@@ -1980,21 +1951,10 @@ impl ModelCatalog for ConfigBackedModelService {
                 .is_none_or(|provider| provider.custom.is_none())
             && !models.iter().any(|entry| entry.model == preferred)
         {
-            let output_transport = registry
-                .get(&preferred.provider)
-                .expect("preferred model provider was validated against the same registry")
-                .output_transport;
             let resolved = manager
                 .resolve_static(&preferred, &ModelRequirements::agent())
                 .map_err(|error| CoreError::Model(error.to_string()))?;
-            models.push(runtime_catalog_entry(
-                zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
-                    preferred,
-                    resolved.entry().info(),
-                    output_transport,
-                ),
-                &config,
-            )?);
+            models.push(runtime_catalog_entry(resolved.entry(), &config, &registry)?);
         }
         models.sort_by(|left, right| {
             let catalog_position = |model: &zeta_protocol::ModelRef| {
@@ -2064,65 +2024,47 @@ fn resolve_local_config(
     .map(|resolved| resolved.values)
 }
 
-fn context_budget_for_config(config: &ResolvedConfig) -> Result<ContextBudget, CoreError> {
+fn context_budget_for_config(
+    config: &ResolvedConfig,
+    providers: &ProviderConfigRegistry,
+    manager: &ModelsManager,
+) -> Result<ContextBudget, CoreError> {
     let Some(model_ref) = config.preferred_model.as_ref() else {
         return Ok(ContextBudget::provider_managed());
     };
     let Some(provider_config) = config.providers.get(&model_ref.provider) else {
         return Ok(ContextBudget::provider_managed());
     };
-    let registry = ProviderConfigRegistry::builtin()
+    let registry = providers
         .with_configs(config.providers.values())
         .map_err(|error| CoreError::Model(error.to_string()))?;
-    let Some(definition) = registry.get(&model_ref.provider) else {
+    let resolved = manager
+        .with_registry(registry.clone())
+        .resolve_static(model_ref, &ModelRequirements::agent())
+        .map_err(|error| CoreError::Model(error.to_string()))?;
+    let info = resolved
+        .entry()
+        .model_info(provider_config)
+        .map_err(|error| CoreError::Model(error.to_string()))?;
+    context_budget_for_model(&info, provider_config, &registry)
+}
+
+fn context_budget_for_model(
+    info: &zeta_protocol::ModelInfo,
+    config: &ModelProviderConfig,
+    registry: &ProviderConfigRegistry,
+) -> Result<ContextBudget, CoreError> {
+    let ContextWindow::Known(context_window) = info.context_window else {
         return Ok(ContextBudget::provider_managed());
     };
-    let catalog_model = definition
-        .models
-        .iter()
-        .find(|model| model.id == model_ref.model);
-    let custom_context = provider_config.custom.as_ref().map(|custom| {
-        zeta_model_provider_config::ModelContextConfig {
-            context_window: custom.context_window,
-            auto_compact_token_limit: None,
-        }
-    });
-    let configured_context = custom_context
-        .as_ref()
-        .or_else(|| provider_config.model_context.get(&model_ref.model));
-    let (context_window, auto_compact_token_limit) = match configured_context {
-        Some(context) => {
-            let window = match catalog_model.map(|model| model.context_window) {
-                Some(ContextWindow::Known(limit)) => context.context_window.min(limit),
-                _ => context.context_window,
-            };
-            let default_limit = window.saturating_mul(9) / 10;
-            (
-                window,
-                Some(
-                    context
-                        .auto_compact_token_limit
-                        .map_or(default_limit, |configured| configured.min(default_limit)),
-                ),
-            )
-        }
-        None => {
-            let Some(model) = catalog_model else {
-                return Ok(ContextBudget::provider_managed());
-            };
-            let ContextWindow::Known(context_window) = model.context_window else {
-                return Ok(ContextBudget::provider_managed());
-            };
-            (context_window, model.effective_auto_compact_token_limit())
-        }
-    };
     let normalized = registry
-        .normalize_for(provider_config, &model_ref.provider)
+        .normalize(config)
         .map_err(|error| CoreError::Model(error.to_string()))?;
     let reserved_output = normalized
         .max_output_tokens
         .unwrap_or(DEFAULT_MODEL_OUTPUT_RESERVATION_TOKENS);
-    let compaction_limit = auto_compact_token_limit
+    let compaction_limit = info
+        .auto_compact_token_limit
         .map_or(ContextCompactionLimit::ContextWindow, |tokens| {
             ContextCompactionLimit::Tokens(ContextTokenCount::new(tokens))
         });
@@ -2135,22 +2077,38 @@ fn context_budget_for_config(config: &ResolvedConfig) -> Result<ContextBudget, C
 }
 
 fn runtime_catalog_entry(
-    mut entry: zeta_app_server_protocol::protocol::model::ModelCatalogEntry,
+    entry: &zeta_models_manager::ModelCatalogEntry,
     config: &ResolvedConfig,
+    registry: &ProviderConfigRegistry,
 ) -> Result<zeta_app_server_protocol::protocol::model::ModelCatalogEntry, CoreError> {
-    let mut selected = config.clone();
-    selected.preferred_model = Some(entry.model.clone());
-    match context_budget_for_config(&selected)?
-        .resolve()
-        .map_err(|error| CoreError::Context(error.to_string()))?
-    {
-        ResolvedContextBudget::ProviderManaged => {}
-        ResolvedContextBudget::CoreManaged(limits) => {
-            entry.context_window = Some(limits.context_window().get());
-            entry.available_context_window = Some(limits.maximum_input().get());
+    let definition = registry
+        .get(&entry.model().provider)
+        .expect("catalog entry belongs to the same provider registry");
+    let default_config = ModelProviderConfig::new(entry.model().provider.clone());
+    let provider_config = config
+        .providers
+        .get(&entry.model().provider)
+        .unwrap_or(&default_config);
+    let info = entry
+        .model_info(provider_config)
+        .map_err(|error| CoreError::Model(error.to_string()))?;
+    let mut result = zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+        entry.model().clone(),
+        &info,
+        definition.output_transport,
+    );
+    if config.providers.contains_key(&entry.model().provider) {
+        match context_budget_for_model(&info, provider_config, registry)?
+            .resolve()
+            .map_err(|error| CoreError::Context(error.to_string()))?
+        {
+            ResolvedContextBudget::ProviderManaged => {}
+            ResolvedContextBudget::CoreManaged(limits) => {
+                result.available_context_window = Some(limits.maximum_input().get());
+            }
         }
     }
-    Ok(entry)
+    Ok(result)
 }
 
 fn image_input_policy_for_config(

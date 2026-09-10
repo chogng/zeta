@@ -1,4 +1,4 @@
-//! Provider-independent model catalog discovery, caching, merge, query, and resolution.
+//! Provider-independent model discovery, caching, resolution, effective metadata, and instructions.
 
 mod cache;
 mod error;
@@ -6,6 +6,7 @@ mod filter;
 mod instructions;
 mod manager;
 mod merge;
+mod model_info;
 mod policy;
 mod scope;
 mod snapshot;
@@ -22,6 +23,7 @@ pub use instructions::ModelInstructionError;
 pub use instructions::ModelInstructionProfile;
 pub use manager::CatalogReadSource;
 pub use manager::ModelsManager;
+pub use model_info::ResolvedModel;
 pub use policy::CatalogFreshnessPolicy;
 pub use policy::CatalogReadPolicy;
 pub use scope::CatalogScopeKey;
@@ -35,7 +37,6 @@ pub use snapshot::ModelCapabilitiesProvenance;
 pub use snapshot::ModelCatalogEntry;
 pub use snapshot::ModelCatalogSnapshot;
 pub use snapshot::ModelMetadataProvenance;
-pub use snapshot::ResolvedModel;
 pub use source::CatalogCacheHint;
 pub use source::CatalogDiscoveryOutcome;
 pub use source::CatalogDiscoveryRequest;

@@ -1152,14 +1152,45 @@ fn configured_model_context_enables_core_managed_compaction() {
             auto_compact_token_limit: Some(15_000),
         },
     )]);
-    let config = ResolvedConfig {
-        preferred_model: Some(ModelRef::new(provider.clone(), model.clone())),
-        providers: BTreeMap::from([(provider, provider_config)]),
-        ..ResolvedConfig::default()
+    let profile = tempfile::tempdir().unwrap();
+    let config = Arc::new(ConfigStore::open(profile.path().join("config.json")).unwrap());
+    let configured = config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("configure-context").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::ConfigureProvider {
+                provider: provider.clone(),
+                config: provider_config,
+            },
+        })
+        .unwrap();
+    config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("select-context-model").unwrap(),
+            expected_revision: configured.revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                preferred_model: Patch::Value(ModelRef::new(provider.clone(), model.clone())),
+                ..Default::default()
+            }),
+        })
+        .unwrap();
+    let provider_configs = ProviderConfigRegistry::builtin();
+    let catalog_provider = Arc::new(ModelProviderRuntime::new(provider_configs.clone()));
+    let service = ConfigBackedModelService {
+        config,
+        dir_config: None,
+        provider_configs,
+        models_manager: catalog_provider.models_manager(),
+        catalog_provider,
+        catalog_runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
+        resolver: Arc::new(RecordingSnapshotResolver {
+            gate: Arc::new(ResponseGate::default()),
+        }),
     };
-
     assert_eq!(
-        context_budget_for_config(&config).unwrap(),
+        service
+            .context_budget(ModelSelection::ConfiguredDefault)
+            .unwrap(),
         ContextBudget::core_managed(
             ContextTokenCount::new(20_000),
             ContextTokenCount::new(2_048),
@@ -1167,17 +1198,18 @@ fn configured_model_context_enables_core_managed_compaction() {
             ContextCompactionLimit::Tokens(ContextTokenCount::new(15_000)),
         )
     );
-    let entry = runtime_catalog_entry(
-        zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
-            config.preferred_model.clone().unwrap(),
-            &zeta_protocol::ModelInfo::new(model, "GPT 5.6"),
-            zeta_protocol::ModelOutputTransport::Unary,
-        ),
-        &config,
-    )
-    .unwrap();
+    let models = service.list().unwrap();
+    let entry = models
+        .iter()
+        .find(|entry| entry.model == ModelRef::new(provider.clone(), model.clone()))
+        .unwrap();
     assert_eq!(entry.context_window, Some(20_000));
+    assert_eq!(entry.auto_compact_token_limit, Some(15_000));
     assert_eq!(entry.available_context_window, Some(11_928));
+    let serialized = serde_json::to_value(entry).unwrap();
+    assert_eq!(serialized["contextWindow"], 20_000);
+    assert_eq!(serialized["autoCompactTokenLimit"], 15_000);
+    assert_eq!(serialized["availableContextWindow"], 11_928);
 }
 
 #[test]
@@ -1542,7 +1574,7 @@ fn local_catalog_projects_static_models_without_runtime_availability() {
 struct OllamaCatalogClient;
 
 #[test]
-fn custom_provider_catalog_fetch_is_explicit_and_feeds_model_selection() {
+fn custom_provider_discovery_preserves_configured_model_choices() {
     struct Client {
         calls: std::sync::atomic::AtomicUsize,
     }
@@ -1608,34 +1640,68 @@ fn custom_provider_catalog_fetch_is_explicit_and_feeds_model_selection() {
             gate: Arc::new(ResponseGate::default()),
         }),
     };
-    assert!(
-        !model
-            .list()
-            .unwrap()
+    let configured = model.config.read_snapshot().unwrap();
+    let initial = model.list().unwrap();
+    assert_eq!(
+        initial
             .iter()
-            .any(|entry| entry.model.provider == provider)
+            .filter(|entry| entry.model.provider == provider)
+            .map(|entry| entry.model.model.as_str())
+            .collect::<Vec<_>>(),
+        ["gpt-5.6", "gpt-6-astra"]
     );
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 0);
     let fetched = model.refresh(&provider).unwrap();
-    assert_eq!(fetched.len(), 1);
-    assert_eq!(fetched[0].model.model.as_str(), "custom-model");
-    assert!(
-        model
-            .list()
-            .unwrap()
+    assert_eq!(
+        fetched
             .iter()
-            .any(|entry| entry.model.provider == provider
-                && entry.model.model.as_str() == "custom-model")
+            .map(|entry| entry.model.clone())
+            .collect::<Vec<_>>(),
+        [ModelRef::new(
+            provider.clone(),
+            ModelId::new("custom-model").unwrap(),
+        )]
     );
+    assert_eq!(model.list().unwrap(), initial);
+    assert_eq!(model.config.read_snapshot().unwrap(), configured);
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 1);
     assert!(model.refresh(&provider).unwrap().is_empty());
+    assert_eq!(model.list().unwrap(), initial);
+    assert_eq!(model.config.read_snapshot().unwrap(), configured);
+    assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 2);
     assert_eq!(
         model.refresh(&provider),
         Err(crate::model_catalog::ModelCatalogRefreshError::Authentication)
     );
+    assert_eq!(model.list().unwrap(), initial);
+    assert_eq!(model.config.read_snapshot().unwrap(), configured);
+    assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 3);
+    assert_eq!(model.refresh(&provider).unwrap(), fetched);
+    assert_eq!(model.list().unwrap(), initial);
+    assert_eq!(model.config.read_snapshot().unwrap(), configured);
+    assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 4);
+
+    let mut connection = configured.values.providers[&provider].clone();
+    connection.custom.as_mut().unwrap().model = Some(fetched[0].model.model.clone());
+    model
+        .config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("select-discovered-model").unwrap(),
+            expected_revision: configured.revision,
+            command: UserConfigCommand::ConfigureProvider {
+                provider: provider.clone(),
+                config: connection,
+            },
+        })
+        .unwrap();
     assert_eq!(
-        model.refresh(&provider).unwrap()[0].model.model.as_str(),
-        "custom-model"
+        model
+            .list()
+            .unwrap()
+            .into_iter()
+            .filter(|entry| entry.model.provider == provider)
+            .collect::<Vec<_>>(),
+        fetched
     );
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 4);
     drop(model);
