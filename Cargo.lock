@@ -260,7 +260,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -271,7 +271,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -284,6 +284,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 name = "app"
 version = "0.1.0"
 dependencies = [
+ "zeta-process-hardening",
  "zeta-workbench",
 ]
 
@@ -1675,6 +1676,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctor"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "424e0138278faeb2b401f174ad17e715c829512d74f3d1e81eb43365c2e0590e"
+dependencies = [
+ "ctor-proc-macro",
+ "dtor",
+]
+
+[[package]]
+name = "ctor-proc-macro"
+version = "0.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52560adf09603e58c9a7ee1fe1dcb95a16927b17c127f0ac02d6e768a0e25bc1"
+
+[[package]]
 name = "cursor-icon"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2021,7 +2038,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2091,6 +2108,21 @@ name = "dpi"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
+
+[[package]]
+name = "dtor"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "404d02eeb088a82cfd873006cb713fe411306c7d182c344905e101fb1167d301"
+dependencies = [
+ "dtor-proc-macro",
+]
+
+[[package]]
+name = "dtor-proc-macro"
+version = "0.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f678cf4a922c215c63e0de95eb1ff08a958a81d47e485cf9da1e27bf6305cfa5"
 
 [[package]]
 name = "dunce"
@@ -2235,7 +2267,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4803,7 +4835,7 @@ dependencies = [
  "once_cell",
  "png",
  "thiserror 2.0.19",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5617,7 +5649,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6497,7 +6529,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7252,7 +7284,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7333,7 +7365,7 @@ dependencies = [
  "security-framework 3.7.0",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7947,7 +7979,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8018,7 +8050,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "psm",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8309,7 +8341,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8908,7 +8940,7 @@ dependencies = [
  "once_cell",
  "png",
  "thiserror 2.0.19",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9400,7 +9432,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -10325,7 +10357,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -11293,6 +11325,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-analytics"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "ts-rs",
+]
+
+[[package]]
 name = "zeta-ansi-escape"
 version = "0.1.0"
 dependencies = [
@@ -11335,6 +11378,7 @@ dependencies = [
  "zeta-action-policy",
  "zeta-agent-environment",
  "zeta-agent-roles",
+ "zeta-analytics",
  "zeta-app-server-protocol",
  "zeta-app-server-transport",
  "zeta-apply-patch",
@@ -11342,6 +11386,7 @@ dependencies = [
  "zeta-attachments",
  "zeta-auto-review",
  "zeta-automation",
+ "zeta-build-info",
  "zeta-chatgpt",
  "zeta-client",
  "zeta-cloud-codebase",
@@ -11355,12 +11400,16 @@ dependencies = [
  "zeta-core",
  "zeta-core-plugins",
  "zeta-debug-adapter",
+ "zeta-diagnostics",
  "zeta-diff",
  "zeta-editor-extension-host",
  "zeta-execpolicy",
  "zeta-extension-api",
+ "zeta-extension-items",
  "zeta-extensions",
  "zeta-fast-regex-search",
+ "zeta-features",
+ "zeta-feedback",
  "zeta-file-access",
  "zeta-file-system",
  "zeta-file-watcher",
@@ -11382,10 +11431,12 @@ dependencies = [
  "zeta-models-manager",
  "zeta-mxc-sandbox",
  "zeta-network-proxy",
+ "zeta-otel",
  "zeta-plugin",
  "zeta-projects",
  "zeta-prompts",
  "zeta-protocol",
+ "zeta-queue",
  "zeta-rmcp-client",
  "zeta-rollout",
  "zeta-sandboxing",
@@ -11421,10 +11472,13 @@ dependencies = [
  "zeta-async-utils",
  "zeta-client",
  "zeta-core",
+ "zeta-diagnostics",
+ "zeta-feedback",
  "zeta-file-access",
  "zeta-install-context",
  "zeta-memory-diagnostics",
  "zeta-protocol",
+ "zeta-queue",
  "zeta-utils-pty",
 ]
 
@@ -11446,9 +11500,12 @@ dependencies = [
  "zeta-app-server-protocol",
  "zeta-app-server-transport",
  "zeta-automation",
+ "zeta-build-info",
  "zeta-fast-regex-search",
  "zeta-package-store",
+ "zeta-process-hardening",
  "zeta-protocol",
+ "zeta-queue",
  "zeta-uds",
 ]
 
@@ -11463,11 +11520,18 @@ dependencies = [
  "ts-rs",
  "url",
  "zeroize",
+ "zeta-analytics",
+ "zeta-build-info",
  "zeta-collaboration",
+ "zeta-diagnostics",
  "zeta-environment",
+ "zeta-extension-items",
+ "zeta-features",
+ "zeta-feedback",
  "zeta-file-access",
  "zeta-memory-diagnostics",
  "zeta-protocol",
+ "zeta-queue",
  "zeta-thread-transcript",
 ]
 
@@ -11543,6 +11607,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-build-info"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "ts-rs",
+]
+
+[[package]]
 name = "zeta-bwrap"
 version = "0.1.0"
 dependencies = [
@@ -11593,8 +11668,10 @@ dependencies = [
  "ureq",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
+ "zeta-build-info",
  "zeta-exec",
  "zeta-install-context",
+ "zeta-process-hardening",
  "zeta-product-update",
  "zeta-protocol",
  "zeta-remote",
@@ -11731,16 +11808,27 @@ name = "zeta-config"
 version = "0.1.0"
 dependencies = [
  "rusqlite",
+ "schemars",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "toml 0.9.12+spec-1.1.0",
  "zeta-execpolicy",
+ "zeta-features",
  "zeta-file-access",
  "zeta-model-provider-config",
  "zeta-plugin",
  "zeta-protocol",
  "zeta-state",
+]
+
+[[package]]
+name = "zeta-config-schema"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde_json",
+ "zeta-config",
 ]
 
 [[package]]
@@ -11847,6 +11935,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-diagnostics"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "ts-rs",
+ "zeta-analytics",
+ "zeta-build-info",
+]
+
+[[package]]
 name = "zeta-diff"
 version = "0.1.0"
 dependencies = [
@@ -11930,6 +12031,7 @@ dependencies = [
 name = "zeta-execpolicy"
 version = "0.1.0"
 dependencies = [
+ "schemars",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -11940,8 +12042,18 @@ name = "zeta-extension-api"
 version = "0.1.0"
 dependencies = [
  "serde_json",
+ "zeta-extension-items",
  "zeta-protocol",
  "zeta-tools",
+]
+
+[[package]]
+name = "zeta-extension-items"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "ts-rs",
 ]
 
 [[package]]
@@ -11972,6 +12084,33 @@ dependencies = [
  "zeta-file-access",
  "zeta-immutable-generation-store",
  "zeta-uds",
+]
+
+[[package]]
+name = "zeta-features"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "ts-rs",
+]
+
+[[package]]
+name = "zeta-feedback"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "ts-rs",
+ "url",
+ "zeta-async-utils",
+ "zeta-client",
+ "zeta-diagnostics",
+ "zeta-http-client",
 ]
 
 [[package]]
@@ -12452,6 +12591,7 @@ dependencies = [
  "serde",
  "serde_json",
  "zeta-client",
+ "zeta-diagnostics",
  "zeta-http-client",
 ]
 
@@ -12483,6 +12623,15 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
+]
+
+[[package]]
+name = "zeta-process-hardening"
+version = "0.1.0"
+dependencies = [
+ "ctor",
+ "libc",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -12528,6 +12677,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-queue"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.19",
+ "ts-rs",
+ "zeta-protocol",
+]
+
+[[package]]
 name = "zeta-remote"
 version = "0.1.0"
 
@@ -12570,6 +12733,8 @@ dependencies = [
  "zeta-app-server",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
+ "zeta-build-info",
+ "zeta-process-hardening",
 ]
 
 [[package]]
@@ -12655,8 +12820,10 @@ dependencies = [
  "zeta-app-server-daemon",
  "zeta-app-server-protocol",
  "zeta-app-server-transport",
+ "zeta-build-info",
  "zeta-fast-regex-search",
  "zeta-package-store",
+ "zeta-process-hardening",
  "zeta-remote",
  "zeta-remote-connections",
  "zeta-remote-server",
@@ -12949,6 +13116,7 @@ dependencies = [
  "zeta-message-history",
  "zeta-product-update",
  "zeta-protocol",
+ "zeta-queue",
  "zeta-slash-commands",
  "zeta-sprite",
  "zeta-state",

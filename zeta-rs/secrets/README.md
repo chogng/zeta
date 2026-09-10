@@ -81,3 +81,5 @@ buffer 处理。
 ## 当前限制与演进
 
 当前具有 memory、unavailable 与 profile 私有文件 backend。`FileSecretStore` 是本地产品默认：Unix 使用 0700/0600 与原子 rename，Windows 使用 owner-only protected DACL 与 write-through atomic replacement。其他平台在 `open` 时明确返回 `BackendUnavailable`。OS keyring 位于独立 `zeta-keyring-store`，供 host 显式注入，不是 daemon 默认。加密文件、跨进程锁、migration 与 rotation metadata 尚未实现。后续 backend 不得扩大 `SecretValue` 的复制、序列化或日志接口。
+
+产品入口现通过 [`zeta-process-hardening`](../process-hardening/README.md) 在读取本 store 前执行进程保护；密钥存储不自行改变进程级环境或调试策略。
