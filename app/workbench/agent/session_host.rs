@@ -467,6 +467,7 @@ impl WorkbenchApplication {
             .map_err(anyhow::Error::msg)?;
             client
                 .update_config(ConfigUpdateParams {
+                    features: Default::default(),
                     command_id: next_gui_config_command_id(),
                     expected_revision: config.revision,
                     preferred_model: Patch::Missing,

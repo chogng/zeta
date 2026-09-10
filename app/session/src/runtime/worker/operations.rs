@@ -463,6 +463,7 @@ pub(super) fn set_preferred_model(
     let config = client.read_config().map_err(client_error)?;
     client
         .update_config(ConfigUpdateParams {
+            features: Default::default(),
             command_id: next_command_id("model"),
             expected_revision: config.revision,
             preferred_model: Patch::Value(ModelRefDto {

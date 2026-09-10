@@ -46,13 +46,16 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
         },
     );
     let configuration = ConfigReadResult {
+        features: vec![],
         revision: 4,
         generation: 7,
         preferred_model: None,
         approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
         commit_message_model: None,
         commit_message_active_dir_authorized: false,
-        issues: zeta_app_server_protocol::protocol::issues::IssueConfigDto { auto_refresh_minutes: 10 },
+        issues: zeta_app_server_protocol::protocol::issues::IssueConfigDto {
+            auto_refresh_minutes: 10,
+        },
         tool_mode: Default::default(),
         agent_grep_backend: AgentGrepBackendDto::Ripgrep,
         gui: FrontendConfigDto::default(),
@@ -94,13 +97,16 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
 #[test]
 fn desktop_configuration_does_not_start_unconfigured_language_servers() {
     let configuration = ConfigReadResult {
+        features: vec![],
         revision: 1,
         generation: 1,
         preferred_model: None,
         approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
         commit_message_model: None,
         commit_message_active_dir_authorized: false,
-        issues: zeta_app_server_protocol::protocol::issues::IssueConfigDto { auto_refresh_minutes: 10 },
+        issues: zeta_app_server_protocol::protocol::issues::IssueConfigDto {
+            auto_refresh_minutes: 10,
+        },
         tool_mode: Default::default(),
         agent_grep_backend: AgentGrepBackendDto::Ripgrep,
         gui: FrontendConfigDto::default(),
