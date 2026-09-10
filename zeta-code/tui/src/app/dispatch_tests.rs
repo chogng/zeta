@@ -274,7 +274,7 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
 
     let view = crate::skills::set_enablement(
         &mut client,
-        &zeta_protocol::SessionId::new("test-session").unwrap(),
+        Some(&zeta_protocol::SessionId::new("test-session").unwrap()),
         skill_id,
         enablement,
     )
@@ -588,7 +588,7 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
     let output = super::execute_product_command(
-        conversation,
+        Some(conversation),
         &mut client,
         invocation(
             TuiSlashCommandAction::AddDir,
@@ -596,13 +596,15 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
         ),
     )
     .unwrap();
-    conversation = output.conversation;
+    conversation = output
+        .conversation
+        .expect("an existing conversation remains selected");
     for event in output.events {
         app.update(event);
     }
 
     let repeated = execute_product_command(
-        conversation.clone(),
+        Some(conversation.clone()),
         &mut client,
         invocation(
             TuiSlashCommandAction::AddDir,
@@ -971,9 +973,11 @@ fn execute<T>(
 ) where
     T: JsonRpcTransport,
 {
-    match execute_product_command(conversation.clone(), client, invocation) {
+    match execute_product_command(Some(conversation.clone()), client, invocation) {
         Ok(output) => {
-            *conversation = output.conversation;
+            *conversation = output
+                .conversation
+                .expect("an existing conversation remains selected");
             for event in output.events {
                 app.update(event);
             }

@@ -65,12 +65,13 @@ fn agents_manager_simulates_navigation_and_transient_details() {
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
     app.update(crate::config::Event::SettingsReceived(settings));
-    assert!(app.overlay().is_some());
-    assert!(app.session_manager_focused());
+    assert!(app.overlay().is_none());
+    assert!(!app.session_manager_focused());
+    assert!(app.session_manager_view().is_none());
     settings.set_screen_mode(crate::terminal::ScreenMode::Fullscreen);
     app.update(crate::config::Event::SettingsReceived(settings));
     assert!(app.overlay().is_some());
-
+    assert!(app.session_manager_focused());
     assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
     assert!(app.overlay().is_none());
     assert!(app.session_manager_focused());
@@ -101,6 +102,7 @@ fn resuming_selected_session_restores_manager_navigation() {
         thread_id: ThreadId::new("current").unwrap(),
     });
 
+    app.show_conversation();
     assert!(!app.session_manager_focused());
     assert_eq!(app.screen_navigation_tip(), Some("← for agents"));
     assert_snapshot!(
@@ -144,7 +146,11 @@ fn session_manager_preview_reads_conversation_and_restores_focus_without_editing
     assert_eq!(params.thread_id.as_str(), "current");
     assert!(!app.accepts_input());
     assert_snapshot!("session_manager_preview_loading", render(&app));
-    app.finish_session_preview(generation, Ok(preview_result(0..35, false)));
+    app.finish_session_preview(
+        app.screen_mode(),
+        generation,
+        Ok(preview_result(0..35, false)),
+    );
     assert_snapshot!("session_manager_preview_conversation", render(&app));
     for code in [
         KeyCode::Char('x'),
@@ -169,10 +175,10 @@ fn session_manager_preview_reads_conversation_and_restores_focus_without_editing
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
     app.update(crate::config::Event::SettingsReceived(settings));
-    assert_eq!(app.session_preview().unwrap().generation, generation);
+    assert!(app.session_preview().is_none());
     assert!(app.inline.preview.scroll.anchor().is_none());
     app.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL));
-    assert!(app.inline.preview.scroll.anchor().is_some());
+    assert!(app.inline.preview.scroll.anchor().is_none());
     settings.set_screen_mode(crate::terminal::ScreenMode::Fullscreen);
     app.update(crate::config::Event::SettingsReceived(settings));
     assert_eq!(
@@ -188,7 +194,11 @@ fn session_manager_preview_reads_conversation_and_restores_focus_without_editing
     assert!(app.session_preview().is_none());
     assert!(app.session_manager_focused());
     assert_eq!(app.input(), draft);
-    app.finish_session_preview(generation, Ok(preview_result(0..1, false)));
+    app.finish_session_preview(
+        app.screen_mode(),
+        generation,
+        Ok(preview_result(0..1, false)),
+    );
     assert!(app.session_preview().is_none());
     let Some(AppCommand::Sessions(SessionCommand::Preview {
         generation: next, ..
@@ -197,7 +207,7 @@ fn session_manager_preview_reads_conversation_and_restores_focus_without_editing
         panic!("new preview expected")
     };
     assert_ne!(next, generation);
-    app.finish_session_preview(generation, Err("stale error".into()));
+    app.finish_session_preview(app.screen_mode(), generation, Err("stale error".into()));
     assert_eq!(
         app.session_preview().unwrap().notice(),
         Some("Loading conversation…")
@@ -215,7 +225,11 @@ fn session_manager_preview_loads_older_history_without_switching_the_active_thre
     else {
         panic!("preview expected")
     };
-    app.finish_session_preview(generation, Ok(preview_result(10..15, true)));
+    app.finish_session_preview(
+        app.screen_mode(),
+        generation,
+        Ok(preview_result(10..15, true)),
+    );
     let Some(AppCommand::Sessions(SessionCommand::Preview { params, .. })) =
         app.handle_key(key(KeyCode::Home))
     else {
@@ -225,7 +239,11 @@ fn session_manager_preview_loads_older_history_without_switching_the_active_thre
         matches!(params.history, Some(zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory::Before { turn_id, .. }) if turn_id.as_str() == "turn-10")
     );
     assert_eq!(app.handle_key(key(KeyCode::Home)), None);
-    app.finish_session_preview(generation, Ok(preview_result(0..10, false)));
+    app.finish_session_preview(
+        app.screen_mode(),
+        generation,
+        Ok(preview_result(0..10, false)),
+    );
     assert_eq!(app.session_preview().unwrap().messages().len(), 15);
     assert!(app.transcript_views().is_empty());
 }

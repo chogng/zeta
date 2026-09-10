@@ -1,0 +1,25 @@
+---
+source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
+expression: rendered
+---
+  Home  .                                                                       
+                                                                                
+● Conver┌── Help ──────────────────────────────────────────────────[×]─┐        
+        │                                                              │        
+        │   Commands    Keys                                           │        
+        │                                                              │        
+        │  ╭─────────────────────────────────────────────────────────╮ │        
+        │  │ Search commands and shortcuts                           │ │        
+        │  ╰─────────────────────────────────────────────────────────╯ │        
+        │> /status  ·  show status                                     │        
+        │  /model  ·  show model                                       │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+  ╭─────│                                                              │───────╮
+> │draft│  Tab/Shift+Tab to switch  ·  / to search  ·  Esc to close    │       │
+  ╰─────└──────────────────────────────────────────────────────────────┘model ─╯

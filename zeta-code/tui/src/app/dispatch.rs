@@ -7,7 +7,6 @@ use crate::models;
 use crate::sessions;
 use crate::sessions::ActiveConversation;
 use crate::sessions::ConversationChange;
-use crate::sessions::ResumeOutcome;
 use crate::skills::load_selection;
 use crate::status;
 use crate::thread::composer::ChatInputItem;
@@ -22,14 +21,14 @@ use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
 use zeta_protocol::TurnId;
 
 pub(crate) struct ProductCommandOutput {
-    pub(crate) conversation: ActiveConversation,
+    pub(crate) conversation: Option<ActiveConversation>,
     pub(crate) command: String,
     pub(crate) events: Vec<AppEvent>,
     pub(crate) conversation_change: Option<ConversationChange>,
 }
 
 pub(crate) fn execute_product_command<T>(
-    mut conversation: ActiveConversation,
+    mut conversation: Option<ActiveConversation>,
     client: &mut AppServerClient<T>,
     invocation: SlashCommandInvocation,
 ) -> Result<ProductCommandOutput, String>
@@ -48,7 +47,7 @@ where
 }
 
 fn dispatch<T>(
-    conversation: &mut ActiveConversation,
+    conversation: &mut Option<ActiveConversation>,
     client: &mut AppServerClient<T>,
     invocation: SlashCommandInvocation,
 ) -> Result<CommandOutput, CommandExecutionError>
@@ -80,10 +79,12 @@ where
             output.events.push(
                 status::Event::PanelOpened(status::load_status_panel(
                     client,
-                    status::StatusRequestScope {
-                        session_id: conversation.session_id(),
-                        thread_id: conversation.thread_id(),
-                    },
+                    conversation
+                        .as_ref()
+                        .map(|conversation| status::StatusRequestScope {
+                            session_id: conversation.session_id(),
+                            thread_id: conversation.thread_id(),
+                        }),
                 )?)
                 .into(),
             );
@@ -92,7 +93,7 @@ where
             output.events.push(
                 crate::skills::Event::SettingsOpened(load_selection(
                     client,
-                    conversation.session_id(),
+                    conversation.as_ref().map(ActiveConversation::session_id),
                     SkillCatalogReloadDto::Refresh,
                 )?)
                 .into(),
@@ -114,29 +115,27 @@ where
                 output.events.push(
                     sessions::Event::PickerOpened(sessions::load_selection(
                         client,
-                        conversation.session_id().as_str(),
+                        conversation.as_ref().map(|c| c.session_id().as_str()),
                     )?)
                     .into(),
                 );
             } else {
-                match conversation
-                    .resume_session(client, &arguments, None)
-                    .map_err(session_error)?
-                {
-                    ResumeOutcome::Listed(notice) => {
-                        output
-                            .events
-                            .push(crate::thread::Event::ProductNotice(notice).into());
-                    }
-                    ResumeOutcome::Changed(change) => {
-                        output.conversation_change = Some(change);
-                    }
-                }
+                let next =
+                    ActiveConversation::open(client, &arguments, None).map_err(session_error)?;
+                output.conversation_change = Some(ConversationChange {
+                    notice: format!(
+                        "Resumed session {} on thread {}.",
+                        next.session_id(),
+                        next.thread_id()
+                    ),
+                    transcript: crate::sessions::ConversationTranscript::Replace,
+                });
+                *conversation = Some(next);
             }
         }
         TuiSlashCommandAction::Archive => {
             output.conversation_change = Some(
-                conversation
+                require_conversation_mut(conversation)?
                     .archive_and_replace(client)
                     .map_err(session_error)?,
             );
@@ -146,8 +145,8 @@ where
                 output.events.push(
                     crate::thread::Event::RewindPickerOpened(rewind::load_selection(
                         client,
-                        conversation.session_id(),
-                        conversation.thread_id(),
+                        require_conversation(conversation)?.session_id(),
+                        require_conversation(conversation)?.thread_id(),
                     )?)
                     .into(),
                 );
@@ -158,25 +157,30 @@ where
                     ))
                 })?;
                 output.conversation_change = Some(
-                    conversation
+                    require_conversation_mut(conversation)?
                         .rewind_active_thread(client, before_turn_id, &arguments)
                         .map_err(session_error)?,
                 );
             }
         }
         TuiSlashCommandAction::New => {
-            output.conversation_change = Some(
-                conversation
-                    .replace_with_new(client, &arguments)
-                    .map_err(session_error)?,
-            );
+            let title = if arguments.is_empty() {
+                "TUI conversation".to_owned()
+            } else {
+                arguments
+            };
+            *conversation = Some(ActiveConversation::start(client, title)?);
+            output.conversation_change = Some(ConversationChange {
+                notice: "Started a new session.".into(),
+                transcript: crate::sessions::ConversationTranscript::Clear,
+            });
         }
         TuiSlashCommandAction::AddDir => {
             if arguments.is_empty() {
                 output.events.push(
                     dirs::Event::PickerOpened(dirs::load_selection(
                         client,
-                        conversation.session_id(),
+                        require_conversation(conversation)?.session_id(),
                     )?)
                     .into(),
                 );
@@ -184,7 +188,7 @@ where
                 let command = format!("/add-dir {arguments}");
                 let update = dirs::add(
                     client,
-                    conversation.session_id(),
+                    require_conversation(conversation)?.session_id(),
                     std::path::PathBuf::from(&arguments),
                 )
                 .map_err(CommandExecutionError)?;
@@ -205,7 +209,7 @@ where
         }
         TuiSlashCommandAction::Fork => {
             output.conversation_change = Some(
-                conversation
+                require_conversation_mut(conversation)?
                     .fork_active_thread(client, &arguments)
                     .map_err(session_error)?,
             );
@@ -215,6 +219,7 @@ where
         | TuiSlashCommandAction::Help
         | TuiSlashCommandAction::Shortcuts
         | TuiSlashCommandAction::Startup
+        | TuiSlashCommandAction::Home
         | TuiSlashCommandAction::StatusLine => {
             return Err(CommandExecutionError(
                 "host command reached the App Server dispatcher".into(),
@@ -277,6 +282,22 @@ fn text_arguments(arguments: &[ChatInputItem]) -> Result<String, CommandExecutio
         .join(" ")
         .trim()
         .to_owned())
+}
+
+fn require_conversation(
+    conversation: &Option<ActiveConversation>,
+) -> Result<&ActiveConversation, CommandExecutionError> {
+    conversation.as_ref().ok_or_else(|| {
+        CommandExecutionError("Start or resume a session before using this command".into())
+    })
+}
+
+fn require_conversation_mut(
+    conversation: &mut Option<ActiveConversation>,
+) -> Result<&mut ActiveConversation, CommandExecutionError> {
+    conversation.as_mut().ok_or_else(|| {
+        CommandExecutionError("Start or resume a session before using this command".into())
+    })
 }
 
 fn session_error(error: impl fmt::Display) -> CommandExecutionError {

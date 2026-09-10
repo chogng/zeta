@@ -20,6 +20,7 @@ fn builtins_follow_enum_presentation_order() {
             "rewind",
             "config",
             "startup",
+            "home",
             "add-dir",
             "fork",
             "help",
@@ -36,7 +37,7 @@ fn builtins_follow_enum_presentation_order() {
             "pr",
         ]
     );
-    assert_eq!(definitions.len(), 24);
+    assert_eq!(definitions.len(), 25);
 }
 
 #[test]

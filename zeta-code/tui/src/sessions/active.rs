@@ -25,6 +25,13 @@ pub(crate) struct ActiveConversation {
     thread_sequence: u64,
 }
 
+/// Keeps the selected conversation and its live subscription under one owner.
+#[derive(Clone)]
+pub(crate) struct Conversation {
+    pub(crate) conversation: ActiveConversation,
+    pub(crate) subscription: crate::thread::ThreadSubscription,
+}
+
 pub(crate) struct ConversationChange {
     pub(crate) notice: String,
     pub(crate) transcript: ConversationTranscript,
@@ -33,11 +40,6 @@ pub(crate) struct ConversationChange {
 pub(crate) enum ConversationTranscript {
     Clear,
     Replace,
-}
-
-pub(crate) enum ResumeOutcome {
-    Listed(String),
-    Changed(ConversationChange),
 }
 
 impl ActiveConversation {
@@ -280,35 +282,11 @@ impl ActiveConversation {
         })
     }
 
-    pub(crate) fn resume_session<T>(
-        &mut self,
+    pub(crate) fn open<T: JsonRpcTransport>(
         client: &mut AppServerClient<T>,
         arguments: &str,
         preferred_thread_id: Option<&ThreadId>,
-    ) -> Result<ResumeOutcome, SessionsError>
-    where
-        T: JsonRpcTransport,
-    {
-        if arguments.is_empty() {
-            let sessions = client.list_sessions()?.sessions;
-            let text = if sessions.is_empty() {
-                "No saved sessions.".into()
-            } else {
-                let lines = sessions
-                    .into_iter()
-                    .map(|session| {
-                        format!(
-                            "{}  {}  {:?}",
-                            session.session_id, session.title, session.status
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                format!("Saved sessions:\n{lines}\nUse /resume <session-id>.")
-            };
-            return Ok(ResumeOutcome::Listed(text));
-        }
-
+    ) -> Result<Self, SessionsError> {
         let session_id = SessionId::new(arguments)
             .map_err(|error| SessionsError(format!("invalid session ID '{arguments}': {error}")))?;
         let session = client
@@ -342,16 +320,11 @@ impl ActiveConversation {
                 history: None,
             })?
             .thread;
-        self.session = session;
-        self.thread_id = thread_id;
-        self.thread_sequence = snapshot.sequence;
-        Ok(ResumeOutcome::Changed(ConversationChange {
-            notice: format!(
-                "Resumed session {} on thread {}.",
-                self.session.session_id, self.thread_id
-            ),
-            transcript: ConversationTranscript::Replace,
-        }))
+        Ok(Self {
+            session,
+            thread_id,
+            thread_sequence: snapshot.sequence,
+        })
     }
 }
 

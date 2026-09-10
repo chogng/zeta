@@ -79,6 +79,7 @@ struct ChatInputDraft {
 /// Owns the editable draft, Slash/Mention/Skill completion, and typed submission assembly.
 #[derive(Debug)]
 pub(crate) struct ChatInput {
+    generation: u64,
     pub(super) textarea: TextArea,
     pub(super) completion: CompletionState,
     input_mode: ChatInputMode,
@@ -99,6 +100,7 @@ impl ChatInput {
 
     pub(crate) fn with_catalog(catalog: ChatInputCatalog) -> Self {
         Self {
+            generation: 0,
             textarea: TextArea::new(),
             completion: CompletionState::new(catalog),
             input_mode: ChatInputMode::Standard,
@@ -399,6 +401,7 @@ impl ChatInput {
     }
 
     fn take_draft(&mut self) -> ChatInputDraft {
+        self.generation = self.generation.wrapping_add(1);
         let draft = self.take_editor_draft();
         self.completion.clear();
         self.reset_history_navigation();
@@ -421,6 +424,7 @@ impl ChatInput {
     }
 
     fn clear(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
         self.textarea.clear();
         self.vim.reset_draft();
         self.slash_command_element = None;
@@ -434,6 +438,14 @@ impl ChatInput {
     pub(crate) fn connect_history(&mut self, client: MessageHistory, thread_id: String) {
         self.history.connect(client);
         self.history.set_thread_id(thread_id);
+    }
+
+    pub(crate) fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub(crate) fn connect_new_session_history(&mut self, client: MessageHistory) {
+        self.history.connect(client);
     }
 
     pub(crate) fn history_unavailable(&mut self, error: String) {

@@ -27,12 +27,6 @@ enum HitBarStyle {
 }
 
 pub(super) fn process_resource_demand(app: &App, areas: &Layout) -> ProcessResourceDemand {
-    if app
-        .command_panel()
-        .is_some_and(|panel| super::panel::process_resources_visible(panel, areas.session.composer))
-    {
-        return ProcessResourceDemand::Detailed;
-    }
     if !matches!(bottom_content(app), BottomContent::StatusLine) {
         return ProcessResourceDemand::Disabled;
     }
@@ -60,6 +54,13 @@ pub(super) fn draw(
     app: &App,
     context: crate::render::RenderContext<'_>,
 ) {
+    if super::modal::is_open(app) {
+        return;
+    }
+    let status_area = Rect {
+        height: area.height.saturating_sub(1),
+        ..area
+    };
     match bottom_content(app) {
         BottomContent::HitBar { text, style } => match style {
             HitBarStyle::Keys => key_hint::draw(frame, bottom_row(area), &text, context),
@@ -72,8 +73,30 @@ pub(super) fn draw(
                 chat_input::content_area(bottom_row(area)),
             ),
         },
-        BottomContent::StatusLine => draw_status_line(frame, area, app, context),
+        BottomContent::StatusLine => {
+            draw_status_line(frame, status_area, app, context);
+            key_hint::draw(frame, bottom_row(area), &input_hints(app), context);
+        }
     }
+}
+
+fn input_hints(app: &App) -> String {
+    if app.fullscreen_home_visible() {
+        return "Enter send  ·  Tab actions  ·  / commands".into();
+    }
+    let mut hints = if app.active_turn().is_some() {
+        "Enter queue".to_owned()
+    } else {
+        "Enter send".to_owned()
+    };
+    if let Some(keys) = app.app_keymap.action_hint(
+        crate::keymap::AppKeymapAction::CycleApprovalMode,
+        app.app_keymap_context(true),
+    ) {
+        hints.push_str(&format!("  ·  {keys} permissions"));
+    }
+    hints.push_str("  ·  /home");
+    hints
 }
 
 fn bottom_content(app: &App) -> BottomContent<'_> {
@@ -83,15 +106,9 @@ fn bottom_content(app: &App) -> BottomContent<'_> {
             style: HitBarStyle::Keys,
         };
     }
-    if app.overlay().is_some() || app.session_preview().is_some() {
+    if app.session_preview().is_some() {
         return BottomContent::HitBar {
             text: Cow::Borrowed(bindings::CLOSE_HINTS.as_str()),
-            style: HitBarStyle::Keys,
-        };
-    }
-    if let Some(hints) = app.command_panel_key_hints() {
-        return BottomContent::HitBar {
-            text: Cow::Borrowed(hints),
             style: HitBarStyle::Keys,
         };
     }
@@ -183,6 +200,32 @@ pub(super) fn draw_tip(
     app: &App,
     context: crate::render::RenderContext<'_>,
 ) {
+    if app.fullscreen.home_visible() {
+        let text = if app.sessions.pending_submission.is_some() {
+            "Starting session…"
+        } else if let Some(error) = &app.sessions.creation_error {
+            error
+        } else {
+            if app.sessions.active_session_id().is_some() {
+                "Type a new task · Tab actions · Esc return"
+            } else if area.width < 54 {
+                "Type a task · Tab actions"
+            } else {
+                "Type a task to begin, or use Tab to choose an action."
+            }
+        };
+        frame.render_widget(
+            Paragraph::new(text).style(Style::default().fg(
+                if app.sessions.creation_error.is_some() {
+                    context.danger()
+                } else {
+                    context.muted()
+                },
+            )),
+            chat_input::content_area(area),
+        );
+        return;
+    }
     if !area.is_empty()
         && let Some(text) = app.top_tip().text(app.screen_navigation_tip())
     {

@@ -1,0 +1,20 @@
+---
+source: zeta-code/tui/src/app/mode_tests.rs
+expression: render(&app)
+---
+  Home  .                                         
+                                                  
+  Idle (2)                                        
+  ○ first session                                 
+> ○ second session                                
+  Archived (0)                                    
+                                                  
+                                                  
+                                                  
+                                                  
+  ╭──────────────────────────────────────────────╮
+> │                                              │
+  ╰──────────────────────────── Automatic model ─╯
+                                                  
+                                                  
+  Enter to open · Space to preview

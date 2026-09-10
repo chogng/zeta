@@ -12,6 +12,7 @@ const MAX_VIEWPORTS: usize = 32;
 
 #[derive(Debug, Default)]
 pub(crate) struct Viewport {
+    pub(crate) queue: crate::thread::queue::QueueNavigation,
     pub(crate) scroll: ChatHistoryScroll,
     pub(crate) render_cache: ChatHistoryRenderCache,
     pub(crate) expanded_cells: BTreeSet<TranscriptCellId>,

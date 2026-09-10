@@ -139,6 +139,14 @@ impl StatusPanel {
             .min(usize::from(u16::MAX)) as u16;
     }
 
+    pub(crate) fn tab_at(&self, area: Rect, position: ratatui::layout::Position) -> Option<usize> {
+        crate::widgets::tab_list::index_at(self.tabs.tabs(), area, position)
+    }
+
+    pub(crate) fn select_tab(&mut self, index: usize) {
+        self.tabs.select(index);
+    }
+
     pub(crate) fn draw_tabs(
         &self,
         frame: &mut Frame<'_>,

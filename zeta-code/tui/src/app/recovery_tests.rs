@@ -14,8 +14,10 @@ fn connection_loss_returns_only_durable_identity_and_diagnostic() {
 
     let exit = continue_or_exit(
         ClientEvent::ConnectionClosed(ConnectionCloseReason::DriverStopped),
-        &session_id,
-        &thread_id,
+        Some(crate::TuiRecoveryState::new(
+            session_id.clone(),
+            thread_id.clone(),
+        )),
     )
     .unwrap_err();
 
@@ -28,8 +30,8 @@ fn connection_loss_returns_only_durable_identity_and_diagnostic() {
         panic!("expected connection loss");
     };
     assert_eq!(kind, TuiConnectionLossKind::Transport);
-    assert_eq!(recovery.session_id(), &session_id);
-    assert_eq!(recovery.thread_id(), &thread_id);
+    assert_eq!(recovery.as_ref().unwrap().session_id(), &session_id);
+    assert_eq!(recovery.as_ref().unwrap().thread_id(), &thread_id);
     assert_eq!(reason, "App Server connection closed: DriverStopped");
 }
 
@@ -42,8 +44,10 @@ fn protocol_failure_remains_terminally_classified() {
         ClientEvent::ConnectionClosed(ConnectionCloseReason::ProtocolFailure(
             "malformed frame".into(),
         )),
-        &session_id,
-        &thread_id,
+        Some(crate::TuiRecoveryState::new(
+            session_id.clone(),
+            thread_id.clone(),
+        )),
     )
     .unwrap_err();
 
@@ -51,6 +55,23 @@ fn protocol_failure_remains_terminally_classified() {
         exit,
         TuiExit::ConnectionLost {
             kind: TuiConnectionLossKind::Protocol,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn home_connection_loss_has_no_invented_conversation_identity() {
+    let exit = continue_or_exit(
+        ClientEvent::ConnectionClosed(ConnectionCloseReason::DriverStopped),
+        None,
+    )
+    .unwrap_err();
+    assert!(matches!(
+        exit,
+        TuiExit::ConnectionLost {
+            kind: TuiConnectionLossKind::Transport,
+            recovery: None,
             ..
         }
     ));

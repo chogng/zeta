@@ -1,21 +1,20 @@
 ---
 source: zeta-code/tui/src/app/fullscreen/pointer_tests.rs
-assertion_line: 113
 expression: text
 ---
-                                                            
-    ▄  ▄     Zeta Code v0.1.0                               
-  ▗█▛██▜█▖   Automatic model · Access unknown               
-  ▝▜████▛▘   .                                              
-    ▝  ▘                                                    
+  Home  .                                                   
                                                             
 ● clipboard unavailable                                     
                                                             
                                                             
                                                             
                                                             
-────────────────────────────────────────────────────────────
-> copy me                                                   
-────────────────────────────────────────────────────────────
                                                             
-  ⏸ ask permissions on
+                                                            
+                                                            
+  ╭────────────────────────────────────────────────────────╮
+> │copy me                                                 │
+  ╰────────────────────────────────────── Automatic model ─╯
+                                                            
+  ⏸ ask permissions on                                      
+  Enter send  ·  shift+tab permissions  ·  /home

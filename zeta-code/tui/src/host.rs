@@ -5,7 +5,10 @@ pub(crate) mod transcript_export;
 
 /// A completed host operation delivered to the TUI state owner.
 pub(crate) enum Event {
-    ClipboardImageRead(Result<clipboard::ClipboardImage, String>),
+    ClipboardImageRead {
+        target: crate::thread::composer::DraftTarget,
+        result: Result<clipboard::ClipboardImage, String>,
+    },
     ClipboardImageAvailabilityChanged(clipboard::ClipboardImageAvailability),
     OperationCompleted(Result<String, String>),
     ProcessResourcesSampled(zeta_memory_diagnostics::ProcessResourcesReading),
@@ -18,7 +21,9 @@ pub(crate) enum Command {
     ExportTranscript {
         requested_path: Option<std::path::PathBuf>,
     },
-    ReadClipboardImage,
+    ReadClipboardImage {
+        target: crate::thread::composer::DraftTarget,
+    },
     RefreshClipboardImageAvailability,
 }
 
@@ -29,7 +34,9 @@ pub(crate) enum Operation {
         requested_path: Option<std::path::PathBuf>,
         markdown: String,
     },
-    ReadClipboardImage,
+    ReadClipboardImage {
+        target: crate::thread::composer::DraftTarget,
+    },
     RefreshClipboardImageAvailability,
 }
 
@@ -38,7 +45,7 @@ impl Operation {
         match self {
             Self::CopyLastResponse(_) => "zeta-tui-copy-last-response",
             Self::ExportTranscript { .. } => "zeta-tui-export-transcript",
-            Self::ReadClipboardImage => "zeta-tui-read-clipboard-image",
+            Self::ReadClipboardImage { .. } => "zeta-tui-read-clipboard-image",
             Self::RefreshClipboardImageAvailability => {
                 "zeta-tui-refresh-clipboard-image-availability"
             }
@@ -53,7 +60,10 @@ impl Operation {
                 requested_path,
                 markdown,
             } => export_transcript(root, requested_path, markdown),
-            Self::ReadClipboardImage => Event::ClipboardImageRead(clipboard::read_image()),
+            Self::ReadClipboardImage { target } => Event::ClipboardImageRead {
+                target,
+                result: clipboard::read_image(),
+            },
             Self::RefreshClipboardImageAvailability => {
                 Event::ClipboardImageAvailabilityChanged(clipboard::image_availability())
             }

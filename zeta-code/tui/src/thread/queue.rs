@@ -40,8 +40,6 @@ struct QueueEntry {
 pub(crate) struct Queue {
     next_id: u64,
     entries: Vec<QueueEntry>,
-    focused: bool,
-    selected: Option<QueueId>,
     editing: Option<QueueId>,
 }
 
@@ -84,7 +82,6 @@ impl Queue {
         match input.restore_queued(queued) {
             Ok(()) => {
                 self.editing = Some(id);
-                self.blur();
                 Ok(())
             }
             Err(queued) => {
@@ -100,7 +97,6 @@ impl Queue {
         };
         self.entries
             .retain(|entry| entry.id != id || entry.input.is_some());
-        self.reconcile_selection();
     }
 
     pub(crate) fn begin_next_send(&mut self) -> Option<(QueueId, ChatSubmission)> {
@@ -108,7 +104,6 @@ impl Queue {
         let id = entry.id;
         let submission = entry.input.as_ref()?.submission().clone();
         entry.sending = true;
-        self.blur();
         Some((id, submission))
     }
 
@@ -124,7 +119,6 @@ impl Queue {
             .submission()
             .clone();
         entry.sending = true;
-        self.blur();
         Some(submission)
     }
 
@@ -139,23 +133,6 @@ impl Queue {
         self.entries.remove(index);
         if self.editing == Some(id) {
             self.editing = None;
-        }
-        if self.focused && self.selected == Some(id) {
-            self.selected = self.entries[index..]
-                .iter()
-                .find(|entry| !entry.sending && entry.input.is_some())
-                .or_else(|| {
-                    self.entries[..index]
-                        .iter()
-                        .rev()
-                        .find(|entry| !entry.sending && entry.input.is_some())
-                })
-                .map(|entry| entry.id);
-            if self.selected.is_none() {
-                self.blur();
-            }
-        } else {
-            self.reconcile_selection();
         }
         true
     }
@@ -195,7 +172,6 @@ impl Queue {
     pub(crate) fn finish_send(&mut self, id: QueueId) -> bool {
         let previous_len = self.entries.len();
         self.entries.retain(|entry| entry.id != id);
-        self.reconcile_selection();
         self.entries.len() != previous_len
     }
 
@@ -209,8 +185,6 @@ impl Queue {
 
     pub(crate) fn clear(&mut self) {
         self.entries.clear();
-        self.focused = false;
-        self.selected = None;
         self.editing = None;
     }
 
@@ -219,10 +193,10 @@ impl Queue {
         self.entries.is_empty()
     }
 
-    pub(crate) fn view(&self) -> QueueView<'_> {
+    pub(crate) fn view(&self, navigation: &QueueNavigation) -> QueueView<'_> {
         QueueView {
-            focused: self.focused,
-            selected: self.selected,
+            focused: navigation.focused(self),
+            selected: navigation.selected,
             items: self
                 .entries
                 .iter()
@@ -237,13 +211,36 @@ impl Queue {
                 .collect(),
         }
     }
+}
 
-    pub(crate) const fn focused(&self) -> bool {
-        self.focused
+/// Selection and focus for one mode's view of a shared message queue.
+#[derive(Debug, Default, Eq, PartialEq)]
+pub(crate) struct QueueNavigation {
+    selected: Option<QueueId>,
+}
+
+impl QueueNavigation {
+    pub(crate) fn focused(&self, queue: &Queue) -> bool {
+        self.selected.is_some_and(|selected| {
+            queue
+                .entries
+                .iter()
+                .any(|entry| entry.id == selected && !entry.sending && entry.input.is_some())
+        })
     }
 
-    pub(crate) fn focus_latest(&mut self) -> bool {
-        let selected = self
+    pub(crate) fn blur(&mut self) {
+        self.selected = None;
+    }
+
+    pub(crate) fn reconcile(&mut self, queue: &Queue) {
+        if self.selected.is_some() && !self.focused(queue) {
+            self.selected = None;
+            self.focus_latest(queue);
+        }
+    }
+    pub(crate) fn focus_latest(&mut self, queue: &Queue) -> bool {
+        let selected = queue
             .entries
             .iter()
             .rev()
@@ -252,22 +249,15 @@ impl Queue {
         let Some(selected) = selected else {
             return false;
         };
-        self.focused = true;
         self.selected = Some(selected);
         true
     }
-
-    pub(crate) fn blur(&mut self) {
-        self.focused = false;
-        self.selected = None;
-    }
-
-    pub(crate) fn handle_key(&mut self, key: KeyEvent) -> QueueKeyOutcome {
-        if !self.focused {
+    pub(crate) fn handle_key(&mut self, queue: &mut Queue, key: KeyEvent) -> QueueKeyOutcome {
+        if !self.focused(queue) {
             return QueueKeyOutcome::Unhandled;
         }
         if let Some(navigation) = Navigation::from_key(key) {
-            let ids = self
+            let ids = queue
                 .entries
                 .iter()
                 .filter(|entry| !entry.sending && entry.input.is_some())
@@ -289,13 +279,13 @@ impl Queue {
         match (key.modifiers, key.code) {
             _ if bindings::QUEUE_UP.matches(key) => {
                 if let Some(id) = selected {
-                    self.move_up(id);
+                    queue.move_up(id);
                 }
                 QueueKeyOutcome::Consumed
             }
             _ if bindings::QUEUE_DOWN.matches(key) => {
                 if let Some(id) = selected {
-                    self.move_down(id);
+                    queue.move_down(id);
                 }
                 QueueKeyOutcome::Consumed
             }
@@ -307,7 +297,19 @@ impl Queue {
                 .unwrap_or(QueueKeyOutcome::Consumed),
             _ if bindings::QUEUE_REMOVE.matches(key) => {
                 if let Some(id) = selected {
-                    self.delete(id);
+                    let index = queue
+                        .entries
+                        .iter()
+                        .position(|entry| entry.id == id)
+                        .unwrap_or(0);
+                    queue.delete(id);
+                    self.selected = queue
+                        .entries
+                        .iter()
+                        .skip(index)
+                        .chain(queue.entries.iter().take(index).rev())
+                        .find(|entry| !entry.sending && entry.input.is_some())
+                        .map(|entry| entry.id);
                 }
                 QueueKeyOutcome::Consumed
             }
@@ -317,25 +319,6 @@ impl Queue {
             }
             _ if bindings::INTERRUPT.matches(key) => QueueKeyOutcome::Unhandled,
             _ => QueueKeyOutcome::Consumed,
-        }
-    }
-
-    fn reconcile_selection(&mut self) {
-        if self.entries.is_empty() {
-            self.blur();
-            return;
-        }
-        if self.selected.is_some_and(|selected| {
-            self.entries
-                .iter()
-                .any(|entry| entry.id == selected && !entry.sending && entry.input.is_some())
-        }) {
-            return;
-        }
-        if self.focused {
-            self.focus_latest();
-        } else {
-            self.selected = None;
         }
     }
 }

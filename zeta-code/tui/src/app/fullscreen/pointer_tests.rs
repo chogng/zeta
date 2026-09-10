@@ -151,19 +151,19 @@ fn fullscreen_selection_copies_text_and_reports_the_clipboard_result() {
         handle_mouse(
             &mut app,
             area,
-            mouse(MouseEventKind::Down(MouseButton::Left), 2),
+            mouse(MouseEventKind::Down(MouseButton::Left), 3),
         );
         handle_mouse(
             &mut app,
             area,
-            mouse(MouseEventKind::Drag(MouseButton::Left), 8),
+            mouse(MouseEventKind::Drag(MouseButton::Left), 9),
         );
         let super::MouseAction::Selection(Some(
             crate::app::fullscreen::selection::ScreenSelectionOutcome::Selection(range),
         )) = handle_mouse(
             &mut app,
             area,
-            mouse(MouseEventKind::Up(MouseButton::Left), 8),
+            mouse(MouseEventKind::Up(MouseButton::Left), 9),
         )
         else {
             panic!("drag must select text");
@@ -185,7 +185,7 @@ fn fullscreen_selection_copies_text_and_reports_the_clipboard_result() {
             .unwrap();
         let buffer = terminal.backend().buffer();
         assert_eq!(
-            buffer[(2, row)].bg,
+            buffer[(3, row)].bg,
             app.render_context().screen_selection_background()
         );
         let text = buffer
@@ -204,7 +204,7 @@ fn fullscreen_selection_copies_text_and_reports_the_clipboard_result() {
 }
 
 #[test]
-fn fixed_command_panels_ignore_mouse_and_keep_keyboard_navigation() {
+fn command_modals_capture_mouse_and_keep_keyboard_navigation() {
     let mut app = App::new();
     app.update(AppEvent::HelpOpened(
         ListSelectionModel::new(
@@ -222,7 +222,13 @@ fn fixed_command_panels_ignore_mouse_and_keep_keyboard_navigation() {
         .with_search(SearchBoxModel::new("Search")),
     ));
     for area in [Rect::new(0, 0, 80, 24), Rect::new(0, 0, 12, 3)] {
-        assert_tui_capture_without_pointer_actions(&mut app, area);
+        let surface = super::super::modal::layout(area).surface;
+        assert!(super::overlay_contains(
+            &app,
+            area,
+            ratatui::layout::Position::new(surface.x, surface.y)
+        ));
+        assert!(super::target_at(&app, area, 0, 0).is_none());
         let selection = app.list_selection().unwrap();
         assert_eq!(selection.active_tab().label(), "First");
         assert_eq!(selection.selected_visible_index(), Some(0));
@@ -250,8 +256,10 @@ fn assert_tui_capture_without_pointer_actions(app: &mut App, area: Rect) {
                 area,
                 ratatui::layout::Position::new(column, row)
             ));
-            assert_eq!(super::target_at(app, area, column, row), None);
-            assert_eq!(activate_pointer_item(app, area, column, row), None);
+            if super::target_at(app, area, column, row) != Some(PointerTarget::Home) {
+                assert_eq!(super::target_at(app, area, column, row), None);
+                assert_eq!(activate_pointer_item(app, area, column, row), None);
+            }
         }
     }
 }
@@ -271,7 +279,12 @@ fn main_screen_leaves_completion_clicks_to_terminal_and_keeps_keyboard_navigatio
     let area = Rect::new(0, 0, 80, 24);
     let target = (0..area.height)
         .flat_map(|row| (0..area.width).map(move |column| (column, row)))
-        .find(|(column, row)| super::target_at(&app, area, *column, *row).is_some())
+        .find(|(column, row)| {
+            matches!(
+                super::target_at(&app, area, *column, *row),
+                Some(PointerTarget::Composer(_))
+            )
+        })
         .expect("completion is clickable");
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
@@ -307,10 +320,7 @@ fn detail_overlay_captures_only_its_surface_and_releases_mouse_on_close() {
         before
     );
     assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
-    let surface = app
-        .overlay()
-        .unwrap()
-        .surface(crate::app::fullscreen::layout(&app, area).transient_area());
+    let surface = super::super::modal::layout(area).surface;
     for row in 0..area.height {
         for column in 0..area.width {
             let position = ratatui::layout::Position::new(column, row);
@@ -318,7 +328,9 @@ fn detail_overlay_captures_only_its_surface_and_releases_mouse_on_close() {
                 super::overlay_contains(&app, area, position),
                 surface.contains(position)
             );
-            assert_eq!(activate_pointer_item(&mut app, area, column, row), None);
+            if !super::super::modal::layout(area).close.contains(position) {
+                assert_eq!(activate_pointer_item(&mut app, area, column, row), None);
+            }
         }
     }
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
@@ -430,7 +442,7 @@ fn mouse_wheel_scrolls_the_full_screen_transcript() {
                 modifiers: KeyModifiers::NONE,
             }
         ),
-        super::MouseAction::Command(None)
+        super::MouseAction::Selection(None)
     ));
     assert!(app.transcript_scroll().anchor().is_none());
 }
@@ -624,10 +636,7 @@ fn detail_overlay_still_scrolls_its_own_content_with_the_mouse() {
                 .join("\n"),
         )],
     ));
-    let surface = app
-        .overlay()
-        .unwrap()
-        .surface(crate::app::fullscreen::layout(&app, area).transient_area());
+    let surface = super::super::modal::layout(area).surface;
     let render = |app: &App| {
         let mut terminal =
             ratatui::Terminal::new(ratatui::backend::TestBackend::new(area.width, area.height))

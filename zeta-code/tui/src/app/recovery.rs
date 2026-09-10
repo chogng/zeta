@@ -1,6 +1,4 @@
 use zeta_app_server_client::ConnectionCloseReason;
-use zeta_protocol::SessionId;
-use zeta_protocol::ThreadId;
 
 use crate::TuiConnectionLossKind;
 use crate::TuiExit;
@@ -9,13 +7,12 @@ use crate::client::ClientEvent;
 
 pub(super) fn continue_or_exit(
     event: ClientEvent,
-    session_id: &SessionId,
-    thread_id: &ThreadId,
+    recovery: Option<TuiRecoveryState>,
 ) -> Result<ClientEvent, TuiExit> {
     match event {
         ClientEvent::ConnectionClosed(reason) => Err(TuiExit::ConnectionLost {
             kind: connection_loss_kind(&reason),
-            recovery: TuiRecoveryState::new(session_id.clone(), thread_id.clone()),
+            recovery,
             reason: format!("App Server connection closed: {reason:?}"),
         }),
         event => Ok(event),

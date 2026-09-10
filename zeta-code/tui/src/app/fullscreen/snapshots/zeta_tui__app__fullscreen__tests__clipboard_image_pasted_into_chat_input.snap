@@ -1,13 +1,8 @@
 ---
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
-assertion_line: 149
 expression: rendered_after_paste
 ---
-                                                                                
-    ▄  ▄     Zeta Code v0.1.0                                                   
-  ▗█▛██▜█▖   Automatic model · Access unknown                                   
-  ▝▜████▛▘   .                                                                  
-    ▝  ▘                                                                        
+  Home  .                                                                       
                                                                                 
                                                                                 
                                                                                 
@@ -18,8 +13,12 @@ expression: rendered_after_paste
                                                                                 
                                                                                 
                                                                                 
-────────────────────────────────────────────────────────────────────────────────
-> [Image #1]                                                                    
-────────────────────────────────────────────────────────────────────────────────
                                                                                 
-  ⏸ ask permissions on
+                                                                                
+                                                                                
+  ╭────────────────────────────────────────────────────────────────────────────╮
+> │[Image #1]                                                                  │
+  ╰────────────────────────────────────────────────────────── Automatic model ─╯
+                                                                                
+  ⏸ ask permissions on                                                          
+  Enter send  ·  shift+tab permissions  ·  /home

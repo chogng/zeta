@@ -23,7 +23,7 @@ impl Command {
 
 pub(crate) fn execute<T>(
     client: &mut AppServerClient<T>,
-    session_id: &SessionId,
+    session_id: Option<&SessionId>,
     command: Command,
 ) -> Result<Event, String>
 where
@@ -41,7 +41,7 @@ where
 
 pub(crate) fn load_selection<T>(
     client: &mut AppServerClient<T>,
-    session_id: &SessionId,
+    session_id: Option<&SessionId>,
     reload: SkillCatalogReloadDto,
 ) -> Result<SkillChoices, ClientError>
 where
@@ -50,14 +50,14 @@ where
     client
         .list_skills(SkillListParams {
             reload,
-            session_id: Some(session_id.clone()),
+            session_id: session_id.cloned(),
         })
         .map(|catalog| skill_choices(&catalog))
 }
 
 pub(crate) fn set_enablement<T>(
     client: &mut AppServerClient<T>,
-    session_id: &SessionId,
+    session_id: Option<&SessionId>,
     skill_id: SkillId,
     enablement: SkillEnablementDto,
 ) -> Result<SkillChoices, ClientError>

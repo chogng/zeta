@@ -1,4 +1,3 @@
-use zeta_memory_diagnostics::ProcessResourceMetrics;
 use crate::thread::TurnApprovalModes;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
@@ -6,6 +5,7 @@ use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::git::GitDiffStatisticsDto;
 use zeta_app_server_protocol::protocol::git::GitHeadDto;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
+use zeta_memory_diagnostics::ProcessResourceMetrics;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::ModelMoneyAmount;
 use zeta_protocol::ModelReferenceCostSummary;
@@ -163,6 +163,12 @@ pub(crate) struct StatusLineModel {
 }
 
 impl StatusLineModel {
+    pub(crate) fn branch_label(&self) -> Option<&str> {
+        self.git_branch
+            .as_ref()
+            .and_then(|value| value.full.first())
+            .map(|segment| segment.text.as_str())
+    }
     pub(crate) fn new() -> Self {
         Self::default()
     }

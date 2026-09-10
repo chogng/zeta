@@ -34,6 +34,10 @@ impl DirPanel {
         self.selection.state()
     }
 
+    pub(crate) fn selection_mut(&mut self) -> Option<&mut ListSelectionState> {
+        self.pending.is_none().then(|| self.selection.state_mut())
+    }
+
     pub(crate) fn replace(&mut self, choices: DirChoices) {
         self.selection.replace(choices.model, choices.actions);
     }

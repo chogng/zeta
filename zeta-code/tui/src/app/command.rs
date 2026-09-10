@@ -18,6 +18,34 @@ pub(crate) enum AppCommand {
     Suspend,
 }
 
+impl AppCommand {
+    pub(super) fn panel_title(&self) -> Option<&'static str> {
+        match self {
+            Self::Config(crate::config::Command::OpenEditor) => Some("Settings"),
+            Self::Keymap(crate::keymap_setup::Command::OpenEditor) => Some("Shortcuts"),
+            Self::Status(crate::status::Command::OpenLineEditor) => Some("Status line"),
+            Self::Theme(crate::theme::Command::OpenPicker) => Some("Theme"),
+            Self::Thread(crate::thread::Command::OpenRewindPicker) => Some("Rewind"),
+            Self::Thread(crate::thread::Command::ExecuteProductCommand(invocation))
+                if invocation.arguments.is_empty() =>
+            {
+                match invocation.command.name.as_str() {
+                    "model" => Some("Model"),
+                    "resume" => Some("Resume session"),
+                    "skills" => Some("Skills"),
+                    "mcp" => Some("MCP"),
+                    "connectors" => Some("Connectors"),
+                    "status" => Some("Status"),
+                    "rewind" => Some("Rewind"),
+                    "add-dir" => Some("Directories"),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+}
+
 macro_rules! app_command_from {
     ($command:ty, $variant:ident) => {
         impl From<$command> for AppCommand {

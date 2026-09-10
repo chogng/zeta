@@ -2,11 +2,10 @@
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
 expression: "render(&app, 80, 20)"
 ---
+  Home  .                                                                       
                                                                                 
-    ▄  ▄     Zeta Code v0.1.0                                                   
-  ▗█▛██▜█▖   Automatic model · Access unknown                                   
-  ▝▜████▛▘   .                                                                  
-    ▝  ▘                                                                        
+                                                                                
+                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -17,8 +16,9 @@ expression: "render(&app, 80, 20)"
                                                                                 
                                                                                 
                                Zeta 1.2.3 is ready · restart to use the update  
-────────────────────────────────────────────────────────────────────────────────
->                                                                               
-────────────────────────────────────────────────────────────────────────────────
+  ╭────────────────────────────────────────────────────────────────────────────╮
+> │                                                                            │
+  ╰────────────────────────────────────────────────────────── Automatic model ─╯
                                                                                 
-  ⏸ ask permissions on
+  ⏸ ask permissions on                                                          
+  Enter send  ·  shift+tab permissions  ·  /home

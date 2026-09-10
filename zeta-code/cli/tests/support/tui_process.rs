@@ -155,7 +155,7 @@ baseUrl = "{base_url}"
         find_named(self._root.path(), name)
     }
 
-    pub fn only_thread(&self) -> (String, String) {
+    pub fn sessions(&self) -> Vec<zeta_protocol::Session> {
         let mut command = StdioAppServerCommand::new(env!("CARGO_BIN_EXE_zeta"))
             .with_argument("app-server")
             .with_argument("connect");
@@ -177,6 +177,11 @@ baseUrl = "{base_url}"
         eprintln!("PTY inspector: shutting down");
         session.shutdown().unwrap();
         eprintln!("PTY inspector: closed");
+        sessions
+    }
+
+    pub fn only_thread(&self) -> (String, String) {
+        let sessions = self.sessions();
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0].threads.len(), 1);
         (

@@ -393,6 +393,25 @@ impl ListSelectionState {
         true
     }
 
+    pub(crate) fn focus_pointer(&mut self, target: &super::ListSelectionPointerTarget) -> bool {
+        match target {
+            super::ListSelectionPointerTarget::Tab(index) => {
+                if !self.show_tabs() {
+                    return false;
+                }
+                match self.tabs.select(*index) {
+                    TabListInputOutcome::Unhandled => return false,
+                    TabListInputOutcome::ActiveChanged => self.select_first_visible(),
+                    TabListInputOutcome::Consumed => {}
+                }
+                self.set_focus(ListSelectionFocus::Tabs);
+                true
+            }
+            super::ListSelectionPointerTarget::Search => self.focus_search(),
+            super::ListSelectionPointerTarget::Item(id) => self.focus_item(id),
+        }
+    }
+
     pub(super) fn tab_list(&self) -> &TabListState<ListSelectionGroup> {
         &self.tabs
     }

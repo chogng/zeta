@@ -124,13 +124,12 @@ pub(crate) enum Status {
 
 #[derive(Debug)]
 pub(crate) struct App {
+    next_panel_generation: u64,
     pub(super) chat_panel: ChatPanel,
     pub(super) app_keymap: AppKeymap,
     pub(super) thread: ThreadState,
     pub(super) thread_presentations: ThreadPresentationStore,
     pub(super) sessions: SessionsState,
-    pub(super) issues: crate::issues::Manager,
-    pub(super) agent_thread_switcher: AgentThreadSwitcher,
     welcome: WelcomeModel,
     status: Status,
     terminal_settings: TerminalSettings,
@@ -148,7 +147,8 @@ pub(crate) struct App {
 impl App {
     #[cfg(test)]
     pub(crate) fn new() -> Self {
-        Self {
+        let mut app = Self {
+            next_panel_generation: 1,
             chat_panel: ChatPanel::new(),
             app_keymap: AppKeymap::default(),
             thread: ThreadState::default(),
@@ -156,8 +156,6 @@ impl App {
                 zeta_protocol::ThreadId::new("tui-local").expect("the local Thread ID is valid"),
             ),
             sessions: SessionsState::default(),
-            issues: crate::issues::Manager::default(),
-            agent_thread_switcher: AgentThreadSwitcher::default(),
             welcome: WelcomeModel::for_workspace(Path::new(".")),
             status: Status::Ready,
             terminal_settings: TerminalSettings::default(),
@@ -174,7 +172,14 @@ impl App {
             process_resources: ProcessResourcesModel::default(),
             memory_diagnostics: crate::memory::Status::Disabled,
             startup_context: TuiStartupContext::new("."),
-        }
+        };
+        app.sessions.activate_context(
+            zeta_protocol::SessionId::new("tui-session").unwrap(),
+            zeta_protocol::ThreadId::new("tui-local").unwrap(),
+        );
+        app.sync_session_views();
+        app.chat_panel.hide_navigation();
+        app
     }
 
     #[cfg(test)]
@@ -198,11 +203,18 @@ impl App {
         dir_root: &Path,
         input_catalog: ChatInputCatalog,
     ) -> Self {
-        Self::for_dir_with_input_catalog_and_startup_context(
+        let mut app = Self::for_dir_with_input_catalog_and_startup_context(
             dir_root,
             input_catalog,
             TuiStartupContext::new(dir_root.to_path_buf()),
-        )
+        );
+        app.sessions.activate_context(
+            zeta_protocol::SessionId::new("tui-session").unwrap(),
+            zeta_protocol::ThreadId::new("tui-local").unwrap(),
+        );
+        app.sync_session_views();
+        app.chat_panel.hide_navigation();
+        app
     }
 
     pub(crate) fn for_dir_with_input_catalog_and_startup_context(
@@ -212,16 +224,15 @@ impl App {
     ) -> Self {
         let process_resources = ProcessResourcesModel::new(startup_context.app_server_process);
         Self {
+            next_panel_generation: 1,
             chat_panel: ChatPanel::new(),
             app_keymap: AppKeymap::default(),
             thread: ThreadState::default(),
             thread_presentations: ThreadPresentationStore::with_input_catalog(
                 zeta_protocol::ThreadId::new("tui-local").expect("the local Thread ID is valid"),
-                input_catalog,
+                input_catalog.clone(),
             ),
-            sessions: SessionsState::default(),
-            issues: crate::issues::Manager::default(),
-            agent_thread_switcher: AgentThreadSwitcher::default(),
+            sessions: SessionsState::new(input_catalog),
             welcome: WelcomeModel::for_workspace(dir_root),
             status: Status::Ready,
             terminal_settings: TerminalSettings::default(),
@@ -277,6 +288,7 @@ impl App {
                 super::inline::navigation::handle_key(self, key, now, terminal_area)
             }
         };
+        self.reconcile_queue_views();
         self.sync_preview_viewports();
         command
     }
@@ -288,7 +300,9 @@ impl App {
     ) -> Option<AppCommand> {
         match outcome {
             ChatComposerOutcome::Command(command) => {
-                self.thread_presentations.active_mut().queue.finish_edit();
+                if !self.starts_new_session() {
+                    self.thread_presentations.active_mut().queue.finish_edit();
+                }
                 self.handle_slash_command(command)
             }
             ChatComposerOutcome::SubmissionRejected(error) => {
@@ -297,16 +311,21 @@ impl App {
                 None
             }
             ChatComposerOutcome::Queued(input) => {
+                if self.starts_new_session() {
+                    let submission = input.submission().clone();
+                    self.sessions.pending_submission = Some(input);
+                    self.sessions.creation_error = None;
+                    return Some(SessionCommand::CreateAndEnter { submission }.into());
+                }
                 self.thread_presentations.active_mut().queue.push(input);
                 None
             }
             ChatComposerOutcome::Submit(submission) => {
-                self.follow_latest_transcript();
-                self.thread_presentations.active_mut().queue.finish_edit();
-                if matches!(self.sessions.screen(), Some(TerminalScreen::Manager)) {
-                    self.set_status(Status::Working);
+                if self.starts_new_session() {
                     return Some(SessionCommand::CreateAndEnter { submission }.into());
                 }
+                self.follow_latest_transcript();
+                self.thread_presentations.active_mut().queue.finish_edit();
                 let starts_conversation = !self.thread.has_user_message();
                 self.thread.update(ThreadPresentationEvent::UserSubmitted(
                     submission.display_text.clone(),
@@ -589,9 +608,8 @@ impl App {
         if !self.accepts_input() {
             return None;
         }
-        let outcome = self
-            .chat_panel
-            .activate_completion(&mut self.thread_presentations.active_mut().input, index)?;
+        let (panel, input) = self.composer_parts_mut();
+        let outcome = panel.activate_completion(input, index)?;
         self.handle_chat_composer_outcome(outcome, Instant::now())
     }
 
@@ -609,27 +627,38 @@ impl App {
     }
 
     pub(crate) fn replace_chat_input_catalog(&mut self, catalog: ChatInputCatalog) {
+        self.sessions.input.replace_catalog(catalog.clone());
         self.thread_presentations.replace_input_catalog(catalog);
     }
 
     #[cfg(test)]
     pub(crate) fn insert_text(&mut self, text: &str) {
         if self.accepts_input() {
-            self.chat_panel
-                .insert_text(&mut self.thread_presentations.active_mut().input, text);
+            let (panel, input) = self.composer_parts_mut();
+            panel.insert_text(input, text);
         }
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
-        if self.issues.is_open() {
-            self.issues.handle_paste(pasted);
-            return;
-        }
         self.fullscreen.pointer.clear();
-        if self.overlay().is_some() || self.sessions.preview.is_some() {
+        if self.overlay().is_some() || self.session_navigation().preview.is_some() {
             return;
         }
-        if matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
+        if self.screen_mode() == crate::terminal::ScreenMode::Fullscreen
+            && self.panels().command_active()
+        {
+            self.panels_mut().handle_command_paste(pasted);
+            return;
+        }
+        if self.issues().is_open() {
+            self.issues_mut().handle_paste(pasted);
+            return;
+        }
+        if !self.fullscreen_home_visible()
+            && matches!(
+                self.session_navigation().screen(),
+                Some(TerminalScreen::Session(_))
+            )
             && self.chat_panel.request_active()
         {
             self.chat_panel.handle_request_paste(pasted);
@@ -639,28 +668,58 @@ impl App {
             self.panels_mut().handle_command_paste(pasted);
             return;
         }
-        if self.accepts_input()
-            && !self.queue_focused()
-            && let Err(error) = self
-                .chat_panel
-                .handle_input_paste(&mut self.thread_presentations.active_mut().input, pasted)
-        {
-            self.thread
-                .update(ThreadPresentationEvent::FailureReported(error));
+        if self.accepts_input() && !self.queue_focused() {
+            let (panel, input) = self.composer_parts_mut();
+            if let Err(error) = panel.handle_input_paste(input, pasted) {
+                self.thread
+                    .update(ThreadPresentationEvent::FailureReported(error));
+            }
         }
     }
 
-    fn attach_clipboard_image(&mut self, image: ClipboardImage) {
-        if self.accepts_input() && !self.queue_focused() {
-            match self
-                .chat_panel
-                .attach_image_bytes(&mut self.thread_presentations.active_mut().input, image.png)
-            {
-                Ok(()) => self.chat_panel.clipboard_image_pasted(image.fingerprint),
-                Err(error) => self
-                    .thread
-                    .update(ThreadPresentationEvent::FailureReported(error)),
+    pub(super) fn draft_target(&self) -> crate::thread::composer::DraftTarget {
+        let generation = self.input_state().generation();
+        if self.starts_new_session() {
+            crate::thread::composer::DraftTarget::NewSession { generation }
+        } else {
+            crate::thread::composer::DraftTarget::Thread {
+                thread_id: self.thread_presentations.active_id().clone(),
+                generation,
             }
+        }
+    }
+
+    fn attach_clipboard_image(
+        &mut self,
+        target: crate::thread::composer::DraftTarget,
+        result: Result<ClipboardImage, String>,
+    ) {
+        let visible = self.draft_target() == target;
+        let (input, generation) = match &target {
+            crate::thread::composer::DraftTarget::NewSession { generation } => {
+                (&mut self.sessions.input, *generation)
+            }
+            crate::thread::composer::DraftTarget::Thread {
+                thread_id,
+                generation,
+            } => {
+                let Some(input) = self.thread_presentations.input_mut(thread_id) else {
+                    return;
+                };
+                (input, *generation)
+            }
+        };
+        if input.generation() != generation {
+            return;
+        }
+        match result {
+            Ok(image) => match self.chat_panel.attach_image_bytes(input, image.png) {
+                Ok(()) if visible => self.chat_panel.clipboard_image_pasted(image.fingerprint),
+                Err(error) if visible => self.record_clipboard_error(error),
+                _ => {}
+            },
+            Err(error) if visible => self.record_clipboard_error(error),
+            Err(_) => {}
         }
     }
 
@@ -674,24 +733,90 @@ impl App {
     }
 
     pub(crate) fn connect_input_history(&mut self, client: message_history::MessageHistory) {
+        self.sessions
+            .input
+            .connect_new_session_history(client.clone());
         self.thread_presentations.connect_history(client);
     }
 
     pub(crate) fn input_history_unavailable(&mut self, error: String) {
+        self.sessions.input.history_unavailable(error.clone());
         self.thread_presentations.history_unavailable(error);
     }
 
     pub(crate) fn poll_input_history(&mut self) -> bool {
-        self.thread_presentations.poll_history()
+        self.sessions.input.poll_history() | self.thread_presentations.poll_history()
     }
 
     pub(crate) fn input(&self) -> &str {
-        self.thread_presentations.active().input.text()
+        self.input_state().text()
     }
 
     pub(crate) fn chat_composer_view(&self) -> ChatComposerView<'_> {
-        self.chat_panel
-            .composer_view(&self.thread_presentations.active().input)
+        self.chat_panel.composer_view(self.input_state())
+    }
+
+    pub(super) fn session_navigation(&self) -> &crate::sessions::SessionNavigation {
+        self.session_navigation_in(self.screen_mode())
+    }
+
+    pub(super) fn session_navigation_mut(&mut self) -> &mut crate::sessions::SessionNavigation {
+        self.session_navigation_in_mut(self.screen_mode())
+    }
+
+    pub(super) fn session_navigation_in(
+        &self,
+        mode: crate::terminal::ScreenMode,
+    ) -> &crate::sessions::SessionNavigation {
+        match mode {
+            crate::terminal::ScreenMode::Fullscreen => &self.fullscreen.sessions,
+            crate::terminal::ScreenMode::Inline => &self.inline.sessions,
+        }
+    }
+
+    pub(super) fn session_navigation_in_mut(
+        &mut self,
+        mode: crate::terminal::ScreenMode,
+    ) -> &mut crate::sessions::SessionNavigation {
+        match mode {
+            crate::terminal::ScreenMode::Fullscreen => &mut self.fullscreen.sessions,
+            crate::terminal::ScreenMode::Inline => &mut self.inline.sessions,
+        }
+    }
+
+    pub(super) fn issues(&self) -> &crate::issues::Manager {
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => &self.fullscreen.issues,
+            crate::terminal::ScreenMode::Inline => &self.inline.issues,
+        }
+    }
+
+    pub(super) fn issues_mut(&mut self) -> &mut crate::issues::Manager {
+        self.issues_in_mut(self.screen_mode())
+    }
+
+    pub(super) fn issues_in_mut(
+        &mut self,
+        mode: crate::terminal::ScreenMode,
+    ) -> &mut crate::issues::Manager {
+        match mode {
+            crate::terminal::ScreenMode::Fullscreen => &mut self.fullscreen.issues,
+            crate::terminal::ScreenMode::Inline => &mut self.inline.issues,
+        }
+    }
+
+    pub(super) fn agent_thread_switcher(&self) -> &AgentThreadSwitcher {
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => &self.fullscreen.agent_thread_switcher,
+            crate::terminal::ScreenMode::Inline => &self.inline.agent_thread_switcher,
+        }
+    }
+
+    pub(super) fn agent_thread_switcher_mut(&mut self) -> &mut AgentThreadSwitcher {
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => &mut self.fullscreen.agent_thread_switcher,
+            crate::terminal::ScreenMode::Inline => &mut self.inline.agent_thread_switcher,
+        }
     }
 
     pub(super) fn escape_mut(&mut self) -> &mut ScreenEscapeSequence {
@@ -699,6 +824,15 @@ impl App {
             crate::terminal::ScreenMode::Fullscreen => &mut self.fullscreen.escape,
             crate::terminal::ScreenMode::Inline => &mut self.inline.escape,
         }
+    }
+
+    pub(super) fn new_panel_generation(&mut self) -> u64 {
+        let generation = self.next_panel_generation;
+        self.next_panel_generation = self
+            .next_panel_generation
+            .checked_add(1)
+            .expect("panel identities are not reused");
+        generation
     }
 
     pub(super) fn panels(&self) -> &super::command_panel::Panels {
@@ -717,15 +851,9 @@ impl App {
 
     fn set_terminal_settings(&mut self, settings: TerminalSettings) {
         if self.screen_mode() != settings.screen_mode() {
-            let panels = std::mem::take(self.panels_mut());
-            self.thread_presentations.active_mut().queue.blur();
-            self.agent_thread_switcher.blur();
-            // Session previews and details retain the manager as their return destination.
-            if self.sessions.preview.is_none() && self.sessions.details.is_none() {
-                self.sessions.manager_mut().blur();
-            }
+            let editor = self.panels_mut().take_editor();
             self.terminal_settings = settings;
-            *self.panels_mut() = panels;
+            self.panels_mut().receive_editor(editor);
             self.fullscreen.clear();
             self.fullscreen.escape.reset();
             self.inline.escape.reset();
@@ -746,7 +874,7 @@ impl App {
     pub(super) fn take_session_details_request(
         &mut self,
     ) -> Option<(u64, zeta_protocol::SessionId)> {
-        self.sessions
+        self.session_navigation_mut()
             .details
             .as_mut()
             .and_then(|details| details.take_request())
@@ -756,7 +884,7 @@ impl App {
         if self.panels().overlay.is_some() {
             return self.panels_mut().overlay.as_mut();
         }
-        self.sessions
+        self.session_navigation_mut()
             .details
             .as_mut()
             .map(|details| &mut details.overlay)
@@ -764,7 +892,7 @@ impl App {
 
     pub(crate) fn overlay(&self) -> Option<&DetailOverlay> {
         self.panels().overlay.as_ref().or_else(|| {
-            self.sessions
+            self.session_navigation()
                 .details
                 .as_ref()
                 .map(|details| &details.overlay)
@@ -772,13 +900,10 @@ impl App {
     }
 
     pub(crate) fn completion(&self) -> Option<CompletionView<'_>> {
-        if self.panels().command_active()
-            || self.overlay().is_some()
-            || self.thread_presentations.active().queue.focused()
-        {
+        if self.panels().command_active() || self.overlay().is_some() || self.queue_focused() {
             return None;
         }
-        self.thread_presentations.active().input.completion()
+        self.input_state().completion()
     }
 
     pub(crate) fn completion_visible(&self) -> bool {
@@ -804,7 +929,13 @@ impl App {
     }
 
     pub(crate) fn queue_focused(&self) -> bool {
-        self.thread_presentations.active().queue.focused()
+        !self.starts_new_session()
+            && !self.issues().is_open()
+            && self.session_preview().is_none()
+            && self
+                .viewport()
+                .queue
+                .focused(&self.thread_presentations.active().queue)
     }
 
     pub(crate) fn queue_key_hints(&self) -> &'static str {
@@ -820,6 +951,112 @@ impl App {
 
     pub(crate) const fn screen_mode(&self) -> crate::terminal::ScreenMode {
         self.terminal_settings.screen_mode()
+    }
+
+    pub(crate) fn fullscreen_home_visible(&self) -> bool {
+        self.screen_mode() == crate::terminal::ScreenMode::Fullscreen
+            && self.fullscreen.home_visible()
+    }
+
+    pub(super) fn starts_new_session(&self) -> bool {
+        self.fullscreen_home_visible()
+            || self.sessions.active_session_id().is_none()
+            || matches!(
+                self.session_navigation().screen(),
+                Some(TerminalScreen::Manager)
+            )
+    }
+
+    pub(super) fn input_state(&self) -> &crate::thread::composer::ChatInput {
+        if self.starts_new_session() {
+            &self.sessions.input
+        } else {
+            &self.thread_presentations.active().input
+        }
+    }
+
+    fn composer_parts_mut(&mut self) -> (&mut ChatPanel, &mut crate::thread::composer::ChatInput) {
+        if self.starts_new_session() {
+            (&mut self.chat_panel, &mut self.sessions.input)
+        } else {
+            (
+                &mut self.chat_panel,
+                &mut self.thread_presentations.active_mut().input,
+            )
+        }
+    }
+
+    pub(super) fn handle_composer_key(&mut self, key: KeyEvent) -> ChatComposerOutcome {
+        let new_session = self.starts_new_session();
+        let (panel, input) = self.composer_parts_mut();
+        if new_session {
+            panel.handle_new_session_key(input, key)
+        } else {
+            panel.handle_composer_key(input, key)
+        }
+    }
+
+    pub(super) fn open_home(&mut self) {
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => {
+                super::fullscreen::navigation::open_home(self)
+            }
+            crate::terminal::ScreenMode::Inline => super::inline::navigation::open_home(self),
+        }
+    }
+
+    pub(super) fn show_conversation(&mut self) {
+        self.show_conversation_in(self.screen_mode());
+    }
+
+    pub(super) fn show_conversation_in(&mut self, mode: crate::terminal::ScreenMode) {
+        let Some(session_id) = self.sessions.active_session_id().cloned() else {
+            return;
+        };
+        match mode {
+            crate::terminal::ScreenMode::Fullscreen => {
+                super::fullscreen::navigation::show_conversation(self, session_id)
+            }
+            crate::terminal::ScreenMode::Inline => {
+                super::inline::navigation::show_conversation(self, session_id)
+            }
+        }
+    }
+
+    pub(super) fn show_session_manager(&mut self) {
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => {
+                super::fullscreen::navigation::show_manager(self)
+            }
+            crate::terminal::ScreenMode::Inline => super::inline::navigation::show_manager(self),
+        }
+    }
+
+    fn open_issues(&mut self) -> Option<AppCommand> {
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => {
+                super::fullscreen::navigation::open_issues(self)
+            }
+            crate::terminal::ScreenMode::Inline => super::inline::navigation::open_issues(self),
+        }
+    }
+
+    fn sync_session_views(&mut self) {
+        self.fullscreen.sessions.context_changed(&self.sessions);
+        self.inline.sessions.context_changed(&self.sessions);
+    }
+
+    pub(super) fn fail_session_creation(&mut self, error: String) {
+        if let Some(draft) = self.sessions.pending_submission.take() {
+            self.sessions
+                .input
+                .restore_queued(draft)
+                .expect("the new-session draft is locked until its request finishes");
+            self.chat_panel.show_notice(error.clone(), Instant::now());
+            self.sessions.creation_error = Some(error);
+        } else {
+            self.update(ThreadEvent::FailureReported(error));
+        }
     }
 
     pub(crate) fn screen_thread_id(&self) -> &zeta_protocol::ThreadId {
@@ -842,15 +1079,23 @@ impl App {
     pub(crate) fn approval_view(
         &self,
     ) -> Option<crate::thread::interaction::approval::ApprovalView<'_>> {
-        matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
-            .then(|| self.chat_panel.approval_view())
-            .flatten()
+        (!self.fullscreen_home_visible()
+            && matches!(
+                self.session_navigation().screen(),
+                Some(TerminalScreen::Session(_))
+            ))
+        .then(|| self.chat_panel.approval_view())
+        .flatten()
     }
 
     pub(crate) fn query_view(&self) -> Option<crate::thread::interaction::query::QueryView<'_>> {
-        matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
-            .then(|| self.chat_panel.query_view())
-            .flatten()
+        (!self.fullscreen_home_visible()
+            && matches!(
+                self.session_navigation().screen(),
+                Some(TerminalScreen::Session(_))
+            ))
+        .then(|| self.chat_panel.query_view())
+        .flatten()
     }
 
     pub(crate) fn transcript_selection_active(&self) -> bool {
@@ -887,7 +1132,15 @@ impl App {
     }
 
     pub(super) fn show_overlay(&mut self, detail: DetailList) {
-        match self.screen_mode() {
+        self.show_overlay_in(self.screen_mode(), detail);
+    }
+
+    pub(super) fn show_overlay_in(
+        &mut self,
+        mode: crate::terminal::ScreenMode,
+        detail: DetailList,
+    ) {
+        match mode {
             crate::terminal::ScreenMode::Fullscreen => {
                 super::fullscreen::navigation::show_overlay(self, detail)
             }
@@ -1025,7 +1278,7 @@ impl App {
         if self.panels().command_active() {
             return None;
         }
-        self.thread_presentations.active().input.mention_query()
+        self.input_state().mention_query()
     }
 
     #[cfg(test)]
@@ -1097,7 +1350,7 @@ impl App {
     }
 
     pub(crate) fn follow_latest_transcript(&mut self) {
-        if self.sessions.preview.is_some() {
+        if self.session_navigation().preview.is_some() {
             match self.screen_mode() {
                 crate::terminal::ScreenMode::Fullscreen => {
                     self.fullscreen.preview.scroll.follow_latest()
@@ -1232,7 +1485,10 @@ impl App {
     }
 
     pub(crate) fn queue_view(&self) -> QueueView<'_> {
-        self.thread_presentations.active().queue.view()
+        self.thread_presentations
+            .active()
+            .queue
+            .view(&self.viewport().queue)
     }
 
     pub(crate) fn goal_view(&self) -> Option<&zeta_protocol::ThreadGoal> {
@@ -1244,22 +1500,38 @@ impl App {
     }
 
     pub(crate) fn issue_manager(&self) -> Option<&crate::issues::Manager> {
-        self.issues.is_open().then_some(&self.issues)
+        self.issues().is_open().then_some(self.issues())
     }
 
-    pub(crate) fn finish_issue_start(&mut self, generation: u64, result: Result<(), String>) {
-        self.issues.finish_start(generation, result.err());
+    pub(crate) fn finish_issue_start(
+        &mut self,
+        mode: crate::terminal::ScreenMode,
+        generation: u64,
+        result: Result<(), String>,
+    ) {
+        self.issues_in_mut(mode)
+            .finish_start(generation, result.err());
     }
 
     pub(crate) fn session_manager_view(&self) -> Option<SessionManagerView<'_>> {
-        (self.sessions.preview.is_none()
-            && matches!(self.sessions.screen(), Some(TerminalScreen::Manager)))
-        .then(|| self.sessions.manager().view(self.sessions.catalog()))
+        (!self.fullscreen_home_visible()
+            && self.session_navigation().preview.is_none()
+            && matches!(
+                self.session_navigation().screen(),
+                Some(TerminalScreen::Manager)
+            ))
+        .then(|| {
+            self.session_navigation()
+                .manager()
+                .view(self.sessions.catalog())
+        })
     }
 
     fn session_manager_focused_internal(&self) -> bool {
-        matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
-            && self.sessions.manager().focused()
+        matches!(
+            self.session_navigation().screen(),
+            Some(TerminalScreen::Manager)
+        ) && self.session_navigation().manager().focused()
     }
 
     #[cfg(test)]
@@ -1268,19 +1540,21 @@ impl App {
     }
 
     pub(crate) fn session_manager_hint(&self) -> &'static str {
-        self.sessions.manager().status_hint()
+        self.session_navigation().manager().status_hint()
     }
 
     pub(crate) fn session_preview(&self) -> Option<&ConversationPreview> {
-        self.sessions.preview.as_ref()
+        self.session_navigation().preview.as_ref()
     }
 
     pub(crate) fn finish_session_preview(
         &mut self,
+        mode: crate::terminal::ScreenMode,
         generation: u64,
         result: Result<SessionThreadReadResult, String>,
     ) {
-        self.sessions.finish_preview(generation, result);
+        self.session_navigation_in_mut(mode)
+            .finish_preview(generation, result);
     }
 
     pub(crate) fn screen_navigation_tip(&self) -> Option<&'static str> {
@@ -1295,20 +1569,26 @@ impl App {
     }
 
     pub(crate) fn agent_thread_switcher_view(&self) -> Option<AgentThreadSwitcherView<'_>> {
-        matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
-            .then(|| self.agent_thread_switcher.view())
+        matches!(
+            self.session_navigation().screen(),
+            Some(TerminalScreen::Session(_))
+        )
+        .then(|| self.agent_thread_switcher().view())
     }
 
     pub(crate) fn agent_thread_switcher_rows(&self) -> u16 {
-        if matches!(self.sessions.screen(), Some(TerminalScreen::Session(_))) {
-            self.agent_thread_switcher.desired_rows()
+        if matches!(
+            self.session_navigation().screen(),
+            Some(TerminalScreen::Session(_))
+        ) {
+            self.agent_thread_switcher().desired_rows()
         } else {
             0
         }
     }
 
     pub(crate) fn agent_thread_switcher_focused(&self) -> bool {
-        self.agent_thread_switcher.focused()
+        self.agent_thread_switcher().focused()
     }
 
     pub(crate) fn dispatch_next_queued_turn(&mut self) -> Option<AppCommand> {
@@ -1375,7 +1655,7 @@ impl App {
 
     pub(crate) fn status_line_runtime(&self) -> StatusLineRuntime {
         let plan = self.plan_view().map(|view| (view.completed, view.total));
-        let visible_session = match self.sessions.screen() {
+        let visible_session = match self.session_navigation().screen() {
             Some(TerminalScreen::Session(session_id)) => Some(session_id),
             Some(TerminalScreen::Manager) | None => None,
         };
@@ -1415,25 +1695,31 @@ impl App {
     }
 
     pub(crate) fn accepts_input(&self) -> bool {
-        !self.issues.is_open()
-            && self.sessions.preview.is_none()
-            && !self.session_manager_focused_internal()
-            && self.approval_view().is_none()
-            && self.query_view().is_none()
-            && self.viewed_thread_accepts_input()
-            && matches!(
-                &self.status,
-                Status::Ready | Status::Working | Status::Error
-            )
+        (!self.starts_new_session() || self.sessions.pending_submission.is_none())
+            && (self.fullscreen_home_visible()
+                || (!self.issues().is_open()
+                    && self.session_navigation().preview.is_none()
+                    && !self.session_manager_focused_internal()
+                    && self.approval_view().is_none()
+                    && self.query_view().is_none()
+                    && self.viewed_thread_accepts_input()
+                    && matches!(
+                        &self.status,
+                        Status::Ready | Status::Working | Status::Error
+                    )))
     }
 
     pub(crate) fn viewed_thread_completed(&self) -> bool {
-        !self.viewed_thread_accepts_input()
-            && matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
+        !self.starts_new_session()
+            && !self.viewed_thread_accepts_input()
+            && matches!(
+                self.session_navigation().screen(),
+                Some(TerminalScreen::Session(_))
+            )
     }
 
     fn viewed_thread_accepts_input(&self) -> bool {
-        let Some(TerminalScreen::Session(session_id)) = self.sessions.screen() else {
+        let Some(TerminalScreen::Session(session_id)) = self.session_navigation().screen() else {
             return true;
         };
         let Some(thread_id) = self.sessions.remembered_thread(session_id) else {
@@ -1452,14 +1738,31 @@ impl App {
             .is_none_or(|thread| thread.status == zeta_protocol::ThreadStatus::Active)
     }
 
+    fn reconcile_queue_views(&mut self) {
+        let queue = &self.thread_presentations.active().queue;
+        self.fullscreen
+            .viewports
+            .active_mut()
+            .queue
+            .reconcile(queue);
+        self.inline.viewports.active_mut().queue.reconcile(queue);
+    }
+
     fn sync_preview_viewports(&mut self) {
-        let generation = self
-            .sessions
-            .preview
-            .as_ref()
-            .map(|preview| preview.generation);
-        self.fullscreen.preview.bind(generation);
-        self.inline.preview.bind(generation);
+        self.fullscreen.preview.bind(
+            self.fullscreen
+                .sessions
+                .preview
+                .as_ref()
+                .map(|preview| preview.generation),
+        );
+        self.inline.preview.bind(
+            self.inline
+                .sessions
+                .preview
+                .as_ref()
+                .map(|preview| preview.generation),
+        );
     }
 
     pub(crate) fn update(&mut self, event: impl Into<AppEvent>) {
@@ -1471,7 +1774,7 @@ impl App {
             self.fullscreen.pointer.clear();
         }
         match event {
-            AppEvent::Issues(event) => self.issues.update(event),
+            AppEvent::Issues(event) => self.issues_mut().update(event),
             AppEvent::Dirs(event) => self.apply_dir_event(event),
             AppEvent::Host(event) => self.apply_host_event(event),
             AppEvent::Config(event) => self.apply_config_event(event),
@@ -1488,7 +1791,88 @@ impl App {
             AppEvent::Skills(event) => self.apply_skill_event(event),
             AppEvent::Theme(event) => self.apply_theme_event(event),
         }
+        self.reconcile_queue_views();
         self.sync_preview_viewports();
+    }
+
+    pub(super) fn presentation_mode(
+        &self,
+        origin: super::requests::RequestOrigin,
+    ) -> crate::terminal::ScreenMode {
+        if origin.panel_generation != 0 && self.panels().generation() == origin.panel_generation {
+            self.screen_mode()
+        } else {
+            origin.mode
+        }
+    }
+
+    pub(super) fn update_from_origin(
+        &mut self,
+        origin: super::requests::RequestOrigin,
+        event: impl Into<AppEvent>,
+    ) {
+        match event.into() {
+            AppEvent::Issues(event) => self.issues_in_mut(origin.mode).update(event),
+            AppEvent::Sessions(SessionEvent::DetailsReceived { generation, result }) => {
+                self.session_navigation_in_mut(origin.mode)
+                    .finish_details(generation, result);
+            }
+            event => self.update_for_panel(origin.panel_generation, event),
+        }
+        self.reconcile_queue_views();
+        self.sync_preview_viewports();
+    }
+
+    /// Background results may update shared facts after dismissal, but not a newer editor.
+    pub(super) fn update_for_panel(&mut self, generation: u64, event: impl Into<AppEvent>) {
+        let event = event.into();
+        if generation == self.panels().generation() {
+            if let AppEvent::Thread(
+                ThreadEvent::FailureReported(error) | ThreadEvent::CommandFailed { error, .. },
+            ) = &event
+                && let Some(CommandPanel::Loading(_)) = self.command_panel()
+            {
+                let title = self.command_panel().unwrap().body().title().to_owned();
+                self.open_command_panel(CommandPanel::loading(&title, error));
+            }
+            self.update(event);
+            return;
+        }
+        match event {
+            AppEvent::Config(ConfigEvent::Updated(result)) => {
+                self.update(ConfigEvent::SettingsReceived(result.terminal));
+                self.update(StatusEvent::LineSettingsReceived(result.status_line));
+            }
+            AppEvent::Keymap(KeymapEvent::EditorOpened(result)) => {
+                self.update(KeymapEvent::SettingsReceived(result.settings))
+            }
+            AppEvent::Status(
+                StatusEvent::LineEditorOpened(result) | StatusEvent::LineEditorUpdated(result),
+            ) => {
+                self.update(StatusEvent::LineSettingsReceived(result.settings));
+            }
+            AppEvent::Skills(
+                SkillEvent::SettingsOpened(choices) | SkillEvent::SettingsUpdated(choices),
+            ) => {
+                self.update(SkillEvent::DiagnosticsReceived(choices.diagnostics));
+            }
+            AppEvent::Config(
+                ConfigEvent::EditorOpened(_)
+                | ConfigEvent::ApiKeySaved { .. }
+                | ConfigEvent::Connection(_),
+            )
+            | AppEvent::Models(ModelEvent::PickerOpened(_) | ModelEvent::PickerUpdated(_))
+            | AppEvent::Status(StatusEvent::PanelOpened(_))
+            | AppEvent::Sessions(SessionEvent::PickerOpened(_))
+            | AppEvent::Connectors(
+                ConnectorEvent::PickerOpened(_) | ConnectorEvent::PickerUpdated(_),
+            )
+            | AppEvent::Mcp(McpEvent::SettingsOpened(_) | McpEvent::SettingsUpdated(_))
+            | AppEvent::Theme(ThemeEvent::PickerOpened(_))
+            | AppEvent::Thread(ThreadEvent::RewindPickerOpened(_))
+            | AppEvent::CommandPanelClosed => {}
+            event => self.update(event),
+        }
     }
 
     fn apply_thread_event(&mut self, event: ThreadEvent) {
@@ -1520,10 +1904,8 @@ impl App {
                 self.chat_panel.start_input();
             }
             ThreadEvent::FileSearchSnapshotReceived(snapshot) => {
-                self.thread_presentations
-                    .active_mut()
-                    .input
-                    .apply_file_search_snapshot(snapshot);
+                let (_, input) = self.composer_parts_mut();
+                input.apply_file_search_snapshot(snapshot);
             }
             ThreadEvent::InterruptFailed(error) => {
                 self.thread
@@ -1546,17 +1928,17 @@ impl App {
             } => {
                 let context_changed = self.sessions.active_session_id() != Some(&session_id)
                     || self.sessions.remembered_thread(&session_id) != Some(&thread_id);
-                self.close_transient_surfaces();
                 if context_changed {
+                    self.sessions.pending_submission = None;
+                    self.sessions.creation_error = None;
                     self.thread
                         .switch_transcript(self.thread_presentations.active_id(), &thread_id);
-                }
-                self.thread_presentations.switch(thread_id.clone());
-                self.fullscreen.viewports.switch(thread_id.clone());
-                self.inline.viewports.switch(thread_id.clone());
-                self.sessions.activate_context(session_id, thread_id);
-                self.chat_panel.status_line_mut().clear_thread_accounting();
-                if context_changed {
+                    self.thread_presentations.switch(thread_id.clone());
+                    self.fullscreen.viewports.switch(thread_id.clone());
+                    self.inline.viewports.switch(thread_id.clone());
+                    self.sessions.activate_context(session_id, thread_id);
+                    self.sync_session_views();
+                    self.chat_panel.status_line_mut().clear_thread_accounting();
                     self.chat_panel.reset_top_tip();
                 }
                 self.reconcile_agent_thread_switcher();
@@ -1728,8 +2110,9 @@ impl App {
 
     fn apply_host_event(&mut self, event: HostEvent) {
         match event {
-            HostEvent::ClipboardImageRead(Ok(image)) => self.attach_clipboard_image(image),
-            HostEvent::ClipboardImageRead(Err(error)) => self.record_clipboard_error(error),
+            HostEvent::ClipboardImageRead { target, result } => {
+                self.attach_clipboard_image(target, result)
+            }
             HostEvent::ClipboardImageAvailabilityChanged(availability) => match availability {
                 ClipboardImageAvailability::Available(fingerprint) => {
                     self.chat_panel
@@ -1778,6 +2161,7 @@ impl App {
                 if !self.mouse_mode().captures_terminal_input() {
                     self.fullscreen.clear();
                 }
+                self.sessions.input.set_input_mode(settings.input_mode());
                 self.thread_presentations
                     .set_input_mode(settings.input_mode());
             }
@@ -1789,6 +2173,9 @@ impl App {
                 if !self.mouse_mode().captures_terminal_input() {
                     self.fullscreen.clear();
                 }
+                self.sessions
+                    .input
+                    .set_input_mode(result.terminal.input_mode());
                 self.thread_presentations
                     .set_input_mode(result.terminal.input_mode());
                 self.panels_mut().replace_config(result.choices);
@@ -1898,12 +2285,14 @@ impl App {
 
     fn apply_session_event(&mut self, event: SessionEvent) {
         match event {
-            SessionEvent::DetailsReceived { generation, result } => {
-                self.sessions.finish_details(generation, result)
-            }
+            SessionEvent::DetailsReceived { generation, result } => self
+                .session_navigation_mut()
+                .finish_details(generation, result),
             SessionEvent::PickerOpened(view) => self.show_session_picker(view),
             SessionEvent::CatalogReceived(catalog) => {
                 self.sessions.refresh_catalog(catalog);
+                self.fullscreen.sessions.reconcile(&self.sessions);
+                self.inline.sessions.reconcile(&self.sessions);
                 self.reconcile_agent_thread_switcher();
             }
         }
@@ -1945,22 +2334,18 @@ impl App {
     }
 
     fn reconcile_agent_thread_switcher(&mut self) {
-        let visible_session_id = match self.sessions.screen() {
-            Some(TerminalScreen::Session(session_id)) => Some(session_id.clone()),
-            Some(TerminalScreen::Manager) | None => None,
-        };
-        let viewed_thread = visible_session_id
-            .as_ref()
-            .and_then(|session_id| self.sessions.remembered_thread(session_id))
-            .cloned();
-        let session = visible_session_id.as_ref().and_then(|session_id| {
+        let session_id = self.sessions.active_session_id();
+        let thread = session_id.and_then(|id| self.sessions.remembered_thread(id));
+        let session = session_id.and_then(|id| {
             self.sessions
                 .catalog()
                 .iter()
-                .find(|session| &session.session_id == session_id)
+                .find(|session| &session.session_id == id)
         });
-        self.agent_thread_switcher
-            .reconcile(session, viewed_thread.as_ref());
+        self.fullscreen
+            .agent_thread_switcher
+            .reconcile(session, thread);
+        self.inline.agent_thread_switcher.reconcile(session, thread);
     }
 
     fn transcript_scroll_is_at_first_cell(&self) -> bool {
@@ -2002,7 +2387,12 @@ impl App {
                 ScreenEscapeOutcome::OpenRewind => Some(ThreadCommand::OpenRewindPicker.into()),
             },
             AppKeymapAction::OpenRewind => Some(ThreadCommand::OpenRewindPicker.into()),
-            AppKeymapAction::ReadClipboardImage => Some(HostCommand::ReadClipboardImage.into()),
+            AppKeymapAction::ReadClipboardImage => Some(
+                HostCommand::ReadClipboardImage {
+                    target: self.draft_target(),
+                }
+                .into(),
+            ),
             AppKeymapAction::InterruptOrQuit => self.quit_or_interrupt(),
             AppKeymapAction::CopyLastResponse => Some(HostCommand::CopyLastResponse.into()),
             AppKeymapAction::Suspend => Some(AppCommand::Suspend),
@@ -2010,7 +2400,7 @@ impl App {
     }
 
     pub(crate) fn poll_issue_refresh(&mut self, now: Instant) -> Option<AppCommand> {
-        self.issues.poll_refresh(now).map(Into::into)
+        self.issues_mut().poll_refresh(now).map(Into::into)
     }
 
     pub(crate) fn handle_tick(&mut self, now: Instant) -> bool {
@@ -2022,9 +2412,20 @@ impl App {
             .status_timer
             .tick(now);
         let top_tip_changed = self.chat_panel.poll_top_tip(now);
-        let elapsed_changed = self.agent_thread_switcher.refresh_elapsed();
-        let manager_changed = matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
-            && self.sessions.refresh_manager_time(now);
+        let elapsed_changed = self.agent_thread_switcher_mut().refresh_elapsed();
+        let manager_changed = matches!(
+            self.session_navigation().screen(),
+            Some(TerminalScreen::Manager)
+        ) && match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => self
+                .fullscreen
+                .sessions
+                .refresh_manager_time(&self.sessions, now),
+            crate::terminal::ScreenMode::Inline => self
+                .inline
+                .sessions
+                .refresh_manager_time(&self.sessions, now),
+        };
         chord_expired
             || status_changed
             || top_tip_changed
@@ -2069,6 +2470,10 @@ impl App {
         }
         if invocation.origin == SlashCommandOrigin::Local && invocation.arguments.is_empty() {
             match local {
+                Some(TuiSlashCommandAction::Home) => {
+                    self.open_home();
+                    return None;
+                }
                 Some(TuiSlashCommandAction::Pr) => {
                     self.sessions.active_session_id()?;
                     self.close_transient_surfaces();
@@ -2082,18 +2487,13 @@ impl App {
                         Instant::now(),
                     );
                 }
-                Some(TuiSlashCommandAction::Issue) => {
-                    self.close_transient_surfaces();
-                    return self.issues.open().map(Into::into);
-                }
+                Some(TuiSlashCommandAction::Issue) => return self.open_issues(),
                 Some(TuiSlashCommandAction::Sessions | TuiSlashCommandAction::Agents) => {
-                    self.agent_thread_switcher.blur();
-                    self.close_transient_surfaces();
-                    self.sessions.show_manager();
+                    self.show_session_manager();
                     return None;
                 }
                 Some(TuiSlashCommandAction::Subagents) => {
-                    self.agent_thread_switcher.focus();
+                    self.agent_thread_switcher_mut().focus();
                     return None;
                 }
                 _ => {}
@@ -2111,6 +2511,7 @@ impl App {
             return None;
         }
         if matches!(self.status, Status::Working)
+            && !self.fullscreen_home_visible()
             && invocation.origin == SlashCommandOrigin::Local
             && !matches!(local, Some(TuiSlashCommandAction::Export))
         {

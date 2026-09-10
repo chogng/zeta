@@ -156,6 +156,10 @@ impl ThreadPresentationStore {
             .expect("the active Thread presentation state exists")
     }
 
+    pub(crate) fn input_mut(&mut self, thread_id: &ThreadId) -> Option<&mut ChatInput> {
+        self.states.get_mut(thread_id).map(|state| &mut state.input)
+    }
+
     fn touch(&mut self, thread_id: ThreadId) {
         self.recent.retain(|recent| recent != &thread_id);
         self.recent.push_back(thread_id);

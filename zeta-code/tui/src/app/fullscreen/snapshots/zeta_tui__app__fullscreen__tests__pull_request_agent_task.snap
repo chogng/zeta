@@ -2,11 +2,7 @@
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
 expression: "render(&app, 100, 20)"
 ---
-                                                                                                    
-    ▄  ▄     Zeta Code v0.1.0                                                                       
-  ▗█▛██▜█▖   Automatic model · Access unknown                                                       
-  ▝▜████▛▘   .                                                                                      
-    ▝  ▘                                                                                            
+  Home  .                                                                                           
                                                                                                     
 > /pr                                                                                               
                                                                                                     
@@ -15,10 +11,14 @@ the target branch and checks, and report the pull request link.
                                                                                                     
                                                                                                     
                                                                                                     
+                                                                                                    
+                                                                                                    
+                                                                                                    
 ⠋ Starting · 0m 00s total                                                                           
                                                                          shift+tab to cycle policy  
-────────────────────────────────────────────────────────────────────────────────────────────────────
->                                                                                                   
-────────────────────────────────────────────────────────────────────────────────────────────────────
+  ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+> │                                                                                                │
+  ╰────────────────────────────────────────────────────────────────────────────── Automatic model ─╯
                                                                                                     
-  ⏸ ask permissions on
+  ⏸ ask permissions on                                                                              
+  Enter send  ·  shift+tab permissions  ·  /home

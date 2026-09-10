@@ -6,13 +6,14 @@ mod completion;
 mod completion_tests;
 mod details;
 mod manager;
+mod navigation;
 mod picker;
 mod state;
 
 pub(crate) use active::ActiveConversation;
+pub(crate) use active::Conversation;
 pub(crate) use active::ConversationChange;
 pub(crate) use active::ConversationTranscript;
-pub(crate) use active::ResumeOutcome;
 pub(crate) use completion::CommandRequest;
 pub(crate) use completion::ConversationCompletion;
 pub(crate) use completion::ManagerSessionCompletion;
@@ -22,12 +23,13 @@ pub(crate) use completion::prepare_command;
 pub(crate) use details::load_details;
 pub(crate) use manager::SessionManagerView;
 pub(crate) use manager::draw_manager;
+pub(crate) use navigation::SessionManagerInputOutcome;
+pub(crate) use navigation::SessionNavigation;
+pub(crate) use navigation::TerminalScreen;
 pub(crate) use picker::SessionChoices;
 pub(crate) use picker::SessionSelectionAction;
 pub(crate) use picker::session_choices;
-pub(crate) use state::SessionManagerInputOutcome;
 pub(crate) use state::SessionsState;
-pub(crate) use state::TerminalScreen;
 
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
@@ -76,7 +78,7 @@ pub(crate) enum Command {
 
 pub(crate) fn load_selection<T>(
     client: &mut AppServerClient<T>,
-    active_session_id: &str,
+    active_session_id: Option<&str>,
 ) -> Result<SessionChoices, ClientError>
 where
     T: JsonRpcTransport,

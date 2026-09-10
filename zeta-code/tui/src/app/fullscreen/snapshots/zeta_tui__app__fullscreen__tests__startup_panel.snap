@@ -1,25 +1,22 @@
 ---
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
-assertion_line: 1099
 expression: "render(&app, 80, 20)"
 ---
+  Home  .                                                                       
                                                                                 
-    ▄  ▄     Zeta Code v0.1.0                                                   
-  ▗█▛██▜█▖   Automatic model · Access unknown                                   
-  ▝▜████▛▘   .                                                                  
-    ▝  ▘                                                                        
-                                                                                
-> /startup                                                                      
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-─ Startup ──────────────────────────────────────────────────────────────────────
-                                                                                
-> Mode  ·  New                                                                  
-  Workspace  ·  .                                                               
-  Profile  ·  default                                                           
-  Connection  ·  Local App Server                                               
-                                                                                
-  Esc to close                                                                  
+> /start┌── Startup ───────────────────────────────────────────────[×]─┐        
+        │                                                              │        
+        │> Mode  ·  New                                                │        
+        │  Workspace  ·  .                                             │        
+        │  Profile  ·  default                                         │        
+        │  Connection  ·  Local App Server                             │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+  ╭─────│                                                              │───────╮
+> │     │                                                              │       │
+  ╰─────│  Esc to close                                                │model ─╯
+        └──────────────────────────────────────────────────────────────┘

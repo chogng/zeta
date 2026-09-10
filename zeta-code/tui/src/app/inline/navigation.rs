@@ -31,8 +31,8 @@ pub(in crate::app) fn handle_key(
     now: Instant,
     terminal_area: Rect,
 ) -> Option<AppCommand> {
-    if app.issues.is_open() {
-        return app.issues.handle_key(key).map(Into::into);
+    if app.inline.issues.is_open() {
+        return app.inline.issues.handle_key(key).map(Into::into);
     }
     let overlay_area = super::layout(app, terminal_area).transient_area();
     if let Some(overlay) = app.overlay_mut() {
@@ -41,9 +41,9 @@ pub(in crate::app) fn handle_key(
         }
         return None;
     }
-    if app.sessions.preview.is_some() {
+    if app.inline.sessions.preview.is_some() {
         if key.kind == KeyEventKind::Press && bindings::CLOSE.matches(key) {
-            app.sessions.preview = None;
+            app.inline.sessions.preview = None;
 
             return None;
         }
@@ -74,7 +74,7 @@ pub(in crate::app) fn handle_key(
                 navigate_preview(app, direction, rows, terminal_area)
             }
             Some(Navigation::First) => {
-                let preview = app.sessions.preview.as_mut().unwrap();
+                let preview = app.inline.sessions.preview.as_mut().unwrap();
                 preview.first(&mut app.inline.preview).map(|params| {
                     SessionCommand::Preview {
                         generation: preview.generation,
@@ -90,12 +90,15 @@ pub(in crate::app) fn handle_key(
             None => None,
         };
     }
-    if matches!(app.sessions.screen(), Some(TerminalScreen::Manager))
-        && app.sessions.manager().focused()
+    if matches!(app.inline.sessions.screen(), Some(TerminalScreen::Manager))
+        && app.inline.sessions.manager().focused()
     {
         return handle_screen_navigation_key(app, key).flatten();
     }
-    if matches!(app.sessions.screen(), Some(TerminalScreen::Session(_))) {
+    if matches!(
+        app.inline.sessions.screen(),
+        Some(TerminalScreen::Session(_))
+    ) {
         if let Some(command) = app.handle_thread_request_key(key) {
             return command;
         }
@@ -108,23 +111,15 @@ pub(in crate::app) fn handle_key(
         let outcome = super::panel::handle_key(panel, key, composer_area);
         return app.handle_command_panel_outcome(outcome);
     }
-    if chat_input_focused(app)
-        && app
-            .thread_presentations
-            .active()
-            .input
-            .history_intercepts(key)
-    {
-        let outcome = app
-            .chat_panel
-            .handle_composer_key(&mut app.thread_presentations.active_mut().input, key);
+    if chat_input_focused(app) && app.input_state().history_intercepts(key) {
+        let outcome = app.handle_composer_key(key);
         app.inline.escape.reset();
         return app.handle_chat_composer_outcome(outcome, now);
     }
     if let Some(command) = handle_queue_key(app, key) {
         return command;
     }
-    if app.agent_thread_switcher.focused() {
+    if app.inline.agent_thread_switcher.focused() {
         return handle_screen_navigation_key(app, key).flatten();
     }
     let temporary_interaction_active = app.completion().is_some();
@@ -154,9 +149,7 @@ pub(in crate::app) fn handle_key(
         return handle_app_key(app, key, now, terminal_area);
     }
 
-    let outcome = app
-        .chat_panel
-        .handle_composer_key(&mut app.thread_presentations.active_mut().input, key);
+    let outcome = app.handle_composer_key(key);
     if matches!(outcome, ChatComposerOutcome::Unhandled) {
         return handle_app_key(app, key, now, terminal_area);
     }
@@ -164,8 +157,13 @@ pub(in crate::app) fn handle_key(
 }
 
 pub(in crate::app) fn handle_queue_key(app: &mut App, key: KeyEvent) -> Option<Option<AppCommand>> {
-    if app.thread_presentations.active().queue.focused() {
-        let outcome = app.thread_presentations.active_mut().queue.handle_key(key);
+    if app.queue_focused() {
+        let outcome = app
+            .inline
+            .viewports
+            .active_mut()
+            .queue
+            .handle_key(&mut app.thread_presentations.active_mut().queue, key);
         if outcome == QueueKeyOutcome::Unhandled {
             return None;
         }
@@ -175,10 +173,18 @@ pub(in crate::app) fn handle_queue_key(app: &mut App, key: KeyEvent) -> Option<O
                 if let Err(error) = state.queue.restore(queue_id, &mut state.input) {
                     app.thread
                         .update(ThreadPresentationEvent::FailureReported(error));
+                } else {
+                    app.inline.viewports.active_mut().queue.blur();
                 }
                 None
             }
-            QueueKeyOutcome::Send(queue_id) => app.send_queued_message(queue_id),
+            QueueKeyOutcome::Send(queue_id) => {
+                let command = app.send_queued_message(queue_id);
+                if command.is_some() {
+                    app.inline.viewports.active_mut().queue.blur();
+                }
+                command
+            }
             QueueKeyOutcome::Consumed => None,
             QueueKeyOutcome::Unhandled => unreachable!("handled above"),
         });
@@ -189,10 +195,15 @@ pub(in crate::app) fn handle_queue_key(app: &mut App, key: KeyEvent) -> Option<O
     if key.kind == KeyEventKind::Press
         && key.code == KeyCode::Up
         && key.modifiers == KeyModifiers::ALT
-        && app.thread_presentations.active_mut().queue.focus_latest()
+        && app
+            .inline
+            .viewports
+            .active_mut()
+            .queue
+            .focus_latest(&app.thread_presentations.active().queue)
     {
         app.inline.viewports.active_mut().selected_cell = None;
-        app.agent_thread_switcher.blur();
+        app.inline.agent_thread_switcher.blur();
         return Some(None);
     }
     None
@@ -207,35 +218,36 @@ pub(in crate::app) fn handle_screen_navigation_key(
     {
         return None;
     }
-    if matches!(app.sessions.screen(), Some(TerminalScreen::Manager))
-        && app.sessions.manager().focused()
+    if matches!(app.inline.sessions.screen(), Some(TerminalScreen::Manager))
+        && app.inline.sessions.manager().focused()
     {
-        return match app.sessions.handle_manager_key(key) {
+        return match app.inline.sessions.handle_manager_key(&app.sessions, key) {
             SessionManagerInputOutcome::Unhandled => None,
             SessionManagerInputOutcome::Consumed => Some(None),
             SessionManagerInputOutcome::Command(command) => Some(Some(command.into())),
             SessionManagerInputOutcome::DetailsRequested => {
                 app.inline.panels.overlay = None;
-                app.sessions.open_details();
+                app.inline.sessions.open_details(&app.sessions);
 
                 Some(None)
             }
         };
     }
-    if app.agent_thread_switcher.focused() {
+    if app.inline.agent_thread_switcher.focused() {
         if let Some(navigation) = Navigation::from_key(key) {
-            app.agent_thread_switcher.navigate(navigation);
+            app.inline.agent_thread_switcher.navigate(navigation);
             return Some(None);
         }
         return match key.code {
             _ if bindings::THREAD_SWITCH.matches(key) => Some(
-                app.agent_thread_switcher
+                app.inline
+                    .agent_thread_switcher
                     .selected()
                     .cloned()
                     .map(|thread_id| SessionCommand::SwitchThread { thread_id }.into()),
             ),
             _ if bindings::RETURN_INPUT.matches(key) => {
-                app.agent_thread_switcher.blur();
+                app.inline.agent_thread_switcher.blur();
                 Some(None)
             }
             _ => None,
@@ -246,44 +258,51 @@ pub(in crate::app) fn handle_screen_navigation_key(
     }
     if key.code == KeyCode::Left && app.session_manager_view().is_none() {
         close_transient_surfaces(app);
-        app.sessions.show_manager();
+        app.inline.sessions.show_manager(&app.sessions);
         return Some(None);
     }
     if key.code == KeyCode::Right && app.session_manager_view().is_none() {
-        return Some(app.issues.open().map(Into::into));
+        return Some(app.inline.issues.open().map(Into::into));
     }
-    let target = match empty_input_navigation(app.sessions.screen(), key.code)? {
-        EmptyInputNavigation::PreviousScreen => match app.sessions.previous_screen() {
+    let target = match empty_input_navigation(app.inline.sessions.screen(), key.code)? {
+        EmptyInputNavigation::PreviousScreen => match app.inline.sessions.previous_screen() {
             Some(target) => target,
             None => return Some(None),
         },
-        EmptyInputNavigation::NextScreen => match app.sessions.next_screen() {
+        EmptyInputNavigation::NextScreen => match app.inline.sessions.next_screen(&app.sessions) {
             Some(target) => target,
             None => return Some(None),
         },
         EmptyInputNavigation::FocusManager => {
-            app.sessions.manager_mut().focus();
+            app.inline.sessions.manager_mut().focus();
             return Some(None);
         }
         EmptyInputNavigation::FocusAgentThreads => {
-            app.agent_thread_switcher.focus();
+            app.inline.agent_thread_switcher.focus();
             return Some(None);
         }
     };
     match target {
         TerminalScreen::Manager => {
             close_transient_surfaces(app);
-            app.sessions.show_manager();
+            app.inline.sessions.show_manager(&app.sessions);
             Some(None)
         }
         TerminalScreen::Session(session_id) => {
             if app.sessions.active_session_id() == Some(&session_id) {
-                let viewed = app
-                    .sessions
-                    .restorable_thread(&session_id)
-                    .expect("the active Session has an active Thread");
+                if let Some(thread_id) = app.sessions.restorable_thread(&session_id)
+                    && app.sessions.remembered_thread(&session_id) != Some(&thread_id)
+                {
+                    return Some(Some(
+                        SessionCommand::Resume {
+                            session_id: session_id.to_string(),
+                            preferred_thread_id: Some(thread_id),
+                        }
+                        .into(),
+                    ));
+                }
                 close_transient_surfaces(app);
-                app.sessions.show_session(session_id, viewed);
+                app.inline.sessions.show_session(session_id);
                 Some(None)
             } else {
                 Some(Some(
@@ -349,7 +368,10 @@ pub(in crate::app) fn handle_transcript_scroll_key(
 
 pub(in crate::app) fn handle_transcript_selection_key(app: &mut App, key: KeyEvent) -> bool {
     if key.kind == KeyEventKind::Release
-        || !matches!(app.sessions.screen(), Some(TerminalScreen::Session(_)))
+        || !matches!(
+            app.inline.sessions.screen(),
+            Some(TerminalScreen::Session(_))
+        )
         || app.inline.panels.command_active()
         || app.completion().is_some()
     {
@@ -454,7 +476,7 @@ pub(in crate::app) fn navigate_transcript(
     direction: TranscriptScrollDirection,
     terminal_area: Rect,
 ) -> Option<AppCommand> {
-    if app.sessions.preview.is_some() {
+    if app.inline.sessions.preview.is_some() {
         return navigate_preview(app, direction, 5, terminal_area);
     }
     if scroll_transcript(app, direction, terminal_area)
@@ -476,7 +498,7 @@ pub(in crate::app) fn navigate_preview(
     terminal_area: Rect,
 ) -> Option<AppCommand> {
     let area = super::layout(app, terminal_area).session.transcript;
-    let mut preview = app.sessions.preview.take()?;
+    let mut preview = app.inline.sessions.preview.take()?;
     let mut viewport = std::mem::take(&mut app.inline.preview);
     let params = preview.navigate(
         &mut viewport,
@@ -493,7 +515,7 @@ pub(in crate::app) fn navigate_preview(
         }
         .into()
     });
-    app.sessions.preview = Some(preview);
+    app.inline.sessions.preview = Some(preview);
     app.inline.preview = viewport;
     command
 }
@@ -511,24 +533,26 @@ pub(in crate::app) fn chat_input_focused(app: &App) -> bool {
     app.overlay().is_none()
         && app.approval_view().is_none()
         && app.query_view().is_none()
-        && !app.sessions.manager().focused()
-        && !app.agent_thread_switcher.focused()
-        && !app.thread_presentations.active().queue.focused()
+        && !app.inline.sessions.manager().focused()
+        && !app.inline.agent_thread_switcher.focused()
+        && !app.queue_focused()
         && !transcript_selection_active(app)
         && !app.inline.panels.command_active()
         && app.completion().is_none()
 }
 
 pub(in crate::app) fn transcript_selection_active(app: &App) -> bool {
-    matches!(app.sessions.screen(), Some(TerminalScreen::Session(_)))
-        && app.inline.viewports.active().selected_cell.is_some()
+    matches!(
+        app.inline.sessions.screen(),
+        Some(TerminalScreen::Session(_))
+    ) && app.inline.viewports.active().selected_cell.is_some()
 }
 
 pub(in crate::app) fn screen_navigation_tip(app: &App) -> Option<&'static str> {
     if !chat_input_focused(app) || !app.input().is_empty() {
         return None;
     }
-    match app.sessions.previous_screen()? {
+    match app.inline.sessions.previous_screen()? {
         TerminalScreen::Manager => Some("← for agents"),
         TerminalScreen::Session(_) => None,
     }
@@ -565,8 +589,9 @@ fn empty_input_navigation(
 pub(in crate::app) fn open_command_panel(app: &mut App, panel: CommandPanel) {
     app.inline.escape.reset();
     app.inline.panels.overlay = None;
-    app.sessions.details = None;
-    app.inline.panels.open_command(panel);
+    app.inline.sessions.details = None;
+    let generation = app.new_panel_generation();
+    app.inline.panels.open_command(panel, generation);
 }
 
 pub(in crate::app) fn close_command_panel(app: &mut App) {
@@ -576,20 +601,43 @@ pub(in crate::app) fn close_command_panel(app: &mut App) {
 
 pub(in crate::app) fn show_overlay(app: &mut App, detail: DetailList) {
     app.inline.escape.reset();
-    app.sessions.details = None;
+    app.inline.sessions.details = None;
     app.inline.panels.overlay = Some(DetailOverlay::new(detail));
 }
 
 pub(in crate::app) fn close_overlay(app: &mut App) {
     app.inline.escape.reset();
     app.inline.panels.overlay = None;
-    app.sessions.details = None;
+    app.inline.sessions.details = None;
 }
 
 pub(in crate::app) fn close_transient_surfaces(app: &mut App) {
     app.inline.escape.reset();
     app.inline.panels.close_command();
     app.inline.panels.overlay = None;
-    app.sessions.details = None;
-    app.thread_presentations.active_mut().queue.blur();
+    app.inline.sessions.details = None;
+    app.inline.viewports.active_mut().queue.blur();
+}
+
+pub(in crate::app) fn open_home(app: &mut App) {
+    close_transient_surfaces(app);
+    app.inline.issues.close();
+    app.inline.agent_thread_switcher.blur();
+    app.inline.sessions.show_manager(&app.sessions);
+}
+
+pub(in crate::app) fn show_conversation(app: &mut App, session_id: zeta_protocol::SessionId) {
+    close_transient_surfaces(app);
+    app.inline.sessions.show_session(session_id);
+}
+
+pub(in crate::app) fn show_manager(app: &mut App) {
+    close_transient_surfaces(app);
+    app.inline.agent_thread_switcher.blur();
+    app.inline.sessions.show_manager(&app.sessions);
+}
+
+pub(in crate::app) fn open_issues(app: &mut App) -> Option<AppCommand> {
+    close_transient_surfaces(app);
+    app.inline.issues.open().map(Into::into)
 }

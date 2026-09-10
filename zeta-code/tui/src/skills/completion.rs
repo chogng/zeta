@@ -34,13 +34,13 @@ pub(crate) fn finish_refresh(
 
 pub(crate) fn refresh(
     mut client: AppServerRequestHandle,
-    session_id: zeta_protocol::SessionId,
+    session_id: Option<zeta_protocol::SessionId>,
     plugins_enabled: bool,
 ) -> Result<SkillRefresh, String> {
     let catalog = client
         .list_skills(SkillListParams {
             reload: SkillCatalogReloadDto::Cached,
-            session_id: Some(session_id),
+            session_id,
         })
         .map_err(|error| error.to_string())?;
     let plugins = if plugins_enabled {

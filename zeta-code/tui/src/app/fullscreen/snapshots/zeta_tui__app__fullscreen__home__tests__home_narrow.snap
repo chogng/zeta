@@ -1,0 +1,20 @@
+---
+source: zeta-code/tui/src/app/fullscreen/home_tests.rs
+expression: "text(&render(&app, 40, 16))"
+---
+  Home  .                               
+                                        
+  ╭──────────────────────────────────╮  
+  │                                  │  
+  │  Zeta Code v0.1.0                │  
+  │  Settings                        │  
+  │  Help and shortcuts              │  
+  │> Quit                            │  
+  ╰──────────────────────────────────╯  
+  Type a task · Tab actions             
+  ╭────────────────────────────────────╮
+> │                                    │
+  ╰────────────────── Automatic model ─╯
+                                        
+  ⏸ ask permissions on                  
+  Enter send · Tab actions

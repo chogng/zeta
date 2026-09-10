@@ -1,7 +1,8 @@
-use super::SessionManagerInputOutcome;
 use super::SessionsState;
-use super::TerminalScreen;
 use crate::sessions::Command;
+use crate::sessions::SessionManagerInputOutcome;
+use crate::sessions::SessionNavigation;
+use crate::sessions::TerminalScreen;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -17,17 +18,20 @@ use zeta_protocol::ThreadStatus;
 #[test]
 fn manager_is_directly_left_of_the_active_session() {
     let mut state = SessionsState::default();
+    let mut navigation = SessionNavigation::default();
     state.install_catalog(
         vec![session("one"), session("two")],
         session_id("one"),
         thread_id("one"),
     );
+    navigation.context_changed(&state);
+    navigation.reconcile(&state);
 
-    assert_eq!(state.previous_screen(), Some(TerminalScreen::Manager));
-    state.show_manager();
-    assert_eq!(state.previous_screen(), None);
+    assert_eq!(navigation.previous_screen(), Some(TerminalScreen::Manager));
+    navigation.show_manager(&state);
+    assert_eq!(navigation.previous_screen(), None);
     assert_eq!(
-        state.next_screen(),
+        navigation.next_screen(&state),
         Some(TerminalScreen::Session(session_id("one")))
     );
 }
@@ -41,23 +45,27 @@ fn historical_sessions_are_not_horizontal_screens() {
     let mut question = session("question");
     question.manager.status = SessionManagerStatus::NeedsInput;
     let mut state = SessionsState::default();
+    let mut navigation = SessionNavigation::default();
     state.install_catalog(
         vec![completed, working, question],
         session_id("completed"),
         thread_id("completed"),
     );
+    navigation.context_changed(&state);
+    navigation.reconcile(&state);
 
-    state.show_manager();
+    navigation.show_manager(&state);
     assert_eq!(
-        state.next_screen(),
+        navigation.next_screen(&state),
         Some(TerminalScreen::Session(session_id("completed")))
     );
-    state.show_session(session_id("working"), thread_id("working"));
-    assert_eq!(state.previous_screen(), Some(TerminalScreen::Manager));
-    assert_eq!(state.next_screen(), None);
-    state.show_manager();
+    state.activate_context(session_id("working"), thread_id("working"));
+    navigation.show_session(session_id("working"));
+    assert_eq!(navigation.previous_screen(), Some(TerminalScreen::Manager));
+    assert_eq!(navigation.next_screen(&state), None);
+    navigation.show_manager(&state);
     assert_eq!(
-        state.next_screen(),
+        navigation.next_screen(&state),
         Some(TerminalScreen::Session(session_id("working")))
     );
 }
@@ -65,17 +73,21 @@ fn historical_sessions_are_not_horizontal_screens() {
 #[test]
 fn showing_a_session_clears_manager_focus() {
     let mut state = SessionsState::default();
+    let mut navigation = SessionNavigation::default();
     state.install_catalog(vec![session("one")], session_id("one"), thread_id("one"));
-    state.show_manager();
-    state.manager_mut().focus();
+    navigation.context_changed(&state);
+    navigation.reconcile(&state);
+    navigation.show_manager(&state);
+    navigation.manager_mut().focus();
 
-    state.show_session(session_id("one"), thread_id("one"));
+    state.activate_context(session_id("one"), thread_id("one"));
+    navigation.show_session(session_id("one"));
 
     assert_eq!(
-        state.screen(),
+        navigation.screen(),
         Some(&TerminalScreen::Session(session_id("one")))
     );
-    assert!(!state.manager().focused());
+    assert!(!navigation.manager().focused());
 }
 
 #[test]
@@ -129,21 +141,25 @@ fn reentering_a_session_falls_back_to_main_after_the_viewed_subagent_completes()
 #[test]
 fn manager_input_requires_a_visible_focused_manager_and_resumes_the_remembered_thread() {
     let mut state = SessionsState::default();
+    let mut navigation = SessionNavigation::default();
     state.install_catalog(vec![session("one")], session_id("one"), thread_id("child"));
+    navigation.context_changed(&state);
+    navigation.reconcile(&state);
     let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
-    state.manager_mut().focus();
+    navigation.manager_mut().focus();
     assert!(matches!(
-        state.handle_manager_key(enter),
+        navigation.handle_manager_key(&state, enter),
         SessionManagerInputOutcome::Unhandled
     ));
-    state.show_manager();
-    state.manager_mut().blur();
+    navigation.show_manager(&state);
+    navigation.manager_mut().blur();
     assert!(matches!(
-        state.handle_manager_key(enter),
+        navigation.handle_manager_key(&state, enter),
         SessionManagerInputOutcome::Unhandled
     ));
-    state.manager_mut().focus();
-    let SessionManagerInputOutcome::Command(command) = state.handle_manager_key(enter) else {
+    navigation.manager_mut().focus();
+    let SessionManagerInputOutcome::Command(command) = navigation.handle_manager_key(&state, enter)
+    else {
         panic!("focused manager must resume the selected session");
     };
     assert_eq!(
@@ -153,15 +169,18 @@ fn manager_input_requires_a_visible_focused_manager_and_resumes_the_remembered_t
             preferred_thread_id: Some(thread_id("child")),
         }
     );
-    assert_eq!(state.screen(), Some(&TerminalScreen::Manager));
+    assert_eq!(navigation.screen(), Some(&TerminalScreen::Manager));
 }
 
 #[test]
 fn manager_repeats_only_navigation_and_keeps_mutations_for_key_presses() {
     let mut state = SessionsState::default();
+    let mut navigation = SessionNavigation::default();
     state.install_catalog(vec![session("one")], session_id("one"), thread_id("one"));
-    state.show_manager();
-    state.manager_mut().focus();
+    navigation.context_changed(&state);
+    navigation.reconcile(&state);
+    navigation.show_manager(&state);
+    navigation.manager_mut().focus();
     for kind in [KeyEventKind::Repeat, KeyEventKind::Release] {
         for (code, modifiers) in [
             (KeyCode::Enter, KeyModifiers::NONE),
@@ -171,26 +190,27 @@ fn manager_repeats_only_navigation_and_keeps_mutations_for_key_presses() {
             (KeyCode::Char('x'), KeyModifiers::CONTROL),
         ] {
             assert!(matches!(
-                state.handle_manager_key(KeyEvent::new_with_kind(code, modifiers, kind)),
+                navigation
+                    .handle_manager_key(&state, KeyEvent::new_with_kind(code, modifiers, kind)),
                 SessionManagerInputOutcome::Unhandled
             ));
         }
     }
-    assert!(state.preview.is_none());
-    assert!(state.details.is_none());
+    assert!(navigation.preview.is_none());
+    assert!(navigation.details.is_none());
     assert!(matches!(
-        state.handle_manager_key(KeyEvent::new_with_kind(
-            KeyCode::Home,
-            KeyModifiers::NONE,
-            KeyEventKind::Repeat
-        )),
+        navigation.handle_manager_key(
+            &state,
+            KeyEvent::new_with_kind(KeyCode::Home, KeyModifiers::NONE, KeyEventKind::Repeat)
+        ),
         SessionManagerInputOutcome::Consumed
     ));
     // Home selects the group heading; Down selects its first session.
-    state.handle_manager_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    let SessionManagerInputOutcome::Command(command) =
-        state.handle_manager_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL))
-    else {
+    navigation.handle_manager_key(&state, KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    let SessionManagerInputOutcome::Command(command) = navigation.handle_manager_key(
+        &state,
+        KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL),
+    ) else {
         panic!("a key press must archive the selected active session");
     };
     assert_eq!(

@@ -1,9 +1,8 @@
 ---
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
-assertion_line: 1218
 expression: "render(&app, 50, 16)"
 ---
-● Model invocation failed 1                       
+  Home  .                                         
                                                   
 ● Model invocation failed 2                       
                                                   
@@ -11,11 +10,11 @@ expression: "render(&app, 50, 16)"
                                                   
 ● Model invocation failed 4                       
                                                   
-● Model invocation failed 5                       
              Jump to bottom (click) ↓             
                                                   
-──────────────────────────────────────────────────
->                                                 
-──────────────────────────────────────────────────
+  ╭──────────────────────────────────────────────╮
+> │                                              │
+  ╰──────────────────────────── Automatic model ─╯
                                                   
-  ⏸ ask permissions on
+  ⏸ ask permissions on                            
+  Enter send  ·  shift+tab permissions  ·  /home

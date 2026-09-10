@@ -24,7 +24,7 @@ fn resume_picker_selects_the_current_session_and_maps_enter_to_its_id() {
         threads: Vec::new(),
     }];
 
-    let view = session_choices(&sessions, "session-1");
+    let view = session_choices(&sessions, Some("session-1"));
     let state = ListSelectionState::new(view.model);
 
     assert_eq!(state.title(), "Resume session");
@@ -52,8 +52,8 @@ fn resume_action_ids_do_not_change_when_sessions_are_reordered() {
         threads: Vec::new(),
     };
 
-    let first = session_choices(&[session("session-1"), session("session-2")], "");
-    let reordered = session_choices(&[session("session-2"), session("session-1")], "");
+    let first = session_choices(&[session("session-1"), session("session-2")], None);
+    let reordered = session_choices(&[session("session-2"), session("session-1")], None);
 
     assert_eq!(
         first.actions, reordered.actions,
@@ -87,7 +87,7 @@ fn resume_picker_excludes_archived_sessions_and_keeps_current_selection() {
         },
     ];
 
-    let view = session_choices(&sessions, "session-1");
+    let view = session_choices(&sessions, Some("session-1"));
     let mut state = ListSelectionState::new(view.model);
 
     assert!(!state.show_tabs());
@@ -133,7 +133,7 @@ fn resume_items_show_time_and_tokens_without_branches_or_ids() {
     session.threads[0].usage.input_tokens.reported = 1_200;
     session.threads[0].usage.output_tokens.reported = 300;
 
-    let view = session_choices_at(&[session], "different", 70_000);
+    let view = session_choices_at(&[session], Some("different"), 70_000);
     let state = ListSelectionState::new(view.model);
 
     assert_eq!(
@@ -152,7 +152,7 @@ fn resume_picker_is_empty_when_every_session_is_archived() {
         manager: Default::default(),
         threads: Vec::new(),
     };
-    let view = session_choices(&[session], "archived");
+    let view = session_choices(&[session], Some("archived"));
     let mut state = ListSelectionState::new(view.model);
     assert!(state.visible_items().is_empty());
     assert!(view.actions.is_empty());
@@ -185,7 +185,7 @@ fn resume_picker_renders_only_session_title_time_and_tokens() {
             threads: Vec::new(),
         })
         .collect::<Vec<_>>();
-    let view = session_choices_at(&sessions, "thread:2", now);
+    let view = session_choices_at(&sessions, Some("thread:2"), now);
     let state = ListSelectionState::new(view.model);
     assert!(!state.show_tabs());
     let mut terminal = Terminal::new(TestBackend::new(80, 7)).unwrap();

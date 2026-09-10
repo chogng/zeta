@@ -1,4 +1,3 @@
-use super::header;
 use super::selection::ClickCount;
 use super::selection::ScreenSelectionOutcome;
 use crate::app::App;
@@ -66,6 +65,9 @@ impl<T> PointerInteraction<T> {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum PointerTarget {
+    Home,
+    HomeAction(super::home::Action),
+    Modal(super::modal::Target),
     Composer(ChatComposerPointerTarget),
     TranscriptJumpToBottom,
 }
@@ -86,13 +88,21 @@ pub(crate) fn target_at(
     column: u16,
     row: u16,
 ) -> Option<PointerTarget> {
-    if !app.mouse_mode().enables_pointer_actions() || app.issue_manager().is_some() {
+    if !app.mouse_mode().enables_pointer_actions() {
         return None;
     }
     let areas = super::layout(app, terminal_area);
     let position = ratatui::layout::Position::new(column, row);
-    if app.overlay().is_some() {
-        return None;
+    if super::modal::is_open(app) {
+        return super::modal::target_at(app, terminal_area, position).map(PointerTarget::Modal);
+    }
+    if app.approval_view().is_none()
+        && app.query_view().is_none()
+        && areas.header.height > 0
+        && Rect::new(areas.header.x, areas.header.y, 4.min(areas.header.width), 1)
+            .contains(position)
+    {
+        return Some(PointerTarget::Home);
     }
     if app.completion_visible() && overlay_contains(app, terminal_area, position) {
         return chat_composer::pointer_target_at(
@@ -104,16 +114,17 @@ pub(crate) fn target_at(
         )
         .map(PointerTarget::Composer);
     }
+    if app.fullscreen.home_visible() {
+        return super::home::action_at(app, areas.session.transcript, position)
+            .map(PointerTarget::HomeAction);
+    }
+    if app.issue_manager().is_some() {
+        return None;
+    }
     if app.session_manager_view().is_some() && app.session_preview().is_none() {
         return None;
     }
     let context = app.render_context();
-    let header = header::history_buffer(
-        areas.session.transcript.width,
-        areas.session.transcript.height,
-        app.welcome(),
-        context,
-    );
     let messages = if let Some(preview) = app.session_preview() {
         preview.messages()
     } else {
@@ -129,7 +140,7 @@ pub(crate) fn target_at(
     };
     ChatHistoryView {
         jump_label: super::JUMP_LABEL,
-        header: Some(&header),
+        header: None,
         messages: &messages,
         scroll,
         render_cache,
@@ -149,8 +160,10 @@ pub(crate) fn overlay_contains(
         return false;
     }
     let areas = super::layout(app, terminal_area);
-    if let Some(overlay) = app.overlay() {
-        return overlay.surface(areas.transient_area()).contains(position);
+    if super::modal::is_open(app) {
+        return super::modal::layout(terminal_area)
+            .surface
+            .contains(position);
     }
     if !app.completion_visible() {
         return false;
@@ -181,6 +194,40 @@ pub(in crate::app) fn handle_mouse(
         return MouseAction::Selection(None);
     }
     let position = ratatui::layout::Position::new(mouse.column, mouse.row);
+    if super::modal::is_open(app) {
+        let target = target_at(app, area, mouse.column, mouse.row);
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                app.fullscreen.pointer.update_pressed(target)
+            }
+            MouseEventKind::Drag(MouseButton::Left) => app.fullscreen.pointer.clear_pressed(),
+            MouseEventKind::Up(MouseButton::Left) => {
+                let activate = target
+                    .as_ref()
+                    .is_some_and(|target| app.fullscreen.pointer.pressed() == Some(target));
+                app.fullscreen.pointer.clear_pressed();
+                if activate && let Some(PointerTarget::Modal(target)) = target {
+                    return MouseAction::Command(super::modal::activate(app, area, target));
+                }
+            }
+            MouseEventKind::Moved => app.fullscreen.pointer.update_hover(target),
+            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
+                if super::modal::layout(area).surface.contains(position) =>
+            {
+                let key = crossterm::event::KeyEvent::new(
+                    if mouse.kind == MouseEventKind::ScrollUp {
+                        crossterm::event::KeyCode::Up
+                    } else {
+                        crossterm::event::KeyCode::Down
+                    },
+                    crossterm::event::KeyModifiers::NONE,
+                );
+                return MouseAction::Command(super::modal::handle_key(app, key, area).flatten());
+            }
+            _ => {}
+        }
+        return MouseAction::Selection(None);
+    }
     let overlay_contains = overlay_contains(app, area, position);
     if (app.overlay().is_some() || app.completion_visible()) && !overlay_contains {
         app.fullscreen.clear();
@@ -195,7 +242,8 @@ pub(in crate::app) fn handle_mouse(
             };
             let command = if overlay_contains {
                 scroll_pointer_item(app, area, mouse.column, mouse.row, direction)
-            } else if app.session_manager_view().is_none()
+            } else if !app.fullscreen.home_visible()
+                && app.session_manager_view().is_none()
                 && app.issue_manager().is_none()
                 && super::layout(app, area)
                     .session
@@ -236,6 +284,12 @@ pub(super) fn activate_pointer_item(
 ) -> Option<AppCommand> {
     let target = target_at(app, area, column, row)?;
     match target {
+        PointerTarget::Home => {
+            app.open_home();
+            None
+        }
+        PointerTarget::HomeAction(action) => super::home::activate(app, action),
+        PointerTarget::Modal(target) => super::modal::activate(app, area, target),
         PointerTarget::TranscriptJumpToBottom => {
             app.follow_latest_transcript();
             None
@@ -257,16 +311,15 @@ fn scroll_pointer_item(
     if !overlay_contains(app, area, position) {
         return None;
     }
-    let navigation = match direction {
-        TranscriptScrollDirection::Up => crate::widgets::navigation::Navigation::Previous,
-        TranscriptScrollDirection::Down => crate::widgets::navigation::Navigation::Next,
+    let key = match direction {
+        TranscriptScrollDirection::Up => crossterm::event::KeyCode::Up,
+        TranscriptScrollDirection::Down => crossterm::event::KeyCode::Down,
     };
     app.fullscreen.clear();
-    let transient = super::layout(app, area).transient_area();
-    if let Some(overlay) = app.overlay_mut() {
-        overlay.scroll(navigation, transient);
-    }
-    None
+    app.handle_key_in_area(
+        crossterm::event::KeyEvent::new(key, crossterm::event::KeyModifiers::NONE),
+        area,
+    )
 }
 
 pub(super) fn update_pointer_hover(

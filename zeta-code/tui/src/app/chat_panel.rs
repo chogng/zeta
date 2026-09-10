@@ -66,6 +66,15 @@ impl ChatPanel {
         self.composer.view(input)
     }
 
+    pub(crate) fn handle_new_session_key(
+        &mut self,
+        input: &mut ChatInput,
+        key: KeyEvent,
+    ) -> ChatComposerOutcome {
+        // Keep the complete draft until session creation succeeds, including attachment bindings.
+        self.composer.handle_queued_turn_key(input, key)
+    }
+
     pub(crate) fn activate_completion(
         &mut self,
         input: &mut ChatInput,

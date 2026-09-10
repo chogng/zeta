@@ -3,6 +3,7 @@ pub(crate) mod grouped_list;
 pub(crate) mod key_capture;
 pub(crate) mod key_hint;
 pub(crate) mod list_selection;
+pub(crate) mod modal;
 pub(crate) mod navigation;
 pub(crate) mod overlay;
 pub(crate) mod panel;

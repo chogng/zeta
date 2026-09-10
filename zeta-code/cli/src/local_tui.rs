@@ -72,12 +72,12 @@ fn run_entry(dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(
                 eprintln!("Local App Server disconnected: {reason}");
                 session =
                     reconnect(&executable, &dir_root, &profile_root, &reason).map_err(|error| {
-                        reconnect::recovery_error(error, &recovery_command(&next_recovery))
+                        reconnect::recovery_error(error, &recovery_command(next_recovery.as_ref()))
                     })?;
                 if let Some(updater) = &updater {
                     updater.replace_client(session.client());
                 }
-                recovery = Some(next_recovery);
+                recovery = next_recovery;
             }
             zeta_tui::TuiExit::ConnectionLost {
                 kind,
@@ -86,14 +86,17 @@ fn run_entry(dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(
             } => {
                 return Err(reconnect::recovery_error(
                     format!("Local App Server recovery stopped after {kind:?}: {reason}"),
-                    &recovery_command(&recovery),
+                    &recovery_command(recovery.as_ref()),
                 ));
             }
         }
     }
 }
 
-fn recovery_command(recovery: &zeta_tui::TuiRecoveryState) -> Vec<String> {
+fn recovery_command(recovery: Option<&zeta_tui::TuiRecoveryState>) -> Vec<String> {
+    let Some(recovery) = recovery else {
+        return vec!["zeta".into()];
+    };
     vec![
         "zeta".into(),
         "resume".into(),

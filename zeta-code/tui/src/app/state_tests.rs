@@ -504,7 +504,9 @@ fn control_v_requests_a_clipboard_image_read() {
 
     assert_eq!(
         action,
-        Some(AppCommand::Host(HostCommand::ReadClipboardImage))
+        Some(AppCommand::Host(HostCommand::ReadClipboardImage {
+            target: app.draft_target()
+        }))
     );
     assert_eq!(app.status(), &Status::Ready);
 }
@@ -539,12 +541,15 @@ fn export_slash_command_stays_in_the_terminal_host() {
 fn export_rejects_image_arguments_before_host_io() {
     let mut app = App::new();
     app.insert_text("/export ");
-    app.update(HostEvent::ClipboardImageRead(Ok(ClipboardImage {
-        png: b"\x89PNG\r\n\x1a\npayload".to_vec(),
-        fingerprint: ClipboardImageFingerprint(1),
-        width: 1,
-        height: 1,
-    })));
+    app.update(HostEvent::ClipboardImageRead {
+        target: app.draft_target(),
+        result: Ok(ClipboardImage {
+            png: b"\x89PNG\r\n\x1a\npayload".to_vec(),
+            fingerprint: ClipboardImageFingerprint(1),
+            width: 1,
+            height: 1,
+        }),
+    });
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
@@ -627,12 +632,15 @@ fn submitting_after_manual_scroll_restores_follow_latest() {
 #[test]
 fn clipboard_png_submits_through_the_existing_attachment_path() {
     let mut app = App::new();
-    app.update(HostEvent::ClipboardImageRead(Ok(ClipboardImage {
-        png: b"\x89PNG\r\n\x1a\npayload".to_vec(),
-        fingerprint: ClipboardImageFingerprint(1),
-        width: 1,
-        height: 1,
-    })));
+    app.update(HostEvent::ClipboardImageRead {
+        target: app.draft_target(),
+        result: Ok(ClipboardImage {
+            png: b"\x89PNG\r\n\x1a\npayload".to_vec(),
+            fingerprint: ClipboardImageFingerprint(1),
+            width: 1,
+            height: 1,
+        }),
+    });
 
     assert_eq!(app.input(), "[Image #1] ");
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -656,7 +664,9 @@ fn active_turn_accepts_clipboard_images_for_a_follow_up() {
 
     assert_eq!(
         action,
-        Some(AppCommand::Host(HostCommand::ReadClipboardImage))
+        Some(AppCommand::Host(HostCommand::ReadClipboardImage {
+            target: app.draft_target()
+        }))
     );
     assert_eq!(app.input(), "");
 }
@@ -1714,7 +1724,7 @@ fn escape_does_not_exit_the_idle_session_screen() {
 }
 
 #[test]
-fn terminal_screen_change_closes_command_panels_including_status() {
+fn explicit_navigation_closes_panels_while_context_updates_preserve_them() {
     let mut app = App::new();
     app.update(AppEvent::HelpOpened(ListSelectionModel::new(
         "Help",
@@ -1726,6 +1736,8 @@ fn terminal_screen_change_closes_command_panels_including_status() {
     assert!(app.command_panel().is_some());
 
     enter_test_session(&mut app);
+    assert!(app.command_panel().is_some());
+    app.show_conversation();
     assert!(app.command_panel().is_none());
 
     let usage = zeta_protocol::ModelUsageSummary::default();
@@ -1745,6 +1757,8 @@ fn terminal_screen_change_closes_command_panels_including_status() {
         session_id: SessionId::new("other-session").unwrap(),
         thread_id: ThreadId::new("other-thread").unwrap(),
     });
+    assert!(app.command_panel().is_some());
+    app.show_conversation();
     assert!(app.command_panel().is_none());
 }
 

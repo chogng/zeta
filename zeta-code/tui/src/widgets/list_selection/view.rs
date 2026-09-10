@@ -23,6 +23,39 @@ use unicode_width::UnicodeWidthStr;
 const ITEM_STATE_COLUMN_WIDTH: u16 = 2;
 const ITEM_COLUMN_GAP: u16 = 4;
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum ListSelectionPointerTarget {
+    Tab(usize),
+    Search,
+    Item(super::ListSelectionItemId),
+}
+
+pub(crate) fn pointer_target_at(
+    view: &ListSelectionState,
+    tabs: Rect,
+    body: Rect,
+    position: ratatui::layout::Position,
+) -> Option<ListSelectionPointerTarget> {
+    if view.show_tabs()
+        && let Some(index) = tab_list::index_at(view.tabs(), tabs, position)
+    {
+        return Some(ListSelectionPointerTarget::Tab(index));
+    }
+    let areas = body_areas(body, view);
+    if view.search().is_some() && areas[0].contains(position) {
+        return Some(ListSelectionPointerTarget::Search);
+    }
+    let viewport = view.viewport(areas[1]);
+    if !viewport.items.contains(position) {
+        return None;
+    }
+    view.visible_items()
+        .get(viewport.start + usize::from(position.y - viewport.items.y))
+        .and_then(|item| item.id())
+        .cloned()
+        .map(ListSelectionPointerTarget::Item)
+}
+
 pub(crate) fn draw_tabs(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -398,7 +431,12 @@ fn item_spans<'a>(
     ]
 }
 
-pub(crate) fn item_style(context: RenderContext<'_>, selected: bool, hovered: bool, pressed: bool) -> Style {
+pub(crate) fn item_style(
+    context: RenderContext<'_>,
+    selected: bool,
+    hovered: bool,
+    pressed: bool,
+) -> Style {
     let mut style = Style::default().fg(if pressed {
         context.pressed_foreground()
     } else if selected || hovered {

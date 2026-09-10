@@ -4,10 +4,9 @@ use super::Issue;
 use super::Page;
 use super::Repository;
 use crate::sessions::ActiveConversation;
+use crate::sessions::Conversation;
 use crate::sessions::ConversationCompletion;
-use crate::sessions::ResumeOutcome;
 use crate::sessions::finish_conversation_request;
-use crate::thread::ThreadSubscription;
 use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_protocol::protocol::issues::IssueListParams;
 use zeta_app_server_protocol::protocol::issues::IssueReadParams;
@@ -124,19 +123,22 @@ pub(crate) fn execute(
 
 pub(crate) fn start(
     mut client: AppServerRequestHandle,
-    mut conversation: ActiveConversation,
-    subscription: ThreadSubscription,
+    current: Option<Conversation>,
     command: Command,
 ) -> Result<ConversationCompletion, String> {
     let session_id = start_session(&mut client, command)?;
-    let change = match conversation
-        .resume_session(&mut client, session_id.as_str(), None)
-        .map_err(|error| error.to_string())?
-    {
-        ResumeOutcome::Changed(change) => change,
-        ResumeOutcome::Listed(_) => return Err("Issue selection did not identify a Session".into()),
+    let conversation = ActiveConversation::open(&mut client, session_id.as_str(), None)
+        .map_err(|error| error.to_string())?;
+    let change = crate::sessions::ConversationChange {
+        notice: format!("Opened issue session {session_id}"),
+        transcript: crate::sessions::ConversationTranscript::Replace,
     };
-    let completion = finish_conversation_request(&mut client, conversation, subscription, change)?;
+    let completion = finish_conversation_request(
+        &mut client,
+        conversation,
+        current.map(|c| c.subscription),
+        change,
+    )?;
     Ok(completion)
 }
 

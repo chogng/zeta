@@ -1,7 +1,7 @@
 use super::ActiveConversation;
 use super::Command;
+use super::Conversation;
 use super::ConversationChange;
-use super::ResumeOutcome;
 use super::archive;
 use crate::thread::ThreadRequestScope;
 use crate::thread::ThreadSubscription;
@@ -103,8 +103,7 @@ impl CommandRequest {
     pub(crate) fn execute(
         self,
         mut client: AppServerRequestHandle,
-        mut conversation: ActiveConversation,
-        subscription: ThreadSubscription,
+        current: Option<Conversation>,
     ) -> SessionCompletion {
         match self {
             Self::Preview { generation, params } => SessionCompletion::Preview {
@@ -124,19 +123,28 @@ impl CommandRequest {
                 preferred_thread_id,
             } => {
                 let command = format!("/resume {session_id}");
-                let result = match conversation.resume_session(
+                let result = ActiveConversation::open(
                     &mut client,
                     &session_id,
                     preferred_thread_id.as_ref(),
-                ) {
-                    Ok(ResumeOutcome::Changed(change)) => {
-                        finish_conversation_request(&mut client, conversation, subscription, change)
-                    }
-                    Ok(ResumeOutcome::Listed(_)) => {
-                        Err("resume selection did not identify a session".into())
-                    }
-                    Err(error) => Err(error.to_string()),
-                };
+                )
+                .map_err(|error| error.to_string())
+                .and_then(|conversation| {
+                    let change = super::ConversationChange {
+                        notice: format!(
+                            "Resumed session {} on thread {}.",
+                            conversation.session_id(),
+                            conversation.thread_id()
+                        ),
+                        transcript: super::ConversationTranscript::Replace,
+                    };
+                    finish_conversation_request(
+                        &mut client,
+                        conversation,
+                        current.map(|c| c.subscription),
+                        change,
+                    )
+                });
                 SessionCompletion::Changed { command, result }
             }
             Self::Archive { session_ids } => SessionCompletion::Catalog(
@@ -147,17 +155,24 @@ impl CommandRequest {
                 approval_mode,
             } => SessionCompletion::ManagerCreated(create_manager_session_and_start(
                 client,
-                conversation,
-                subscription,
+                current.map(|c| c.subscription),
                 submission,
                 approval_mode,
             )),
             Self::SwitchThread { thread_id } => {
-                let result = conversation
-                    .select_thread(&mut client, thread_id)
-                    .map_err(|error| error.to_string())
-                    .and_then(|change| {
-                        finish_conversation_request(&mut client, conversation, subscription, change)
+                let result = current
+                    .ok_or_else(|| "No active session".to_owned())
+                    .and_then(|mut current| {
+                        let change = current
+                            .conversation
+                            .select_thread(&mut client, thread_id)
+                            .map_err(|error| error.to_string())?;
+                        finish_conversation_request(
+                            &mut client,
+                            current.conversation,
+                            Some(current.subscription),
+                            change,
+                        )
                     });
                 SessionCompletion::ThreadChanged(result)
             }
@@ -189,12 +204,32 @@ pub(crate) fn prepare_command(approval_mode: ApprovalMode, command: Command) -> 
 pub(crate) fn finish_conversation_request(
     client: &mut AppServerRequestHandle,
     conversation: ActiveConversation,
-    mut subscription: ThreadSubscription,
+    subscription: Option<ThreadSubscription>,
     change: ConversationChange,
 ) -> Result<ConversationCompletion, String> {
-    let switch = subscription
-        .switch(client, conversation.session_id(), conversation.thread_id())
-        .map_err(subscription_error)?;
+    let (subscription, switch) = match subscription {
+        Some(mut subscription) => {
+            let switch = subscription
+                .switch(client, conversation.session_id(), conversation.thread_id())
+                .map_err(subscription_error)?;
+            (subscription, switch)
+        }
+        None => {
+            let (subscription, snapshot, transcript) = ThreadSubscription::start(
+                client,
+                conversation.session_id(),
+                conversation.thread_id(),
+            )
+            .map_err(subscription_error)?;
+            (
+                subscription,
+                ThreadSwitch::Complete {
+                    snapshot,
+                    transcript,
+                },
+            )
+        }
+    };
     Ok(ConversationCompletion {
         conversation,
         change,
@@ -205,15 +240,17 @@ pub(crate) fn finish_conversation_request(
 
 pub(crate) fn create_manager_session_and_start(
     mut client: AppServerRequestHandle,
-    mut conversation: ActiveConversation,
-    subscription: ThreadSubscription,
+    subscription: Option<ThreadSubscription>,
     submission: ChatSubmission,
     approval_mode: ApprovalMode,
 ) -> Result<ManagerSessionCompletion, String> {
     let title = submission.display_text.clone();
-    let change = conversation
-        .replace_with_new(&mut client, &title)
-        .map_err(|error| error.to_string())?;
+    let conversation =
+        ActiveConversation::start(&mut client, title).map_err(|error| error.to_string())?;
+    let change = ConversationChange {
+        notice: String::new(),
+        transcript: super::ConversationTranscript::Clear,
+    };
     let conversation =
         finish_conversation_request(&mut client, conversation, subscription, change)?;
     let scope = ThreadRequestScope::new(

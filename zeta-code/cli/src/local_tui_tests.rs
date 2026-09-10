@@ -33,7 +33,12 @@ fn local_recovery_command_preserves_session_and_thread() {
     );
 
     assert_eq!(
-        recovery_command(&recovery),
+        recovery_command(Some(&recovery)),
         ["zeta", "resume", "session-1", "thread-1"]
     );
+}
+
+#[test]
+fn home_recovery_restarts_without_a_session_argument() {
+    assert_eq!(recovery_command(None), ["zeta"]);
 }

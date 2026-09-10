@@ -7,14 +7,16 @@ use super::AppCommand;
 use super::AppEvent;
 use super::completion::Completion;
 use super::completion::apply_request_completion;
+use super::requests::RequestCompletion;
 use super::requests::RequestKey;
+use super::requests::RequestOrigin;
 use super::requests::RequestTasks;
 use super::requests::request_key;
 use crate::client;
 use crate::connectors;
 use crate::host::Command as HostCommand;
 use crate::sessions;
-use crate::sessions::ActiveConversation;
+use crate::sessions::Conversation;
 use crate::sessions::Event as SessionEvent;
 use crate::skills;
 use crate::skills::finish_refresh;
@@ -24,7 +26,6 @@ use crate::thread::Command as ThreadCommand;
 use crate::thread::Event as ThreadEvent;
 use crate::thread::ThreadCompletion;
 use crate::thread::ThreadRequestScope;
-use crate::thread::ThreadSubscription;
 use crate::thread::ThreadUpdateDisposition;
 use crate::thread::TranscriptUpdateDisposition;
 use crate::thread::composer::file_search::FileSearchManager;
@@ -35,6 +36,21 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
+
+#[derive(Debug, Eq, PartialEq)]
+pub(super) struct ScheduledCommand {
+    pub(super) command: AppCommand,
+    pub(super) origin: RequestOrigin,
+}
+
+impl ScheduledCommand {
+    pub(super) fn new(command: AppCommand, app: &App) -> Self {
+        Self {
+            command,
+            origin: RequestOrigin::current(app),
+        }
+    }
+}
 
 pub(super) enum CommandEffect {
     None,
@@ -65,10 +81,9 @@ impl ServerRefresh {
 pub(super) struct AppDriver {
     app: App,
     client: AppServerRequestHandle,
-    conversation: ActiveConversation,
-    thread_subscription: ThreadSubscription,
+    conversation: Option<Conversation>,
     requests: RequestTasks,
-    queued_commands: VecDeque<AppCommand>,
+    queued_commands: VecDeque<ScheduledCommand>,
     refresh: ServerRefresh,
     queued_turn_dispatch_requested: bool,
     file_search: Option<FileSearchManager>,
@@ -91,19 +106,17 @@ impl AppDriver {
     pub(super) fn new(
         app: App,
         client: AppServerRequestHandle,
-        conversation: ActiveConversation,
-        thread_subscription: ThreadSubscription,
+        conversation: Option<Conversation>,
         resources: AppDriverResources,
     ) -> Self {
+        let initial =
+            ScheduledCommand::new(HostCommand::RefreshClipboardImageAvailability.into(), &app);
         let mut driver = Self {
             app,
             client,
             conversation,
-            thread_subscription,
             requests: RequestTasks::default(),
-            queued_commands: VecDeque::from([AppCommand::from(
-                HostCommand::RefreshClipboardImageAvailability,
-            )]),
+            queued_commands: VecDeque::from([initial]),
             refresh: ServerRefresh::default(),
             queued_turn_dispatch_requested: false,
             file_search: resources.file_search,
@@ -125,21 +138,17 @@ impl AppDriver {
         &mut self.app
     }
 
-    pub(super) fn session_id(&self) -> &zeta_protocol::SessionId {
-        self.conversation.session_id()
-    }
-
-    pub(super) fn thread_id(&self) -> &zeta_protocol::ThreadId {
-        self.conversation.thread_id()
+    pub(super) fn recovery_state(&self) -> Option<crate::TuiRecoveryState> {
+        self.conversation.as_ref().map(|current| {
+            crate::TuiRecoveryState::new(
+                current.conversation.session_id().clone(),
+                current.conversation.thread_id().clone(),
+            )
+        })
     }
 
     pub(super) fn handle_client_event(&mut self, event: client::ClientEvent) {
-        let refresh = refresh_server_event(
-            event,
-            &mut self.conversation,
-            &mut self.thread_subscription,
-            &mut self.app,
-        );
+        let refresh = refresh_server_event(event, self.conversation.as_mut(), &mut self.app);
         self.refresh.merge(refresh);
     }
 
@@ -149,17 +158,20 @@ impl AppDriver {
         let mut changed = self.app.poll_input_history() || !completions.is_empty();
         for completion in completions {
             match completion {
-                Ok(Completion::Memory(completion)) => {
+                Ok(RequestCompletion {
+                    completion: Completion::Memory(completion),
+                    ..
+                }) => {
                     let previous = self.memory.status();
                     if let Err(error) = self.memory.complete(completion) {
                         self.app.update(ThreadEvent::FailureReported(error));
                     }
                     self.publish_memory_status(previous);
                 }
-                Ok(completion) => apply_request_completion(
+                Ok(RequestCompletion { completion, origin }) => apply_request_completion(
                     completion,
+                    origin,
                     &mut self.conversation,
-                    &mut self.thread_subscription,
                     &mut self.app,
                 ),
                 Err(error) => self
@@ -172,6 +184,7 @@ impl AppDriver {
     }
 
     fn reconcile_memory_diagnostics(&mut self) -> bool {
+        let origin = RequestOrigin::current(&self.app);
         let previous = self.memory.status();
         let request = match self
             .memory
@@ -193,6 +206,7 @@ impl AppDriver {
             name,
             move || Completion::Memory(request.execute()),
             &mut self.app,
+            origin,
         );
         if self.requests.is_idle(Some(RequestKey::Memory)) {
             let previous = self.memory.status();
@@ -214,7 +228,17 @@ impl AppDriver {
         &mut self,
         command: Option<AppCommand>,
         had_active_turn: bool,
-    ) -> Option<AppCommand> {
+    ) -> Option<ScheduledCommand> {
+        let command = command.map(|command| {
+            if let Some(title) = command.panel_title() {
+                self.app
+                    .open_command_panel(super::command_panel::CommandPanel::loading(
+                        title,
+                        "Loading…",
+                    ));
+            }
+            ScheduledCommand::new(command, &self.app)
+        });
         self.queued_turn_dispatch_requested |= had_active_turn && self.app.active_turn().is_none();
 
         let mut command = schedule_command(command, &self.requests, &mut self.queued_commands);
@@ -223,7 +247,10 @@ impl AppDriver {
             && self.queued_commands.is_empty()
             && self.queued_turn_dispatch_requested
         {
-            command = self.app.dispatch_next_queued_turn();
+            command = self
+                .app
+                .dispatch_next_queued_turn()
+                .map(|command| ScheduledCommand::new(command, &self.app));
             self.queued_turn_dispatch_requested = false;
         }
         command
@@ -244,6 +271,7 @@ impl AppDriver {
     }
 
     pub(super) fn schedule_refreshes(&mut self) {
+        let origin = RequestOrigin::current(&self.app);
         if self.requests.is_idle(Some(RequestKey::Config)) && self.refresh.config {
             let mut client = self.client.clone();
             self.requests.spawn(
@@ -257,17 +285,23 @@ impl AppDriver {
                     })())
                 },
                 &mut self.app,
+                origin,
             );
             if !self.requests.is_idle(Some(RequestKey::Config)) {
                 self.refresh.config = false;
             }
         }
-        if self.requests.is_idle(Some(RequestKey::Thread)) && self.refresh.thread {
+        if self.requests.is_idle(Some(RequestKey::Thread))
+            && self.refresh.thread
+            && self.conversation.is_some()
+        {
             let mut client = self.client.clone();
-            let scope = self.thread_request_scope();
+            let scope = self
+                .thread_request_scope()
+                .expect("a subscribed conversation owns this refresh");
             let session_id = scope.session_id().clone();
             let thread_id = scope.thread_id().clone();
-            let history = self.thread_subscription.history();
+            let history = self.conversation.as_ref().unwrap().subscription.history();
             self.requests.spawn(
                 Some(RequestKey::Thread),
                 "zeta-tui-refresh-thread",
@@ -278,6 +312,7 @@ impl AppDriver {
                     })
                 },
                 &mut self.app,
+                origin,
             );
             if !self.requests.is_idle(Some(RequestKey::Thread)) {
                 self.refresh.thread = false;
@@ -286,7 +321,10 @@ impl AppDriver {
         if self.requests.is_idle(Some(RequestKey::Skills)) && self.refresh.skills {
             let client = self.client.clone();
             let server_slash_commands = self.server_slash_commands.clone();
-            let session_id = self.conversation.session_id().clone();
+            let session_id = self
+                .conversation
+                .as_ref()
+                .map(|current| current.conversation.session_id().clone());
             let plugins_enabled = self.plugins_enabled;
             self.requests.spawn(
                 Some(RequestKey::Skills),
@@ -298,6 +336,7 @@ impl AppDriver {
                     )
                 },
                 &mut self.app,
+                origin,
             );
             if !self.requests.is_idle(Some(RequestKey::Skills)) {
                 self.refresh.skills = false;
@@ -318,6 +357,7 @@ impl AppDriver {
                         .into()))
                     },
                     &mut self.app,
+                    origin,
                 );
             }
         }
@@ -335,6 +375,7 @@ impl AppDriver {
                     )
                 },
                 &mut self.app,
+                origin,
             );
             if !self.requests.is_idle(Some(RequestKey::Sessions)) {
                 self.refresh.sessions = false;
@@ -354,6 +395,7 @@ impl AppDriver {
                     )
                 },
                 &mut self.app,
+                origin,
             );
             if !self.requests.is_idle(Some(RequestKey::Connectors)) {
                 self.refresh.connectors = false;
@@ -380,36 +422,41 @@ impl AppDriver {
                     )
                 },
                 &mut self.app,
+                origin,
             );
         }
     }
 
-    fn thread_request_scope(&self) -> ThreadRequestScope {
-        ThreadRequestScope::new(
-            self.conversation.session_id(),
-            self.conversation.thread_id(),
-            self.conversation.thread_sequence(),
-        )
+    fn thread_request_scope(&self) -> Option<ThreadRequestScope> {
+        let current = self.conversation.as_ref()?;
+        Some(ThreadRequestScope::new(
+            current.conversation.session_id(),
+            current.conversation.thread_id(),
+            current.conversation.thread_sequence(),
+        ))
     }
 }
 
 pub(super) fn schedule_command(
-    command: Option<AppCommand>,
+    command: Option<ScheduledCommand>,
     requests: &RequestTasks,
-    queued: &mut VecDeque<AppCommand>,
-) -> Option<AppCommand> {
+    queued: &mut VecDeque<ScheduledCommand>,
+) -> Option<ScheduledCommand> {
     if let Some(command) = command {
-        let duplicate = match &command {
+        let duplicate = match &command.command {
             AppCommand::Host(HostCommand::RefreshClipboardImageAvailability) => {
                 queued.iter().any(|queued| {
                     matches!(
-                        queued,
+                        &queued.command,
                         AppCommand::Host(HostCommand::RefreshClipboardImageAvailability)
                     )
                 })
             }
             AppCommand::Thread(ThreadCommand::LoadOlderHistory) => queued.iter().any(|queued| {
-                matches!(queued, AppCommand::Thread(ThreadCommand::LoadOlderHistory))
+                matches!(
+                    &queued.command,
+                    AppCommand::Thread(ThreadCommand::LoadOlderHistory)
+                )
             }),
             _ => false,
         };
@@ -419,14 +466,13 @@ pub(super) fn schedule_command(
     }
     let runnable = queued
         .iter()
-        .position(|command| requests.is_idle(request_key(command)))?;
+        .position(|command| requests.is_idle(request_key(&command.command)))?;
     queued.remove(runnable)
 }
 
 fn refresh_server_event(
     event: client::ClientEvent,
-    conversation: &mut ActiveConversation,
-    thread_subscription: &mut ThreadSubscription,
+    current: Option<&mut Conversation>,
     app: &mut App,
 ) -> ServerRefresh {
     match event {
@@ -439,9 +485,10 @@ fn refresh_server_event(
             ..ServerRefresh::default()
         },
         client::ClientEvent::AgentRequest(request) => {
-            if request.session_id == *conversation.session_id()
-                && request.thread_id == *conversation.thread_id()
-            {
+            if current.is_some_and(|current| {
+                request.session_id == *current.conversation.session_id()
+                    && request.thread_id == *current.conversation.thread_id()
+            }) {
                 app.set_active_turn(request.turn_id.clone());
                 let envelope = *request;
                 let turn_id = envelope.turn_id;
@@ -492,7 +539,10 @@ fn refresh_server_event(
             ..ServerRefresh::default()
         },
         client::ClientEvent::ThreadUpdated(update) => {
-            match thread_subscription.classify_update(&update) {
+            let Some(current) = current else {
+                return ServerRefresh::default();
+            };
+            match current.subscription.classify_update(&update) {
                 ThreadUpdateDisposition::Ignore => ServerRefresh::default(),
                 ThreadUpdateDisposition::RefreshSnapshot => ServerRefresh {
                     thread: true,
@@ -501,7 +551,10 @@ fn refresh_server_event(
             }
         }
         client::ClientEvent::ThreadTranscriptUpdated(update) => {
-            match thread_subscription.classify_transcript_update(&update) {
+            let Some(current) = current else {
+                return ServerRefresh::default();
+            };
+            match current.subscription.classify_transcript_update(&update) {
                 TranscriptUpdateDisposition::Ignore => ServerRefresh::default(),
                 TranscriptUpdateDisposition::Apply => {
                     app.update(ThreadEvent::TranscriptUpdateReceived(update));

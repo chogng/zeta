@@ -1,35 +1,45 @@
 //! Full-screen page composition and transient pointer state.
 
 mod composer;
+mod conversation;
 mod footer;
 mod header;
+mod home;
 mod layout;
+mod modal;
 pub(super) mod navigation;
-mod panel;
 pub(super) mod pointer;
 pub(super) mod selection;
 
 pub(super) use layout::layout;
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(in crate::app) enum Page {
+    Home,
+    #[default]
+    Conversation,
+}
+
 const JUMP_LABEL: &str = "Jump to bottom (click) ↓";
 
 use crate::app::App;
-use crate::render::Renderable;
-use crate::sessions;
 use crate::thread::composer as chat_composer;
-use crate::thread::transcript::ChatHistoryView;
 use pointer::PointerInteraction;
 use pointer::PointerTarget;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Block;
-use ratatui::widgets::Paragraph;
 use selection::ScreenSelection;
 
 /// Owns interaction state that exists only while the full-screen page is active.
 #[derive(Debug)]
 pub(super) struct Fullscreen {
+    pub(super) sessions: crate::sessions::SessionNavigation,
+    pub(super) issues: crate::issues::Manager,
+    pub(super) agent_thread_switcher: crate::thread::AgentThreadSwitcher,
+    page: Page,
+    home: home::Home,
     pub(super) preview: crate::thread::transcript::viewport::PreviewViewport,
     pub(super) escape: crate::app::escape::ScreenEscapeSequence,
     pub(super) panels: crate::app::command_panel::Panels,
@@ -41,6 +51,11 @@ pub(super) struct Fullscreen {
 impl Fullscreen {
     pub(super) fn new(thread: zeta_protocol::ThreadId) -> Self {
         Self {
+            sessions: Default::default(),
+            issues: Default::default(),
+            agent_thread_switcher: Default::default(),
+            page: Page::Conversation,
+            home: home::Home::default(),
             preview: Default::default(),
             escape: Default::default(),
             panels: Default::default(),
@@ -53,6 +68,10 @@ impl Fullscreen {
     pub(super) fn clear(&mut self) {
         self.pointer.clear();
         self.selection.clear();
+    }
+
+    pub(in crate::app) fn home_visible(&self) -> bool {
+        self.page == Page::Home
     }
 }
 
@@ -71,75 +90,19 @@ pub(super) fn draw(
         frame.area(),
     );
     let areas = layout(app, frame.area());
-    if let Some(preview) = app.session_preview() {
-        let messages = preview.messages();
-        let header = header::history_buffer(
-            areas.session.transcript.width,
-            areas.session.transcript.height,
-            app.welcome(),
-            context,
-        );
-        ChatHistoryView {
-            jump_label: JUMP_LABEL,
-            header: Some(&header),
-            messages: &messages,
-            scroll: &app.fullscreen.preview.scroll,
-            render_cache: &app.fullscreen.preview.cache,
-            pointer: pointer::transcript_pointer(app),
-        }
-        .render(frame, areas.session.transcript, context);
-        let title = format!("  Preview · {} · read only", preview.title);
-        frame.render_widget(
-            Paragraph::new(title).style(Style::default().fg(context.muted())),
-            areas.session.composer,
-        );
-        if let Some(notice) = preview.notice() {
-            frame.render_widget(
-                Paragraph::new(notice).style(Style::default().fg(context.muted())),
-                areas.session.top_tip,
-            );
-        }
-        footer::draw(frame, areas.session.bottom, app, context);
-        if let Some(overlay) = app.overlay() {
-            context.clear_hyperlinks(overlay.surface(areas.transient_area()));
-            crate::widgets::overlay::draw(frame, areas.transient_area(), overlay, context);
-        }
-        app.fullscreen.selection.draw(frame.buffer_mut(), context);
-        return;
-    }
+    header::draw(frame, areas.header, app, context);
     let hovered = app.fullscreen.pointer.hovered();
     let pressed = app.fullscreen.pointer.pressed();
-    if let Some(manager) = app.issue_manager() {
-        manager.draw(frame, areas.session.transcript, context);
-    } else if let Some(manager) = app.session_manager_view() {
-        let manager_areas = layout::manager_areas(
-            areas.session.transcript,
-            header::desired_height(areas.session.transcript.width),
-        );
-        header::draw(frame, manager_areas.welcome, app.welcome(), context);
-        sessions::draw_manager(frame, manager_areas.sessions, manager, None, None, context);
+    if app.fullscreen.home_visible() {
+        home::draw(frame, areas.session.transcript, app, context);
     } else {
-        let messages = app.visible_transcript_views();
-        let header = header::history_buffer(
-            areas.session.transcript.width,
-            areas.session.transcript.height,
-            app.welcome(),
-            context,
-        );
-        ChatHistoryView {
-            jump_label: JUMP_LABEL,
-            header: Some(&header),
-            messages: &messages,
-            scroll: app.transcript_scroll(),
-            render_cache: app.transcript_render_cache(),
-            pointer: pointer::transcript_pointer(app),
-        }
-        .render(frame, areas.session.transcript, context);
+        conversation::draw(frame, &areas, app, context);
     }
-    composer::draw(frame, app, &areas, context);
-    if let Some(overlay) = app.overlay() {
-        context.clear_hyperlinks(overlay.surface(areas.transient_area()));
-        crate::widgets::overlay::draw(frame, areas.transient_area(), overlay, context);
+    if app.session_preview().is_none() {
+        composer::draw(frame, app, &areas, context);
+    }
+    if modal::is_open(app) {
+        modal::draw(frame, app, context);
     } else if app.completion_visible() {
         context.clear_hyperlinks(areas.completion_area());
         let input_view = app.chat_composer_view();
@@ -171,5 +134,12 @@ pub(super) fn process_resource_demand(
     app: &App,
     area: Rect,
 ) -> zeta_memory_diagnostics::ProcessResourceDemand {
+    if modal::is_open(app) {
+        return if modal::process_resources_visible(app, area) {
+            zeta_memory_diagnostics::ProcessResourceDemand::Detailed
+        } else {
+            zeta_memory_diagnostics::ProcessResourceDemand::Disabled
+        };
+    }
     footer::process_resource_demand(app, &layout(app, area))
 }

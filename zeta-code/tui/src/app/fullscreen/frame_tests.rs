@@ -118,9 +118,9 @@ fn input_history_search_and_cancel_preserve_the_composer() {
     let area = layout(&app, Rect::new(0, 0, 100, 20)).session.composer;
     let content = crate::thread::composer::content_area(area);
     let buffer = render_buffer(&app, 100, 20);
-    assert_eq!(buffer[(content.x, area.y)].symbol(), "H");
+    assert_eq!(buffer[(content.x + 2, area.y)].symbol(), "H");
     assert_eq!(
-        buffer[(content.x, area.y)].fg,
+        buffer[(content.x + 2, area.y)].fg,
         app.render_context().foreground()
     );
     assert_eq!(buffer[(area.x, area.y + 1)].symbol(), ">");
@@ -158,16 +158,20 @@ fn pull_request_command_submits_an_ordinary_agent_task() {
 }
 
 #[test]
-fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
+fn conversation_chrome_keeps_home_and_input_visible_without_a_welcome_message() {
     let rendered = render(&App::new(), 80, 20);
-
-    assert!(!rendered.contains("dir assistant"));
-    assert!(rendered.contains(concat!("Zeta Code v", env!("CARGO_PKG_VERSION"))));
-    assert!(rendered.contains("Automatic model · Access unknown"));
-    assert!(!rendered.contains("enter send"));
-    assert!(!rendered.contains("ctrl-v image"));
-    let status_line = rendered.lines().last().unwrap();
-    assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
+    assert!(rendered.lines().next().unwrap().contains("Home"));
+    assert!(!rendered.contains("Zeta Code v"));
+    assert!(rendered.contains("Automatic model"));
+    assert!(
+        rendered
+            .lines()
+            .rev()
+            .nth(1)
+            .unwrap()
+            .contains("ask permissions on")
+    );
+    assert!(rendered.lines().last().unwrap().contains("/home"));
 }
 
 #[test]
@@ -231,12 +235,15 @@ fn clipboard_image_paste_moves_from_top_tip_into_chat_input() {
     );
     assert_snapshot!("clipboard_image_top_tip", rendered);
 
-    app.update(HostEvent::ClipboardImageRead(Ok(ClipboardImage {
-        png: b"\x89PNG\r\n\x1a\npayload".to_vec(),
-        fingerprint: ClipboardImageFingerprint(1),
-        width: 1,
-        height: 1,
-    })));
+    app.update(HostEvent::ClipboardImageRead {
+        target: app.draft_target(),
+        result: Ok(ClipboardImage {
+            png: b"\x89PNG\r\n\x1a\npayload".to_vec(),
+            fingerprint: ClipboardImageFingerprint(1),
+            width: 1,
+            height: 1,
+        }),
+    });
     let rendered_after_paste = render(&app, terminal_area.width, terminal_area.height);
     assert!(!rendered_after_paste.contains("image in clipboard"));
     assert!(rendered_after_paste.contains("[Image #1]"));
@@ -250,12 +257,15 @@ fn clipboard_image_paste_moves_from_top_tip_into_chat_input() {
 fn clipboard_image_refresh_after_paste_stays_quiet_until_content_changes() {
     let mut app = App::new();
     // Pasting can finish before the first availability refresh.
-    app.update(HostEvent::ClipboardImageRead(Ok(ClipboardImage {
-        png: b"\x89PNG\r\n\x1a\npayload".to_vec(),
-        fingerprint: ClipboardImageFingerprint(1),
-        width: 1,
-        height: 1,
-    })));
+    app.update(HostEvent::ClipboardImageRead {
+        target: app.draft_target(),
+        result: Ok(ClipboardImage {
+            png: b"\x89PNG\r\n\x1a\npayload".to_vec(),
+            fingerprint: ClipboardImageFingerprint(1),
+            width: 1,
+            height: 1,
+        }),
+    });
     app.update(HostEvent::ClipboardImageAvailabilityChanged(
         ClipboardImageAvailability::Available(ClipboardImageFingerprint(1)),
     ));
@@ -273,7 +283,9 @@ fn clipboard_image_refresh_after_paste_stays_quiet_until_content_changes() {
     assert!(!render(&app, 80, 20).contains("image in clipboard"));
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL)),
-        Some(AppCommand::Host(crate::host::Command::ReadClipboardImage))
+        Some(AppCommand::Host(crate::host::Command::ReadClipboardImage {
+            target: app.draft_target()
+        }))
     );
 }
 
@@ -283,12 +295,15 @@ fn failed_clipboard_image_paste_keeps_the_tip_visible() {
     app.update(HostEvent::ClipboardImageAvailabilityChanged(
         ClipboardImageAvailability::Available(ClipboardImageFingerprint(1)),
     ));
-    app.update(HostEvent::ClipboardImageRead(Ok(ClipboardImage {
-        png: b"invalid image".to_vec(),
-        fingerprint: ClipboardImageFingerprint(1),
-        width: 1,
-        height: 1,
-    })));
+    app.update(HostEvent::ClipboardImageRead {
+        target: app.draft_target(),
+        result: Ok(ClipboardImage {
+            png: b"invalid image".to_vec(),
+            fingerprint: ClipboardImageFingerprint(1),
+            width: 1,
+            height: 1,
+        }),
+    });
 
     assert!(render(&app, 80, 20).contains("image in clipboard"));
     assert_eq!(app.input(), "");
@@ -308,33 +323,31 @@ fn status_command_panel_uses_the_shared_title_and_close_hint() {
         session_id: "session-1",
         thread_id: "thread-1",
     }));
-    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
-
-    terminal
-        .draw(|frame| super::panel::draw(&panel, frame, frame.area(), test_context()))
-        .unwrap();
-
-    let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(0, 0)].symbol(), "─");
-    assert_eq!(buffer[(2, 0)].symbol(), "S");
-    assert_eq!(buffer[(9, 0)].symbol(), "─");
-    assert_eq!(buffer[(2, 0)].fg, test_context().focus());
-    assert!(buffer[(2, 0)].modifier.contains(Modifier::BOLD));
-    assert_ne!(
-        buffer[(2, 0)].bg,
-        test_context().accent_surface_background()
-    );
-    assert_eq!(buffer[(3, 2)].symbol(), "T");
+    let mut app = App::new();
+    app.open_command_panel(panel);
+    let area = Rect::new(0, 0, 80, 20);
+    let modal = super::modal::layout(area);
+    let buffer = render_buffer(&app, 80, 20);
+    assert_eq!(buffer[(modal.surface.x, modal.surface.y)].symbol(), "┌");
+    assert_eq!(buffer[(modal.title.x + 1, modal.title.y)].symbol(), "S");
     assert_eq!(
-        buffer[(3, 2)].bg,
-        test_context().accent_surface_background()
+        buffer[(modal.title.x + 1, modal.title.y)].fg,
+        test_context().foreground()
     );
-    assert_eq!(buffer[(2, 3)].symbol(), "M");
-    assert_eq!(panel.key_hints(), "Tab to switch · Esc to close");
+    assert!(
+        buffer[(modal.title.x + 1, modal.title.y)]
+            .modifier
+            .contains(Modifier::BOLD)
+    );
+    let text = render(&app, 80, 20);
+    assert!(text.contains("Thread"));
+    assert!(text.contains("Processes"));
+    assert!(text.contains("Esc to close"));
+    assert!(text.contains("[×]"));
 }
 
 #[test]
-fn command_panel_layout_keeps_wrapped_tabs_between_title_and_body() {
+fn modal_keeps_wrapped_tabs_between_title_and_body() {
     let panel = CommandPanel::help(ListSelectionModel::new(
         "Panel",
         vec![
@@ -342,32 +355,29 @@ fn command_panel_layout_keeps_wrapped_tabs_between_title_and_body() {
             ListSelectionGroup::new("Second tab", vec![ListSelectionItem::new("Second item")]),
         ],
     ));
-    let area = Rect::new(0, 0, 20, super::panel::desired_height(&panel, 20));
+    let area = Rect::new(0, 0, 20, 12);
+    let modal = super::modal::layout(area);
+    let body = super::modal::body_area(&panel, modal.content);
     let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
-
     terminal
-        .draw(|frame| super::panel::draw(&panel, frame, area, test_context()))
+        .draw(|frame| super::modal::draw_panel(frame, &panel, modal, test_context()))
         .unwrap();
-
     let buffer = terminal.backend().buffer();
-    assert_eq!(
-        buffer[(2, 2)].bg,
-        test_context().accent_surface_background()
-    );
-    assert_eq!(buffer[(0, 4)].symbol(), ">");
-    assert_eq!(buffer[(2, 4)].symbol(), "F");
-    let rows = terminal.backend().to_string();
-    let rows = rows.lines().collect::<Vec<_>>();
-    assert!(rows[0].contains("Panel"));
-    assert!(rows[1].trim_matches('"').trim().is_empty());
-    assert!(rows[2].contains("First tab"));
-    assert!(rows[3].contains("Second tab"));
-    assert!(rows[4].contains("First item"));
+    assert_eq!(body.y, modal.content.y + 3);
+    assert_eq!(buffer[(body.x - 2, body.y)].symbol(), ">");
+    assert_eq!(buffer[(body.x, body.y)].symbol(), "F");
+    let text = terminal.backend().to_string();
+    assert!(text.contains("First tab"));
+    assert!(text.contains("Second tab"));
+    assert!(text.contains("First item"));
+    insta::assert_snapshot!("modal_wrapped_tabs", text);
 }
 
 #[test]
-fn long_command_lists_grow_past_twelve_rows_and_scroll_only_when_terminal_is_full() {
+fn modal_lists_scroll_within_their_bounds_without_moving_the_composer() {
     let mut app = App::new();
+    let area = Rect::new(0, 0, 80, 20);
+    let before = layout(&app, area).session.composer;
     app.update(AppEvent::HelpOpened(
         ListSelectionModel::new(
             "Items",
@@ -380,21 +390,18 @@ fn long_command_lists_grow_past_twelve_rows_and_scroll_only_when_terminal_is_ful
         )
         .without_tab_bar(),
     ));
-    let large = layout(&app, Rect::new(0, 0, 80, 40));
-    assert_eq!(large.session.composer.height, 32);
-    let rendered = render(&app, 80, 40);
-    assert!(rendered.contains("Item 29"));
-    assert!(!rendered.contains("more below"));
-    let small = layout(&app, Rect::new(0, 0, 80, 20));
-    assert_eq!(small.session.composer.y, 0);
-    assert_eq!(small.session.composer.height, 18);
-    assert!(render(&app, 80, 20).contains("15 more below"));
-    app.handle_key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE));
-    let rendered = render(&app, 80, 20);
-    assert!(rendered.contains("15 more above"));
-    assert!(rendered.contains("Item 29"));
-    assert!(!rendered.contains("more below"));
-    assert!(!render(&app, 80, 40).contains("more above"));
+    assert_eq!(layout(&app, area).session.composer, before);
+    for height in [20, 40] {
+        app.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE));
+        let first = render(&app, 80, height);
+        assert!(first.contains("Item 0"));
+        assert!(first.contains("more below"));
+        app.handle_key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE));
+        let last = render(&app, 80, height);
+        assert!(last.contains("Item 29"));
+        assert!(last.contains("more above"));
+        assert!(!last.contains("more below"));
+    }
 }
 
 #[test]
@@ -517,28 +524,17 @@ fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_cha
         thread_id: "thread-1",
     })));
 
-    assert_eq!(
-        layout(&app, Rect::new(0, 0, 80, 30))
-            .session
-            .composer
-            .height,
-        17
-    );
-    assert_eq!(layout(&app, terminal_area).session.composer.height, 17);
-    assert_eq!(layout(&app, terminal_area).session.bottom.height, 2);
-    assert_ne!(layout(&app, terminal_area).session, before);
+    assert_eq!(layout(&app, terminal_area).session, before);
     assert!(app.command_panel().is_some());
     assert!(app.overlay().is_none());
     assert!(app.completion().is_none());
     app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
     assert_eq!(app.input(), "/");
     let rendered = render(&app, 80, 20);
-    let rows = rendered.lines().collect::<Vec<_>>();
-    assert!(rows[1].starts_with("─ Status ─"));
-    assert!(rows[2].trim().is_empty());
-    assert!(rows[3].starts_with("   Thread    Processes"));
-    assert!(rows[18].trim().is_empty());
-    assert_eq!(rows[19].trim_end(), "  Tab to switch · Esc to close");
+    assert!(rendered.contains("Status"));
+    assert!(rendered.contains("Thread"));
+    assert!(rendered.contains("Processes"));
+    assert!(rendered.contains("Tab to switch · Esc to close"));
     assert_snapshot!("status_panel_adaptive_height", rendered);
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
@@ -599,7 +595,7 @@ fn empty_session_input_offers_manager_navigation() {
 
     assert!(rows[top_tip_row].contains("← for agents"));
     assert!(!rows[top_tip_row].contains("shift+tab"));
-    assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
+    assert_eq!(rows[18].trim_end(), "  ⏸ ask permissions on");
 
     assert!(!app.handle_tick(Instant::now() + Duration::from_secs(10)));
     let rendered = render(&app, terminal_area.width, terminal_area.height);
@@ -610,7 +606,7 @@ fn empty_session_input_offers_manager_navigation() {
     app.insert_text("draft");
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
-    let status_line = rendered.lines().last().unwrap();
+    let status_line = rendered.lines().rev().nth(1).unwrap();
 
     assert!(!rows[top_tip_row].contains("← for agents"));
     assert!(!rows[top_tip_row].contains("shift+tab"));
@@ -634,7 +630,7 @@ fn narrow_session_keeps_manager_tip_above_input_and_status_below() {
 
     assert!(rows[top_tip_row].contains("← for agents"));
     assert!(!rows[top_tip_row].contains("shift+tab"));
-    assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
+    assert_eq!(rows[18].trim_end(), "  ⏸ ask permissions on");
 }
 
 #[test]
@@ -660,7 +656,7 @@ fn left_from_a_session_opens_the_manager() {
 }
 
 #[test]
-fn manager_keeps_welcome_and_renders_grouped_three_column_status_rows() {
+fn manager_uses_the_page_body_for_grouped_three_column_status_rows() {
     let mut app = App::new();
     app.update(SessionEvent::CatalogReceived(vec![
         manager_session(
@@ -696,7 +692,7 @@ fn manager_keeps_welcome_and_renders_grouped_three_column_status_rows() {
         .unwrap();
     assert!(!rendered.lines().any(|line| line.contains("done")));
 
-    assert!(rendered.contains(concat!("Zeta Code v", env!("CARGO_PKG_VERSION"))));
+    assert!(rendered.lines().next().unwrap().contains("Home"));
     assert!(rendered.contains("Needs input"));
     assert!(rendered.contains("Working"));
     assert!(
@@ -737,7 +733,8 @@ fn status_line_uses_a_distinct_symbol_for_each_approval_mode() {
     let mut app = App::new();
     let ask_permissions = render(&app, 80, 20)
         .lines()
-        .last()
+        .rev()
+        .nth(1)
         .unwrap()
         .trim_end()
         .to_owned();
@@ -745,7 +742,8 @@ fn status_line_uses_a_distinct_symbol_for_each_approval_mode() {
     app.set_next_approval_mode(zeta_protocol::ApprovalMode::AutoReview);
     let auto_review = render(&app, 80, 20)
         .lines()
-        .last()
+        .rev()
+        .nth(1)
         .unwrap()
         .trim_end()
         .to_owned();
@@ -753,7 +751,8 @@ fn status_line_uses_a_distinct_symbol_for_each_approval_mode() {
     app.set_next_approval_mode(zeta_protocol::ApprovalMode::BypassPermissions);
     let bypass_permissions = render(&app, 80, 20)
         .lines()
-        .last()
+        .rev()
+        .nth(1)
         .unwrap()
         .trim_end()
         .to_owned();
@@ -818,25 +817,25 @@ fn queue_focus_is_visible_and_queue_rows_leave_mouse_to_the_terminal() {
 fn status_line_uses_a_distinct_color_for_each_approval_mode_symbol() {
     let mut app = App::new();
     let ask_permissions = render_buffer(&app, 80, 20);
-    assert_eq!(ask_permissions[(2, 19)].fg, test_context().warning());
+    assert_eq!(ask_permissions[(2, 18)].fg, test_context().warning());
     assert_eq!(
-        ask_permissions[(2 + "⏸".width() as u16, 19)].fg,
+        ask_permissions[(2 + "⏸".width() as u16, 18)].fg,
         test_context().chat_input_chrome()
     );
 
     app.set_next_approval_mode(zeta_protocol::ApprovalMode::AutoReview);
     let auto_review = render_buffer(&app, 80, 20);
-    assert_eq!(auto_review[(2, 19)].fg, test_context().accent());
+    assert_eq!(auto_review[(2, 18)].fg, test_context().accent());
     assert_eq!(
-        auto_review[(2 + "⏩".width() as u16, 19)].fg,
+        auto_review[(2 + "⏩".width() as u16, 18)].fg,
         test_context().chat_input_chrome()
     );
 
     app.set_next_approval_mode(zeta_protocol::ApprovalMode::BypassPermissions);
     let bypass_permissions = render_buffer(&app, 80, 20);
-    assert_eq!(bypass_permissions[(2, 19)].fg, test_context().danger());
+    assert_eq!(bypass_permissions[(2, 18)].fg, test_context().danger());
     assert_eq!(
-        bypass_permissions[(2 + "▶".width() as u16, 19)].fg,
+        bypass_permissions[(2 + "▶".width() as u16, 18)].fg,
         test_context().chat_input_chrome()
     );
 }
@@ -849,12 +848,12 @@ fn status_line_colors_current_and_next_modes_independently() {
 
     let buffer = render_buffer(&app, 80, 20);
     let next_icon_column = 2 + "⏸ current: ask permissions on · ".width() as u16;
-    assert_eq!(buffer[(2, 19)].fg, test_context().warning());
-    assert_eq!(buffer[(next_icon_column, 19)].fg, test_context().accent());
+    assert_eq!(buffer[(2, 18)].fg, test_context().warning());
+    assert_eq!(buffer[(next_icon_column, 18)].fg, test_context().accent());
 }
 
 #[test]
-fn welcome_header_remains_at_the_start_of_scrollable_history() {
+fn workspace_header_stays_fixed_while_scrolling_conversation_history() {
     let mut app = App::for_dir(Path::new("/work/zeta"));
 
     let empty = render(&app, 80, 20);
@@ -869,17 +868,17 @@ fn welcome_header_remains_at_the_start_of_scrollable_history() {
             "Model invocation failed {index}"
         )));
     }
-    assert!(!render(&app, 80, 20).contains("/work/zeta"));
+    assert!(render(&app, 80, 20).contains("/work/zeta"));
 
     app.handle_key_in_area(
         KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL),
         Rect::new(0, 0, 80, 20),
     );
     let scrolled_to_start = render(&app, 80, 20);
-    assert!(scrolled_to_start.contains(concat!("Zeta Code v", env!("CARGO_PKG_VERSION"))));
+    assert!(!scrolled_to_start.contains("Zeta Code v"));
     assert!(scrolled_to_start.contains("/work/zeta"));
     assert!(scrolled_to_start.contains("Conversation started."));
-    assert_snapshot!("transcript_scrolled_to_welcome_header", scrolled_to_start);
+    assert_snapshot!("transcript_scrolled_to_first_message", scrolled_to_start);
 }
 
 #[test]
@@ -895,15 +894,15 @@ fn status_line_renders_the_configured_model_without_provider() {
 
     let buffer = render_buffer(&app, 80, 20);
     let context_line = (0..80)
-        .map(|x| buffer[(x, 18)].symbol())
+        .map(|x| buffer[(x, 17)].symbol())
         .collect::<String>();
     let policy_line = (0..80)
-        .map(|x| buffer[(x, 19)].symbol())
+        .map(|x| buffer[(x, 18)].symbol())
         .collect::<String>();
 
     assert_eq!(context_line.trim_end(), "  claude-sonnet");
     assert_eq!(policy_line.trim_end(), "  ⏸ ask permissions on");
-    assert_eq!(buffer[(2, 19)].fg, test_context().warning());
+    assert_eq!(buffer[(2, 18)].fg, test_context().warning());
 }
 
 #[test]
@@ -920,27 +919,23 @@ fn narrow_status_line_keeps_the_first_configured_item() {
     let rendered = render(&app, 24, 20);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert_eq!(rows[18].trim_end(), "  claude-sonnet");
-    assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
+    assert_eq!(rows[17].trim_end(), "  claude-sonnet");
+    assert_eq!(rows[18].trim_end(), "  ⏸ ask permissions on");
 }
 
 #[test]
-fn chat_input_uses_light_gray_edge_to_edge_horizontal_rules_and_prompt() {
+fn boxed_input_keeps_its_border_outside_the_status_marker_column() {
     let app = App::new();
-    let terminal_area = Rect::new(0, 0, 80, 20);
-    let input = layout(&app, terminal_area).input;
-    let buffer = render_buffer(&app, terminal_area.width, terminal_area.height);
-
-    for y in [input.y, input.bottom() - 1] {
-        assert_eq!(buffer[(0, y)].symbol(), "─");
-        assert_eq!(buffer[(0, y)].fg, test_context().chat_input_chrome());
-        assert_eq!(buffer[(79, y)].symbol(), "─");
-        assert_eq!(buffer[(79, y)].fg, test_context().chat_input_chrome());
-    }
-    let content_row = input.y + 1;
-    assert_eq!(buffer[(0, content_row)].symbol(), ">");
-    assert_eq!(buffer[(0, content_row)].fg, test_context().foreground());
-    assert_eq!(buffer[(79, content_row)].symbol(), " ");
+    let input = layout(&app, Rect::new(0, 0, 80, 20)).input;
+    let buffer = render_buffer(&app, 80, 20);
+    assert_eq!(buffer[(0, input.y)].symbol(), " ");
+    assert_eq!(buffer[(2, input.y)].symbol(), "╭");
+    assert_eq!(buffer[(79, input.y)].symbol(), "╮");
+    assert_eq!(buffer[(2, input.y)].fg, test_context().chat_input_chrome());
+    assert_eq!(buffer[(0, input.y + 1)].symbol(), ">");
+    assert_eq!(buffer[(0, input.y + 1)].fg, test_context().foreground());
+    assert_eq!(buffer[(2, input.y + 1)].symbol(), "│");
+    assert_eq!(buffer[(79, input.y + 1)].symbol(), "│");
 }
 
 #[test]
@@ -979,7 +974,7 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
     ));
 
     let buffer = render_buffer(&app, 80, 20);
-    let bottom_row = layout(&app, terminal_area).session.bottom.bottom() - 1;
+    let bottom_row = layout(&app, terminal_area).session.bottom.bottom() - 2;
     let hint_column = 78 - "shift+tab to cycle policy".width() as u16;
     let hint = &buffer[(hint_column, top_tip_row)];
 
@@ -993,8 +988,8 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
             .trim_end(),
         "  ⏸ ask permissions on"
     );
-    assert_eq!(buffer[(0, composer.y)].symbol(), "─");
-    assert_eq!(buffer[(79, composer.y)].symbol(), "─");
+    assert_eq!(buffer[(2, composer.y)].symbol(), "╭");
+    assert_eq!(buffer[(79, composer.y)].symbol(), "╮");
 
     let first_tip_expired = Instant::now() + Duration::from_secs(6);
     assert!(app.handle_tick(first_tip_expired));
@@ -1104,7 +1099,7 @@ fn multiline_chat_input_grows_upward_and_keeps_all_lines_visible() {
     assert!(rows[usize::from(input.y + 1)].contains("first"));
     assert!(rows[usize::from(input.y + 2)].contains("second"));
     assert!(rows[usize::from(input.y + 3)].contains("third"));
-    assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
+    assert_eq!(rows[18].trim_end(), "  ⏸ ask permissions on");
 }
 
 #[test]
@@ -1113,7 +1108,7 @@ fn turn_activity_keeps_permission_status_free_of_submission_hints() {
     app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
 
     let rendered = render(&app, 80, 20);
-    let status_line = rendered.lines().last().unwrap();
+    let status_line = rendered.lines().rev().nth(1).unwrap();
 
     assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
     assert!(!status_line.contains("enter queue"));
@@ -1130,36 +1125,30 @@ fn chat_input_soft_wraps_long_lines_instead_of_clipping_them() {
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert!(rows[usize::from(input.y + 1)].contains("abcdef"));
-    assert!(rows[usize::from(input.y + 2)].contains("ghij"));
+    assert!(rows[usize::from(input.y + 1)].contains("abcd"));
+    assert!(rows[usize::from(input.y + 2)].contains("efgh"));
 }
 
 #[test]
-fn read_only_command_panel_keeps_the_visible_transcript_above_it() {
+fn modal_covers_the_page_and_restores_its_transcript_and_draft() {
     let mut app = App::new();
     app.update(ThreadEvent::ProductNotice(
         "Conversation remains visible.".into(),
     ));
+    app.insert_text("draft");
+    let area = Rect::new(0, 0, 80, 24);
+    let before = render(&app, 80, 24);
+    let composer = layout(&app, area).input;
     app.update(AppEvent::HelpOpened(help_view()));
-
     let rendered = render(&app, 80, 24);
-
-    assert!(rendered.contains("Conversation remains visible."));
     assert!(rendered.contains("Help"));
-    assert!(rendered.contains("Commands"));
-    assert!(rendered.contains("Keys"));
     assert!(rendered.contains("Search commands and shortcuts"));
-    assert!(rendered.contains("Esc to close"));
-    assert!(!rendered.contains("←/→/Tab to switch"));
-    assert!(!rendered.contains("enter send"));
-    assert!(!rendered.contains("ask permissions on"));
-    let layout = layout(&app, Rect::new(0, 0, 80, 24));
-    assert!(layout.input.is_empty());
-    assert_eq!(layout.session.bottom.height, 2);
-    let rows = rendered.lines().collect::<Vec<_>>();
-    assert!(rows[22].trim().is_empty());
-    assert!(rows[23].contains("/ to search"));
-    assert_eq!(layout.session.composer.bottom(), layout.session.bottom.y);
+    assert!(!rendered.contains("Conversation remains visible."));
+    assert_eq!(layout(&app, area).input, composer);
+    assert_eq!(app.input(), "draft");
+    assert_snapshot!("help_modal", rendered);
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert_eq!(render(&app, 80, 24), before);
 }
 
 #[test]
@@ -1195,7 +1184,7 @@ fn startup_panel_renders_the_effective_context() {
 }
 
 #[test]
-fn theme_candidate_focus_repaints_only_the_command_panel_focus_border() {
+fn theme_candidate_focus_changes_content_without_repainting_modal_chrome() {
     let mut app = App::new();
     app.update(AppEvent::HelpOpened(ListSelectionModel::new(
         "Theme",
@@ -1212,35 +1201,25 @@ fn theme_candidate_focus_repaints_only_the_command_panel_focus_border() {
         )],
     )));
 
+    let area = Rect::new(0, 0, 80, 24);
+    let modal = super::modal::layout(area);
+    let body = super::modal::body_area(app.command_panel().unwrap(), modal.content);
     let first = render_buffer(&app, 80, 24);
-    let interaction_y = layout(&app, Rect::new(0, 0, 80, 24)).session.composer.y;
-
-    assert_eq!(first[(0, interaction_y)].fg, Color::Red);
-    assert_eq!(first[(2, interaction_y)].fg, Color::Red);
-    assert!(first[(2, interaction_y)].modifier.contains(Modifier::BOLD));
-    assert_ne!(
-        first[(2, interaction_y)].bg,
-        test_context().accent_surface_background()
-    );
-
+    assert_eq!(first[(body.x, body.y)].fg, Color::LightRed);
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let second = render_buffer(&app, 80, 24);
-    for y in 0..interaction_y {
-        for x in 0..80 {
-            assert_eq!(
-                second[(x, y)],
-                first[(x, y)],
-                "background changed at {x},{y}"
-            );
+    assert_eq!(second[(body.x, body.y + 1)].fg, Color::LightGreen);
+    assert_eq!(
+        first[(modal.surface.x, modal.surface.y)],
+        second[(modal.surface.x, modal.surface.y)]
+    );
+    for y in 0..area.height {
+        for x in 0..area.width {
+            if !modal.surface.contains(ratatui::layout::Position::new(x, y)) {
+                assert_eq!(second[(x, y)], first[(x, y)]);
+            }
         }
     }
-    assert_eq!(second[(0, interaction_y)].fg, Color::Green);
-    assert_eq!(second[(2, interaction_y)].fg, Color::Green);
-    assert!(second[(2, interaction_y)].modifier.contains(Modifier::BOLD));
-    assert_ne!(
-        second[(2, interaction_y)].bg,
-        test_context().accent_surface_background()
-    );
 }
 
 #[test]
@@ -1256,7 +1235,7 @@ fn completed_error_remains_visible_in_the_scrollable_transcript() {
     assert!(rendered.contains("The configured model is unavailable."));
     assert!(rendered.contains("ask permissions on"));
     assert!(!rows.iter().any(|line| line.trim() == "error"));
-    assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
+    assert_eq!(rows[18].trim_end(), "  ⏸ ask permissions on");
     assert!(!rendered.contains("ready to retry"));
     assert!(!rendered.contains("esc esc rewind"));
     assert!(!rendered.contains("StableTurnError"));
@@ -1366,7 +1345,8 @@ fn transcript_and_chat_input_content_start_in_the_same_column() {
         .unwrap();
 
     assert_eq!(buffer[(2, transcript_row)].symbol(), "/");
-    assert_eq!(buffer[(2, input.y + 1)].symbol(), "d");
+    assert_eq!(buffer[(2, input.y + 1)].symbol(), "│");
+    assert_eq!(buffer[(3, input.y + 1)].symbol(), "d");
 }
 
 #[test]
@@ -1657,7 +1637,7 @@ fn mention_popup_aligns_markers_with_the_query_and_highlights_fuzzy_matches() {
         }
     }
     assert_eq!(
-        buffer[(2, layout(&app, terminal_area).input.y + 1)].symbol(),
+        buffer[(3, layout(&app, terminal_area).input.y + 1)].symbol(),
         "@"
     );
     let second = &popup.matches[1];
@@ -1840,22 +1820,28 @@ fn custom_provider_app() -> App {
 }
 
 #[test]
-fn short_provider_panel_uses_space_below_base_url() {
+fn short_provider_modal_scrolls_to_each_focused_field() {
     let mut app = custom_provider_app();
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let output = render(&app, 100, 17);
     let buffer = render_buffer(&app, 100, 17);
-    assert_eq!(buffer[(0, 6)].symbol(), ">");
-    assert_eq!(buffer[(2, 6)].symbol(), "B");
-    assert_eq!(buffer[(0, 7)].symbol(), " ");
-    assert_eq!(buffer[(2, 7)].symbol(), "╭");
-    assert_eq!(buffer[(2, 8)].symbol(), "│");
+    let content = super::modal::layout(Rect::new(0, 0, 100, 17)).content;
+    let base_row = output
+        .lines()
+        .position(|line| line.contains("> Base URL"))
+        .unwrap() as u16;
+    assert_eq!(buffer[(content.x - 2, base_row)].symbol(), ">");
+    assert_eq!(buffer[(content.x, base_row)].symbol(), "B");
+    assert_eq!(buffer[(content.x - 2, base_row + 1)].symbol(), " ");
+    assert_eq!(buffer[(content.x, base_row + 1)].symbol(), "╭");
+    assert_eq!(buffer[(content.x, base_row + 2)].symbol(), "│");
     assert!(output.contains("> Base URL"));
     assert_snapshot!("short_provider_panel", output);
-    assert!(
-        output.contains("API key"),
-        "the next field fits when no status message is present"
-    );
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    let next = render(&app, 100, 17);
+    assert!(next.contains("> API key"));
+    assert!(next.contains("API key (optional)"));
+    assert_snapshot!("short_provider_modal_api_key", next);
 }
 
 #[test]
@@ -1944,9 +1930,9 @@ fn render_buffer(app: &App, width: u16, height: u16) -> Buffer {
 }
 
 #[test]
-fn detail_overlay_keeps_content_above_the_shared_hitbar_at_every_height() {
-    use crate::widgets::detail_list::{DetailList, DetailListRow};
-
+fn detail_modal_keeps_scrolled_content_above_its_own_footer() {
+    use crate::widgets::detail_list::DetailList;
+    use crate::widgets::detail_list::DetailListRow;
     for height in [2, 3, 4, 8, 24] {
         let mut app = App::new();
         app.show_overlay(DetailList::new(
@@ -1960,25 +1946,20 @@ fn detail_overlay_keeps_content_above_the_shared_hitbar_at_every_height() {
             )],
         ));
         let area = Rect::new(0, 0, 80, height);
-        let bottom = layout(&app, area).session.bottom;
-        assert!(
-            app.overlay()
-                .unwrap()
-                .surface(crate::app::fullscreen::layout(&app, area).transient_area())
-                .bottom()
-                <= bottom.y
-        );
+        let modal = super::modal::layout(area);
+        assert!(modal.content.bottom() <= modal.footer.y.max(modal.content.y));
         app.handle_key_in_area(KeyEvent::new(KeyCode::End, KeyModifiers::NONE), area);
         let rendered = render(&app, 80, height);
-        let rows = rendered.lines().collect::<Vec<_>>();
-        assert_eq!(
-            rows[usize::from(bottom.bottom() - 1)].trim(),
-            "Esc to close"
-        );
-        if bottom.height == 2 {
-            assert!(rows[usize::from(bottom.y)].trim().is_empty());
+        if !modal.footer.is_empty() {
+            assert!(
+                rendered
+                    .lines()
+                    .nth(usize::from(modal.footer.y))
+                    .unwrap()
+                    .contains("Esc to close")
+            );
+            assert_eq!(rendered.matches("Esc to close").count(), 1);
         }
-        assert_eq!(rendered.matches("Esc to close").count(), 1);
         if height >= 8 {
             assert!(rendered.contains("line 39"));
         }
@@ -2152,10 +2133,19 @@ fn model_tab_from_items_moves_the_visible_focus_to_the_tab_bar() {
     );
     assert!(app.list_selection().unwrap().tabs_focused());
     let buffer = render_buffer(&app, 100, 18);
-    assert_ne!(buffer[(0, 15)].symbol(), ">");
-    assert_eq!(buffer[(16, 14)].symbol(), "M");
-    assert_eq!(buffer[(16, 14)].bg, test_context().selection_background());
-    assert_eq!(buffer[(16, 14)].fg, test_context().selection_foreground());
+    let modal = super::modal::layout(Rect::new(0, 0, 100, 18));
+    let text = render(&app, 100, 18);
+    let row = text.lines().nth(usize::from(modal.content.y)).unwrap();
+    let column = row[..row.find("My gateway").unwrap()].width() as u16;
+    assert_eq!(buffer[(column, modal.content.y)].symbol(), "M");
+    assert_eq!(
+        buffer[(column, modal.content.y)].bg,
+        test_context().selection_background()
+    );
+    assert_eq!(
+        buffer[(column, modal.content.y)].fg,
+        test_context().selection_foreground()
+    );
     assert_snapshot!("model_tab_bar_focused", render(&app, 100, 18));
     assert!(app.list_selection().unwrap().search().is_none());
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
