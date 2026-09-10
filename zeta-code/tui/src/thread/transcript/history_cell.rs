@@ -126,6 +126,36 @@ pub(crate) struct CellView<'a> {
 }
 
 impl CellView<'_> {
+    pub(crate) fn height(
+        &self,
+        width: u16,
+        context: RenderContext<'_>,
+        cache: &ChatHistoryRenderCache,
+    ) -> usize {
+        cache
+            .measure(self, width, context, || {
+                self.lines(context, Some(cache), width)
+            })
+            .height
+    }
+
+    pub(crate) fn render_rows(
+        &self,
+        buffer: &mut ratatui::buffer::Buffer,
+        offset: usize,
+        context: RenderContext<'_>,
+        cache: &ChatHistoryRenderCache,
+    ) {
+        let area = buffer.area;
+        let prepared = cache.prepare(self, area.width, context, || {
+            self.lines(context, Some(cache), area.width)
+        });
+        prepared.render(buffer, area, offset);
+        if let Some(links) = context.hyperlinks() {
+            prepared.place_links(&mut links.borrow_mut(), area, offset);
+        }
+    }
+
     pub(super) fn owner(&self) -> &dyn HistoryCell {
         self.cell.history_cell()
     }

@@ -76,6 +76,7 @@ pub(crate) fn session_areas(
     bottom_desired_rows: u16,
     switcher_desired_rows: u16,
     status_desired_rows: u16,
+    min_transcript_rows: u16,
 ) -> SessionAreas {
     let switcher_rows = switcher_desired_rows.min(area.height);
     let available_above_switcher = area.height.saturating_sub(switcher_rows);
@@ -84,7 +85,7 @@ pub(crate) fn session_areas(
     let switcher_gap_rows =
         u16::from(switcher_rows > 0 && bottom_rows > 0).min(available_above_bottom);
     let available_above_gap = available_above_bottom.saturating_sub(switcher_gap_rows);
-    let transcript_rows = MIN_TRANSCRIPT_ROWS.min(available_above_gap);
+    let transcript_rows = min_transcript_rows.min(available_above_gap);
     let available_chrome = available_above_gap.saturating_sub(transcript_rows);
     let top_tip_rows = TOP_TIP_ROWS.min(available_chrome);
     let available_input = available_chrome.saturating_sub(top_tip_rows);

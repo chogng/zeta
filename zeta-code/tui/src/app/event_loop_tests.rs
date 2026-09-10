@@ -33,6 +33,88 @@ use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadStatus;
 
 #[test]
+fn fullscreen_selection_copies_text_and_reports_the_clipboard_result() {
+    for (name, result) in [
+        ("fullscreen_selection_copied", Ok(())),
+        (
+            "fullscreen_selection_copy_failed",
+            Err("clipboard unavailable".to_owned()),
+        ),
+    ] {
+        let mut app = App::new();
+        app.insert_text("copy me");
+        let area = Rect::new(0, 0, 60, 16);
+        let row = frame::layout(&app, area).input.y + 1;
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(area.width, area.height))
+                .unwrap();
+        terminal
+            .draw(|frame| crate::app::frame::draw(frame, &app))
+            .unwrap();
+        let mouse = |kind, column| MouseEvent {
+            kind,
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        };
+        handle_mouse(
+            &mut app,
+            area,
+            mouse(MouseEventKind::Down(MouseButton::Left), 2),
+        );
+        handle_mouse(
+            &mut app,
+            area,
+            mouse(MouseEventKind::Drag(MouseButton::Left), 8),
+        );
+        let super::MouseAction::Selection(Some(
+            crate::terminal::screen_selection::ScreenSelectionOutcome::Selection(range),
+        )) = handle_mouse(
+            &mut app,
+            area,
+            mouse(MouseEventKind::Up(MouseButton::Left), 8),
+        )
+        else {
+            panic!("drag must select text");
+        };
+        let mut copied = None;
+        super::apply_screen_selection(
+            &mut app,
+            range,
+            |range| {
+                crate::terminal::screen_selection::text_in_range(terminal.backend().buffer(), range)
+            },
+            |text| {
+                copied = Some(text.to_owned());
+                result.clone()
+            },
+        );
+        assert_eq!(copied.as_deref(), Some("copy me"));
+        assert_eq!(app.screen_selection().range(), Some(range));
+        terminal
+            .draw(|frame| crate::app::frame::draw(frame, &app))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        assert_eq!(
+            buffer[(2, row)].bg,
+            app.render_context().screen_selection_background()
+        );
+        let text = buffer
+            .content
+            .chunks(usize::from(area.width))
+            .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n");
+        if result.is_ok() {
+            assert!(text.contains("Copied 7 chars to clipboard"));
+        } else {
+            assert!(text.contains("clipboard unavailable"));
+        }
+        insta::assert_snapshot!(name, text);
+    }
+}
+
+#[test]
 fn fixed_command_panels_ignore_mouse_and_keep_keyboard_navigation() {
     let mut app = App::new();
     app.update(AppEvent::HelpOpened(
@@ -85,8 +167,8 @@ fn assert_tui_capture_without_pointer_actions(app: &mut App, area: Rect) {
     }
 }
 
-fn assert_scroll_only_mouse(app: &mut App) {
-    assert_eq!(app.mouse_mode(), MouseMode::TuiScroll);
+fn assert_terminal_selection(app: &mut App) {
+    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
     app.clear_mouse_interaction();
     assert!(app.hovered_pointer_target().is_none());
     assert!(app.pressed_pointer_target().is_none());
@@ -94,7 +176,7 @@ fn assert_scroll_only_mouse(app: &mut App) {
 }
 
 #[test]
-fn completion_click_is_disabled_with_enhancement_and_keyboard_still_works() {
+fn main_screen_leaves_completion_clicks_to_terminal_and_keeps_keyboard_navigation() {
     let mut app = App::new();
     app.insert_text("/q");
     let area = Rect::new(0, 0, 80, 24);
@@ -103,9 +185,9 @@ fn completion_click_is_disabled_with_enhancement_and_keyboard_still_works() {
         .find(|(column, row)| frame::input_pointer_target_at(&app, area, *column, *row).is_some())
         .expect("completion is clickable");
     let mut settings = crate::config::TerminalSettings::default();
-    settings.set_mouse_interactions(false);
+    settings.set_screen_mode(crate::terminal::ScreenMode::Native);
     app.update(crate::config::Event::SettingsReceived(settings));
-    assert_scroll_only_mouse(&mut app);
+    assert_terminal_selection(&mut app);
     assert_eq!(app.input(), "/q");
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
@@ -260,13 +342,13 @@ fn mouse_wheel_scrolls_the_full_screen_transcript() {
 }
 
 #[test]
-fn scroll_only_mouse_mode_still_scrolls_the_transcript() {
+fn main_screen_leaves_wheel_input_to_terminal() {
     let mut app = App::new();
     for index in 0..12 {
         app.update(ThreadEvent::FailureReported(format!("failure {index}")));
     }
     let mut settings = crate::config::TerminalSettings::default();
-    settings.set_mouse_interactions(false);
+    settings.set_screen_mode(crate::terminal::ScreenMode::Native);
     app.update(crate::config::Event::SettingsReceived(settings));
     let area = Rect::new(0, 0, 50, 16);
     let transcript = frame::layout(&app, area).session.transcript;
@@ -282,18 +364,15 @@ fn scroll_only_mouse_mode_still_scrolls_the_transcript() {
                 modifiers: KeyModifiers::NONE,
             }
         ),
-        super::MouseAction::Command(None)
+        super::MouseAction::Selection(None)
     ));
-    assert!(app.transcript_scroll().anchor().is_some());
-    assert_scroll_only_mouse(&mut app);
+    assert!(app.transcript_scroll().anchor().is_none());
+    assert_terminal_selection(&mut app);
 }
 
 #[test]
-fn text_selection_remains_available_without_enhanced_pointer_actions() {
+fn fullscreen_drag_produces_a_selection_without_a_separate_setting() {
     let mut app = App::new();
-    let mut settings = crate::config::TerminalSettings::default();
-    settings.set_mouse_interactions(false);
-    app.update(crate::config::Event::SettingsReceived(settings));
     let area = Rect::new(0, 0, 50, 16);
     let event = |kind, column| MouseEvent {
         kind,
@@ -574,7 +653,7 @@ fn jump_control_click_and_keyboard_restore_latest_without_changing_the_draft() {
         assert_eq!(app.transcript_scroll().anchor(), anchor.as_ref());
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         let mut settings = crate::config::TerminalSettings::default();
-        settings.set_mouse_interactions(false);
+        settings.set_screen_mode(crate::terminal::ScreenMode::Native);
         app.update(crate::config::Event::SettingsReceived(settings));
         activate_pointer_item(&mut app, area, columns[0], row);
         assert!(app.transcript_scroll().anchor().is_some());
@@ -596,7 +675,7 @@ fn transcript_keyboard_navigation_still_requests_older_history() {
 }
 
 #[test]
-fn disabling_enhancement_during_a_drag_keeps_the_baseline_selection() {
+fn switching_to_main_screen_during_a_drag_discards_the_pending_copy() {
     let mut app = App::new();
     app.insert_text("/");
     let area = Rect::new(0, 0, 80, 24);
@@ -622,7 +701,7 @@ fn disabling_enhancement_during_a_drag_keeps_the_baseline_selection() {
     );
     assert!(app.screen_selection().range().is_some());
     let mut settings = crate::config::TerminalSettings::default();
-    settings.set_mouse_interactions(false);
+    settings.set_screen_mode(crate::terminal::ScreenMode::Native);
     app.update(crate::config::Event::SettingsReceived(settings));
     assert!(matches!(
         handle_mouse(
@@ -630,14 +709,12 @@ fn disabling_enhancement_during_a_drag_keeps_the_baseline_selection() {
             area,
             event(MouseEventKind::Up(MouseButton::Left), 8)
         ),
-        super::MouseAction::Selection(Some(
-            crate::terminal::screen_selection::ScreenSelectionOutcome::Selection(_)
-        ))
+        super::MouseAction::Selection(None)
     ));
-    assert_eq!(app.mouse_mode(), MouseMode::TuiScroll);
+    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
     assert!(app.hovered_pointer_target().is_none());
     assert!(app.pressed_pointer_target().is_none());
-    assert!(app.screen_selection().range().is_some());
+    assert!(app.screen_selection().range().is_none());
     assert_eq!(app.input(), "/");
 }
 
@@ -645,7 +722,9 @@ fn disabling_enhancement_during_a_drag_keeps_the_baseline_selection() {
 #[test]
 #[ignore = "requires a PTY with a nonzero window size"]
 fn real_terminal_mouse_handoff() {
-    let mut terminal = crate::terminal::TerminalSession::open().unwrap();
+    let mut output = crate::app::frame::Output::default();
+    let mut terminal =
+        crate::terminal::TerminalSession::open(crate::terminal::ScreenMode::Fullscreen).unwrap();
     let area = terminal.area().unwrap();
     assert!(area.width >= 40 && area.height >= 12);
     let mut app = App::new();
@@ -656,11 +735,11 @@ fn real_terminal_mouse_handoff() {
             vec![ListSelectionItem::new("Help")],
         )],
     )));
-    super::draw_terminal(&mut terminal, &mut app).unwrap();
+    super::draw_terminal(&mut terminal, &mut app, &mut output).unwrap();
     assert_tui_capture_without_pointer_actions(&mut app, area);
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     app.insert_text("/q");
-    super::draw_terminal(&mut terminal, &mut app).unwrap();
+    super::draw_terminal(&mut terminal, &mut app, &mut output).unwrap();
     let area = terminal.area().unwrap();
     let (column, row) = (area.y..area.bottom())
         .flat_map(|row| (0..area.width).map(move |column| (column, row)))
@@ -686,14 +765,14 @@ fn real_terminal_mouse_handoff() {
         super::finish_pointer_gesture(&mut app, &terminal, outcome).unwrap(),
         Some(AppCommand::Quit)
     );
-    super::draw_terminal(&mut terminal, &mut app).unwrap();
+    super::draw_terminal(&mut terminal, &mut app, &mut output).unwrap();
     app.insert_text("/q");
-    super::draw_terminal(&mut terminal, &mut app).unwrap();
+    super::draw_terminal(&mut terminal, &mut app, &mut output).unwrap();
     let mut settings = crate::config::TerminalSettings::default();
-    settings.set_mouse_interactions(false);
+    settings.set_screen_mode(crate::terminal::ScreenMode::Native);
     app.update(crate::config::Event::SettingsReceived(settings));
-    super::draw_terminal(&mut terminal, &mut app).unwrap();
-    assert_scroll_only_mouse(&mut app);
+    super::draw_terminal(&mut terminal, &mut app, &mut output).unwrap();
+    assert_terminal_selection(&mut app);
     assert_eq!(app.input(), "/q");
 }
 

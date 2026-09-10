@@ -927,19 +927,22 @@ impl App {
     }
 
     pub(crate) fn mouse_mode(&self) -> MouseMode {
-        if self.terminal_settings.mouse_interactions() {
-            MouseMode::TuiCapture
-        } else {
-            MouseMode::TuiScroll
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => MouseMode::TuiCapture,
+            crate::terminal::ScreenMode::Native => MouseMode::TerminalSelection,
         }
     }
 
-    pub(crate) const fn mouse_interactions(&self) -> bool {
-        self.terminal_settings.mouse_interactions()
+    pub(crate) const fn screen_mode(&self) -> crate::terminal::ScreenMode {
+        self.terminal_settings.screen_mode()
     }
 
-    pub(crate) const fn copy_on_select(&self) -> bool {
-        self.terminal_settings.copy_on_select()
+    pub(crate) fn screen_thread_id(&self) -> &zeta_protocol::ThreadId {
+        self.thread_presentations.active_id()
+    }
+
+    pub(crate) fn history_prefix(&self) -> &[crate::thread::transcript::TranscriptCell] {
+        self.thread.history_prefix()
     }
 
     pub(super) const fn memory_diagnostics_enabled(&self) -> bool {
@@ -1963,8 +1966,8 @@ impl App {
             }
             ConfigEvent::SettingsReceived(settings) => {
                 self.terminal_settings = settings;
-                if !settings.mouse_interactions() {
-                    self.pointer.clear();
+                if !self.mouse_mode().captures_terminal_input() {
+                    self.clear_mouse_interaction();
                 }
                 self.thread_presentations
                     .set_input_mode(settings.input_mode());
@@ -1974,8 +1977,8 @@ impl App {
                 self.chat_panel
                     .status_line_mut()
                     .apply_settings(result.status_line);
-                if !result.terminal.mouse_interactions() {
-                    self.pointer.clear();
+                if !self.mouse_mode().captures_terminal_input() {
+                    self.clear_mouse_interaction();
                 }
                 self.thread_presentations
                     .set_input_mode(result.terminal.input_mode());

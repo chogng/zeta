@@ -772,7 +772,7 @@ fn inline_theme_selection_requests_a_tui_config_edit() {
 }
 
 #[test]
-fn enhanced_tui_keyboard_toggle_emits_a_revision_bound_edit() {
+fn screen_mode_keyboard_toggle_emits_a_revision_bound_edit() {
     let mut config = empty_config_snapshot();
     config.revision = 7;
     let mut app = App::new();
@@ -783,37 +783,16 @@ fn enhanced_tui_keyboard_toggle_emits_a_revision_bound_edit() {
         StatusLineSettings::default(),
     )));
 
+    for _ in 0..6 {
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert!(matches!(
         action,
         Some(AppCommand::Config(ConfigCommand::Edit(edit)))
             if edit.server_config.revision == 7
-                && !edit.terminal.mouse_interactions()
-                && !edit.terminal.copy_on_select()
-    ));
-}
-
-#[test]
-fn copy_on_select_keyboard_toggle_emits_a_revision_bound_edit() {
-    let mut config = empty_config_snapshot();
-    config.revision = 7;
-    let mut app = App::new();
-    app.update(ConfigEvent::EditorOpened(config_choices(
-        &config,
-        &ProviderListResult { providers: vec![] },
-        TerminalSettings::default(),
-        StatusLineSettings::default(),
-    )));
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-
-    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-
-    assert!(matches!(
-        action,
-        Some(AppCommand::Config(ConfigCommand::Edit(edit)))
-            if edit.server_config.revision == 7
-                && edit.terminal.copy_on_select()
+                && edit.terminal.screen_mode() == crate::terminal::ScreenMode::Native
     ));
 }
 
@@ -828,9 +807,6 @@ fn config_vim_mode_toggles_on_enter() {
         TerminalSettings::default(),
         StatusLineSettings::default(),
     )));
-    for _ in 0..2 {
-        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    }
 
     assert!(matches!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
@@ -851,7 +827,7 @@ fn config_memory_diagnostics_toggles_on_enter() {
         TerminalSettings::default(),
         StatusLineSettings::default(),
     )));
-    for _ in 0..3 {
+    for _ in 0..1 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
 
@@ -874,7 +850,7 @@ fn config_show_git_changes_as_diff_toggles_on_enter() {
         TerminalSettings::default(),
         StatusLineSettings::default(),
     )));
-    for _ in 0..5 {
+    for _ in 0..3 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
 
@@ -896,7 +872,7 @@ fn config_language_change_emits_a_profile_setting_edit() {
         TerminalSettings::default(),
         StatusLineSettings::default(),
     )));
-    for _ in 0..6 {
+    for _ in 0..4 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
 
@@ -931,7 +907,7 @@ fn saved_language_rebuilds_the_open_config_page() {
     let selection = app.list_selection().unwrap();
     assert_eq!(selection.title(), "配置");
     assert_eq!(
-        selection.visible_items()[6].description(),
+        selection.visible_items()[4].description(),
         Some("切换界面语言 中文")
     );
 }
@@ -1606,7 +1582,7 @@ fn fixed_requests_do_not_capture_mouse_for_a_hidden_completion() {
 }
 
 #[test]
-fn disabled_mouse_interactions_keep_scrolling_and_text_selection() {
+fn switching_to_main_screen_clears_selection() {
     let mut app = App::new();
     app.insert_text("/");
     assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
@@ -1615,15 +1591,15 @@ fn disabled_mouse_interactions_keep_scrolling_and_text_selection() {
     assert!(app.screen_selection().range().is_some());
 
     let mut settings = TerminalSettings::default();
-    settings.set_mouse_interactions(false);
+    settings.set_screen_mode(crate::terminal::ScreenMode::Native);
     app.update(ConfigEvent::SettingsReceived(settings));
 
-    assert_eq!(app.mouse_mode(), MouseMode::TuiScroll);
-    assert!(app.screen_selection().range().is_some());
+    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert!(app.screen_selection().range().is_none());
 }
 
 #[test]
-fn saved_enhancement_disable_clears_pointer_feedback_but_keeps_text_selection() {
+fn saved_main_screen_mode_clears_pointer_feedback_and_selection() {
     let mut app = App::new();
     app.insert_text("/");
     let target = crate::app::frame::InputPointerTarget::Composer(
@@ -1634,7 +1610,7 @@ fn saved_enhancement_disable_clears_pointer_feedback_but_keeps_text_selection() 
     app.begin_screen_selection(ratatui::layout::Position::new(2, 1));
     app.drag_screen_selection(ratatui::layout::Position::new(4, 1));
     let mut settings = TerminalSettings::default();
-    settings.set_mouse_interactions(false);
+    settings.set_screen_mode(crate::terminal::ScreenMode::Native);
     app.update(ConfigEvent::Updated(crate::config::ConfigEditResult {
         terminal: settings,
         status_line: StatusLineSettings::default(),
@@ -1645,10 +1621,10 @@ fn saved_enhancement_disable_clears_pointer_feedback_but_keeps_text_selection() 
             StatusLineSettings::default(),
         ),
     }));
-    assert_eq!(app.mouse_mode(), MouseMode::TuiScroll);
+    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
     assert!(app.hovered_pointer_target().is_none());
     assert!(app.pressed_pointer_target().is_none());
-    assert!(app.screen_selection().range().is_some());
+    assert!(app.screen_selection().range().is_none());
 }
 
 #[test]

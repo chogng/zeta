@@ -7,6 +7,99 @@ use crate::tui_process::SMALL_SIZE;
 use crate::tui_process::TuiProcess;
 
 #[test]
+fn actual_tui_native_preserves_history_across_panels_resize_and_exit() {
+    let fixture = Fixture::new();
+    let replies = [
+        "NATIVE-REPLY-ONE",
+        "NATIVE-REPLY-TWO",
+        "NATIVE-REPLY-THREE 中文",
+    ];
+    let server = ScenarioServer::start(replies.map(|reply| HttpResponse::streaming([reply], None)));
+    fixture.write_config(&server.base_url());
+    fixture.append_config("\n[tui]\nscreenMode = \"native\"\n");
+    let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
+    process.wait_for_stable_screen("ask permissions on");
+    for (index, reply) in replies.iter().enumerate() {
+        process.submit(&format!("NATIVE-MESSAGE-{index}"));
+        process.wait_for_screen(reply);
+        process.wait_for_stable_screen("ask permissions on");
+        process.submit("/status");
+        process.wait_for_stable_screen("Full context window");
+        process.escape();
+        process.wait_for_stable_screen("ask permissions on");
+        assert_input_surface_visible(&process);
+    }
+    process.resize(SMALL_SIZE);
+    process.wait_for_stable_screen("ask permissions on");
+    process.type_text("DRAFT-AFTER-RESIZE");
+    process.wait_for_stable_screen("DRAFT-AFTER-RESIZE");
+    assert!(!process.raw_text().contains("\x1b[?1049h"));
+    assert!(!process.raw_text().contains("\x1b[?1000h"));
+    assert!(!process.raw_text().contains("\x1b[?1003h"));
+    process.quit();
+    let history = process.terminal_text();
+    for reply in replies {
+        assert_eq!(history.matches(reply).count(), 1, "{history}");
+    }
+    assert!(
+        !history.contains("Full context window"),
+        "temporary panels must not enter history:\n{history}"
+    );
+    assert!(process.raw_text().contains("\x1b[?2004l"));
+    assert!(!process.raw_text().contains("\x1b[?1049l"));
+    assert_eq!(server.request_count(), replies.len());
+}
+
+#[test]
+fn actual_tui_screen_mode_switches_live_and_persists() {
+    let fixture = Fixture::new();
+    let server = ScenarioServer::start([HttpResponse::streaming(["MODE-SWITCH-REPLY"], None)]);
+    fixture.write_config(&server.base_url());
+    let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
+    process.wait_for_stable_screen("ask permissions on");
+    let fullscreen_input = input_top_row(&process);
+    // ConPTY can implement the screen switch through console APIs instead of forwarding CSI.
+    #[cfg(unix)]
+    assert!(process.raw_text().contains("\x1b[?1049h"));
+    process.submit("/config");
+    process.wait_for_stable_screen("Screen mode");
+    for _ in 0..6 {
+        process.down();
+    }
+    process.enter();
+    process.wait_for_stable_screen("native");
+    assert!(fixture.config_source().contains("screenMode = \"native\""));
+    #[cfg(unix)]
+    assert!(process.raw_text().contains("\x1b[?1049l"));
+    process.escape();
+    process.wait_for_stable_screen("ask permissions on");
+    assert!(
+        input_top_row(&process) < fullscreen_input,
+        "{}",
+        process.screen()
+    );
+    process.submit("/config");
+    process.wait_for_stable_screen("Screen mode");
+    for _ in 0..6 {
+        process.down();
+    }
+    process.enter();
+    process.wait_for_stable_screen("fullscreen");
+    assert!(
+        fixture
+            .config_source()
+            .contains("screenMode = \"fullscreen\"")
+    );
+    process.escape();
+    process.wait_for_stable_screen("ask permissions on");
+    assert_eq!(input_top_row(&process), fullscreen_input);
+    process.submit("check the preserved conversation");
+    process.wait_for_screen("MODE-SWITCH-REPLY");
+    process.quit();
+    assert_eq!(server.request_count(), 1);
+}
+
+#[test]
 fn actual_tui_multiple_commands_preserve_internal_history_and_fixed_input() {
     const REPLIES: [&str; 12] = [
         "REPLY-00", "REPLY-01", "REPLY-02", "REPLY-03", "REPLY-04", "REPLY-05", "REPLY-06",

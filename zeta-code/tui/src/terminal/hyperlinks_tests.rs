@@ -121,3 +121,27 @@ fn redraw_and_resize_reapply_links_even_with_identical_destinations() {
         assert!(output.contains("https://example.com/"));
     }
 }
+#[test]
+fn history_output_preserves_links_and_does_not_print_wide_continuation_spaces() {
+    let mut buffer = ratatui::buffer::Buffer::empty(ratatui::layout::Rect::new(0, 0, 8, 1));
+    buffer.set_string(0, 0, "中文ab", ratatui::style::Style::default());
+    let original = buffer.clone();
+    let mut links = super::FrameLinks::default();
+    links.place(
+        &[vec![super::Hyperlink {
+            columns: 0..6,
+            destination: "https://example.com/".into(),
+        }]],
+        buffer.area,
+        0,
+    );
+    links.encode_history(&mut buffer);
+    assert_eq!(buffer[(1, 0)].symbol(), "");
+    assert_eq!(buffer[(3, 0)].symbol(), "");
+    assert_eq!(
+        buffer[(0, 0)].symbol(),
+        "\x1b]8;;https://example.com/\x1b\\中\x1b]8;;\x1b\\"
+    );
+    assert_eq!(original[(0, 0)].symbol(), "中");
+    assert_eq!(original[(1, 0)].symbol(), " ");
+}

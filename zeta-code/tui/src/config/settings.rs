@@ -7,8 +7,7 @@ use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct TerminalSettings {
-    mouse_interactions: bool,
-    copy_on_select: bool,
+    screen_mode: crate::terminal::ScreenMode,
     input_mode: ChatInputMode,
     memory_diagnostics: bool,
     auto_update: crate::UpdatePolicy,
@@ -16,9 +15,8 @@ pub(crate) struct TerminalSettings {
 }
 
 impl TerminalSettings {
-    const KEYS: [&'static str; 6] = [
-        "mouseInteractions",
-        "copyOnSelect",
+    const KEYS: [&'static str; 5] = [
+        "screenMode",
         "inputMode",
         "memoryDiagnostics",
         "autoUpdate",
@@ -53,6 +51,8 @@ impl TerminalSettings {
         let mut values = section.0.clone();
         values.remove("dirPermissions");
         values.remove("followUpMode");
+        values.remove("mouseInteractions");
+        values.remove("copyOnSelect");
         for key in Self::KEYS {
             let value = fields
                 .get(key)
@@ -62,20 +62,12 @@ impl TerminalSettings {
         Ok(FrontendConfigDto(values))
     }
 
-    pub(crate) const fn mouse_interactions(self) -> bool {
-        self.mouse_interactions
+    pub(crate) const fn screen_mode(self) -> crate::terminal::ScreenMode {
+        self.screen_mode
     }
 
-    pub(crate) fn set_mouse_interactions(&mut self, enabled: bool) {
-        self.mouse_interactions = enabled;
-    }
-
-    pub(crate) const fn copy_on_select(self) -> bool {
-        self.copy_on_select
-    }
-
-    pub(crate) fn set_copy_on_select(&mut self, enabled: bool) {
-        self.copy_on_select = enabled;
+    pub(crate) fn set_screen_mode(&mut self, mode: crate::terminal::ScreenMode) {
+        self.screen_mode = mode;
     }
 
     pub(crate) const fn input_mode(self) -> ChatInputMode {
@@ -114,8 +106,7 @@ impl TerminalSettings {
 impl Default for TerminalSettings {
     fn default() -> Self {
         Self {
-            mouse_interactions: true,
-            copy_on_select: false,
+            screen_mode: crate::terminal::ScreenMode::Fullscreen,
             input_mode: ChatInputMode::Standard,
             memory_diagnostics: false,
             auto_update: crate::UpdatePolicy::Latest,

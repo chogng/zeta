@@ -65,6 +65,28 @@ fn tool_call_output_and_result_form_one_exec_cell() {
 }
 
 #[test]
+fn history_prefix_stops_at_live_cells_and_active_turns() {
+    let old = turn_id("old");
+    let active = turn_id("active");
+    let mut model = TranscriptModel::default();
+    let old_message = message("old", &old, MessageRole::Agent, "old");
+    let final_message = message("current", &active, MessageRole::Agent, "current");
+    model.replace(snapshot(vec![old_message.clone(), final_message.clone()]));
+    assert_eq!(model.history_prefix(Some(&active)).len(), 1);
+    assert_eq!(model.history_prefix(None).len(), 2);
+    let mut live_message = final_message;
+    if let ThreadTranscriptEntry::Item { transient, .. } = &mut live_message {
+        *transient = true;
+    }
+    model.replace(snapshot(vec![
+        old_message,
+        live_message,
+        message("later", &old, MessageRole::Agent, "later"),
+    ]));
+    assert_eq!(model.history_prefix(None).len(), 1);
+}
+
+#[test]
 fn expansion_is_derived_without_changing_cell_lifecycle() {
     let turn_id = turn_id("turn");
     let tool_call_id = call_id("call");

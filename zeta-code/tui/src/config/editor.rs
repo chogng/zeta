@@ -457,27 +457,13 @@ pub(crate) fn config_choices(
 ) -> ConfigChoices {
     let mut actions = BTreeMap::new();
     let language = terminal.language();
-    let mouse_id = ListSelectionItemId::new("terminal-mouse-interactions");
-    let mouse_enabled = terminal.mouse_interactions();
-    let mut toggled_terminal = terminal;
-    toggled_terminal.set_mouse_interactions(!mouse_enabled);
+    let screen_id = ListSelectionItemId::new("screen-mode");
+    let mut next_screen = terminal;
+    next_screen.set_screen_mode(terminal.screen_mode().next());
     actions.insert(
-        mouse_id.clone(),
+        screen_id.clone(),
         ConfigSelectionAction::SetTerminalSettings(ConfigEdit {
-            terminal: toggled_terminal,
-            status_line: status_line.clone(),
-            server_config: config.clone(),
-            providers: providers.clone(),
-        }),
-    );
-    let copy_on_select_id = ListSelectionItemId::new("terminal-copy-on-select");
-    let copy_on_select_enabled = terminal.copy_on_select();
-    let mut toggled_copy_on_select = terminal;
-    toggled_copy_on_select.set_copy_on_select(!copy_on_select_enabled);
-    actions.insert(
-        copy_on_select_id.clone(),
-        ConfigSelectionAction::SetTerminalSettings(ConfigEdit {
-            terminal: toggled_copy_on_select,
+            terminal: next_screen,
             status_line: status_line.clone(),
             server_config: config.clone(),
             providers: providers.clone(),
@@ -590,20 +576,6 @@ pub(crate) fn config_choices(
     let issue_tab =
         ListSelectionGroup::new(nls::text(language, Message::ConfigIssues), issue_items);
     let config_items = vec![
-        ListSelectionItem::new(nls::text(language, Message::ConfigEnhancedTui))
-            .with_id(mouse_id)
-            .with_columns(
-                nls::text(language, Message::ConfigEnhancedTui),
-                nls::text(language, Message::ConfigEnhancedTuiDescription),
-                checkbox(mouse_enabled),
-            ),
-        ListSelectionItem::new(nls::text(language, Message::ConfigCopyOnSelect))
-            .with_id(copy_on_select_id)
-            .with_columns(
-                nls::text(language, Message::ConfigCopyOnSelect),
-                nls::text(language, Message::ConfigCopyOnSelectDescription),
-                checkbox(copy_on_select_enabled),
-            ),
         ListSelectionItem::new(nls::text(language, Message::ConfigVimMode))
             .with_id(vim_mode_id)
             .with_columns(
@@ -645,6 +617,13 @@ pub(crate) fn config_choices(
                 nls::text(language, Message::ConfigStatusLineStyle),
                 nls::text(language, style_description),
                 nls::text(language, style_label),
+            ),
+        ListSelectionItem::new(nls::text(language, Message::ConfigScreenMode))
+            .with_id(screen_id)
+            .with_columns(
+                nls::text(language, Message::ConfigScreenMode),
+                nls::text(language, Message::ConfigScreenModeDescription),
+                terminal.screen_mode().label(),
             ),
     ];
     let provider_items = provider_items(config, providers, &mut actions);

@@ -32,7 +32,8 @@ just zeta
 | 持续内存诊断 | [memory.rs](src/memory.rs)；Config 提供开关，Status 只读展示 |
 | 界面语言与类型化文案 | [nls.rs](src/nls.rs)；持久化由 [config/settings.rs](src/config/settings.rs) 负责 |
 | 状态信息和本机资源 | [status](src/status)、[process_resources.rs](../../zeta-rs/memory-diagnostics/src/process_resources.rs) |
-| 终端恢复、鼠标和历史输出 | [session.rs](src/terminal/session.rs)、[mouse.rs](src/terminal/mouse.rs) |
+| 终端恢复、鼠标和历史输出 | [session.rs](src/terminal/session.rs)、[scrollback.rs](src/terminal/scrollback.rs)、[mouse.rs](src/terminal/mouse.rs) |
+| 屏幕模式与页面组合 | [frame.rs](src/app/frame.rs)、[fullscreen.rs](src/app/frame/fullscreen.rs)、[native.rs](src/app/frame/native.rs) |
 | 命令面板共用控件和文字绘制 | [widgets](src/widgets)、[render](src/render) |
 
 Skills、Models、Connectors 和 MCP 各自拥有同名模块；目录授权在 [dirs.rs](src/dirs.rs)。新增功能从对应模块进入，不在 App 里再建一套状态和请求流程。
@@ -165,11 +166,11 @@ Thread 保存真实消息和独立的显示进度。流式队列保留源码范�
 
 执行输出按调用身份归组，稳定标识取组内第一个 `ToolCallId`。预览、展开和详情共用有界数据；“完整详情”指 TUI 获得的完整保留内容，必须保留上游省略标记。不能从文字猜测协议未提供的最终时长或退出码。
 
-初始快照从最近 50 个 Turn 开始，订阅随后自动读完历史分页。已定稿前缀只提交到终端历史一次，普通画面继续绘制可变尾部；正文浏览组合两段。滚动位置用单元身份和行偏移保存，不能依赖屏幕行号。
+初始快照从最近 50 个 Turn 开始，订阅随后自动读完历史分页。全屏模式始终从同一正文模型绘制历史与当前回复。主屏模式把当前活动 Turn 之前的定稿前缀追加到终端历史，Turn 结束后再提交其正文；可变尾部继续局部重绘。后续加载的更早分页通过 Ctrl+Home 打开的正文浏览区查看，不能追加到较新的终端输出之后。滚动位置用单元身份和行偏移保存，不能依赖屏幕行号。
 
 ## 产品支持边界
 
-Agent 回复与计划支持 Markdown 标题、列表、引用、强调、代码块、表格和链接；窄屏表格按字段逐项展示。HTTP(S) 链接通过 OSC 8 交给终端打开，本地路径保留可复制目标。用户输入和命令保持字面显示，HTML 标签作为文字显示。拖选文字是基础终端交互；增强 TUI 只提供点击和悬停反馈，“选中后复制”只决定选择完成后是否自动写入剪贴板。补全处理自己的事件，Vim 只改变输入框编辑。
+Agent 回复与计划支持 Markdown 标题、列表、引用、强调、代码块、表格和链接；窄屏表格按字段逐项展示。HTTP(S) 链接通过 OSC 8 交给终端打开，本地路径保留可复制目标。用户输入和命令保持字面显示，HTML 标签作为文字显示。全屏模式提供点击、悬停、滚动和文字选择；拖选、双击选词或三击选行后自动复制，并显示复制结果。主屏模式的滚轮、选文和复制由终端处理。补全处理自己的事件，Vim 只改变输入框编辑。
 
 `/export [relative-path]` 导出当前已加载正文，路径限制在本机工作目录内，不能覆盖已有文件。Ctrl+O 复制最后一条 Agent 回复。
 
@@ -183,9 +184,8 @@ TUI 设置保存在 `<profile>/config.toml` 的根级 `[tui]` 表：
 
 ```toml
 [tui]
+screenMode = "fullscreen"
 theme = "graphite"
-mouseInteractions = true
-copyOnSelect = false
 inputMode = "standard"
 memoryDiagnostics = false
 autoUpdate = "latest"
@@ -194,7 +194,9 @@ statusLineStyle = "compact"
 language = "en"
 ```
 
-`mouseInteractions` 控制增强 TUI，缺省为 `true`；`copyOnSelect` 是独立布尔开关，缺省为 `false`。两项都在“通用”页签中编辑，修改其中一项不会改变另一项。
+`screenMode` 只接受 `fullscreen` 和 `native`，缺省为 `fullscreen`。在 Config 的“通用”页通过 Enter、Space 或左右键切换，保存成功后立即应用；外部配置重载也使用同一路径。设置沿用现有 Config 读写通路；本地运行保存在本机 profile，远程连接目前读取和写入远端 App Server 的 profile。本机独立 UX 配置通路尚未接入。启动时先验证设置，再获取终端模式；非法值会报告配置错误。
+
+鼠标交互和选中复制由 `screenMode` 决定，不再提供独立开关。旧 `mouseInteractions`、`copyOnSelect` 字段不参与解析和运行决策，在 Config 的“通用”页保存设置时删除；它们不会改变已选择的屏幕模式。
 
 `autoUpdate` 在“通用”页签中以单行选项切换：`latest` 跟随每次发布，`stable` 只跟随显式晋升的版本，`never` 不自动检查；缺省为 `latest`。CLI 在本地 TUI 启动时和运行期间读取这个 profile 设置，源码构建和其他安装方式不会被改写。下载、签名校验、诊断和版本切换契约见 [Zeta Code README](../README.md)。
 
@@ -225,13 +227,22 @@ language = "en"
 
 ## 终端生命周期
 
-当前使用终端备用屏幕。`TerminalSession::open` 先检测终端，获取模式、查询背景色，再创建覆盖整个终端的 Ratatui 页面；退出后恢复原 shell 画面。
+`TerminalSession` 是终端输出的唯一入口。页面层决定绘制区域和提交哪些消息，消息模型决定定稿边界，组件共用输入、审批、设置和正文排版。
 
-模式按以下顺序获取：原始输入模式 → 备用屏幕并保存、关闭滚轮转方向键 → 粘贴事件 → 焦点上报 → 鼠标捕获。TUI 运行期间始终保留鼠标捕获以获得带位置的滚轮和文字选择；关闭增强只停止点击、悬停和按下反馈。`copyOnSelect` 不改变鼠标模式，只控制选择完成后的剪贴板写入。退出备用屏幕前恢复进入时的滚轮模式。
+| 模式 | 终端控制 | 历史与退出 |
+| --- | --- | --- |
+| `fullscreen` | 备用屏幕、整屏绘制、应用处理鼠标滚动与选文 | 正文内部滚动；退出恢复 shell 画面 |
+| `native` | 主屏局部绘制；保留原始输入、粘贴和焦点事件；不捕获鼠标 | 定稿内容按顺序追加；退出移除交互区域并保留已显示正文 |
+
+全屏按以下顺序获取模式：原始输入 → 备用屏幕并保存、关闭滚轮转方向键 → 粘贴事件 → 焦点上报 → 鼠标捕获。全屏固定启用鼠标捕获和选中复制。退出备用屏幕前恢复进入时的滚轮模式。
+
+主屏沿用终端滚轮、选文和复制，不启用应用鼠标捕获。切入主屏时立即清除应用悬停、按下和选区状态，进行中的拖选不会触发复制。面板、补全和正文浏览可扩展当前交互区域；关闭后缩回输入与当前回复所需的高度。Ctrl+Home/End 打开历史浏览或返回当前回复。切换 Thread 会追加新的会话标题和该 Thread 当前已加载的历史；已写入的终端历史不重写。缩放与重复快照不会重复追加已输出的消息。
+
+历史输出使用有界分块和普通终端滚动，不依赖局部滚动区域。临时输出缓冲区在最后写出时附加 OSC 8 链接并处理宽字符续列；它不参与后续布局、差分、复制或导出。
 
 `TerminalModeGuard` 记录每一步是否成功。任一步失败或退出时，逆序关闭鼠标、焦点上报、粘贴事件，结束当前屏幕并关闭原始输入模式。显式恢复可重复调用，Drop 再次清理不会重复操作；退出或挂起时还要重置光标颜色并显示光标。
 
-鼠标边界回归见 [event_loop_tests.rs](src/app/event_loop_tests.rs)。在窗口至少 40×12 的真实 PTY 中运行 `just test zeta-tui --lib real_terminal_mouse_handoff -- --ignored --nocapture --test-threads=1`，可验证整屏捕获、补全点击、增强开关关闭和退出恢复。该场景不替代各终端自身的选文与复制兼容性验证。
+鼠标边界回归见 [event_loop_tests.rs](src/app/event_loop_tests.rs)。在窗口至少 40×12 的真实 PTY 中运行 `just test zeta-tui --lib real_terminal_mouse_handoff -- --ignored --nocapture --test-threads=1`，可验证整屏捕获、补全点击、切换到主屏和退出恢复。该场景不替代各终端自身的选文与复制兼容性验证。
 
 Ctrl+Z 在 Unix 上先恢复终端，再发送 SIGTSTP；`fg` 后重新获取模式并重绘。SIGINT/SIGTERM 进入正常事件循环退出路径。新增模式时同时修改获取标记、逆序清理和 [session_tests.rs](src/terminal/session_tests.rs) 中的部分失败测试。
 
@@ -285,3 +296,5 @@ just test-tui
 最小真实场景使用 `just test-tui actual_tui_input_keeps_hint_bar_without_blank_line_growth -- --nocapture`。多轮历史使用 `just test zeta-cli --test tui_real_scenarios actual_tui_multiple_commands_preserve_internal_history_and_fixed_input -- --nocapture`，它执行本地命令与 12 轮消息，核对 Welcome、本地命令和最后回复均可从同一 Transcript 到达。
 
 终端模式协议由 [session_tests.rs](src/terminal/session_tests.rs) 检查，正文分页、稳定锚点和长内容由 [正文绘制测试](src/thread/transcript/view/render_tests.rs) 检查。历史完整性不能再用终端回滚行数判断。
+
+主屏模式的真实边界检查使用 `just test-tui actual_tui_native_preserves_history_across_panels_resize_and_exit -- --nocapture`；两种模式的即时切换和设置保存使用 `just test-tui actual_tui_screen_mode_switches_live_and_persists -- --nocapture`。组件状态与文本基线位于 [native_tests.rs](src/app/frame/native_tests.rs)，历史顺序与样式位于 [scrollback_tests.rs](src/terminal/scrollback_tests.rs)。命令列出验证入口，不代表所有终端组合均已验证。

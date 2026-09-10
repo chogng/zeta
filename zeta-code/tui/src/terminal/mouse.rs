@@ -1,10 +1,8 @@
-/// Declares whether the terminal releases pointer input, forwards only content scrolling, or
-/// enables every TUI pointer interaction.
+/// Declares whether pointer input belongs to the terminal or the full-screen TUI.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum MouseMode {
     #[default]
     TerminalSelection,
-    TuiScroll,
     TuiCapture,
 }
 

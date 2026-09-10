@@ -132,6 +132,28 @@ pub(crate) struct FrameLinks {
 }
 
 impl FrameLinks {
+    /// Encode a disposable history buffer immediately before sequential terminal output.
+    /// It must never be reused for layout, diffing, selection, or export.
+    pub(crate) fn encode_history(&self, buffer: &mut Buffer) {
+        for y in buffer.area.y..buffer.area.bottom() {
+            let mut next_column = buffer.area.x;
+            for x in buffer.area.x..buffer.area.right() {
+                let cell = &mut buffer[(x, y)];
+                if x < next_column {
+                    // insert_before writes every cell, including wide-glyph continuation columns.
+                    cell.set_symbol("");
+                    continue;
+                }
+                next_column = x.saturating_add(cell.symbol().width().max(1) as u16);
+                if let Some(destination) = self.cells.get(&(x, y)) {
+                    let symbol =
+                        format!("\x1b]8;;{destination}\x1b\\{}\x1b]8;;\x1b\\", cell.symbol());
+                    cell.set_symbol(&symbol);
+                }
+            }
+        }
+    }
+
     pub(crate) fn place(&mut self, rows: &[Vec<Hyperlink>], area: Rect, source_row: usize) {
         for (row, links) in rows
             .iter()

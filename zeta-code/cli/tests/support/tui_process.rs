@@ -544,6 +544,19 @@ impl TuiProcess {
         self.capture.lock().unwrap().raw_text()
     }
 
+    pub fn terminal_text(&self) -> String {
+        let capture = self.capture.lock().unwrap();
+        capture
+            .core
+            .grid()
+            .scrollback_lines()
+            .iter()
+            .chain(capture.core.grid().lines().iter())
+            .map(|line| line.text())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
     pub fn assert_snapshot(&self, name: &str) {
         let screen = normalize_snapshot(self.screen(), &self.snapshot_paths);
         assert_named_snapshot(name, screen);

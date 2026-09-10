@@ -1,3 +1,8 @@
+mod fullscreen;
+mod native;
+
+pub(super) use native::Output;
+
 use crate::app::App;
 use crate::app::welcome;
 use crate::keymap::bindings;
@@ -50,6 +55,20 @@ pub(crate) fn draw_with_links(
     frame: &mut Frame<'_>,
     app: &App,
     links: &std::cell::RefCell<crate::terminal::hyperlinks::FrameLinks>,
+) {
+    fullscreen::draw(frame, app, links);
+}
+
+enum Transcript<'a> {
+    Full,
+    Tail(Vec<crate::thread::transcript::CellView<'a>>),
+}
+
+fn draw_content(
+    frame: &mut Frame<'_>,
+    app: &App,
+    links: &std::cell::RefCell<crate::terminal::hyperlinks::FrameLinks>,
+    transcript: Transcript<'_>,
 ) {
     let context = app.render_context().with_hyperlinks(links);
     frame.render_widget(
@@ -113,15 +132,20 @@ pub(crate) fn draw_with_links(
         welcome::draw(frame, manager_areas.welcome, app.welcome(), context);
         sessions::draw_manager(frame, manager_areas.sessions, manager, None, None, context);
     } else {
-        let messages = app.visible_transcript_views();
-        let header = welcome::history_buffer(
-            areas.session.transcript.width,
-            areas.session.transcript.height,
-            app.welcome(),
-            context,
-        );
+        let (messages, header) = match transcript {
+            Transcript::Full => (
+                app.visible_transcript_views(),
+                Some(welcome::history_buffer(
+                    areas.session.transcript.width,
+                    areas.session.transcript.height,
+                    app.welcome(),
+                    context,
+                )),
+            ),
+            Transcript::Tail(messages) => (messages, None),
+        };
         ChatHistoryView {
-            header: Some(&header),
+            header: header.as_ref(),
             messages: &messages,
             scroll: app.transcript_scroll(),
             render_cache: app.transcript_render_cache(),
@@ -334,83 +358,13 @@ pub(crate) struct FrameLayout {
     pub(crate) input: Rect,
 }
 
-pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
-    if app.session_preview().is_some() {
-        let session = super::layout::session_areas(terminal_area, 0, 0, 0, 0, 1, 1, 0, 0);
-        return FrameLayout {
-            input: Rect::default(),
-            session,
-        };
-    }
-    if let Some(panel) = app.command_panel() {
-        return FrameLayout {
-            session: super::layout::command_panel_areas(
-                terminal_area,
-                panel.desired_height(terminal_area.width),
-                BOTTOM_ROWS,
-            ),
-            input: Rect::default(),
-        };
-    }
-    let input_view = app.chat_composer_view();
-    let input_rows = ChatComposerSurface {
-        view: &input_view,
-        cursor: chat_input::ChatInputCursor::Hidden,
-    }
-    .desired_height(terminal_area.width, app.render_context());
-    let approval_rows = app
-        .approval_view()
-        .map(approval::desired_height)
-        .unwrap_or_default();
-    let query_rows = app
-        .query_view()
-        .map(query::desired_height)
-        .unwrap_or_default();
-    let composer_rows = if approval_rows > 0 {
-        approval_rows
-    } else {
-        input_rows
-    };
-    let queue_rows = if app.session_manager_view().is_some() {
-        0
-    } else {
-        let queue_view = app.queue_view();
-        queue::desired_height(&queue_view, queue::DEFAULT_MAX_VISIBLE_ITEMS)
-    };
-    let session = super::layout::session_areas(
-        terminal_area,
-        if app.session_manager_view().is_some() {
-            0
-        } else {
-            goal::desired_height(app.goal_view())
-        },
-        if app.session_manager_view().is_some() {
-            0
-        } else {
-            plan::desired_height(app.plan_view())
-        },
-        queue_rows,
-        query_rows,
-        composer_rows,
-        BOTTOM_ROWS,
-        app.agent_thread_switcher_rows(),
-        u16::from(app.status_indicator().is_some()),
-    );
-    let input = if approval_rows > 0 {
-        Rect {
-            y: session.composer.bottom(),
-            height: 0,
-            ..session.composer
+pub(crate) fn layout(app: &App, area: Rect) -> FrameLayout {
+    match app.screen_mode() {
+        crate::terminal::ScreenMode::Fullscreen => {
+            fullscreen::layout(app, area, super::layout::MIN_TRANSCRIPT_ROWS)
         }
-    } else {
-        let height = input_rows.min(session.composer.height);
-        Rect {
-            y: session.composer.bottom().saturating_sub(height),
-            height,
-            ..session.composer
-        }
-    };
-    FrameLayout { session, input }
+        crate::terminal::ScreenMode::Native => native::layout(app, area),
+    }
 }
 
 pub(crate) fn process_resource_demand(app: &App, terminal_area: Rect) -> ProcessResourceDemand {

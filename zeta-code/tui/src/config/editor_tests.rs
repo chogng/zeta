@@ -38,6 +38,38 @@ fn providers() -> ProviderListResult {
 }
 
 #[test]
+fn screen_mode_can_be_changed_with_activation_and_both_arrow_keys() {
+    for mode in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Native,
+    ] {
+        for code in [
+            KeyCode::Enter,
+            KeyCode::Char(' '),
+            KeyCode::Left,
+            KeyCode::Right,
+        ] {
+            let mut terminal = TerminalSettings::default();
+            terminal.set_screen_mode(mode);
+            let mut editor = super::ConfigEditor::new(config_choices(
+                &empty_config_snapshot(),
+                &providers(),
+                terminal,
+                StatusLineSettings::default(),
+            ));
+            for _ in 0..6 {
+                editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+            }
+            assert!(
+                matches!(editor.handle_key(KeyEvent::new(code, KeyModifiers::NONE)),
+                super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetTerminalSettings(edit))
+                if edit.terminal.screen_mode() == mode.next())
+            );
+        }
+    }
+}
+
+#[test]
 fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     let mut config = empty_config_snapshot();
     config.revision = 4;
@@ -75,32 +107,13 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
             .iter()
             .all(|item| item.label() != "Language servers")
     );
-    let mouse = &state.visible_items()[0];
-    assert_eq!(mouse.label(), "Enhanced TUI");
-    assert_eq!(
-        mouse.description(),
-        Some("Enable clicks and hover feedback [ ✔ ]")
+    assert!(
+        !state
+            .visible_items()
+            .iter()
+            .any(|item| matches!(item.label(), "Enhanced TUI" | "Copy on select"))
     );
-    assert!(matches!(
-        view.actions.get(mouse.id().unwrap()).unwrap(),
-        ConfigSelectionAction::SetTerminalSettings(edit)
-            if edit.server_config.revision == 4
-                && !edit.terminal.mouse_interactions()
-    ));
-    let copy_on_select = &state.visible_items()[1];
-    assert_eq!(copy_on_select.label(), "Copy on select");
-    assert_eq!(
-        copy_on_select.description(),
-        Some("Copy selected text automatically [   ]")
-    );
-    assert!(matches!(
-        view.actions.get(copy_on_select.id().unwrap()).unwrap(),
-        ConfigSelectionAction::SetTerminalSettings(edit)
-            if edit.server_config.revision == 4
-                && edit.terminal.mouse_interactions()
-                && edit.terminal.copy_on_select()
-    ));
-    let vim_mode = &state.visible_items()[2];
+    let vim_mode = &state.visible_items()[0];
     assert_eq!(vim_mode.label(), "Vim mode");
     assert_eq!(
         vim_mode.description(),
@@ -111,7 +124,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::SetVimMode(edit)
             if edit.terminal.input_mode() == ChatInputMode::Vim
     ));
-    let memory_diagnostics = &state.visible_items()[3];
+    let memory_diagnostics = &state.visible_items()[1];
     assert_eq!(memory_diagnostics.label(), "Memory diagnostics");
     assert_eq!(
         memory_diagnostics.description(),
@@ -124,7 +137,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::SetTerminalSettings(edit)
             if edit.terminal.memory_diagnostics()
     ));
-    let auto_update = &state.visible_items()[4];
+    let auto_update = &state.visible_items()[2];
     assert_eq!(auto_update.label(), "Automatic updates");
     assert_eq!(
         auto_update.description(),
@@ -135,7 +148,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::SetUpdatePolicy(edit)
             if edit.terminal.auto_update() == crate::UpdatePolicy::Latest
     ));
-    let git_changes = &state.visible_items()[5];
+    let git_changes = &state.visible_items()[3];
     assert_eq!(git_changes.label(), "Show Git changes as diff");
     assert_eq!(
         git_changes.description(),
@@ -146,7 +159,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::SetShowGitChangesAsDiff(edit)
             if edit.status_line.show_git_changes_as_diff()
     ));
-    let language = &state.visible_items()[6];
+    let language = &state.visible_items()[4];
     assert_eq!(language.label(), "Language");
     assert_eq!(
         language.description(),
@@ -216,7 +229,7 @@ fn language_setting_cycles_with_activation_and_directional_keys() {
         )
     };
     let mut editor = super::ConfigEditor::new(choices());
-    for _ in 0..6 {
+    for _ in 0..4 {
         editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
 
@@ -227,7 +240,7 @@ fn language_setting_cycles_with_activation_and_directional_keys() {
     ));
 
     let mut editor = super::ConfigEditor::new(choices());
-    for _ in 0..6 {
+    for _ in 0..4 {
         editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
     assert!(matches!(
@@ -237,7 +250,7 @@ fn language_setting_cycles_with_activation_and_directional_keys() {
     ));
 
     let mut editor = super::ConfigEditor::new(choices());
-    for _ in 0..6 {
+    for _ in 0..4 {
         editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
     assert!(matches!(
@@ -268,17 +281,17 @@ fn config_root_uses_the_selected_language_through_nls() {
             .collect::<Vec<_>>(),
         vec!["通用", "提供商", "语言服务器", "Issues"]
     );
-    assert_eq!(state.visible_items()[0].label(), "增强 TUI");
-    assert_eq!(state.visible_items()[1].label(), "选中后复制");
-    assert_eq!(state.visible_items()[3].label(), "内存诊断");
-    assert_eq!(state.visible_items()[4].label(), "自动更新");
+    assert_eq!(state.visible_items()[0].label(), "Vim 模式");
+    assert_eq!(state.visible_items()[6].label(), "屏幕模式");
+    assert_eq!(state.visible_items()[1].label(), "内存诊断");
+    assert_eq!(state.visible_items()[2].label(), "自动更新");
     assert_eq!(
-        state.visible_items()[4].description(),
+        state.visible_items()[2].description(),
         Some("选择版本更新节奏 最新")
     );
-    assert_eq!(state.visible_items()[6].label(), "语言");
+    assert_eq!(state.visible_items()[4].label(), "语言");
     assert_eq!(
-        state.visible_items()[6].description(),
+        state.visible_items()[4].description(),
         Some("切换界面语言 中文")
     );
 }
@@ -379,9 +392,9 @@ fn language_server_tab_exposes_one_switch_per_configured_server() {
 }
 
 #[test]
-fn config_editor_uses_an_empty_unicode_checkbox_when_copy_on_select_are_disabled() {
+fn config_editor_uses_an_empty_unicode_checkbox_when_vim_is_disabled() {
     let mut terminal = TerminalSettings::default();
-    terminal.set_copy_on_select(false);
+    terminal.set_input_mode(ChatInputMode::Standard);
 
     let view = config_choices(
         &empty_config_snapshot(),
@@ -392,8 +405,8 @@ fn config_editor_uses_an_empty_unicode_checkbox_when_copy_on_select_are_disabled
     let mut state = ListSelectionState::new(view.model);
 
     assert_eq!(
-        state.visible_items()[1].description(),
-        Some("Copy selected text automatically [   ]")
+        state.visible_items()[0].description(),
+        Some("Use Vim editing in ChatInput [   ]")
     );
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     assert!(state.search().unwrap().input_active());
@@ -419,7 +432,7 @@ fn config_option_arrows_toggle_values_without_switching_pages() {
         editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
         assert!(matches!(editor.handle_key(key),
             super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetTerminalSettings(edit))
-                if edit.terminal.copy_on_select()
+                if edit.terminal.memory_diagnostics()
         ));
     }
 }
@@ -438,7 +451,7 @@ fn config_editor_shows_a_checked_vim_mode_when_enabled() {
     let state = ListSelectionState::new(view.model);
 
     assert_eq!(
-        state.visible_items()[2].description(),
+        state.visible_items()[0].description(),
         Some("Use Vim editing in ChatInput [ ✔ ]")
     );
 }

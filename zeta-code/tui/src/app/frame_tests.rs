@@ -1256,7 +1256,7 @@ fn scrolled_transcript_shows_jump_control_at_the_bottom_of_the_content_area() {
         super::BottomContent::StatusLine
     ));
     let mut settings = crate::config::TerminalSettings::default();
-    settings.set_mouse_interactions(false);
+    settings.set_screen_mode(crate::terminal::ScreenMode::Native);
     app.update(crate::config::Event::SettingsReceived(settings));
     let screen = render(&app, 50, 16);
     assert!(screen.contains("Ctrl+End to jump to bottom ↓"));

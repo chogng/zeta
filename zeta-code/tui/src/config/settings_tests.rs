@@ -12,11 +12,45 @@ fn tui_table_defaults_missing_terminal_fields() {
 
     let settings = TerminalSettings::from_tui(&section).unwrap();
 
-    assert!(settings.mouse_interactions());
-    assert!(!settings.copy_on_select());
     assert!(!settings.memory_diagnostics());
     assert_eq!(settings.auto_update(), crate::UpdatePolicy::Latest);
     assert_eq!(settings.language(), Language::English);
+    assert_eq!(
+        settings.screen_mode(),
+        crate::terminal::ScreenMode::Fullscreen
+    );
+}
+
+#[test]
+fn screen_mode_round_trips_preserves_other_fields_and_rejects_invalid_values() {
+    for (name, expected) in [
+        ("fullscreen", crate::terminal::ScreenMode::Fullscreen),
+        ("native", crate::terminal::ScreenMode::Native),
+    ] {
+        let section = FrontendConfigDto(BTreeMap::from([
+            ("screenMode".into(), serde_json::json!(name)),
+            ("futureOption".into(), serde_json::json!({"enabled": true})),
+        ]));
+        let settings = TerminalSettings::from_tui(&section).unwrap();
+        assert_eq!(settings.screen_mode(), expected);
+        let updated = settings.write_to_tui(&section).unwrap();
+        assert_eq!(updated.0["screenMode"], serde_json::json!(name));
+        assert_eq!(updated.0["futureOption"], section.0["futureOption"]);
+    }
+    for value in [
+        serde_json::json!("auto"),
+        serde_json::json!("Fullscreen"),
+        serde_json::json!(true),
+        serde_json::Value::Null,
+    ] {
+        assert!(
+            TerminalSettings::from_tui(&FrontendConfigDto(BTreeMap::from([(
+                "screenMode".into(),
+                value
+            )])))
+            .is_err()
+        );
+    }
 }
 
 #[test]
@@ -34,28 +68,6 @@ fn terminal_settings_update_removes_legacy_fields() {
 
     assert!(!updated.0.contains_key("dirPermissions"));
     assert!(!updated.0.contains_key("followUpMode"));
-    assert!(!settings.copy_on_select());
-}
-
-#[test]
-fn copy_on_select_round_trips_and_rejects_non_boolean_values() {
-    for enabled in [false, true] {
-        let section = FrontendConfigDto(BTreeMap::from([
-            ("copyOnSelect".into(), serde_json::json!(enabled)),
-            ("mouseInteractions".into(), serde_json::json!(!enabled)),
-        ]));
-        let settings = TerminalSettings::from_tui(&section).unwrap();
-        assert_eq!(settings.copy_on_select(), enabled);
-        assert_eq!(settings.mouse_interactions(), !enabled);
-        let updated = settings.write_to_tui(&section).unwrap();
-        assert_eq!(updated.0["copyOnSelect"], serde_json::json!(enabled));
-        assert_eq!(updated.0["mouseInteractions"], serde_json::json!(!enabled));
-    }
-    let section = FrontendConfigDto(BTreeMap::from([(
-        "copyOnSelect".into(),
-        serde_json::json!("true"),
-    )]));
-    assert!(TerminalSettings::from_tui(&section).is_err());
 }
 
 #[test]
@@ -90,7 +102,6 @@ fn terminal_settings_update_preserves_other_tui_fields() {
         ("futureOption".into(), serde_json::json!({"enabled": true})),
     ]));
     let mut settings = TerminalSettings::default();
-    settings.set_mouse_interactions(false);
     settings.set_memory_diagnostics(true);
     settings.set_auto_update(crate::UpdatePolicy::Never);
     settings.set_language(Language::French);
@@ -102,8 +113,6 @@ fn terminal_settings_update_preserves_other_tui_fields() {
         updated.0["futureOption"],
         serde_json::json!({"enabled": true})
     );
-    assert_eq!(updated.0["mouseInteractions"], serde_json::json!(false));
-    assert_eq!(updated.0["copyOnSelect"], serde_json::json!(false));
     assert_eq!(updated.0["memoryDiagnostics"], serde_json::json!(true));
     assert_eq!(updated.0["autoUpdate"], serde_json::json!("never"));
     assert_eq!(updated.0["language"], serde_json::json!("fr"));
@@ -150,4 +159,31 @@ fn unsupported_language_is_rejected() {
     )]));
 
     assert!(TerminalSettings::from_tui(&section).is_err());
+}
+
+#[test]
+fn obsolete_pointer_settings_do_not_affect_screen_mode_and_are_removed_on_write() {
+    for mode in ["fullscreen", "native"] {
+        for old in [
+            serde_json::json!(false),
+            serde_json::json!(true),
+            serde_json::json!("obsolete"),
+        ] {
+            let section = FrontendConfigDto(BTreeMap::from([
+                ("screenMode".into(), serde_json::json!(mode)),
+                ("mouseInteractions".into(), old.clone()),
+                ("copyOnSelect".into(), old),
+                ("theme".into(), serde_json::json!("graphite")),
+                ("futureOption".into(), serde_json::json!({"enabled": true})),
+            ]));
+            let settings = TerminalSettings::from_tui(&section).unwrap();
+            assert_eq!(settings.screen_mode().label(), mode);
+            let updated = settings.write_to_tui(&section).unwrap();
+            assert!(!updated.0.contains_key("mouseInteractions"));
+            assert!(!updated.0.contains_key("copyOnSelect"));
+            assert_eq!(updated.0["theme"], section.0["theme"]);
+            assert_eq!(updated.0["futureOption"], section.0["futureOption"]);
+            assert_eq!(settings.write_to_tui(&updated).unwrap(), updated);
+        }
+    }
 }

@@ -8,7 +8,6 @@ use super::event_pump::EventPump;
 use crate::AppServerProcess;
 use crate::TuiError;
 use crate::TuiOptions;
-use zeta_memory_diagnostics::ProcessResourceTargets;
 use crate::sessions;
 use crate::sessions::Event as SessionEvent;
 use crate::skills::Event as SkillEvent;
@@ -26,6 +25,7 @@ use crate::thread::composer::slash_command_registry;
 use zeta_app_server_client::AppServerSession;
 use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
 use zeta_app_server_protocol::protocol::skills::SkillListParams;
+use zeta_memory_diagnostics::ProcessResourceTargets;
 
 pub(super) struct StartedSession {
     pub(super) driver: AppDriver,
@@ -76,6 +76,9 @@ pub(super) fn start(
     let initial_skill_diagnostics = initial_skill_catalog
         .map(|catalog| catalog.diagnostics)
         .unwrap_or_default();
+    let initial_config = client.read_config()?;
+    let terminal_settings = crate::config::TerminalSettings::from_tui(&initial_config.tui)
+        .map_err(std::io::Error::other)?;
     let mut conversation = match recovery {
         Some(recovery) => ActiveConversation::recover(&mut client, recovery)?,
         None => ActiveConversation::start(&mut client, thread_title)?,
@@ -86,7 +89,7 @@ pub(super) fn start(
         conversation.thread_id(),
     )?;
     conversation.set_thread_sequence(initial_thread.sequence);
-    let terminal = TerminalSession::open()?;
+    let terminal = TerminalSession::open(terminal_settings.screen_mode())?;
     let theme_resource = match theme_root {
         Some(theme_root) => ThemeResource::in_product_root(theme_root, terminal.background_color()),
         None => ThemeResource::new(terminal.background_color()),
@@ -97,12 +100,9 @@ pub(super) fn start(
         input_catalog,
         startup_context,
     );
-    let initial_config = client.read_config();
+
     let initial_model_catalog = client.list_models().ok();
-    let theme_preference = initial_config
-        .as_ref()
-        .map(theme_feature::preference)
-        .unwrap_or("system");
+    let theme_preference = theme_feature::preference(&initial_config);
     match theme_resource.load(theme_preference) {
         Ok(loaded) => {
             for diagnostic in loaded.diagnostics {
@@ -112,12 +112,7 @@ pub(super) fn start(
         }
         Err(error) => app.update(ThreadEvent::FailureReported(error)),
     }
-    match initial_config {
-        Ok(config) => apply_tui_config(config, initial_model_catalog.as_ref(), &mut app),
-        Err(error) => app.update(ThreadEvent::FailureReported(format!(
-            "could not read server configuration: {error}"
-        ))),
-    }
+    apply_tui_config(initial_config, initial_model_catalog.as_ref(), &mut app);
     match sessions::load_catalog(&mut client) {
         Ok(catalog) => app.update(SessionEvent::CatalogReceived(catalog)),
         Err(error) => app.update(ThreadEvent::FailureReported(format!(
@@ -163,7 +158,9 @@ pub(super) fn start(
 const fn process_resource_targets(process: AppServerProcess) -> ProcessResourceTargets {
     match process {
         AppServerProcess::Local(process_id) => ProcessResourceTargets::CurrentAndTree(process_id),
-        AppServerProcess::IncludedInTui | AppServerProcess::Remote => ProcessResourceTargets::Current,
+        AppServerProcess::IncludedInTui | AppServerProcess::Remote => {
+            ProcessResourceTargets::Current
+        }
     }
 }
 

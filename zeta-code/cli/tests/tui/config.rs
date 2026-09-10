@@ -9,7 +9,7 @@ use std::fs;
 fn open_provider(process: &mut TuiProcess, label: &str) {
     process.wait_for_screen("Zeta Code v");
     process.submit("/config");
-    process.wait_for_screen("Enhanced TUI");
+    process.wait_for_screen("Screen mode");
     process.up();
     process.up();
     process.tab();
@@ -20,46 +20,35 @@ fn open_provider(process: &mut TuiProcess, label: &str) {
 }
 
 #[test]
-fn actual_tui_copy_on_select_is_opt_in_and_persists_across_restart() {
+fn actual_tui_screen_mode_replaces_obsolete_pointer_settings_on_save() {
     let fixture = Fixture::new();
     let server = ScenarioServer::start([]);
     fixture.write_config(&server.base_url());
+    fixture.append_config("\n[tui]\nmouseInteractions = false\ncopyOnSelect = false\n");
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_screen("Zeta Code v");
     process.submit("/config");
-    process.wait_for_screen("Copy on select");
-    assert!(process.screen().contains("General"));
-    assert!(
-        process
-            .screen()
-            .lines()
-            .find(|line| line.contains("Copy on select"))
-            .unwrap()
-            .contains("[   ]")
-    );
-    process.down();
+    process.wait_for_stable_screen("Screen mode");
+    assert!(!process.screen().contains("Enhanced TUI"));
+    assert!(!process.screen().contains("Copy on select"));
+    for _ in 0..6 {
+        process.down();
+    }
     process.enter();
-    assert!(fixture.config_source().contains("copyOnSelect = true"));
-    assert!(fixture.config_source().contains("mouseInteractions = true"));
+    wait_for_config(&fixture, "screenMode = \"native\"");
+    process.wait_for_stable_screen("native");
+    assert!(!fixture.config_source().contains("mouseInteractions"));
+    assert!(!fixture.config_source().contains("copyOnSelect"));
     process.escape();
     process.quit();
 
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_screen("Zeta Code v");
     process.submit("/config");
-    process.wait_for_screen("Copy on select");
-    assert!(
-        process
-            .screen()
-            .lines()
-            .find(|line| line.contains("Copy on select"))
-            .unwrap()
-            .contains("[ ✔ ]")
-    );
-    process.down();
-    process.enter();
-    assert!(fixture.config_source().contains("copyOnSelect = false"));
-    assert!(fixture.config_source().contains("mouseInteractions = true"));
+    process.wait_for_stable_screen("Screen mode");
+    assert!(process.screen().contains("native"));
+    assert!(!process.screen().contains("Enhanced TUI"));
+    assert!(!process.screen().contains("Copy on select"));
     process.escape();
     process.quit();
 }
@@ -73,7 +62,7 @@ fn actual_tui_automatic_update_policy_cycles_and_persists_across_restart() {
     process.wait_for_screen("Zeta Code v");
     process.submit("/config");
     process.wait_for_screen("Automatic updates");
-    for _ in 0..4 {
+    for _ in 0..2 {
         process.down();
     }
     process.enter();
@@ -116,7 +105,7 @@ fn actual_tui_issue_refresh_setting_persists_across_restart() {
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_screen("Zeta Code v");
     process.submit("/config");
-    process.wait_for_screen("Enhanced TUI");
+    process.wait_for_screen("Screen mode");
     process.up();
     process.up();
     process.back_tab();
@@ -132,7 +121,7 @@ fn actual_tui_issue_refresh_setting_persists_across_restart() {
     let mut reopened = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     reopened.wait_for_screen("Zeta Code v");
     reopened.submit("/config");
-    reopened.wait_for_screen("Enhanced TUI");
+    reopened.wait_for_screen("Screen mode");
     reopened.up();
     reopened.up();
     reopened.back_tab();
@@ -307,15 +296,13 @@ fn actual_tui_switches_language_and_persists_it() {
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_screen("Zeta Code v");
     process.submit("/config");
-    process.wait_for_screen("Enhanced TUI");
-    process.down();
-    process.down();
+    process.wait_for_screen("Screen mode");
     process.down();
     process.down();
     process.down();
     process.down();
     process.enter();
-    process.wait_for_screen("拡張 TUI");
+    process.wait_for_screen("画面モード");
     process.escape();
     process.quit();
 
@@ -436,7 +423,7 @@ fn actual_tui_tab_switches_from_content_search_and_unsaved_field() {
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_screen("Zeta Code v");
     process.submit("/config");
-    process.wait_for_screen("Enhanced TUI");
+    process.wait_for_screen("Screen mode");
     let original_config = fixture.config_source();
     process.tab();
     process.wait_for_screen("> OpenAI");
@@ -480,8 +467,8 @@ fn actual_tui_status_line_style_persists_across_restart() {
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_screen("Zeta Code v");
     process.submit("/config");
-    process.wait_for_screen("Enhanced TUI");
-    for _ in 0..8 {
+    process.wait_for_screen("Screen mode");
+    for _ in 0..5 {
         process.down();
     }
     process.enter();
@@ -499,7 +486,7 @@ fn actual_tui_status_line_style_persists_across_restart() {
     process.wait_for_screen("🤖 zeta-real-scenario");
     process.submit("/config");
     process.wait_for_screen("Emoji and progress bars at a glance");
-    for _ in 0..8 {
+    for _ in 0..5 {
         process.down();
     }
     process.enter();

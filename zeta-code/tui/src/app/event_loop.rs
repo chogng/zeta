@@ -50,9 +50,10 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         mut terminal,
     } = super::start::start(session, options)?;
     let mut redraw = RedrawScheduler::default();
+    let mut output = frame::Output::default();
     let mut process_resource_demand = ProcessResourceDemand::Disabled;
     let mut pending_runtime_event = None;
-    if let Err(error) = draw_terminal(&mut terminal, driver.app_mut()) {
+    if let Err(error) = draw_terminal(&mut terminal, driver.app_mut(), &mut output) {
         let _ = pump.shutdown();
         return Err(error.into());
     }
@@ -60,7 +61,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         loop {
             advance_stream(driver.app_mut(), &mut redraw, Instant::now());
             if redraw.take_due(Instant::now()) {
-                draw_terminal(&mut terminal, driver.app_mut())?;
+                draw_terminal(&mut terminal, driver.app_mut(), &mut output)?;
             }
             sync_process_resource_demand(
                 &mut pump,
@@ -229,10 +230,17 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
             );
             advance_stream(driver.app_mut(), &mut redraw, Instant::now());
             if redraw.take_due(Instant::now()) {
-                draw_terminal(&mut terminal, driver.app_mut())?;
+                draw_terminal(&mut terminal, driver.app_mut(), &mut output)?;
             }
         }
     })();
+    let result = result.and_then(|exit| {
+        terminal.set_screen_mode(driver.app().screen_mode())?;
+        if driver.app().screen_mode() == terminal::ScreenMode::Native {
+            output.finish(&mut terminal, driver.app())?;
+        }
+        Ok(exit)
+    });
     let pump_result = pump.shutdown();
     match (result, pump_result) {
         (Err(error), _) => Err(error),
@@ -313,10 +321,8 @@ fn handle_mouse(app: &mut App, area: ratatui::layout::Rect, mouse: MouseEvent) -
             return MouseAction::Command(command);
         }
         MouseEventKind::Down(MouseButton::Left) => {
-            if app.mouse_interactions() {
-                let target = frame::input_pointer_target_at(app, area, mouse.column, mouse.row);
-                app.update_pointer_pressed(target);
-            }
+            let target = frame::input_pointer_target_at(app, area, mouse.column, mouse.row);
+            app.update_pointer_pressed(target);
             app.begin_screen_selection(position);
         }
         MouseEventKind::Drag(MouseButton::Left) => {
@@ -326,16 +332,9 @@ fn handle_mouse(app: &mut App, area: ratatui::layout::Rect, mouse: MouseEvent) -
         MouseEventKind::Up(MouseButton::Left) => {
             let outcome = app.finish_screen_selection(position, Instant::now());
             app.clear_pointer_pressed();
-            if !app.mouse_interactions()
-                && matches!(outcome, Some(ScreenSelectionOutcome::Click { .. }))
-            {
-                return MouseAction::Selection(None);
-            }
             return MouseAction::Selection(outcome);
         }
-        MouseEventKind::Moved if app.mouse_interactions() => {
-            update_pointer_hover(app, area, mouse.column, mouse.row)
-        }
+        MouseEventKind::Moved => update_pointer_hover(app, area, mouse.column, mouse.row),
         _ => {}
     }
     MouseAction::Selection(None)
@@ -383,6 +382,14 @@ fn finish_pointer_gesture(
     terminal: &terminal::TerminalSession,
     outcome: Option<ScreenSelectionOutcome>,
 ) -> Result<Option<AppCommand>, std::io::Error> {
+    let select = |app: &mut App, range| {
+        apply_screen_selection(
+            app,
+            range,
+            |range| terminal.selected_text(range),
+            host::clipboard::write_text,
+        );
+    };
     match outcome {
         Some(ScreenSelectionOutcome::Click {
             position,
@@ -396,7 +403,7 @@ fn finish_pointer_gesture(
             count: ClickCount::Double,
         }) => {
             if let Some(range) = terminal.token_range_at(position) {
-                apply_screen_selection(app, terminal, range);
+                select(app, range);
             }
             Ok(None)
         }
@@ -405,12 +412,12 @@ fn finish_pointer_gesture(
             count: ClickCount::Triple,
         }) => {
             if let Some(range) = terminal.line_range_at(position) {
-                apply_screen_selection(app, terminal, range);
+                select(app, range);
             }
             Ok(None)
         }
         Some(ScreenSelectionOutcome::Selection(range)) => {
-            apply_screen_selection(app, terminal, range);
+            select(app, range);
             Ok(None)
         }
         None => Ok(None),
@@ -419,18 +426,16 @@ fn finish_pointer_gesture(
 
 fn apply_screen_selection(
     app: &mut App,
-    terminal: &terminal::TerminalSession,
     range: crate::terminal::screen_selection::ScreenSelectionRange,
+    read: impl FnOnce(crate::terminal::screen_selection::ScreenSelectionRange) -> Option<String>,
+    write: impl FnOnce(&str) -> Result<(), String>,
 ) {
     app.select_screen_range(range);
-    if !app.copy_on_select() {
-        return;
-    }
-    let Some(text) = terminal.selected_text(range) else {
+    let Some(text) = read(range) else {
         return;
     };
     let char_count = text.chars().count();
-    match host::clipboard::write_text(&text) {
+    match write(&text) {
         Ok(()) => app.update(HostEvent::TopTipNoticeShown(format!(
             "Copied {char_count} chars to clipboard"
         ))),
@@ -446,13 +451,19 @@ fn update_pointer_hover(app: &mut App, area: ratatui::layout::Rect, column: u16,
 fn draw_terminal(
     terminal: &mut terminal::TerminalSession,
     app: &mut App,
+    output: &mut frame::Output,
 ) -> Result<(), std::io::Error> {
     if !app.mouse_mode().enables_pointer_actions() {
         app.clear_mouse_interaction();
     }
+    terminal.set_screen_mode(app.screen_mode())?;
     terminal.set_mouse_mode(app.mouse_mode())?;
     terminal.set_cursor_color(app.render_context().cursor_color())?;
-    terminal.draw(|terminal_frame, links| frame::draw_with_links(terminal_frame, app, links))
+    match app.screen_mode() {
+        terminal::ScreenMode::Fullscreen => terminal
+            .draw(|terminal_frame, links| frame::draw_with_links(terminal_frame, app, links)),
+        terminal::ScreenMode::Native => output.draw(terminal, app),
+    }
 }
 
 #[cfg(test)]

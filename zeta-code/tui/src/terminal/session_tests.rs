@@ -1,5 +1,6 @@
 use super::TerminalModeGuard;
 use super::TerminalModeOperations;
+use crate::terminal::ScreenMode;
 use crate::terminal::mouse::MouseMode;
 use std::cell::RefCell;
 use std::io;
@@ -15,6 +16,58 @@ const DISABLE_FOCUS_CHANGE: &str = "disable focus change";
 const DISABLE_BRACKETED_PASTE: &str = "disable bracketed paste";
 const FINISH_SCREEN: &str = "finish screen";
 const DISABLE_RAW_MODE: &str = "disable raw mode";
+
+#[test]
+fn main_screen_keeps_mouse_and_screen_with_the_terminal_across_resume() {
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let mut guard =
+        TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None), ScreenMode::Native)
+            .unwrap();
+    guard.set_mouse_mode(MouseMode::TuiCapture).unwrap();
+    guard.restore();
+    guard.reacquire().unwrap();
+    drop(guard);
+    let lifecycle = [
+        ENABLE_RAW_MODE,
+        ENABLE_BRACKETED_PASTE,
+        ENABLE_FOCUS_CHANGE,
+        DISABLE_FOCUS_CHANGE,
+        DISABLE_BRACKETED_PASTE,
+        DISABLE_RAW_MODE,
+    ];
+    assert_eq!(calls.borrow().as_slice(), lifecycle.repeat(2));
+}
+
+#[test]
+fn main_screen_failure_restores_only_acquired_input_modes() {
+    for (failure, expected) in [
+        (ENABLE_RAW_MODE, vec![ENABLE_RAW_MODE]),
+        (
+            ENABLE_BRACKETED_PASTE,
+            vec![ENABLE_RAW_MODE, ENABLE_BRACKETED_PASTE, DISABLE_RAW_MODE],
+        ),
+        (
+            ENABLE_FOCUS_CHANGE,
+            vec![
+                ENABLE_RAW_MODE,
+                ENABLE_BRACKETED_PASTE,
+                ENABLE_FOCUS_CHANGE,
+                DISABLE_BRACKETED_PASTE,
+                DISABLE_RAW_MODE,
+            ],
+        ),
+    ] {
+        let calls = Rc::new(RefCell::new(Vec::new()));
+        assert!(
+            TerminalModeGuard::acquire(
+                FakeOperations::new(calls.clone(), Some(failure)),
+                ScreenMode::Native
+            )
+            .is_err()
+        );
+        assert_eq!(*calls.borrow(), expected);
+    }
+}
 
 #[test]
 fn cursor_color_updates_once_and_resets_before_reapplication() {
@@ -34,8 +87,11 @@ fn cursor_color_updates_once_and_resets_before_reapplication() {
 #[test]
 fn acquired_terminal_modes_are_restored_in_reverse_order() {
     let calls = Rc::new(RefCell::new(Vec::new()));
-    let guard =
-        TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None)).expect("acquire");
+    let guard = TerminalModeGuard::acquire(
+        FakeOperations::new(calls.clone(), None),
+        ScreenMode::Fullscreen,
+    )
+    .expect("acquire");
 
     drop(guard);
 
@@ -88,7 +144,10 @@ fn acquisition_failure_restores_only_modes_that_were_acquired() {
 
     for (failure, expected_calls) in cases {
         let calls = Rc::new(RefCell::new(Vec::new()));
-        let result = TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), Some(failure)));
+        let result = TerminalModeGuard::acquire(
+            FakeOperations::new(calls.clone(), Some(failure)),
+            ScreenMode::Fullscreen,
+        );
 
         assert!(result.is_err(), "{failure} should fail");
         assert_eq!(
@@ -102,8 +161,11 @@ fn acquisition_failure_restores_only_modes_that_were_acquired() {
 #[test]
 fn mouse_mode_is_applied_idempotently() {
     let calls = Rc::new(RefCell::new(Vec::new()));
-    let mut guard =
-        TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None)).expect("acquire");
+    let mut guard = TerminalModeGuard::acquire(
+        FakeOperations::new(calls.clone(), None),
+        ScreenMode::Fullscreen,
+    )
+    .expect("acquire");
 
     guard
         .set_mouse_mode(MouseMode::TuiCapture)
@@ -111,12 +173,6 @@ fn mouse_mode_is_applied_idempotently() {
     guard
         .set_mouse_mode(MouseMode::TuiCapture)
         .expect("keep TUI pointer capture enabled");
-    guard
-        .set_mouse_mode(MouseMode::TuiScroll)
-        .expect("keep capture for content scrolling");
-    guard
-        .set_mouse_mode(MouseMode::TuiScroll)
-        .expect("keep content scrolling enabled");
     guard
         .set_mouse_mode(MouseMode::TerminalSelection)
         .expect("restore terminal selection");
@@ -142,8 +198,11 @@ fn mouse_mode_is_applied_idempotently() {
 #[test]
 fn explicit_restore_is_idempotent() {
     let calls = Rc::new(RefCell::new(Vec::new()));
-    let mut guard =
-        TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None)).expect("acquire");
+    let mut guard = TerminalModeGuard::acquire(
+        FakeOperations::new(calls.clone(), None),
+        ScreenMode::Fullscreen,
+    )
+    .expect("acquire");
 
     guard.restore();
     guard.restore();
@@ -165,14 +224,17 @@ fn explicit_restore_is_idempotent() {
 }
 
 #[test]
-fn suspend_cycle_reacquires_scroll_only_mouse_capture() {
+fn suspend_cycle_reacquires_fullscreen_mouse_capture() {
     let calls = Rc::new(RefCell::new(Vec::new()));
-    let mut guard =
-        TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None)).expect("acquire");
+    let mut guard = TerminalModeGuard::acquire(
+        FakeOperations::new(calls.clone(), None),
+        ScreenMode::Fullscreen,
+    )
+    .expect("acquire");
 
     guard
-        .set_mouse_mode(MouseMode::TuiScroll)
-        .expect("enable content scrolling capture");
+        .set_mouse_mode(MouseMode::TuiCapture)
+        .expect("enable fullscreen mouse capture");
     guard.restore();
     guard.reacquire().expect("reacquire");
     drop(guard);

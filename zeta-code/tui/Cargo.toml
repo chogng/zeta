@@ -17,7 +17,6 @@ crossterm = { workspace = true }
 dirs = { workspace = true }
 pulldown-cmark = { workspace = true }
 ratatui = { workspace = true, features = [
-    "scrolling-regions",
     "unstable-backend-writer",
     "unstable-rendered-line-info",
 ] }

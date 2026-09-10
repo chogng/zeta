@@ -1,3 +1,4 @@
+use crate::terminal::ScreenMode;
 use crate::terminal::mouse::MouseMode;
 use crate::terminal::screen_selection::ScreenSelectionRange;
 use crate::terminal::screen_selection::line_range_at;
@@ -15,6 +16,8 @@ use crossterm::terminal::LeaveAlternateScreen;
 use crossterm::terminal::disable_raw_mode;
 use crossterm::terminal::enable_raw_mode;
 use ratatui::Terminal;
+use ratatui::TerminalOptions;
+use ratatui::Viewport;
 use ratatui::backend::CrosstermBackend;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Position;
@@ -37,14 +40,16 @@ pub(crate) struct TerminalSession {
     rendered_frame: Option<Buffer>,
     hyperlinks: super::hyperlinks::FrameLinks,
     cursor_color: CursorColor,
+    inline_height: u16,
+    inline_active: bool,
 }
 
 impl TerminalSession {
-    pub(crate) fn open() -> io::Result<Self> {
+    pub(crate) fn open(mode: ScreenMode) -> io::Result<Self> {
         let host_terminal = detect_host_terminal();
-        let modes = TerminalModeGuard::acquire(CrosstermModeOperations)?;
+        let modes = TerminalModeGuard::acquire(CrosstermModeOperations, mode)?;
         let background_color = super::terminal_probe::query_background(&host_terminal);
-        let terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
+        let terminal = new_terminal(mode, 1)?;
         let mut session = Self {
             background_color,
             terminal,
@@ -52,9 +57,66 @@ impl TerminalSession {
             rendered_frame: None,
             hyperlinks: Default::default(),
             cursor_color: CursorColor::default(),
+            inline_height: 1,
+            inline_active: mode == ScreenMode::Native,
         };
         session.terminal.clear()?;
         Ok(session)
+    }
+
+    pub(crate) fn set_screen_mode(&mut self, mode: ScreenMode) -> io::Result<()> {
+        if self.modes.mode == mode {
+            return Ok(());
+        }
+        if self.modes.mode == ScreenMode::Native {
+            self.terminal.clear()?;
+            let origin = self.terminal.get_frame().area().as_position();
+            self.terminal.set_cursor_position(origin)?;
+        }
+        self.inline_active = false;
+        self.modes.restore();
+        self.modes.mode = mode;
+        self.modes.mouse_mode = MouseMode::TerminalSelection;
+        self.modes.reacquire()?;
+        self.terminal = new_terminal(mode, self.inline_height)?;
+        self.inline_active = mode == ScreenMode::Native;
+        self.terminal.clear()?;
+        self.invalidate();
+        Ok(())
+    }
+
+    pub(crate) fn set_inline_height(&mut self, height: u16) -> io::Result<()> {
+        self.terminal.autoresize()?;
+        let height = height.max(1).min(self.screen_area()?.height.max(1));
+        if self.inline_height == height {
+            return Ok(());
+        }
+        let origin = self.terminal.get_frame().area().as_position();
+        self.terminal.clear()?;
+        self.terminal.set_cursor_position(origin)?;
+        self.terminal = new_terminal(ScreenMode::Native, height)?;
+        self.inline_height = height;
+        self.invalidate();
+        Ok(())
+    }
+
+    pub(crate) fn append_history(
+        &mut self,
+        height: usize,
+        mut render: impl FnMut(&mut Buffer, usize, &std::cell::RefCell<super::hyperlinks::FrameLinks>),
+    ) -> io::Result<()> {
+        super::scrollback::append(&mut self.terminal, height, |buffer, offset| {
+            let links = std::cell::RefCell::default();
+            render(buffer, offset, &links);
+            links.into_inner().encode_history(buffer);
+        })?;
+        self.invalidate();
+        Ok(())
+    }
+
+    fn invalidate(&mut self) {
+        self.hyperlinks = Default::default();
+        self.rendered_frame = None;
     }
 
     pub(crate) const fn background_color(&self) -> Option<TerminalRgb> {
@@ -121,14 +183,21 @@ impl TerminalSession {
     /// Restores the parent terminal, suspends this process, and reacquires TUI modes on resume.
     pub(crate) fn suspend(&mut self) -> io::Result<()> {
         self.cursor_color.set(&mut io::stdout(), None)?;
+        if self.modes.mode == ScreenMode::Native {
+            self.terminal.clear()?;
+            let origin = self.terminal.get_frame().area().as_position();
+            self.terminal.set_cursor_position(origin)?;
+        }
         self.modes.restore();
         let _ = self.terminal.show_cursor();
         let suspend_result = suspend_process();
         let reacquire_result = self.modes.reacquire();
         suspend_result?;
         reacquire_result?;
-        self.hyperlinks = Default::default();
-        self.rendered_frame = None;
+        if self.modes.mode == ScreenMode::Native {
+            self.terminal = new_terminal(ScreenMode::Native, self.inline_height)?;
+        }
+        self.invalidate();
         self.terminal.clear()
     }
 }
@@ -136,6 +205,11 @@ impl TerminalSession {
 impl Drop for TerminalSession {
     fn drop(&mut self) {
         let _ = self.cursor_color.set(&mut io::stdout(), None);
+        if self.inline_active {
+            let _ = self.terminal.clear();
+            let origin = self.terminal.get_frame().area().as_position();
+            let _ = self.terminal.set_cursor_position(origin);
+        }
         self.modes.restore();
         let _ = self.terminal.show_cursor();
     }
@@ -178,6 +252,7 @@ trait TerminalModeOperations {
 
 struct TerminalModeGuard<O: TerminalModeOperations> {
     operations: O,
+    mode: ScreenMode,
     raw_mode: bool,
     screen_active: bool,
     bracketed_paste: bool,
@@ -187,9 +262,10 @@ struct TerminalModeGuard<O: TerminalModeOperations> {
 }
 
 impl<O: TerminalModeOperations> TerminalModeGuard<O> {
-    fn acquire(operations: O) -> io::Result<Self> {
+    fn acquire(operations: O, mode: ScreenMode) -> io::Result<Self> {
         let mut guard = Self {
             operations,
+            mode,
             raw_mode: false,
             screen_active: false,
             bracketed_paste: false,
@@ -206,13 +282,15 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
         let result = (|| {
             self.operations.enable_raw_mode()?;
             self.raw_mode = true;
-            self.operations.begin_screen()?;
-            self.screen_active = true;
+            if self.mode == ScreenMode::Fullscreen {
+                self.operations.begin_screen()?;
+                self.screen_active = true;
+            }
             self.operations.enable_bracketed_paste()?;
             self.bracketed_paste = true;
             self.operations.enable_focus_change()?;
             self.focus_change = true;
-            if self.mouse_mode.captures_terminal_input() {
+            if self.mode == ScreenMode::Fullscreen && self.mouse_mode.captures_terminal_input() {
                 self.operations.enable_mouse_capture()?;
                 self.mouse_capture = true;
             }
@@ -225,6 +303,11 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
     }
 
     fn set_mouse_mode(&mut self, mode: MouseMode) -> io::Result<()> {
+        let mode = if self.mode == ScreenMode::Native {
+            MouseMode::TerminalSelection
+        } else {
+            mode
+        };
         if self.mouse_mode == mode {
             return Ok(());
         }
@@ -235,7 +318,7 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
                     self.mouse_capture = false;
                 }
             }
-            MouseMode::TuiScroll | MouseMode::TuiCapture => {
+            MouseMode::TuiCapture => {
                 if self.screen_active && !self.mouse_capture {
                     self.operations.enable_mouse_capture()?;
                     self.mouse_capture = true;
@@ -277,6 +360,18 @@ impl<O: TerminalModeOperations> Drop for TerminalModeGuard<O> {
 }
 
 struct CrosstermModeOperations;
+
+fn new_terminal(mode: ScreenMode, height: u16) -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
+    Terminal::with_options(
+        CrosstermBackend::new(io::stdout()),
+        TerminalOptions {
+            viewport: match mode {
+                ScreenMode::Fullscreen => Viewport::Fullscreen,
+                ScreenMode::Native => Viewport::Inline(height),
+            },
+        },
+    )
+}
 
 impl TerminalModeOperations for CrosstermModeOperations {
     fn enable_raw_mode(&mut self) -> io::Result<()> {
