@@ -13,12 +13,12 @@ use zeta_sprite::TerminalSprite;
 #[cfg(test)]
 use zeta_sprite::TerminalSpriteSheet;
 
-pub(super) struct PetWidget<'a> {
+pub(in crate::app) struct PetWidget<'a> {
     sprite: TerminalSprite<'a>,
 }
 
 impl<'a> PetWidget<'a> {
-    pub(super) const fn new(sprite: TerminalSprite<'a>) -> Self {
+    pub(in crate::app) const fn new(sprite: TerminalSprite<'a>) -> Self {
         Self { sprite }
     }
 }
@@ -55,7 +55,7 @@ fn ratatui_color(color: Rgb) -> Color {
     Color::Rgb(red, green, blue)
 }
 
-pub(super) fn sprite() -> TerminalSprite<'static> {
+pub(in crate::app) fn sprite() -> TerminalSprite<'static> {
     asset::PET.idle()
 }
 
@@ -63,3 +63,7 @@ pub(super) fn sprite() -> TerminalSprite<'static> {
 pub(super) fn sheet() -> TerminalSpriteSheet<'static> {
     asset::PET
 }
+
+#[cfg(test)]
+#[path = "pet_tests.rs"]
+mod tests;

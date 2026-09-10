@@ -1,0 +1,17 @@
+---
+source: zeta-code/tui/src/app/fullscreen/pointer_tests.rs
+assertion_line: 94
+expression: text
+---
+                                        
+    ▄  ▄     Zeta Code v0.1.0           
+  ▗█▛██▜█▖   Automatic model · Access   
+  ▝▜████▛▘   .                          
+    ▝  ▘                                
+                                        
+  /quit                      quit Zeta  
+────────────────────────────────────────
+> /q                                    
+────────────────────────────────────────
+                                        
+  ⏸ ask permissions on

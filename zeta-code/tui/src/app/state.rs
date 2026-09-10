@@ -5,12 +5,10 @@ use super::command_panel::CommandPanelOutcome;
 use super::escape::ScreenEscapeOutcome;
 use super::escape::ScreenEscapeSequence;
 use super::event::AppEvent;
-use super::frame;
-use super::frame::InputPointerTarget;
+use super::fullscreen::Fullscreen;
 use super::help::help_choices;
 use crate::TuiStartupContext;
 use crate::app::top_tip::TopTip;
-use crate::app::welcome;
 use crate::app::welcome::WelcomeModel;
 use crate::config::Command as ConfigCommand;
 use crate::config::ConfigSelectionAction;
@@ -28,7 +26,6 @@ use crate::host::Command as HostCommand;
 use crate::host::Event as HostEvent;
 use crate::host::clipboard::ClipboardImage;
 use crate::host::clipboard::ClipboardImageAvailability;
-use crate::keymap::AppChordMatch;
 use crate::keymap::AppKeymap;
 use crate::keymap::AppKeymapAction;
 use crate::keymap::AppKeymapContext;
@@ -50,7 +47,6 @@ use crate::render::RenderTheme;
 use crate::sessions::Command as SessionCommand;
 use crate::sessions::Event as SessionEvent;
 use crate::sessions::SessionChoices;
-use crate::sessions::SessionManagerInputOutcome;
 use crate::sessions::SessionManagerView;
 use crate::sessions::SessionSelectionAction;
 use crate::sessions::SessionsState;
@@ -67,10 +63,7 @@ use crate::status::StatusLineChoices;
 use crate::status::StatusLineModel;
 use crate::status::StatusLineRuntime;
 use crate::status::StatusLineSelectionAction;
-use crate::terminal::mouse::MouseMode;
-use crate::terminal::mouse::PointerInteraction;
-use crate::terminal::screen_selection::ScreenSelection;
-use crate::terminal::screen_selection::ScreenSelectionOutcome;
+use crate::terminal::MouseMode;
 use crate::theme::Command as ThemeCommand;
 use crate::theme::Event as ThemeEvent;
 use crate::theme::ThemeChoices;
@@ -94,7 +87,6 @@ use crate::thread::composer::ChatInputItem;
 use crate::thread::composer::SteerSource;
 use crate::thread::preview::ConversationPreview;
 use crate::thread::queue::QueueId;
-use crate::thread::queue::QueueKeyOutcome;
 use crate::thread::queue::QueueView;
 use crate::thread::rewind::RewindChoices;
 use crate::thread::rewind::RewindSelectionAction;
@@ -104,18 +96,11 @@ use crate::thread::transcript::ChatHistoryScroll;
 use crate::thread::transcript::TranscriptScrollAnchor;
 use crate::thread::transcript::TranscriptScrollDirection;
 use crate::thread::transcript::first_scroll_target;
-use crate::thread::transcript::scroll_target;
 use crate::widgets::detail_list::DetailList;
 use crate::widgets::detail_list::DetailListRow;
 use crate::widgets::list_selection::ListSelectionState;
-use crate::widgets::navigation::Navigation;
 use crate::widgets::overlay::DetailOverlay;
-use crate::widgets::overlay::OverlayInputOutcome;
-use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
-use crossterm::event::KeyEventKind;
-use crossterm::event::KeyModifiers;
-use ratatui::layout::Position;
 use ratatui::layout::Rect;
 use std::path::Path;
 use std::path::PathBuf;
@@ -137,51 +122,21 @@ pub(crate) enum Status {
     Error,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum EmptyInputNavigation {
-    PreviousScreen,
-    NextScreen,
-    FocusManager,
-    FocusAgentThreads,
-}
-
-fn empty_input_navigation(
-    screen: Option<&TerminalScreen>,
-    key: KeyCode,
-) -> Option<EmptyInputNavigation> {
-    match key {
-        KeyCode::Left => Some(EmptyInputNavigation::PreviousScreen),
-        KeyCode::Right => Some(EmptyInputNavigation::NextScreen),
-        KeyCode::Esc if matches!(screen, Some(TerminalScreen::Manager)) => {
-            Some(EmptyInputNavigation::NextScreen)
-        }
-        KeyCode::Up if matches!(screen, Some(TerminalScreen::Manager)) => {
-            Some(EmptyInputNavigation::FocusManager)
-        }
-        KeyCode::Down if matches!(screen, Some(TerminalScreen::Session(_))) => {
-            Some(EmptyInputNavigation::FocusAgentThreads)
-        }
-        _ => None,
-    }
-}
-
 #[derive(Debug)]
 pub(crate) struct App {
-    chat_panel: ChatPanel,
+    pub(super) chat_panel: ChatPanel,
     pub(super) app_keymap: AppKeymap,
-    thread: ThreadState,
-    thread_presentations: ThreadPresentationStore,
-    sessions: SessionsState,
-    issues: crate::issues::Manager,
-    agent_thread_switcher: AgentThreadSwitcher,
-    overlay: Option<DetailOverlay>,
+    pub(super) thread: ThreadState,
+    pub(super) thread_presentations: ThreadPresentationStore,
+    pub(super) sessions: SessionsState,
+    pub(super) issues: crate::issues::Manager,
+    pub(super) agent_thread_switcher: AgentThreadSwitcher,
     welcome: WelcomeModel,
-    screen_escape_sequence: ScreenEscapeSequence,
     status: Status,
     terminal_settings: TerminalSettings,
     subscription: crate::config::Subscription,
-    pointer: PointerInteraction<InputPointerTarget>,
-    screen_selection: ScreenSelection,
+    pub(super) fullscreen: Fullscreen,
+    pub(super) inline: super::inline::Inline,
     render_theme: RenderTheme,
     render_theme_revision: u64,
     skill_diagnostic_warnings: SkillDiagnosticWarnings,
@@ -203,14 +158,16 @@ impl App {
             sessions: SessionsState::default(),
             issues: crate::issues::Manager::default(),
             agent_thread_switcher: AgentThreadSwitcher::default(),
-            overlay: None,
             welcome: WelcomeModel::for_workspace(Path::new(".")),
-            screen_escape_sequence: ScreenEscapeSequence::default(),
             status: Status::Ready,
             terminal_settings: TerminalSettings::default(),
             subscription: crate::config::Subscription::default(),
-            pointer: PointerInteraction::default(),
-            screen_selection: ScreenSelection::default(),
+            fullscreen: Fullscreen::new(
+                zeta_protocol::ThreadId::new("tui-local").expect("valid initial Thread"),
+            ),
+            inline: super::inline::Inline::new(
+                zeta_protocol::ThreadId::new("tui-local").expect("valid initial Thread"),
+            ),
             render_theme: RenderTheme::fallback(),
             render_theme_revision: 0,
             skill_diagnostic_warnings: SkillDiagnosticWarnings::default(),
@@ -265,14 +222,16 @@ impl App {
             sessions: SessionsState::default(),
             issues: crate::issues::Manager::default(),
             agent_thread_switcher: AgentThreadSwitcher::default(),
-            overlay: None,
             welcome: WelcomeModel::for_workspace(dir_root),
-            screen_escape_sequence: ScreenEscapeSequence::default(),
             status: Status::Ready,
             terminal_settings: TerminalSettings::default(),
             subscription: crate::config::Subscription::default(),
-            pointer: PointerInteraction::default(),
-            screen_selection: ScreenSelection::default(),
+            fullscreen: Fullscreen::new(
+                zeta_protocol::ThreadId::new("tui-local").expect("valid initial Thread"),
+            ),
+            inline: super::inline::Inline::new(
+                zeta_protocol::ThreadId::new("tui-local").expect("valid initial Thread"),
+            ),
             render_theme: RenderTheme::fallback(),
             render_theme_revision: 0,
             skill_diagnostic_warnings: SkillDiagnosticWarnings::default(),
@@ -304,147 +263,25 @@ impl App {
         self.handle_key_at_in_area(key, Instant::now(), terminal_area)
     }
 
-    fn handle_key_at_in_area(
+    pub(crate) fn handle_key_at_in_area(
         &mut self,
         key: KeyEvent,
         now: Instant,
         terminal_area: Rect,
     ) -> Option<AppCommand> {
-        if key.kind == KeyEventKind::Press {
-            self.pointer.clear();
-        }
-        if self.issues.is_open() {
-            return self.issues.handle_key(key).map(Into::into);
-        }
-        let overlay_area = frame::transient_area(self, terminal_area);
-        if let Some(overlay) = self.overlay_mut() {
-            if overlay.handle_key(key, overlay_area) == OverlayInputOutcome::Dismiss {
-                self.close_overlay();
+        let command = match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => {
+                super::fullscreen::navigation::handle_key(self, key, now, terminal_area)
             }
-            return None;
-        }
-        if self.sessions.preview.is_some() {
-            if key.kind == KeyEventKind::Press && bindings::CLOSE.matches(key) {
-                self.sessions.preview = None;
-                self.pointer.clear();
-                return None;
+            crate::terminal::ScreenMode::Inline => {
+                super::inline::navigation::handle_key(self, key, now, terminal_area)
             }
-            return match Navigation::from_key(key) {
-                Some(
-                    navigation @ (Navigation::Previous
-                    | Navigation::Next
-                    | Navigation::PagePrevious
-                    | Navigation::PageNext),
-                ) => {
-                    let rows = match navigation {
-                        Navigation::PagePrevious | Navigation::PageNext => usize::from(
-                            frame::layout(self, terminal_area)
-                                .session
-                                .transcript
-                                .height
-                                .saturating_sub(1)
-                                .max(1),
-                        ),
-                        _ => 1,
-                    };
-                    let direction =
-                        if matches!(navigation, Navigation::Previous | Navigation::PagePrevious) {
-                            TranscriptScrollDirection::Up
-                        } else {
-                            TranscriptScrollDirection::Down
-                        };
-                    self.navigate_preview(direction, rows, terminal_area)
-                }
-                Some(Navigation::First) => {
-                    let preview = self.sessions.preview.as_mut().unwrap();
-                    preview.first().map(|params| {
-                        SessionCommand::Preview {
-                            generation: preview.generation,
-                            params,
-                        }
-                        .into()
-                    })
-                }
-                Some(Navigation::Last) => {
-                    self.follow_latest_transcript();
-                    None
-                }
-                None => None,
-            };
-        }
-        if matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
-            && self.sessions.manager().focused()
-        {
-            return self.handle_screen_navigation_key(key).flatten();
-        }
-        if matches!(self.sessions.screen(), Some(TerminalScreen::Session(_))) {
-            if let Some(command) = self.handle_thread_request_key(key) {
-                return command;
-            }
-            if self.chat_panel.request_active() {
-                return None;
-            }
-        }
-        let composer_area = frame::layout(self, terminal_area).session.composer;
-        if let Some(outcome) = self.chat_panel.handle_command_key(key, composer_area) {
-            return self.handle_command_panel_outcome(outcome);
-        }
-        if self.chat_input_focused()
-            && self
-                .thread_presentations
-                .active()
-                .input
-                .history_intercepts(key)
-        {
-            let outcome = self
-                .chat_panel
-                .handle_composer_key(&mut self.thread_presentations.active_mut().input, key);
-            self.screen_escape_sequence.reset();
-            return self.handle_chat_composer_outcome(outcome, now);
-        }
-        if let Some(command) = self.handle_queue_key(key) {
-            return command;
-        }
-        if self.agent_thread_switcher.focused() {
-            return self.handle_screen_navigation_key(key).flatten();
-        }
-        let temporary_interaction_active = self.completion().is_some();
-        let is_screen_escape_press = key.kind == KeyEventKind::Press
-            && key.code == KeyCode::Esc
-            && key.modifiers.is_empty()
-            && !temporary_interaction_active;
-        if key.kind == KeyEventKind::Press && !is_screen_escape_press {
-            self.screen_escape_sequence.reset();
-        }
-        let keymap_context = self.app_keymap_context(key.kind == KeyEventKind::Press);
-        match self.app_keymap.route_chord(&key, keymap_context, now) {
-            AppChordMatch::PassThrough => {}
-            AppChordMatch::Pending | AppChordMatch::Consumed => return None,
-            AppChordMatch::Command(action) => {
-                return self.apply_app_keymap_action(action, now);
-            }
-        }
-        if let Some(command) = self.handle_screen_navigation_key(key) {
-            return command;
-        }
-        if self.handle_transcript_selection_key(key) {
-            return None;
-        }
-        if !self.accepts_input() {
-            self.screen_escape_sequence.reset();
-            return self.handle_app_key(key, now, terminal_area);
-        }
-
-        let outcome = self
-            .chat_panel
-            .handle_composer_key(&mut self.thread_presentations.active_mut().input, key);
-        if matches!(outcome, ChatComposerOutcome::Unhandled) {
-            return self.handle_app_key(key, now, terminal_area);
-        }
-        self.handle_chat_composer_outcome(outcome, now)
+        };
+        self.sync_preview_viewports();
+        command
     }
 
-    fn handle_chat_composer_outcome(
+    pub(super) fn handle_chat_composer_outcome(
         &mut self,
         outcome: ChatComposerOutcome,
         now: Instant,
@@ -497,42 +334,7 @@ impl App {
         }
     }
 
-    fn handle_queue_key(&mut self, key: KeyEvent) -> Option<Option<AppCommand>> {
-        if self.thread_presentations.active().queue.focused() {
-            let outcome = self.thread_presentations.active_mut().queue.handle_key(key);
-            if outcome == QueueKeyOutcome::Unhandled {
-                return None;
-            }
-            return Some(match outcome {
-                QueueKeyOutcome::Restore(queue_id) => {
-                    let state = self.thread_presentations.active_mut();
-                    if let Err(error) = state.queue.restore(queue_id, &mut state.input) {
-                        self.thread
-                            .update(ThreadPresentationEvent::FailureReported(error));
-                    }
-                    None
-                }
-                QueueKeyOutcome::Send(queue_id) => self.send_queued_message(queue_id),
-                QueueKeyOutcome::Consumed => None,
-                QueueKeyOutcome::Unhandled => unreachable!("handled above"),
-            });
-        }
-        if !self.accepts_input() || self.session_manager_view().is_some() {
-            return None;
-        }
-        if key.kind == KeyEventKind::Press
-            && key.code == KeyCode::Up
-            && key.modifiers == KeyModifiers::ALT
-            && self.thread_presentations.active_mut().queue.focus_latest()
-        {
-            self.thread_presentations.active_mut().selected_cell = None;
-            self.agent_thread_switcher.blur();
-            return Some(None);
-        }
-        None
-    }
-
-    fn send_queued_message(&mut self, queue_id: QueueId) -> Option<AppCommand> {
+    pub(super) fn send_queued_message(&mut self, queue_id: QueueId) -> Option<AppCommand> {
         if matches!(self.status, Status::Working) && !self.chat_panel.is_steering() {
             self.thread.update(ThreadPresentationEvent::FailureReported(
                 "wait until the active Turn can accept steering before sending this queued message"
@@ -589,7 +391,10 @@ impl App {
         )
     }
 
-    fn handle_thread_request_key(&mut self, key: KeyEvent) -> Option<Option<AppCommand>> {
+    pub(super) fn handle_thread_request_key(
+        &mut self,
+        key: KeyEvent,
+    ) -> Option<Option<AppCommand>> {
         self.chat_panel
             .handle_request_key(key)
             .map(|response| response.map(|response| ThreadCommand::ResolveRequest(response).into()))
@@ -603,7 +408,10 @@ impl App {
         self.chat_panel.fail_request(request, error);
     }
 
-    fn handle_command_panel_outcome(&mut self, outcome: CommandPanelOutcome) -> Option<AppCommand> {
+    pub(super) fn handle_command_panel_outcome(
+        &mut self,
+        outcome: CommandPanelOutcome,
+    ) -> Option<AppCommand> {
         match outcome {
             CommandPanelOutcome::Dirs(DirSelectionAction::Add { request_id, path }) => {
                 Some(DirCommand::Add { request_id, path }.into())
@@ -708,8 +516,8 @@ impl App {
                 None
             }
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenSubscription) => {
-                self.chat_panel
-                    .open_subscription(self.subscription.choices());
+                let choices = self.subscription.choices();
+                self.panels_mut().open_subscription(choices);
                 self.begin_subscription_command(crate::config::SubscriptionCommand::Read)
             }
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::Subscription(
@@ -753,8 +561,8 @@ impl App {
         if !self.subscription.begin(&command) {
             return None;
         }
-        self.chat_panel
-            .update_subscription(self.subscription.choices());
+        let choices = self.subscription.choices();
+        self.panels_mut().update_subscription(choices);
         Some(ConfigCommand::Subscription(command).into())
     }
 
@@ -792,7 +600,7 @@ impl App {
         let Some(details) = self.thread.details(&cell_id) else {
             return false;
         };
-        self.thread_presentations.active_mut().selected_cell = Some(cell_id);
+        self.viewport_mut().selected_cell = Some(cell_id);
         self.show_overlay(DetailList::new(
             "Transcript cell",
             vec![DetailListRow::new("Content", details)],
@@ -817,7 +625,7 @@ impl App {
             self.issues.handle_paste(pasted);
             return;
         }
-        self.pointer.clear();
+        self.fullscreen.pointer.clear();
         if self.overlay().is_some() || self.sessions.preview.is_some() {
             return;
         }
@@ -827,8 +635,8 @@ impl App {
             self.chat_panel.handle_request_paste(pasted);
             return;
         }
-        if self.chat_panel.command_active() {
-            self.chat_panel.handle_command_paste(pasted);
+        if self.panels().command_active() {
+            self.panels_mut().handle_command_paste(pasted);
             return;
         }
         if self.accepts_input()
@@ -886,12 +694,47 @@ impl App {
             .composer_view(&self.thread_presentations.active().input)
     }
 
+    pub(super) fn escape_mut(&mut self) -> &mut ScreenEscapeSequence {
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => &mut self.fullscreen.escape,
+            crate::terminal::ScreenMode::Inline => &mut self.inline.escape,
+        }
+    }
+
+    pub(super) fn panels(&self) -> &super::command_panel::Panels {
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => &self.fullscreen.panels,
+            crate::terminal::ScreenMode::Inline => &self.inline.panels,
+        }
+    }
+
+    pub(super) fn panels_mut(&mut self) -> &mut super::command_panel::Panels {
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => &mut self.fullscreen.panels,
+            crate::terminal::ScreenMode::Inline => &mut self.inline.panels,
+        }
+    }
+
+    fn set_terminal_settings(&mut self, settings: TerminalSettings) {
+        if self.screen_mode() != settings.screen_mode() {
+            let panels = std::mem::take(self.panels_mut());
+            self.terminal_settings = settings;
+            *self.panels_mut() = panels;
+            self.fullscreen.clear();
+            self.fullscreen.escape.reset();
+            self.inline.escape.reset();
+            self.reconcile_transcript_scroll_anchor();
+        } else {
+            self.terminal_settings = settings;
+        }
+    }
+
     pub(crate) fn command_panel_key_hints(&self) -> Option<&str> {
-        self.chat_panel.command_key_hints()
+        self.panels().command_key_hints()
     }
 
     pub(crate) fn command_panel(&self) -> Option<&CommandPanel> {
-        self.chat_panel.command()
+        self.panels().command()
     }
 
     pub(super) fn take_session_details_request(
@@ -903,17 +746,18 @@ impl App {
             .and_then(|details| details.take_request())
     }
 
-    fn overlay_mut(&mut self) -> Option<&mut DetailOverlay> {
-        self.overlay.as_mut().or_else(|| {
-            self.sessions
-                .details
-                .as_mut()
-                .map(|details| &mut details.overlay)
-        })
+    pub(super) fn overlay_mut(&mut self) -> Option<&mut DetailOverlay> {
+        if self.panels().overlay.is_some() {
+            return self.panels_mut().overlay.as_mut();
+        }
+        self.sessions
+            .details
+            .as_mut()
+            .map(|details| &mut details.overlay)
     }
 
     pub(crate) fn overlay(&self) -> Option<&DetailOverlay> {
-        self.overlay.as_ref().or_else(|| {
+        self.panels().overlay.as_ref().or_else(|| {
             self.sessions
                 .details
                 .as_ref()
@@ -922,7 +766,7 @@ impl App {
     }
 
     pub(crate) fn completion(&self) -> Option<CompletionView<'_>> {
-        if self.chat_panel.command_active()
+        if self.panels().command_active()
             || self.overlay().is_some()
             || self.thread_presentations.active().queue.focused()
         {
@@ -931,16 +775,26 @@ impl App {
         self.thread_presentations.active().input.completion()
     }
 
+    pub(crate) fn completion_visible(&self) -> bool {
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => {
+                super::fullscreen::navigation::completion_visible(self)
+            }
+            crate::terminal::ScreenMode::Inline => {
+                super::inline::navigation::completion_visible(self)
+            }
+        }
+    }
+
     pub(crate) fn chat_input_focused(&self) -> bool {
-        self.overlay().is_none()
-            && self.approval_view().is_none()
-            && self.query_view().is_none()
-            && !self.sessions.manager().focused()
-            && !self.agent_thread_switcher.focused()
-            && !self.thread_presentations.active().queue.focused()
-            && self.thread_presentations.active().selected_cell.is_none()
-            && !self.chat_panel.command_active()
-            && self.completion().is_none()
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => {
+                super::fullscreen::navigation::chat_input_focused(self)
+            }
+            crate::terminal::ScreenMode::Inline => {
+                super::inline::navigation::chat_input_focused(self)
+            }
+        }
     }
 
     pub(crate) fn queue_focused(&self) -> bool {
@@ -954,7 +808,7 @@ impl App {
     pub(crate) fn mouse_mode(&self) -> MouseMode {
         match self.screen_mode() {
             crate::terminal::ScreenMode::Fullscreen => MouseMode::TuiCapture,
-            crate::terminal::ScreenMode::Native => MouseMode::TerminalSelection,
+            crate::terminal::ScreenMode::Inline => MouseMode::TerminalSelection,
         }
     }
 
@@ -972,77 +826,6 @@ impl App {
 
     pub(super) const fn memory_diagnostics_enabled(&self) -> bool {
         self.terminal_settings.memory_diagnostics()
-    }
-
-    pub(crate) fn update_pointer_hover(&mut self, target: Option<InputPointerTarget>) {
-        self.pointer.update_hover(target);
-    }
-
-    pub(crate) fn hovered_pointer_target(&self) -> Option<&InputPointerTarget> {
-        self.pointer.hovered()
-    }
-
-    pub(crate) fn update_pointer_pressed(&mut self, target: Option<InputPointerTarget>) {
-        self.pointer.update_pressed(target);
-    }
-
-    pub(crate) fn clear_pointer_pressed(&mut self) {
-        self.pointer.clear_pressed();
-    }
-
-    pub(crate) fn clear_pointer_interaction(&mut self) {
-        self.pointer.clear();
-    }
-
-    pub(crate) fn clear_mouse_interaction(&mut self) {
-        self.pointer.clear();
-        self.screen_selection.clear();
-    }
-
-    pub(crate) fn scroll_overlay(
-        &mut self,
-        terminal_area: Rect,
-        navigation: crate::widgets::navigation::Navigation,
-    ) {
-        if !self.mouse_mode().captures_terminal_input() {
-            return;
-        }
-        self.clear_mouse_interaction();
-        let transient = super::frame::transient_area(self, terminal_area);
-        if let Some(overlay) = self.overlay_mut() {
-            overlay.scroll(navigation, transient);
-        }
-    }
-
-    pub(crate) fn pressed_pointer_target(&self) -> Option<&InputPointerTarget> {
-        self.pointer.pressed()
-    }
-
-    pub(crate) const fn screen_selection(&self) -> &ScreenSelection {
-        &self.screen_selection
-    }
-
-    pub(crate) fn begin_screen_selection(&mut self, position: Position) {
-        self.screen_selection.begin(position);
-    }
-
-    pub(crate) fn drag_screen_selection(&mut self, position: Position) {
-        self.screen_selection.drag(position);
-    }
-
-    pub(crate) fn finish_screen_selection(
-        &mut self,
-        position: Position,
-        now: Instant,
-    ) -> Option<ScreenSelectionOutcome> {
-        self.screen_selection.finish(position, now)
-    }
-
-    pub(crate) fn select_screen_range(
-        &mut self,
-        range: crate::terminal::screen_selection::ScreenSelectionRange,
-    ) {
-        self.screen_selection.select(range);
     }
 
     #[cfg(test)]
@@ -1065,45 +848,58 @@ impl App {
     }
 
     pub(crate) fn transcript_selection_active(&self) -> bool {
-        matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
-            && self.thread_presentations.active().selected_cell.is_some()
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => {
+                super::fullscreen::navigation::transcript_selection_active(self)
+            }
+            crate::terminal::ScreenMode::Inline => {
+                super::inline::navigation::transcript_selection_active(self)
+            }
+        }
     }
 
-    fn open_command_panel(&mut self, panel: CommandPanel) {
-        self.screen_escape_sequence.reset();
-        self.overlay = None;
-        self.sessions.details = None;
-        self.chat_panel.open_command(panel);
-        self.pointer.clear();
+    pub(super) fn open_command_panel(&mut self, panel: CommandPanel) {
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => {
+                super::fullscreen::navigation::open_command_panel(self, panel)
+            }
+            crate::terminal::ScreenMode::Inline => {
+                super::inline::navigation::open_command_panel(self, panel)
+            }
+        }
     }
 
-    fn close_command_panel(&mut self) {
-        self.screen_escape_sequence.reset();
-        self.chat_panel.close_command();
-        self.pointer.clear();
+    pub(super) fn close_command_panel(&mut self) {
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => {
+                super::fullscreen::navigation::close_command_panel(self)
+            }
+            crate::terminal::ScreenMode::Inline => {
+                super::inline::navigation::close_command_panel(self)
+            }
+        }
     }
 
     pub(super) fn show_overlay(&mut self, detail: DetailList) {
-        self.screen_escape_sequence.reset();
-        self.sessions.details = None;
-        self.overlay = Some(DetailOverlay::new(detail));
-        self.pointer.clear();
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => {
+                super::fullscreen::navigation::show_overlay(self, detail)
+            }
+            crate::terminal::ScreenMode::Inline => {
+                super::inline::navigation::show_overlay(self, detail)
+            }
+        }
     }
 
-    fn close_overlay(&mut self) {
-        self.screen_escape_sequence.reset();
-        self.overlay = None;
-        self.sessions.details = None;
-        self.pointer.clear();
-    }
-
-    fn close_transient_surfaces(&mut self) {
-        self.screen_escape_sequence.reset();
-        self.chat_panel.close_command();
-        self.overlay = None;
-        self.sessions.details = None;
-        self.thread_presentations.active_mut().queue.blur();
-        self.pointer.clear();
+    pub(super) fn close_transient_surfaces(&mut self) {
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => {
+                super::fullscreen::navigation::close_transient_surfaces(self)
+            }
+            crate::terminal::ScreenMode::Inline => {
+                super::inline::navigation::close_transient_surfaces(self)
+            }
+        }
     }
 
     fn show_dirs_picker(&mut self, spec: DirChoices) {
@@ -1111,7 +907,7 @@ impl App {
     }
 
     fn update_dirs_picker(&mut self, spec: DirChoices) {
-        self.chat_panel.replace_dirs(spec);
+        self.panels_mut().replace_dirs(spec);
     }
 
     fn show_skill_settings(&mut self, choices: SkillChoices) {
@@ -1137,15 +933,15 @@ impl App {
     }
 
     fn update_connector_picker(&mut self, spec: ConnectorChoices) {
-        self.chat_panel.replace_connectors(spec);
+        self.panels_mut().replace_connectors(spec);
     }
 
     pub(crate) fn connector_picker_open(&self) -> bool {
-        self.chat_panel.command_is_connectors()
+        self.panels().command_is_connectors()
     }
 
     fn update_mcp_settings(&mut self, spec: McpChoices) {
-        self.chat_panel.replace_mcp(spec);
+        self.panels_mut().replace_mcp(spec);
     }
 
     fn show_model_picker(&mut self, spec: ModelChoices) {
@@ -1167,7 +963,7 @@ impl App {
             diagnostics,
         } = choices;
         self.report_skill_diagnostics(&diagnostics);
-        self.chat_panel.replace_skills(SkillChoices {
+        self.panels_mut().replace_skills(SkillChoices {
             model,
             actions,
             diagnostics: Vec::new(),
@@ -1208,19 +1004,19 @@ impl App {
     }
 
     fn update_status_line_editor(&mut self, spec: StatusLineChoices) {
-        self.chat_panel.replace_status_line(spec);
+        self.panels_mut().replace_status_line(spec);
     }
 
     pub(crate) fn skills_view_is_active(&self) -> bool {
-        self.chat_panel.command_is_skills()
+        self.panels().command_is_skills()
     }
 
     pub(crate) fn list_selection(&self) -> Option<&ListSelectionState> {
-        self.chat_panel.command_list_selection()
+        self.panels().command_list_selection()
     }
 
     pub(crate) fn mention_query(&self) -> Option<&str> {
-        if self.chat_panel.command_active() {
+        if self.panels().command_active() {
             return None;
         }
         self.thread_presentations.active().input.mention_query()
@@ -1233,8 +1029,8 @@ impl App {
 
     pub(crate) fn transcript_views(&self) -> Vec<CellView<'_>> {
         self.thread.views(
-            &self.thread_presentations.active().expanded_cells,
-            self.thread_presentations.active().selected_cell.as_ref(),
+            &self.viewport().expanded_cells,
+            self.viewport().selected_cell.as_ref(),
         )
     }
 
@@ -1248,8 +1044,8 @@ impl App {
 
     pub(crate) fn visible_transcript_views(&self) -> Vec<CellView<'_>> {
         self.thread.visible_views(
-            &self.thread_presentations.active().expanded_cells,
-            self.thread_presentations.active().selected_cell.as_ref(),
+            &self.viewport().expanded_cells,
+            self.viewport().selected_cell.as_ref(),
         )
     }
 
@@ -1261,28 +1057,22 @@ impl App {
         crate::thread::transcript::export_markdown(&self.transcript_views())
     }
 
-    pub(crate) fn transcript_scroll(&self) -> &ChatHistoryScroll {
-        &self.thread_presentations.active().scroll
+    pub(super) fn viewport(&self) -> &crate::thread::transcript::viewport::Viewport {
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => self.fullscreen.viewports.active(),
+            crate::terminal::ScreenMode::Inline => self.inline.viewports.active(),
+        }
     }
 
-    pub(crate) fn scroll_transcript(
-        &mut self,
-        direction: TranscriptScrollDirection,
-        terminal_area: Rect,
-    ) -> bool {
-        let transcript_area = frame::layout(self, terminal_area).session.transcript;
-        let messages = self.visible_transcript_views();
-        let target = scroll_target(
-            transcript_area,
-            usize::from(welcome::history_height(transcript_area.height)),
-            &messages,
-            self.transcript_scroll(),
-            self.transcript_render_cache(),
-            self.render_context(),
-            direction,
-            5,
-        );
-        target.is_some_and(|target| self.thread_presentations.active_mut().scroll.apply(target))
+    pub(super) fn viewport_mut(&mut self) -> &mut crate::thread::transcript::viewport::Viewport {
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => self.fullscreen.viewports.active_mut(),
+            crate::terminal::ScreenMode::Inline => self.inline.viewports.active_mut(),
+        }
+    }
+
+    pub(crate) fn transcript_scroll(&self) -> &ChatHistoryScroll {
+        &self.viewport().scroll
     }
 
     pub(crate) fn navigate_transcript(
@@ -1290,34 +1080,31 @@ impl App {
         direction: TranscriptScrollDirection,
         terminal_area: Rect,
     ) -> Option<AppCommand> {
-        if self.sessions.preview.is_some() {
-            return self.navigate_preview(direction, 5, terminal_area);
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => {
+                super::fullscreen::navigation::navigate_transcript(self, direction, terminal_area)
+            }
+            crate::terminal::ScreenMode::Inline => {
+                super::inline::navigation::navigate_transcript(self, direction, terminal_area)
+            }
         }
-        if self.scroll_transcript(direction, terminal_area)
-            || direction == TranscriptScrollDirection::Down
-        {
-            return None;
-        }
-        let messages = self.visible_transcript_views();
-        if let Some(target) = first_scroll_target(true, &messages) {
-            self.thread_presentations.active_mut().scroll.apply(target);
-        }
-        Some(ThreadCommand::LoadOlderHistory.into())
     }
 
     pub(crate) fn follow_latest_transcript(&mut self) {
-        if let Some(preview) = self.sessions.preview.as_mut() {
-            preview.scroll.follow_latest();
+        if self.sessions.preview.is_some() {
+            match self.screen_mode() {
+                crate::terminal::ScreenMode::Fullscreen => {
+                    self.fullscreen.preview.scroll.follow_latest()
+                }
+                crate::terminal::ScreenMode::Inline => self.inline.preview.scroll.follow_latest(),
+            }
             return;
         }
-        self.thread_presentations
-            .active_mut()
-            .scroll
-            .follow_latest();
+        self.viewport_mut().scroll.follow_latest();
     }
 
     pub(crate) fn transcript_render_cache(&self) -> &ChatHistoryRenderCache {
-        &self.thread_presentations.active().render_cache
+        &self.viewport().render_cache
     }
 
     pub(crate) fn welcome(&self) -> &WelcomeModel {
@@ -1490,39 +1277,14 @@ impl App {
         self.sessions.finish_preview(generation, result);
     }
 
-    fn navigate_preview(
-        &mut self,
-        direction: TranscriptScrollDirection,
-        rows: usize,
-        terminal_area: Rect,
-    ) -> Option<AppCommand> {
-        let area = frame::layout(self, terminal_area).session.transcript;
-        let mut preview = self.sessions.preview.take()?;
-        let params = preview.navigate(
-            direction,
-            rows,
-            area,
-            usize::from(welcome::history_height(area.height)),
-            self.render_context(),
-        );
-        let command = params.map(|params| {
-            SessionCommand::Preview {
-                generation: preview.generation,
-                params,
-            }
-            .into()
-        });
-        self.sessions.preview = Some(preview);
-        command
-    }
-
     pub(crate) fn screen_navigation_tip(&self) -> Option<&'static str> {
-        if !self.chat_input_focused() || !self.input().is_empty() {
-            return None;
-        }
-        match self.sessions.previous_screen()? {
-            TerminalScreen::Manager => Some("← for agents"),
-            TerminalScreen::Session(_) => None,
+        match self.screen_mode() {
+            crate::terminal::ScreenMode::Fullscreen => {
+                super::fullscreen::navigation::screen_navigation_tip(self)
+            }
+            crate::terminal::ScreenMode::Inline => {
+                super::inline::navigation::screen_navigation_tip(self)
+            }
         }
     }
 
@@ -1642,8 +1404,8 @@ impl App {
 
     pub(crate) fn apply_process_resource_request(&mut self, request: ProcessResourceRequest) {
         self.process_resources.apply_request(request);
-        self.chat_panel
-            .apply_process_resources(self.process_resources.view());
+        let resources = self.process_resources.view();
+        self.panels_mut().apply_process_resources(resources);
     }
 
     pub(crate) fn accepts_input(&self) -> bool {
@@ -1684,13 +1446,23 @@ impl App {
             .is_none_or(|thread| thread.status == zeta_protocol::ThreadStatus::Active)
     }
 
+    fn sync_preview_viewports(&mut self) {
+        let generation = self
+            .sessions
+            .preview
+            .as_ref()
+            .map(|preview| preview.generation);
+        self.fullscreen.preview.bind(generation);
+        self.inline.preview.bind(generation);
+    }
+
     pub(crate) fn update(&mut self, event: impl Into<AppEvent>) {
         let event = event.into();
         if !matches!(
             &event,
             AppEvent::Host(HostEvent::ProcessResourcesSampled(_))
         ) {
-            self.pointer.clear();
+            self.fullscreen.pointer.clear();
         }
         match event {
             AppEvent::Issues(event) => self.issues.update(event),
@@ -1710,6 +1482,7 @@ impl App {
             AppEvent::Skills(event) => self.apply_skill_event(event),
             AppEvent::Theme(event) => self.apply_theme_event(event),
         }
+        self.sync_preview_viewports();
     }
 
     fn apply_thread_event(&mut self, event: ThreadEvent) {
@@ -1773,6 +1546,8 @@ impl App {
                         .switch_transcript(self.thread_presentations.active_id(), &thread_id);
                 }
                 self.thread_presentations.switch(thread_id.clone());
+                self.fullscreen.viewports.switch(thread_id.clone());
+                self.inline.viewports.switch(thread_id.clone());
                 self.sessions.activate_context(session_id, thread_id);
                 self.chat_panel.status_line_mut().clear_thread_accounting();
                 if context_changed {
@@ -1856,7 +1631,7 @@ impl App {
                 if reveal_older_history {
                     let messages = self.visible_transcript_views();
                     if let Some(target) = first_scroll_target(true, &messages) {
-                        self.thread_presentations.active_mut().scroll.apply(target);
+                        self.viewport_mut().scroll.apply(target);
                     }
                 } else {
                     self.reconcile_transcript_scroll_anchor();
@@ -1871,12 +1646,15 @@ impl App {
             }
             ThreadEvent::TranscriptCleared => {
                 self.thread.update(ThreadPresentationEvent::Cleared);
+                self.reconcile_transcript_scroll_anchor();
                 self.chat_panel.reset_top_tip();
                 self.skill_diagnostic_warnings.clear();
-                self.thread_presentations
+                self.fullscreen
+                    .viewports
                     .active_mut()
                     .scroll
                     .follow_latest();
+                self.inline.viewports.active_mut().scroll.follow_latest();
                 self.chat_panel.clear_steers();
                 self.thread_presentations.active_mut().queue.clear();
                 self.set_status(Status::Ready);
@@ -1926,7 +1704,7 @@ impl App {
         match event {
             DirEvent::PickerOpened(view) => self.show_dirs_picker(view),
             DirEvent::AddCompleted { request_id, result } => {
-                self.chat_panel.finish_dir_add(request_id, result);
+                self.panels_mut().finish_dir_add(request_id, result);
             }
             DirEvent::Removed { path, choices } => {
                 self.update_dirs_picker(choices);
@@ -1963,8 +1741,8 @@ impl App {
             }
             HostEvent::ProcessResourcesSampled(reading) => {
                 self.process_resources.apply(reading);
-                self.chat_panel
-                    .apply_process_resources(self.process_resources.view());
+                let resources = self.process_resources.view();
+                self.panels_mut().apply_process_resources(resources);
             }
             HostEvent::TopTipNoticeShown(notice) => {
                 self.chat_panel.show_notice(notice, Instant::now());
@@ -1981,39 +1759,39 @@ impl App {
                             "Provider update failed: {error}"
                         )));
                 }
-                self.chat_panel.complete_connection(reply);
+                self.panels_mut().complete_connection(reply);
                 self.set_status(Status::Ready);
             }
             ConfigEvent::Subscription(event) => {
                 self.subscription.update(event);
-                self.chat_panel
-                    .update_subscription(self.subscription.choices());
+                let choices = self.subscription.choices();
+                self.panels_mut().update_subscription(choices);
             }
             ConfigEvent::SettingsReceived(settings) => {
-                self.terminal_settings = settings;
+                self.set_terminal_settings(settings);
                 if !self.mouse_mode().captures_terminal_input() {
-                    self.clear_mouse_interaction();
+                    self.fullscreen.clear();
                 }
                 self.thread_presentations
                     .set_input_mode(settings.input_mode());
             }
             ConfigEvent::Updated(result) => {
-                self.terminal_settings = result.terminal;
+                self.set_terminal_settings(result.terminal);
                 self.chat_panel
                     .status_line_mut()
                     .apply_settings(result.status_line);
                 if !self.mouse_mode().captures_terminal_input() {
-                    self.clear_mouse_interaction();
+                    self.fullscreen.clear();
                 }
                 self.thread_presentations
                     .set_input_mode(result.terminal.input_mode());
-                self.chat_panel.replace_config(result.choices);
+                self.panels_mut().replace_config(result.choices);
             }
             ConfigEvent::EditorOpened(view) => {
                 self.open_command_panel(CommandPanel::config(view));
             }
             ConfigEvent::ApiKeySaved { provider, choices } => {
-                self.chat_panel.finish_config_prompt(choices);
+                self.panels_mut().finish_config_prompt(choices);
                 self.thread
                     .update(ThreadPresentationEvent::NoticeReceived(format!(
                         "Saved API key for {provider}"
@@ -2036,7 +1814,7 @@ impl App {
                 self.welcome.apply_model_summary(&summary);
             }
             ModelEvent::PickerOpened(view) => self.show_model_picker(view),
-            ModelEvent::PickerUpdated(view) => self.chat_panel.replace_model(view),
+            ModelEvent::PickerUpdated(view) => self.panels_mut().replace_model(view),
         }
     }
 
@@ -2057,8 +1835,8 @@ impl App {
                     self.thread
                         .update(ThreadPresentationEvent::NoticeReceived(notice));
                 }
-                if self.chat_panel.command_is_keymap() {
-                    self.chat_panel.replace_keymap(update.choices);
+                if self.panels().command_is_keymap() {
+                    self.panels_mut().replace_keymap(update.choices);
                 } else {
                     self.show_keymap_editor(update.choices);
                 }
@@ -2086,7 +1864,7 @@ impl App {
             StatusEvent::PanelOpened(panel) => self.show_status_panel(panel),
             StatusEvent::MemoryDiagnosticsChanged(status) => {
                 self.memory_diagnostics = status;
-                self.chat_panel.apply_memory_diagnostics(status);
+                self.panels_mut().apply_memory_diagnostics(status);
             }
             StatusEvent::GitStatusReceived(status) => {
                 self.chat_panel.status_line_mut().apply_git_status(&status);
@@ -2138,8 +1916,8 @@ impl App {
     fn apply_theme_event(&mut self, event: ThemeEvent) {
         match event {
             ThemeEvent::PickerOpened(view) => {
-                if self.chat_panel.command_is_theme() {
-                    self.chat_panel.push_custom_theme(view);
+                if self.panels().command_is_theme() {
+                    self.panels_mut().push_custom_theme(view);
                 } else {
                     self.show_theme_picker(view);
                 }
@@ -2151,112 +1929,12 @@ impl App {
         }
     }
 
-    fn app_keymap_context(&self, is_press: bool) -> AppKeymapContext {
+    pub(super) fn app_keymap_context(&self, is_press: bool) -> AppKeymapContext {
         AppKeymapContext {
             accepts_input: self.accepts_input(),
             has_selection: self.list_selection().is_some(),
             chat_input_empty: self.input().is_empty(),
             is_press,
-        }
-    }
-
-    fn handle_screen_navigation_key(&mut self, key: KeyEvent) -> Option<Option<AppCommand>> {
-        if key.kind == KeyEventKind::Release
-            || (key.kind == KeyEventKind::Repeat && Navigation::from_key(key).is_none())
-        {
-            return None;
-        }
-        if matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
-            && self.sessions.manager().focused()
-        {
-            return match self.sessions.handle_manager_key(key) {
-                SessionManagerInputOutcome::Unhandled => None,
-                SessionManagerInputOutcome::Consumed => Some(None),
-                SessionManagerInputOutcome::Command(command) => Some(Some(command.into())),
-                SessionManagerInputOutcome::DetailsRequested => {
-                    self.overlay = None;
-                    self.sessions.open_details();
-                    self.pointer.clear();
-                    Some(None)
-                }
-            };
-        }
-        if self.agent_thread_switcher.focused() {
-            if let Some(navigation) = Navigation::from_key(key) {
-                self.agent_thread_switcher.navigate(navigation);
-                return Some(None);
-            }
-            return match key.code {
-                _ if bindings::THREAD_SWITCH.matches(key) => Some(
-                    self.agent_thread_switcher
-                        .selected()
-                        .cloned()
-                        .map(|thread_id| SessionCommand::SwitchThread { thread_id }.into()),
-                ),
-                _ if bindings::RETURN_INPUT.matches(key) => {
-                    self.agent_thread_switcher.blur();
-                    Some(None)
-                }
-                _ => None,
-            };
-        }
-        if !key.modifiers.is_empty() || !self.chat_input_focused() || !self.input().is_empty() {
-            return None;
-        }
-        if key.code == KeyCode::Left && self.session_manager_view().is_none() {
-            self.close_transient_surfaces();
-            self.sessions.show_manager();
-            return Some(None);
-        }
-        if key.code == KeyCode::Right && self.session_manager_view().is_none() {
-            return Some(self.issues.open().map(Into::into));
-        }
-        let target = match empty_input_navigation(self.sessions.screen(), key.code)? {
-            EmptyInputNavigation::PreviousScreen => match self.sessions.previous_screen() {
-                Some(target) => target,
-                None => return Some(None),
-            },
-            EmptyInputNavigation::NextScreen => match self.sessions.next_screen() {
-                Some(target) => target,
-                None => return Some(None),
-            },
-            EmptyInputNavigation::FocusManager => {
-                self.sessions.manager_mut().focus();
-                return Some(None);
-            }
-            EmptyInputNavigation::FocusAgentThreads => {
-                self.agent_thread_switcher.focus();
-                return Some(None);
-            }
-        };
-        match target {
-            TerminalScreen::Manager => {
-                self.close_transient_surfaces();
-                self.sessions.show_manager();
-                Some(None)
-            }
-            TerminalScreen::Session(session_id) => {
-                if self.sessions.active_session_id() == Some(&session_id) {
-                    let viewed = self
-                        .sessions
-                        .restorable_thread(&session_id)
-                        .expect("the active Session has an active Thread");
-                    self.close_transient_surfaces();
-                    self.sessions.show_session(session_id, viewed);
-                    Some(None)
-                } else {
-                    Some(Some(
-                        SessionCommand::Resume {
-                            session_id: session_id.to_string(),
-                            preferred_thread_id: self
-                                .sessions
-                                .remembered_thread(&session_id)
-                                .cloned(),
-                        }
-                        .into(),
-                    ))
-                }
-            }
         }
     }
 
@@ -2279,51 +1957,6 @@ impl App {
             .reconcile(session, viewed_thread.as_ref());
     }
 
-    fn handle_app_key(
-        &mut self,
-        key: KeyEvent,
-        now: Instant,
-        terminal_area: Rect,
-    ) -> Option<AppCommand> {
-        let keymap_context = self.app_keymap_context(key.kind == KeyEventKind::Press);
-        if let Some(action) = self.app_keymap.resolve_single(&key, keymap_context) {
-            return self.apply_app_keymap_action(action, now);
-        }
-        if self.list_selection().is_none()
-            && let Some(command) = self.handle_transcript_scroll_key(key, terminal_area)
-        {
-            return command;
-        }
-        None
-    }
-
-    fn handle_transcript_scroll_key(
-        &mut self,
-        key: KeyEvent,
-        terminal_area: Rect,
-    ) -> Option<Option<AppCommand>> {
-        match (key.modifiers, key.code) {
-            (KeyModifiers::NONE, KeyCode::PageUp) => {
-                Some(self.navigate_transcript(TranscriptScrollDirection::Up, terminal_area))
-            }
-            (KeyModifiers::NONE, KeyCode::PageDown) => {
-                Some(self.navigate_transcript(TranscriptScrollDirection::Down, terminal_area))
-            }
-            (KeyModifiers::CONTROL, KeyCode::Home) => {
-                let messages = self.visible_transcript_views();
-                if let Some(target) = first_scroll_target(true, &messages) {
-                    self.thread_presentations.active_mut().scroll.apply(target);
-                }
-                Some(Some(ThreadCommand::LoadOlderHistory.into()))
-            }
-            (KeyModifiers::CONTROL, KeyCode::End) => {
-                self.follow_latest_transcript();
-                Some(None)
-            }
-            _ => None,
-        }
-    }
-
     fn transcript_scroll_is_at_first_cell(&self) -> bool {
         let Some(TranscriptScrollAnchor::Cell {
             cell_id,
@@ -2341,108 +1974,24 @@ impl App {
     }
 
     fn reconcile_transcript_scroll_anchor(&mut self) {
-        let cell_id = match self.transcript_scroll().anchor() {
-            Some(TranscriptScrollAnchor::Header { .. }) | None => return,
-            Some(TranscriptScrollAnchor::Cell { cell_id, .. }) => cell_id.clone(),
-        };
-        if !self
-            .thread
-            .cells()
-            .iter()
-            .any(|cell| cell.cell_id().as_str() == cell_id.as_str())
-        {
-            self.follow_latest_transcript();
-        }
-    }
-
-    fn handle_transcript_selection_key(&mut self, key: KeyEvent) -> bool {
-        if key.kind == KeyEventKind::Release
-            || !matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
-            || self.chat_panel.command_active()
-            || self.completion().is_some()
-            || !self.input().is_empty()
-        {
-            return false;
-        }
-        let cell_ids = self
+        let cells = self
             .thread
             .cells()
             .iter()
             .map(|cell| cell.cell_id().clone())
-            .collect::<Vec<_>>();
-        let navigation_key = if key.modifiers == KeyModifiers::CONTROL
-            && matches!(key.code, KeyCode::Up | KeyCode::Down)
-        {
-            KeyEvent {
-                modifiers: KeyModifiers::NONE,
-                ..key
-            }
-        } else {
-            key
-        };
-        if self.thread_presentations.active().selected_cell.is_some()
-            && let Some(navigation) = Navigation::from_key(navigation_key)
-        {
-            self.thread_presentations
-                .active_mut()
-                .navigate_cell(&cell_ids, navigation);
-            return true;
-        }
-        if key.kind != KeyEventKind::Press {
-            return self.thread_presentations.active().selected_cell.is_some();
-        }
-        match (key.modifiers, key.code) {
-            (KeyModifiers::CONTROL, KeyCode::Up) => self
-                .thread_presentations
-                .active_mut()
-                .select_previous_cell(&cell_ids),
-            (KeyModifiers::CONTROL, KeyCode::Down) => self
-                .thread_presentations
-                .active_mut()
-                .select_next_cell(&cell_ids),
-            _ if bindings::TRANSCRIPT_EXPAND.matches(key) => {
-                let Some(selected) = self.thread_presentations.active().selected_cell.clone()
-                else {
-                    return false;
-                };
-                if self
-                    .thread
-                    .cells()
-                    .iter()
-                    .any(|cell| cell.cell_id() == &selected && cell.can_expand())
-                {
-                    self.thread_presentations
-                        .active_mut()
-                        .toggle_cell(&selected);
-                }
-                true
-            }
-            _ if bindings::TRANSCRIPT_DETAILS.matches(key) => {
-                let Some(selected) = self.thread_presentations.active().selected_cell.clone()
-                else {
-                    return false;
-                };
-                self.open_transcript_cell_details(selected.as_str());
-                true
-            }
-            _ if bindings::RETURN_INPUT.matches(key)
-                && self.thread_presentations.active().selected_cell.is_some() =>
-            {
-                self.thread_presentations.active_mut().selected_cell = None;
-                true
-            }
-            _ => false,
-        }
+            .collect();
+        self.fullscreen.viewports.active_mut().reconcile(&cells);
+        self.inline.viewports.active_mut().reconcile(&cells);
     }
 
-    fn apply_app_keymap_action(
+    pub(super) fn apply_app_keymap_action(
         &mut self,
         action: AppKeymapAction,
         now: Instant,
     ) -> Option<AppCommand> {
         match action {
             AppKeymapAction::CycleApprovalMode => Some(ThreadCommand::CycleNextApprovalMode.into()),
-            AppKeymapAction::ScreenEscape => match self.screen_escape_sequence.press(now) {
+            AppKeymapAction::ScreenEscape => match self.escape_mut().press(now) {
                 ScreenEscapeOutcome::WaitingForSecondPress => None,
                 ScreenEscapeOutcome::OpenRewind => Some(ThreadCommand::OpenRewindPicker.into()),
             },

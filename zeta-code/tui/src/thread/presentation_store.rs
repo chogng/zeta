@@ -1,16 +1,10 @@
 use super::plan::PlanState;
-use super::transcript::TranscriptCellId;
 use crate::thread::composer::ChatInput;
 use crate::thread::composer::ChatInputCatalog;
 use crate::thread::composer::ChatInputMode;
 use crate::thread::composer::SlashCommandCatalog;
 use crate::thread::queue::Queue;
-use crate::thread::transcript::ChatHistoryRenderCache;
-use crate::thread::transcript::ChatHistoryScroll;
-use crate::thread::transcript::TranscriptScrollAnchor;
-use crate::thread::transcript::TranscriptScrollTarget;
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use zeta_protocol::ThreadGoal;
 use zeta_protocol::ThreadId;
@@ -24,10 +18,6 @@ pub(crate) struct ThreadPresentationState {
     pub(crate) goal: Option<ThreadGoal>,
     pub(crate) plan: PlanState,
     pub(crate) queue: Queue,
-    pub(crate) scroll: ChatHistoryScroll,
-    pub(crate) render_cache: ChatHistoryRenderCache,
-    pub(crate) expanded_cells: BTreeSet<TranscriptCellId>,
-    pub(crate) selected_cell: Option<TranscriptCellId>,
 }
 
 impl Default for ThreadPresentationState {
@@ -44,91 +34,7 @@ impl ThreadPresentationState {
             goal: None,
             plan: PlanState::default(),
             queue: Queue::default(),
-            scroll: ChatHistoryScroll::default(),
-            render_cache: ChatHistoryRenderCache::default(),
-            expanded_cells: BTreeSet::new(),
-            selected_cell: None,
         }
-    }
-
-    pub(crate) fn toggle_cell(&mut self, cell_id: &TranscriptCellId) -> bool {
-        if !self.expanded_cells.remove(cell_id) {
-            self.expanded_cells.insert(cell_id.clone());
-        }
-        self.selected_cell = Some(cell_id.clone());
-        self.scroll.apply(TranscriptScrollTarget::Anchor(
-            TranscriptScrollAnchor::Cell {
-                cell_id: cell_id.as_str().to_owned(),
-                line_offset: 0,
-            },
-        ));
-        self.expanded_cells.contains(cell_id)
-    }
-
-    pub(crate) fn navigate_cell(
-        &mut self,
-        cell_ids: &[TranscriptCellId],
-        navigation: crate::widgets::navigation::Navigation,
-    ) {
-        let Some(last) = cell_ids.len().checked_sub(1) else {
-            return;
-        };
-        let current = self
-            .selected_cell
-            .as_ref()
-            .and_then(|id| cell_ids.iter().position(|cell| cell == id))
-            .unwrap_or(last);
-        let index = navigation.offset(current, last, 12);
-        let cell_id = cell_ids[index].clone();
-        self.scroll.apply(TranscriptScrollTarget::Anchor(
-            TranscriptScrollAnchor::Cell {
-                cell_id: cell_id.as_str().to_owned(),
-                line_offset: 0,
-            },
-        ));
-        self.selected_cell = Some(cell_id);
-    }
-
-    pub(crate) fn select_previous_cell(&mut self, cell_ids: &[TranscriptCellId]) -> bool {
-        let next = self
-            .selected_cell
-            .as_ref()
-            .and_then(|selected| cell_ids.iter().position(|cell_id| cell_id == selected))
-            .and_then(|index| index.checked_sub(1))
-            .or_else(|| cell_ids.len().checked_sub(1));
-        let Some(index) = next else {
-            return false;
-        };
-        let cell_id = cell_ids[index].clone();
-        self.scroll.apply(TranscriptScrollTarget::Anchor(
-            TranscriptScrollAnchor::Cell {
-                cell_id: cell_id.as_str().to_owned(),
-                line_offset: 0,
-            },
-        ));
-        self.selected_cell = Some(cell_id);
-        true
-    }
-
-    pub(crate) fn select_next_cell(&mut self, cell_ids: &[TranscriptCellId]) -> bool {
-        let next = self
-            .selected_cell
-            .as_ref()
-            .and_then(|selected| cell_ids.iter().position(|cell_id| cell_id == selected))
-            .map(|index| index.saturating_add(1))
-            .unwrap_or_default();
-        let Some(cell_id) = cell_ids.get(next).cloned() else {
-            self.selected_cell = None;
-            return false;
-        };
-        self.scroll.apply(TranscriptScrollTarget::Anchor(
-            TranscriptScrollAnchor::Cell {
-                cell_id: cell_id.as_str().to_owned(),
-                line_offset: 0,
-            },
-        ));
-        self.selected_cell = Some(cell_id);
-        true
     }
 }
 
@@ -171,9 +77,6 @@ impl ThreadPresentationStore {
     }
 
     pub(crate) fn switch(&mut self, thread_id: ThreadId) {
-        if thread_id != self.active {
-            self.active_mut().render_cache.clear();
-        }
         let input_catalog = self.input_catalog.clone();
         self.states
             .entry(thread_id.clone())

@@ -1,9 +1,5 @@
 use crate::host::clipboard::ClipboardImageFingerprint;
 use crate::keymap::bindings;
-use crate::render::RenderContext;
-use crate::widgets::key_hint;
-use ratatui::Frame;
-use ratatui::layout::Rect;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -84,18 +80,6 @@ impl TopTip {
         self.clipboard_image_expires_at = None;
     }
 
-    pub(crate) fn draw(
-        &self,
-        frame: &mut Frame<'_>,
-        area: Rect,
-        tip: Option<&str>,
-        context: RenderContext<'_>,
-    ) {
-        if let Some(text) = self.text(tip) {
-            key_hint::draw_right(frame, area, text, context);
-        }
-    }
-
     pub(crate) fn poll(&mut self, now: Instant) -> bool {
         let notice_expired = self
             .notice
@@ -120,7 +104,7 @@ impl TopTip {
         notice_expired || clipboard_image_expired || policy_expired
     }
 
-    fn text<'a>(&'a self, tip: Option<&'a str>) -> Option<&'a str> {
+    pub(crate) fn text<'a>(&'a self, tip: Option<&'a str>) -> Option<&'a str> {
         if let Some(notice) = self.notice.as_ref() {
             return Some(notice.text.as_str());
         }

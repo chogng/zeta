@@ -15,21 +15,15 @@ Zeta is a Rust-first agent workspace with three product lines sharing one App Se
 
 ## Quick start
 
-On Windows, initialize the Rust development environment with the repository setup script. It installs the toolchain declared by `rust-toolchain.toml` together with MSVC, the Windows SDK, Git, ripgrep, just, CMake, LLVM, Protocol Buffers, Python 3.12, and cargo-insta:
+On Windows, initialize the Rust development environment with the repository setup script. It installs the toolchain declared by `rust-toolchain.toml` together with MSVC, the Windows SDK, Git, ripgrep, just, CMake, LLVM, Python 3.12, and cargo-insta:
 
 ~~~powershell
 powershell -ExecutionPolicy Bypass -File scripts/zeta-rs/setup-windows.ps1
 ~~~
 
-On macOS or Linux, install Rust and, for the Rust workspace's input classifier, Protocol Buffers:
-
-```bash
-# macOS
-brew install protobuf
-
-# Debian/Ubuntu
-apt-get install protobuf-compiler
-```
+On macOS or Linux, install Rust. Cargo supplies the input classifier's
+build-time Protocol Buffers compiler; no system `protoc` installation is
+required.
 
 For Electron or Browser Workbench development, install the pinned pnpm workspace:
 

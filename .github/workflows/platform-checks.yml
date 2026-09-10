@@ -74,18 +74,7 @@ jobs:
             libssl-dev \
             libwayland-dev \
             libxkbcommon-dev \
-            pkg-config \
-            protobuf-compiler
-
-      - name: Install macOS build dependencies
-        if: runner.os == 'macOS'
-        shell: bash
-        run: brew install protobuf
-
-      - name: Install Windows build dependencies
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: choco install protoc --yes --no-progress
+            pkg-config
 
       - name: Install Windows ARM64 Rust target
         if: runner.os == 'Windows' && matrix.target == 'aarch64-pc-windows-msvc'

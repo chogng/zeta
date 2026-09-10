@@ -1,20 +1,18 @@
 use super::execute_product_command;
-use crate::sessions::ActiveConversation;
-use crate::sessions::ConversationChange;
-use crate::sessions::ConversationTranscript;
-use crate::thread::read_thread;
-use zeta_app_server_client::JsonRpcTransport;
-use zeta_protocol::Thread;
 use crate::app::command_panel::CommandPanel;
 use crate::app::{App, AppCommand, AppEvent, Status};
 use crate::dirs::Command as DirCommand;
 use crate::models::Command as ModelCommand;
+use crate::sessions::ActiveConversation;
 use crate::sessions::Command as SessionCommand;
+use crate::sessions::ConversationChange;
+use crate::sessions::ConversationTranscript;
 use crate::skills::Command as SkillCommand;
 use crate::skills::Event as SkillEvent;
 use crate::thread::composer::{
     ChatInputItem, SlashCommandInvocation, TuiSlashCommandAction, built_in_catalog_command,
 };
+use crate::thread::read_thread;
 use crate::thread::transcript::MessageRole;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::fs;
@@ -26,6 +24,7 @@ use std::sync::MutexGuard;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
+use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_client::{
     AppServerClient, InProcessClientOptions, InProcessTransport, start_in_process_client,
 };
@@ -42,6 +41,7 @@ use zeta_client::ClientResponse;
 use zeta_client::OperationClient;
 use zeta_protocol::CommandId;
 use zeta_protocol::SessionStatus;
+use zeta_protocol::Thread;
 use zeta_protocol::ThreadStatus;
 
 #[test]
@@ -512,9 +512,15 @@ fn resume_and_model_without_arguments_open_actionable_pickers() {
         &mut app,
     );
     assert_eq!(app.list_selection().unwrap().title(), "Model");
-    assert_eq!(app.list_selection().unwrap().active_tab().label(), "Favorites");
+    assert_eq!(
+        app.list_selection().unwrap().active_tab().label(),
+        "Favorites"
+    );
     assert!(app.list_selection().unwrap().visible_items().is_empty());
-    assert!(app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).is_none());
+    assert!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+            .is_none()
+    );
 
     drop(client);
     let _ = fs::remove_dir_all(state_root);
@@ -849,7 +855,14 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
                 }),
             },
         }).unwrap();
-        crate::models::execute(&mut *client, ModelCommand::Pin { preference: format!("{id}/shared-alias"), pinned: true }).unwrap();
+        crate::models::execute(
+            &mut *client,
+            ModelCommand::Pin {
+                preference: format!("{id}/shared-alias"),
+                pinned: true,
+            },
+        )
+        .unwrap();
     }
     let config = client.read_config().unwrap();
     assert_eq!(config.tui.0["pinnedModels"].as_array().unwrap().len(), 2);
@@ -858,17 +871,35 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
     assert_eq!(state.active_tab().label(), "Favorites");
     assert_eq!(state.visible_items().len(), 2);
     assert_eq!(state.tabs()[1].label(), "custom-second");
-    crate::models::execute(&mut *client, ModelCommand::Pin { preference: "custom-first/shared-alias".into(), pinned: false }).unwrap();
+    crate::models::execute(
+        &mut *client,
+        ModelCommand::Pin {
+            preference: "custom-first/shared-alias".into(),
+            pinned: false,
+        },
+    )
+    .unwrap();
     let config = client.read_config().unwrap();
-    crate::config::execute(&mut *client, crate::config::Command::Connection(crate::config::provider::Request {
-        id: CommandId::new("delete-pinned-provider").unwrap(), revision: config.revision,
-        config: config.providers["custom-second"].clone(), key: None, model: None,
-        operation: crate::config::provider::Operation::Remove,
-    })).unwrap();
+    crate::config::execute(
+        &mut *client,
+        crate::config::Command::Connection(crate::config::provider::Request {
+            id: CommandId::new("delete-pinned-provider").unwrap(),
+            revision: config.revision,
+            config: config.providers["custom-second"].clone(),
+            key: None,
+            model: None,
+            operation: crate::config::provider::Operation::Remove,
+        }),
+    )
+    .unwrap();
     let config = client.read_config().unwrap();
     assert_eq!(config.tui.0["pinnedModels"], serde_json::json!([]));
     assert!(!config.providers.contains_key("custom-second"));
-    assert_eq!(model.calls(), 0, "listing and pinning custom models never fetches remote models");
+    assert_eq!(
+        model.calls(),
+        0,
+        "listing and pinning custom models never fetches remote models"
+    );
     drop(client);
     let _ = fs::remove_dir_all(root);
 }
@@ -877,21 +908,55 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
 fn custom_model_picker_replaces_inherited_ids_with_the_configured_id() {
     let (mut client, root, transport) = client_with_model_probe();
     let mut config = ProviderConfigDto {
-        provider: "custom-gateway".into(), base_url: Some("https://example.invalid/v1".into()), max_output_tokens: None, model_context: Default::default(),
-        custom: Some(zeta_app_server_protocol::protocol::config::CustomProviderConfigDto {
-            context_window: 272_000, order: 0, model: None, name: "Gateway".into(),
-            protocol: zeta_app_server_protocol::protocol::config::CustomProviderProtocolDto::Responses,
-        }),
+        provider: "custom-gateway".into(),
+        base_url: Some("https://example.invalid/v1".into()),
+        max_output_tokens: None,
+        model_context: Default::default(),
+        custom: Some(
+            zeta_app_server_protocol::protocol::config::CustomProviderConfigDto {
+                context_window: 272_000,
+                order: 0,
+                model: None,
+                name: "Gateway".into(),
+                protocol:
+                    zeta_app_server_protocol::protocol::config::CustomProviderProtocolDto::Responses,
+            },
+        ),
     };
     let revision = client.read_config().unwrap().revision;
-    client.configure_provider(ProviderConfigureParams { command_id: CommandId::new("create-gateway").unwrap(), expected_revision: revision, config: config.clone() }).unwrap();
-    assert!(client.list_models().unwrap().models.iter().any(|entry| entry.model.provider.as_str() == "custom-gateway" && entry.model.model.as_str() == "gpt-5.6"));
+    client
+        .configure_provider(ProviderConfigureParams {
+            command_id: CommandId::new("create-gateway").unwrap(),
+            expected_revision: revision,
+            config: config.clone(),
+        })
+        .unwrap();
+    assert!(
+        client
+            .list_models()
+            .unwrap()
+            .models
+            .iter()
+            .any(|entry| entry.model.provider.as_str() == "custom-gateway"
+                && entry.model.model.as_str() == "gpt-5.6")
+    );
     crate::models::set_preferred_model(&mut *client, "custom-gateway/gpt-5.6").unwrap();
     config.custom.as_mut().unwrap().model = Some("private-alias".into());
     let revision = client.read_config().unwrap().revision;
-    client.configure_provider(ProviderConfigureParams { command_id: CommandId::new("change-gateway-model").unwrap(), expected_revision: revision, config }).unwrap();
+    client
+        .configure_provider(ProviderConfigureParams {
+            command_id: CommandId::new("change-gateway-model").unwrap(),
+            expected_revision: revision,
+            config,
+        })
+        .unwrap();
     let catalog = client.list_models().unwrap();
-    let models = catalog.models.iter().filter(|entry| entry.model.provider.as_str() == "custom-gateway").map(|entry| entry.model.model.as_str()).collect::<Vec<_>>();
+    let models = catalog
+        .models
+        .iter()
+        .filter(|entry| entry.model.provider.as_str() == "custom-gateway")
+        .map(|entry| entry.model.model.as_str())
+        .collect::<Vec<_>>();
     assert_eq!(models, vec!["private-alias"]);
     assert_eq!(transport.calls(), 0);
     drop(client);

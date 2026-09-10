@@ -1,10 +1,12 @@
 use super::App;
-use super::AppCommand;
 use super::driver::CommandEffect;
 use super::event_pump::EventPump;
 use super::event_pump::RuntimeEvent;
 use super::frame;
-use super::frame::InputPointerTarget;
+use super::fullscreen::pointer::MouseAction;
+use super::fullscreen::pointer::finish_pointer_gesture;
+use super::fullscreen::pointer::handle_mouse;
+use super::inline;
 use super::redraw::RedrawPriority;
 use super::redraw::RedrawScheduler;
 use super::start::StartedSession;
@@ -12,21 +14,12 @@ use crate::TuiError;
 use crate::TuiExit;
 use crate::TuiOptions;
 use crate::client;
-use crate::host;
 use crate::host::Command as HostCommand;
 use crate::host::Event as HostEvent;
 use crate::terminal;
-use crate::terminal::screen_selection::ClickCount;
-use crate::terminal::screen_selection::ScreenSelectionOutcome;
-use crate::thread::Event as ThreadEvent;
-use crate::thread::composer::ChatComposerPointerTarget;
-use crate::thread::transcript::TranscriptScrollDirection;
 use crate::thread::transcript::batch::TranscriptBatch;
 use crossterm::event::Event;
 use crossterm::event::KeyEventKind;
-use crossterm::event::MouseButton;
-use crossterm::event::MouseEvent;
-use crossterm::event::MouseEventKind;
 use std::time::Duration;
 use std::time::Instant;
 use zeta_app_server_client::AppServerSession;
@@ -50,7 +43,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         mut terminal,
     } = super::start::start(session, options)?;
     let mut redraw = RedrawScheduler::default();
-    let mut output = frame::Output::default();
+    let mut output = inline::Output::default();
     let mut process_resource_demand = ProcessResourceDemand::Disabled;
     let mut pending_runtime_event = None;
     if let Err(error) = draw_terminal(&mut terminal, driver.app_mut(), &mut output) {
@@ -199,7 +192,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         None
                     }
                     Event::Resize(_, _) => {
-                        driver.app_mut().clear_pointer_interaction();
+                        driver.app_mut().fullscreen.clear();
                         None
                     }
                     _ => None,
@@ -236,7 +229,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     })();
     let result = result.and_then(|exit| {
         terminal.set_screen_mode(driver.app().screen_mode())?;
-        if driver.app().screen_mode() == terminal::ScreenMode::Native {
+        if driver.app().screen_mode() == terminal::ScreenMode::Inline {
             output.finish(&mut terminal, driver.app())?;
         }
         Ok(exit)
@@ -281,180 +274,13 @@ fn sync_process_resource_demand(
     *current = next;
 }
 
-enum MouseAction {
-    Selection(Option<ScreenSelectionOutcome>),
-    Command(Option<AppCommand>),
-}
-
-fn handle_mouse(app: &mut App, area: ratatui::layout::Rect, mouse: MouseEvent) -> MouseAction {
-    let mouse_mode = app.mouse_mode();
-    if !mouse_mode.captures_terminal_input() {
-        app.clear_mouse_interaction();
-        return MouseAction::Selection(None);
-    }
-    let position = ratatui::layout::Position::new(mouse.column, mouse.row);
-    let overlay_contains = frame::overlay_mouse_contains(app, area, position);
-    if (app.overlay().is_some() || frame::completion_visible(app)) && !overlay_contains {
-        app.clear_mouse_interaction();
-        return MouseAction::Selection(None);
-    }
-    match mouse.kind {
-        MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
-            let direction = if mouse.kind == MouseEventKind::ScrollUp {
-                TranscriptScrollDirection::Up
-            } else {
-                TranscriptScrollDirection::Down
-            };
-            let command = if overlay_contains {
-                scroll_pointer_item(app, area, mouse.column, mouse.row, direction)
-            } else if app.session_manager_view().is_none()
-                && app.issue_manager().is_none()
-                && frame::layout(app, area)
-                    .session
-                    .transcript
-                    .contains(position)
-            {
-                app.navigate_transcript(direction, area)
-            } else {
-                None
-            };
-            return MouseAction::Command(command);
-        }
-        MouseEventKind::Down(MouseButton::Left) => {
-            let target = frame::input_pointer_target_at(app, area, mouse.column, mouse.row);
-            app.update_pointer_pressed(target);
-            app.begin_screen_selection(position);
-        }
-        MouseEventKind::Drag(MouseButton::Left) => {
-            app.clear_pointer_pressed();
-            app.drag_screen_selection(position);
-        }
-        MouseEventKind::Up(MouseButton::Left) => {
-            let outcome = app.finish_screen_selection(position, Instant::now());
-            app.clear_pointer_pressed();
-            return MouseAction::Selection(outcome);
-        }
-        MouseEventKind::Moved => update_pointer_hover(app, area, mouse.column, mouse.row),
-        _ => {}
-    }
-    MouseAction::Selection(None)
-}
-
-fn activate_pointer_item(
-    app: &mut App,
-    area: ratatui::layout::Rect,
-    column: u16,
-    row: u16,
-) -> Option<AppCommand> {
-    let target = frame::input_pointer_target_at(app, area, column, row)?;
-    match target {
-        InputPointerTarget::TranscriptJumpToBottom => {
-            app.follow_latest_transcript();
-            None
-        }
-        InputPointerTarget::Composer(ChatComposerPointerTarget::CompletionItem(index)) => {
-            app.activate_input_completion(index)
-        }
-    }
-}
-
-fn scroll_pointer_item(
-    app: &mut App,
-    area: ratatui::layout::Rect,
-    column: u16,
-    row: u16,
-    direction: TranscriptScrollDirection,
-) -> Option<AppCommand> {
-    let position = ratatui::layout::Position::new(column, row);
-    if !frame::overlay_mouse_contains(app, area, position) {
-        return None;
-    }
-    let navigation = match direction {
-        TranscriptScrollDirection::Up => crate::widgets::navigation::Navigation::Previous,
-        TranscriptScrollDirection::Down => crate::widgets::navigation::Navigation::Next,
-    };
-    app.scroll_overlay(area, navigation);
-    None
-}
-
-fn finish_pointer_gesture(
-    app: &mut App,
-    terminal: &terminal::TerminalSession,
-    outcome: Option<ScreenSelectionOutcome>,
-) -> Result<Option<AppCommand>, std::io::Error> {
-    let select = |app: &mut App, range| {
-        apply_screen_selection(
-            app,
-            range,
-            |range| terminal.selected_text(range),
-            host::clipboard::write_text,
-        );
-    };
-    match outcome {
-        Some(ScreenSelectionOutcome::Click {
-            position,
-            count: ClickCount::Single,
-        }) => {
-            let area = terminal.area()?;
-            Ok(activate_pointer_item(app, area, position.x, position.y))
-        }
-        Some(ScreenSelectionOutcome::Click {
-            position,
-            count: ClickCount::Double,
-        }) => {
-            if let Some(range) = terminal.token_range_at(position) {
-                select(app, range);
-            }
-            Ok(None)
-        }
-        Some(ScreenSelectionOutcome::Click {
-            position,
-            count: ClickCount::Triple,
-        }) => {
-            if let Some(range) = terminal.line_range_at(position) {
-                select(app, range);
-            }
-            Ok(None)
-        }
-        Some(ScreenSelectionOutcome::Selection(range)) => {
-            select(app, range);
-            Ok(None)
-        }
-        None => Ok(None),
-    }
-}
-
-fn apply_screen_selection(
-    app: &mut App,
-    range: crate::terminal::screen_selection::ScreenSelectionRange,
-    read: impl FnOnce(crate::terminal::screen_selection::ScreenSelectionRange) -> Option<String>,
-    write: impl FnOnce(&str) -> Result<(), String>,
-) {
-    app.select_screen_range(range);
-    let Some(text) = read(range) else {
-        return;
-    };
-    let char_count = text.chars().count();
-    match write(&text) {
-        Ok(()) => app.update(HostEvent::TopTipNoticeShown(format!(
-            "Copied {char_count} chars to clipboard"
-        ))),
-        Err(error) => app.update(ThreadEvent::FailureReported(error)),
-    }
-}
-
-fn update_pointer_hover(app: &mut App, area: ratatui::layout::Rect, column: u16, row: u16) {
-    let target = frame::input_pointer_target_at(app, area, column, row);
-    app.update_pointer_hover(target);
-}
-
 fn draw_terminal(
     terminal: &mut terminal::TerminalSession,
     app: &mut App,
-    output: &mut frame::Output,
+    output: &mut inline::Output,
 ) -> Result<(), std::io::Error> {
     if !app.mouse_mode().enables_pointer_actions() {
-        app.clear_mouse_interaction();
+        app.fullscreen.clear();
     }
     terminal.set_screen_mode(app.screen_mode())?;
     terminal.set_mouse_mode(app.mouse_mode())?;
@@ -462,7 +288,7 @@ fn draw_terminal(
     match app.screen_mode() {
         terminal::ScreenMode::Fullscreen => terminal
             .draw(|terminal_frame, links| frame::draw_with_links(terminal_frame, app, links)),
-        terminal::ScreenMode::Native => output.draw(terminal, app),
+        terminal::ScreenMode::Inline => output.draw(terminal, app),
     }
 }
 

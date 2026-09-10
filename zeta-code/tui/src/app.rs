@@ -15,8 +15,12 @@ mod event;
 mod event_loop;
 mod event_pump;
 mod frame;
+mod fullscreen;
 mod help;
-mod layout;
+mod inline;
+#[cfg(test)]
+#[path = "app/mode_tests.rs"]
+mod mode_tests;
 mod recovery;
 mod redraw;
 mod requests;

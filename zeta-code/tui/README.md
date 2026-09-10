@@ -33,17 +33,41 @@ just zeta
 | 持续内存诊断 | [memory.rs](src/memory.rs)；Config 提供开关，Status 只读展示 |
 | 界面语言与类型化文案 | [nls.rs](src/nls.rs)；持久化由 [config/settings.rs](src/config/settings.rs) 负责 |
 | 状态信息和本机资源 | [status](src/status)、[process_resources.rs](../../zeta-rs/memory-diagnostics/src/process_resources.rs) |
-| 终端恢复、鼠标和历史输出 | [session.rs](src/terminal/session.rs)、[scrollback.rs](src/terminal/scrollback.rs)、[mouse.rs](src/terminal/mouse.rs) |
-| 屏幕模式与页面组合 | [frame.rs](src/app/frame.rs)、[fullscreen.rs](src/app/frame/fullscreen.rs)、[native.rs](src/app/frame/native.rs) |
+| 终端恢复、鼠标捕获协议和历史输出 | [session.rs](src/terminal/session.rs)、[scrollback.rs](src/terminal/scrollback.rs)、[terminal.rs](src/terminal.rs) |
+| 屏幕模式与页面组合 | [frame.rs](src/app/frame.rs)、[fullscreen.rs](src/app/fullscreen.rs)、[inline.rs](src/app/inline.rs) |
+| 全屏布局、鼠标和选区 | [layout.rs](src/app/fullscreen/layout.rs)、[pointer.rs](src/app/fullscreen/pointer.rs)、[selection.rs](src/app/fullscreen/selection.rs) |
+| 行内布局与历史追加 | [layout.rs](src/app/inline/layout.rs)、[output.rs](src/app/inline/output.rs) |
+| 全屏输入区组合 | [composer.rs](src/app/fullscreen/composer.rs) |
+| 模式内的按键路由与面板容器 | [全屏导航](src/app/fullscreen/navigation.rs)、[行内导航](src/app/inline/navigation.rs)、[全屏面板](src/app/fullscreen/panel.rs)、[行内面板](src/app/inline/panel.rs) |
+| 欢迎信息、状态栏与提示位置 | 两种模式各自的 [全屏页眉](src/app/fullscreen/header.rs)、[行内页眉](src/app/inline/header.rs)、[全屏底栏](src/app/fullscreen/footer.rs)、[行内底栏](src/app/inline/footer.rs) |
 | 命令面板共用控件和文字绘制 | [widgets](src/widgets)、[render](src/render) |
 
 Skills、Models、Connectors 和 MCP 各自拥有同名模块；目录授权在 [dirs.rs](src/dirs.rs)。新增功能从对应模块进入，不在 App 里再建一套状态和请求流程。
 
 一级模块按能力归属组织，模块内部按实际职责拆文件；小组件直接在同名文件中保留状态、交互和绘制。只有需要能力和依赖隔离时才另拆 crate。共享 `widgets` 提供列表、输入和提示绘制，`TopTip`、`ChatPanel`、`CommandPanel` 等应用交互组件归 `app`。
 
+全屏界面的维护入口是 `app/fullscreen.rs` 与 `app/fullscreen/`：
+
+- 全屏入口组合正文、会话预览、输入区和浮层，持有鼠标、选区、面板和正文浏览状态；功能数据与请求仍由原功能模块维护。
+- 每种模式的 `layout.rs` 独立定义整页区域，绘制与命中共用本模式的区域计算；公共 App 不计算输入、正文或浮层坐标。`composer.rs` 组合全屏输入、批准、提问和队列。
+- `navigation.rs` 负责区域间的按键路由、焦点顺序、正文导航与面板打开关闭，功能组件继续处理自身的编辑和操作。全屏 `pointer.rs` 处理鼠标路由，`selection.rs` 处理选区手势、高亮和复制结果。
+- `panel.rs` 负责本模式的面板外框、尺寸及正文区域；`CommandPanel` 共用功能编辑器和操作结果，不决定页面摆放。
+- `header.rs`、`footer.rs` 分别维护欢迎信息、底栏与提示的呈现规则。目录和模型摘要、状态信息、通知内容与有效期继续共用；正文跳转文案由模式提供。
+- `frame.rs` 只选择屏幕绘制入口和可见资源需求。两种模式彼此不调用，共用正文、输入编辑、通用控件和终端能力。
+- 终端模块负责捕获协议、输出与恢复，`terminal/text.rs` 负责缓冲区文字范围和提取，不保存界面手势状态。
+- 新首页、顶部栏等具体界面在有实现时加入这个目录，小组件在同一文件中维护状态、操作和绘制，不预建空文件。
+
+`app/inline.rs` 与全屏入口平级，组合主屏上的正文、输入区和临时面板；`inline/layout.rs` 决定局部绘制高度与区域，`inline/output.rs` 管理已输出记录、定稿正文追加和退出前提交。会话、消息、草稿、队列、模型与设置继续共用现有功能模块的数据和操作。
+
+滚动、消息选中、展开项和绘制缓存由各模式分别持有，复用 [viewport.rs](src/thread/transcript/viewport.rs) 的有界存储与状态算法。预览数据与请求由原功能维护，预览滚动和缓存按模式隔离；关闭或更换预览时释放对应状态。移除消息时同步清理两种模式的无效选中项和锚点。
+
+切换模式保留共用草稿和队列，恢复目标模式自己的浏览位置，并将正在编辑的面板完整转交给目标模式。面板编辑状态只有一份，不会遗留一个可被异步结果重新打开的后台面板。
+
+两种模式的测试与文本快照分别放在 `fullscreen/` 和 `inline/`。定向运行 `just test zeta-tui --lib app::fullscreen` 或 `just test zeta-tui --lib app::inline`；模式隔离与面板转交运行 `just test zeta-tui --lib app::mode_tests`，共用应用流程运行 `just test zeta-tui --lib app::`。
+
 跨功能命令由 [dispatch.rs](src/app/dispatch.rs) 分发，通过各功能接口执行，不在 `app` 中为功能类型追加方法。功能模块解释后端返回值：例如 `dirs::add` 统一校验添加结果，并返回 `AddedDir`，供行内命令和目录面板共用。测试执行助手只放在测试模块中。
 
-会话管理器的导航、分组、归档、删除、恢复、预览和置顶按键由 [SessionsState](src/sessions/state.rs) 处理，向 App 返回会话命令或打开详情的请求。App 负责全局焦点路由与浮层协调，不读取分组和归档状态来决定这些按键的含义。
+会话管理器的导航、分组、归档、删除、恢复、预览和置顶按键由 [SessionsState](src/sessions/state.rs) 处理，返回会话命令或打开详情的请求。各模式负责页面焦点路由与浮层协调，不读取分组和归档状态来决定这些按键的含义。
 
 ## 启动与事件循环
 
@@ -153,7 +177,7 @@ Connector 操作见 [request.rs](src/connectors/request.rs)：设备码复制到
 | --- | --- |
 | 一批流式更新 | 最多 256 个身份、1024 次更新、1 MiB 正文 |
 | 临时正文 | 单条 256 KiB，最多 1024 个身份 |
-| 跨 Thread 界面状态 | 最近 32 条 Thread；切走时释放重型绘制缓存 |
+| 跨 Thread 状态 | 共用草稿与队列保留最近 32 条 Thread；每种模式分别保留最近 32 份浏览状态，切换 Thread 时释放重型绘制缓存 |
 | 进程资源历史 | 最多 301 个本机内存合计读数 |
 | 连续更新重绘 | 首次请求后 16 ms 内；新请求不延后期限，输入可立即绘制 |
 | 流式显示提交 | 正常每 40 ms 提交一个源码行范围；积压 8 行或最旧内容等待 120 ms 时追赶 |
@@ -195,7 +219,7 @@ statusLineStyle = "compact"
 language = "en"
 ```
 
-`screenMode` 只接受 `fullscreen` 和 `native`，缺省为 `fullscreen`。在 Config 的“通用”页通过 Enter、Space 或左右键切换，保存成功后立即应用；外部配置重载也使用同一路径。设置沿用现有 Config 读写通路；本地运行保存在本机 profile，远程连接目前读取和写入远端 App Server 的 profile。本机独立 UX 配置通路尚未接入。启动时先验证设置，再获取终端模式；非法值会报告配置错误。
+`screenMode` 只接受 `fullscreen` 和 `inline`，缺省为 `fullscreen`。已有主屏配置需要将该值更新为 `inline`；其他值按配置错误报告。在 Config 的“通用”页通过 Enter、Space 或左右键切换，保存成功后立即应用；外部配置重载也使用同一路径。设置沿用现有 Config 读写通路；本地运行保存在本机 profile，远程连接目前读取和写入远端 App Server 的 profile。本机独立 UX 配置通路尚未接入。启动时先验证设置，再获取终端模式；非法值会报告配置错误。
 
 鼠标交互和选中复制由 `screenMode` 决定，不再提供独立开关。旧 `mouseInteractions`、`copyOnSelect` 字段不参与解析和运行决策，在 Config 的“通用”页保存设置时删除；它们不会改变已选择的屏幕模式。
 
@@ -233,7 +257,7 @@ language = "en"
 | 模式 | 终端控制 | 历史与退出 |
 | --- | --- | --- |
 | `fullscreen` | 备用屏幕、整屏绘制、应用处理鼠标滚动与选文 | 正文内部滚动；退出恢复 shell 画面 |
-| `native` | 主屏局部绘制；保留原始输入、粘贴和焦点事件；不捕获鼠标 | 定稿内容按顺序追加；退出移除交互区域并保留已显示正文 |
+| `inline` | 主屏局部绘制；保留原始输入、粘贴和焦点事件；不捕获鼠标 | 定稿内容按顺序追加；退出移除交互区域并保留已显示正文 |
 
 全屏按以下顺序获取模式：原始输入 → 备用屏幕并保存、关闭滚轮转方向键 → 粘贴事件 → 焦点上报 → 鼠标捕获。全屏固定启用鼠标捕获和选中复制。退出备用屏幕前恢复进入时的滚轮模式。
 
@@ -243,7 +267,7 @@ language = "en"
 
 `TerminalModeGuard` 记录每一步是否成功。任一步失败或退出时，逆序关闭鼠标、焦点上报、粘贴事件，结束当前屏幕并关闭原始输入模式。显式恢复可重复调用，Drop 再次清理不会重复操作；退出或挂起时还要重置光标颜色并显示光标。
 
-鼠标边界回归见 [event_loop_tests.rs](src/app/event_loop_tests.rs)。在窗口至少 40×12 的真实 PTY 中运行 `just test zeta-tui --lib real_terminal_mouse_handoff -- --ignored --nocapture --test-threads=1`，可验证整屏捕获、补全点击、切换到主屏和退出恢复。该场景不替代各终端自身的选文与复制兼容性验证。
+鼠标交互回归见 [pointer_tests.rs](src/app/fullscreen/pointer_tests.rs)，选区手势与样式见 [selection_tests.rs](src/app/fullscreen/selection_tests.rs)。尺寸变化时清除全屏悬停、按下和选区状态，迟到的释放事件不能触发复制。在窗口至少 40×12 的真实 PTY 中运行 `just test zeta-tui --lib real_terminal_mouse_handoff -- --ignored --nocapture --test-threads=1`，由 [event_loop_tests.rs](src/app/event_loop_tests.rs) 验证整屏捕获、补全点击、切换到主屏和退出恢复。该场景不替代各终端自身的选文与复制兼容性验证。
 
 Ctrl+Z 在 Unix 上先恢复终端，再发送 SIGTSTP；`fg` 后重新获取模式并重绘。SIGINT/SIGTERM 进入正常事件循环退出路径。新增模式时同时修改获取标记、逆序清理和 [session_tests.rs](src/terminal/session_tests.rs) 中的部分失败测试。
 
@@ -298,6 +322,6 @@ just test-tui
 
 终端模式协议由 [session_tests.rs](src/terminal/session_tests.rs) 检查，正文分页、稳定锚点和长内容由 [正文绘制测试](src/thread/transcript/view/render_tests.rs) 检查。历史完整性不能再用终端回滚行数判断。
 
-主屏模式的真实边界检查使用 `just test-tui actual_tui_native_preserves_history_across_panels_resize_and_exit -- --nocapture`；两种模式的即时切换和设置保存使用 `just test-tui actual_tui_screen_mode_switches_live_and_persists -- --nocapture`。组件状态与文本基线位于 [native_tests.rs](src/app/frame/native_tests.rs)，历史顺序与样式位于 [scrollback_tests.rs](src/terminal/scrollback_tests.rs)。命令列出验证入口，不代表所有终端组合均已验证。
+主屏模式的真实边界检查使用 `just test-tui actual_tui_inline_preserves_history_across_panels_resize_and_exit -- --nocapture`；两种模式的即时切换和设置保存使用 `just test-tui actual_tui_screen_mode_switches_live_and_persists -- --nocapture`。组件状态与文本基线位于 [frame_tests.rs](src/app/inline/frame_tests.rs)，定稿边界与去重位于 [output_tests.rs](src/app/inline/output_tests.rs)，历史顺序与样式位于 [scrollback_tests.rs](src/terminal/scrollback_tests.rs)。命令列出验证入口，不代表所有终端组合均已验证。
 
 输入历史验证：`just test zeta-tui history`；跨进程重启验证：`just test-tui actual_tui_recalls_input_history_after_process_restart`。

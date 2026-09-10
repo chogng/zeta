@@ -7,20 +7,20 @@ use crate::tui_process::SMALL_SIZE;
 use crate::tui_process::TuiProcess;
 
 #[test]
-fn actual_tui_native_preserves_history_across_panels_resize_and_exit() {
+fn actual_tui_inline_preserves_history_across_panels_resize_and_exit() {
     let fixture = Fixture::new();
     let replies = [
-        "NATIVE-REPLY-ONE",
-        "NATIVE-REPLY-TWO",
-        "NATIVE-REPLY-THREE 中文",
+        "INLINE-REPLY-ONE",
+        "INLINE-REPLY-TWO",
+        "INLINE-REPLY-THREE 中文",
     ];
     let server = ScenarioServer::start(replies.map(|reply| HttpResponse::streaming([reply], None)));
     fixture.write_config(&server.base_url());
-    fixture.append_config("\n[tui]\nscreenMode = \"native\"\n");
+    fixture.append_config("\n[tui]\nscreenMode = \"inline\"\n");
     let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
     process.wait_for_stable_screen("ask permissions on");
     for (index, reply) in replies.iter().enumerate() {
-        process.submit(&format!("NATIVE-MESSAGE-{index}"));
+        process.submit(&format!("INLINE-MESSAGE-{index}"));
         process.wait_for_screen(reply);
         process.wait_for_stable_screen("ask permissions on");
         process.submit("/status");
@@ -67,8 +67,8 @@ fn actual_tui_screen_mode_switches_live_and_persists() {
         process.down();
     }
     process.enter();
-    process.wait_for_stable_screen("native");
-    assert!(fixture.config_source().contains("screenMode = \"native\""));
+    process.wait_for_stable_screen("inline");
+    assert!(fixture.config_source().contains("screenMode = \"inline\""));
     #[cfg(unix)]
     assert!(process.raw_text().contains("\x1b[?1049l"));
     process.escape();

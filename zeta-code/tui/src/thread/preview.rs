@@ -1,11 +1,10 @@
 use super::ThreadPresentationEvent;
 use super::ThreadState;
 use super::transcript::CellView;
-use super::transcript::ChatHistoryRenderCache;
-use super::transcript::ChatHistoryScroll;
 use super::transcript::TranscriptScrollDirection;
 use super::transcript::first_scroll_target;
 use super::transcript::scroll_target;
+use super::transcript::viewport::PreviewViewport;
 use crate::render::RenderContext;
 use ratatui::layout::Rect;
 use std::collections::BTreeSet;
@@ -14,13 +13,11 @@ use zeta_app_server_protocol::protocol::session::SessionThreadReadResult;
 use zeta_app_server_protocol::protocol::session::ThreadHistoryBoundary;
 use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 
-/// A read-only conversation snapshot with its own history, scroll, and request lifecycle.
+/// A read-only conversation snapshot with its own history and request lifecycle.
 #[derive(Debug)]
 pub(crate) struct ConversationPreview {
     pub(crate) generation: u64,
     pub(crate) title: String,
-    pub(crate) scroll: ChatHistoryScroll,
-    pub(crate) cache: ChatHistoryRenderCache,
     request: SessionThreadReadParams,
     thread: ThreadState,
     boundary: Option<ThreadHistoryBoundary>,
@@ -38,8 +35,6 @@ impl ConversationPreview {
             generation,
             title,
             request,
-            scroll: Default::default(),
-            cache: Default::default(),
             thread: Default::default(),
             boundary: None,
             loading: true,
@@ -100,6 +95,7 @@ impl ConversationPreview {
 
     pub(crate) fn navigate(
         &mut self,
+        viewport: &mut PreviewViewport,
         direction: TranscriptScrollDirection,
         rows: usize,
         area: Rect,
@@ -111,12 +107,12 @@ impl ConversationPreview {
             area,
             header_rows,
             &messages,
-            &self.scroll,
-            &self.cache,
+            &viewport.scroll,
+            &viewport.cache,
             context,
             direction,
             rows,
-        ) && self.scroll.apply(target)
+        ) && viewport.scroll.apply(target)
         {
             return None;
         }
@@ -126,9 +122,12 @@ impl ConversationPreview {
         self.older()
     }
 
-    pub(crate) fn first(&mut self) -> Option<SessionThreadReadParams> {
+    pub(crate) fn first(
+        &mut self,
+        viewport: &mut PreviewViewport,
+    ) -> Option<SessionThreadReadParams> {
         if let Some(target) = first_scroll_target(true, &self.messages()) {
-            self.scroll.apply(target);
+            viewport.scroll.apply(target);
         }
         if self.loading {
             return None;

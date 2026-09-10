@@ -41,7 +41,7 @@ fn providers() -> ProviderListResult {
 fn screen_mode_can_be_changed_with_activation_and_both_arrow_keys() {
     for mode in [
         crate::terminal::ScreenMode::Fullscreen,
-        crate::terminal::ScreenMode::Native,
+        crate::terminal::ScreenMode::Inline,
     ] {
         for code in [
             KeyCode::Enter,

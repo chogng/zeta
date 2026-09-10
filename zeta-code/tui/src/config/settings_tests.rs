@@ -25,7 +25,7 @@ fn tui_table_defaults_missing_terminal_fields() {
 fn screen_mode_round_trips_preserves_other_fields_and_rejects_invalid_values() {
     for (name, expected) in [
         ("fullscreen", crate::terminal::ScreenMode::Fullscreen),
-        ("native", crate::terminal::ScreenMode::Native),
+        ("inline", crate::terminal::ScreenMode::Inline),
     ] {
         let section = FrontendConfigDto(BTreeMap::from([
             ("screenMode".into(), serde_json::json!(name)),
@@ -39,7 +39,9 @@ fn screen_mode_round_trips_preserves_other_fields_and_rejects_invalid_values() {
     }
     for value in [
         serde_json::json!("auto"),
+        serde_json::json!("native"),
         serde_json::json!("Fullscreen"),
+        serde_json::json!("Inline"),
         serde_json::json!(true),
         serde_json::Value::Null,
     ] {
@@ -163,7 +165,7 @@ fn unsupported_language_is_rejected() {
 
 #[test]
 fn obsolete_pointer_settings_do_not_affect_screen_mode_and_are_removed_on_write() {
-    for mode in ["fullscreen", "native"] {
+    for mode in ["fullscreen", "inline"] {
         for old in [
             serde_json::json!(false),
             serde_json::json!(true),

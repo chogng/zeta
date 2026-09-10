@@ -1,9 +1,9 @@
+use crate::terminal::MouseMode;
 use crate::terminal::ScreenMode;
-use crate::terminal::mouse::MouseMode;
-use crate::terminal::screen_selection::ScreenSelectionRange;
-use crate::terminal::screen_selection::line_range_at;
-use crate::terminal::screen_selection::text_in_range;
-use crate::terminal::screen_selection::token_range_at;
+use crate::terminal::text::ScreenSelectionRange;
+use crate::terminal::text::line_range_at;
+use crate::terminal::text::text_in_range;
+use crate::terminal::text::token_range_at;
 use crossterm::ExecutableCommand;
 use crossterm::event::DisableBracketedPaste;
 use crossterm::event::DisableFocusChange;
@@ -58,7 +58,7 @@ impl TerminalSession {
             hyperlinks: Default::default(),
             cursor_color: CursorColor::default(),
             inline_height: 1,
-            inline_active: mode == ScreenMode::Native,
+            inline_active: mode == ScreenMode::Inline,
         };
         session.terminal.clear()?;
         Ok(session)
@@ -68,7 +68,7 @@ impl TerminalSession {
         if self.modes.mode == mode {
             return Ok(());
         }
-        if self.modes.mode == ScreenMode::Native {
+        if self.modes.mode == ScreenMode::Inline {
             self.terminal.clear()?;
             let origin = self.terminal.get_frame().area().as_position();
             self.terminal.set_cursor_position(origin)?;
@@ -79,7 +79,7 @@ impl TerminalSession {
         self.modes.mouse_mode = MouseMode::TerminalSelection;
         self.modes.reacquire()?;
         self.terminal = new_terminal(mode, self.inline_height)?;
-        self.inline_active = mode == ScreenMode::Native;
+        self.inline_active = mode == ScreenMode::Inline;
         self.terminal.clear()?;
         self.invalidate();
         Ok(())
@@ -94,7 +94,7 @@ impl TerminalSession {
         let origin = self.terminal.get_frame().area().as_position();
         self.terminal.clear()?;
         self.terminal.set_cursor_position(origin)?;
-        self.terminal = new_terminal(ScreenMode::Native, height)?;
+        self.terminal = new_terminal(ScreenMode::Inline, height)?;
         self.inline_height = height;
         self.invalidate();
         Ok(())
@@ -183,7 +183,7 @@ impl TerminalSession {
     /// Restores the parent terminal, suspends this process, and reacquires TUI modes on resume.
     pub(crate) fn suspend(&mut self) -> io::Result<()> {
         self.cursor_color.set(&mut io::stdout(), None)?;
-        if self.modes.mode == ScreenMode::Native {
+        if self.modes.mode == ScreenMode::Inline {
             self.terminal.clear()?;
             let origin = self.terminal.get_frame().area().as_position();
             self.terminal.set_cursor_position(origin)?;
@@ -194,8 +194,8 @@ impl TerminalSession {
         let reacquire_result = self.modes.reacquire();
         suspend_result?;
         reacquire_result?;
-        if self.modes.mode == ScreenMode::Native {
-            self.terminal = new_terminal(ScreenMode::Native, self.inline_height)?;
+        if self.modes.mode == ScreenMode::Inline {
+            self.terminal = new_terminal(ScreenMode::Inline, self.inline_height)?;
         }
         self.invalidate();
         self.terminal.clear()
@@ -303,7 +303,7 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
     }
 
     fn set_mouse_mode(&mut self, mode: MouseMode) -> io::Result<()> {
-        let mode = if self.mode == ScreenMode::Native {
+        let mode = if self.mode == ScreenMode::Inline {
             MouseMode::TerminalSelection
         } else {
             mode
@@ -367,7 +367,7 @@ fn new_terminal(mode: ScreenMode, height: u16) -> io::Result<Terminal<CrosstermB
         TerminalOptions {
             viewport: match mode {
                 ScreenMode::Fullscreen => Viewport::Fullscreen,
-                ScreenMode::Native => Viewport::Inline(height),
+                ScreenMode::Inline => Viewport::Inline(height),
             },
         },
     )

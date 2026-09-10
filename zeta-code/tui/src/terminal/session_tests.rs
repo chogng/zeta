@@ -1,7 +1,7 @@
 use super::TerminalModeGuard;
 use super::TerminalModeOperations;
+use crate::terminal::MouseMode;
 use crate::terminal::ScreenMode;
-use crate::terminal::mouse::MouseMode;
 use std::cell::RefCell;
 use std::io;
 use std::rc::Rc;
@@ -21,7 +21,7 @@ const DISABLE_RAW_MODE: &str = "disable raw mode";
 fn main_screen_keeps_mouse_and_screen_with_the_terminal_across_resume() {
     let calls = Rc::new(RefCell::new(Vec::new()));
     let mut guard =
-        TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None), ScreenMode::Native)
+        TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None), ScreenMode::Inline)
             .unwrap();
     guard.set_mouse_mode(MouseMode::TuiCapture).unwrap();
     guard.restore();
@@ -61,7 +61,7 @@ fn main_screen_failure_restores_only_acquired_input_modes() {
         assert!(
             TerminalModeGuard::acquire(
                 FakeOperations::new(calls.clone(), Some(failure)),
-                ScreenMode::Native
+                ScreenMode::Inline
             )
             .is_err()
         );

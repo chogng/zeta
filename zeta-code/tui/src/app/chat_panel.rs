@@ -1,17 +1,6 @@
-use super::command_panel::CommandPanel;
-use super::command_panel::CommandPanelOutcome;
 use super::top_tip::TopTip;
-use crate::config::ConfigChoices;
-use crate::connectors::ConnectorChoices;
-use crate::dirs::DirChoices;
 use crate::host::clipboard::ClipboardImageFingerprint;
-use crate::keymap_setup::KeymapChoices;
-use crate::mcp::McpChoices;
-use crate::skills::SkillChoices;
-use crate::status::ProcessResourcesView;
-use crate::status::StatusLineChoices;
 use crate::status::StatusLineModel;
-use crate::theme::ThemeChoices;
 use crate::thread::ThreadRequestIdentity;
 use crate::thread::ThreadRequestKind;
 use crate::thread::ThreadRequestResponse;
@@ -27,7 +16,6 @@ use crate::thread::interaction::approval::ApprovalView;
 use crate::thread::interaction::query::Query;
 use crate::thread::interaction::query::QueryOutcome;
 use crate::thread::interaction::query::QueryView;
-use crate::widgets::list_selection::ListSelectionState;
 use crossterm::event::KeyEvent;
 use std::time::Instant;
 use zeta_protocol::RequestId;
@@ -43,7 +31,6 @@ enum InputMode {
 #[derive(Debug)]
 pub(crate) struct ChatPanel {
     composer: ChatComposer,
-    command: Option<CommandPanel>,
     approval: Option<Approval>,
     query: Option<Query>,
     input_mode: InputMode,
@@ -55,7 +42,6 @@ impl ChatPanel {
     pub(crate) fn new() -> Self {
         Self {
             composer: ChatComposer::new(),
-            command: None,
             approval: None,
             query: None,
             input_mode: InputMode::Start,
@@ -146,166 +132,6 @@ impl ChatPanel {
             | TurnActivity::WaitingForCapability
             | TurnActivity::Cancelling => InputMode::Queue,
         };
-    }
-
-    pub(crate) fn command(&self) -> Option<&CommandPanel> {
-        self.command.as_ref()
-    }
-
-    pub(crate) fn command_key_hints(&self) -> Option<&str> {
-        self.command.as_ref().map(CommandPanel::key_hints)
-    }
-
-    pub(crate) fn command_active(&self) -> bool {
-        self.command.is_some()
-    }
-
-    pub(crate) fn open_command(&mut self, command: CommandPanel) {
-        self.command = Some(command);
-    }
-
-    pub(crate) fn close_command(&mut self) {
-        self.command = None;
-    }
-
-    pub(crate) fn handle_command_key(
-        &mut self,
-        key: KeyEvent,
-        area: ratatui::layout::Rect,
-    ) -> Option<CommandPanelOutcome> {
-        self.command
-            .as_mut()
-            .map(|command| command.handle_key(key, area))
-    }
-
-    pub(crate) fn handle_command_paste(&mut self, pasted: String) -> bool {
-        let Some(command) = self.command.as_mut() else {
-            return false;
-        };
-        command.handle_paste(pasted);
-        true
-    }
-
-    pub(crate) fn command_list_selection(&self) -> Option<&ListSelectionState> {
-        self.command.as_ref().and_then(CommandPanel::list_selection)
-    }
-
-    pub(crate) fn replace_dirs(&mut self, choices: DirChoices) {
-        if let Some(command) = self.command.as_mut() {
-            command.replace_dirs(choices);
-        }
-    }
-
-    pub(crate) fn finish_dir_add(
-        &mut self,
-        request_id: u64,
-        result: Result<crate::dirs::AddedDir, String>,
-    ) {
-        if let Some(command) = self.command.as_mut() {
-            command.finish_dir_add(request_id, result);
-        }
-    }
-
-    pub(crate) fn replace_config(&mut self, choices: ConfigChoices) {
-        if let Some(command) = self.command.as_mut() {
-            command.replace_config(choices);
-        }
-    }
-
-    pub(crate) fn open_subscription(&mut self, choices: ConfigChoices) {
-        if let Some(command) = self.command.as_mut() {
-            command.open_subscription(choices);
-        }
-    }
-
-    pub(crate) fn complete_connection(&mut self, reply: crate::config::provider::Reply) {
-        if let Some(CommandPanel::Config(editor)) = self.command.as_mut() {
-            editor.complete_connection(reply);
-        }
-    }
-
-    pub(crate) fn update_subscription(&mut self, choices: ConfigChoices) {
-        if let Some(command) = self.command.as_mut() {
-            command.update_subscription(choices);
-        }
-    }
-
-    pub(crate) fn finish_config_prompt(&mut self, choices: ConfigChoices) {
-        if let Some(command) = self.command.as_mut() {
-            command.finish_config_prompt(choices);
-        }
-    }
-
-    pub(crate) fn replace_connectors(&mut self, choices: ConnectorChoices) {
-        if let Some(command) = self.command.as_mut() {
-            command.replace_connectors(choices);
-        }
-    }
-
-    pub(crate) fn replace_model(&mut self, choices: crate::models::ModelChoices) {
-        if let Some(CommandPanel::Model(selection)) = self.command.as_mut() {
-            selection.replace(choices.model, choices.actions);
-        }
-    }
-
-    pub(crate) fn replace_mcp(&mut self, choices: McpChoices) {
-        if let Some(command) = self.command.as_mut() {
-            command.replace_mcp(choices);
-        }
-    }
-
-    pub(crate) fn replace_skills(&mut self, choices: SkillChoices) {
-        if let Some(command) = self.command.as_mut() {
-            command.replace_skills(choices);
-        }
-    }
-
-    pub(crate) fn replace_keymap(&mut self, choices: KeymapChoices) {
-        if let Some(command) = self.command.as_mut() {
-            command.replace_keymap_catalog(choices);
-        }
-    }
-
-    pub(crate) fn replace_status_line(&mut self, choices: StatusLineChoices) {
-        if let Some(command) = self.command.as_mut() {
-            command.replace_status_line(choices);
-        }
-    }
-
-    pub(crate) fn apply_process_resources(&mut self, resources: ProcessResourcesView) {
-        if let Some(command) = self.command.as_mut() {
-            command.apply_process_resources(resources);
-        }
-    }
-
-    pub(crate) fn apply_memory_diagnostics(&mut self, status: crate::memory::Status) {
-        if let Some(command) = self.command.as_mut() {
-            command.apply_memory_diagnostics(status);
-        }
-    }
-
-    pub(crate) fn push_custom_theme(&mut self, choices: ThemeChoices) {
-        if let Some(command) = self.command.as_mut() {
-            command.push_custom_theme(choices);
-        }
-    }
-
-    pub(crate) fn command_is_keymap(&self) -> bool {
-        matches!(self.command, Some(CommandPanel::Keymap(_)))
-    }
-
-    pub(crate) fn command_is_connectors(&self) -> bool {
-        self.command
-            .as_ref()
-            .is_some_and(CommandPanel::is_connectors)
-    }
-
-    pub(crate) fn command_is_skills(&self) -> bool {
-        self.command.as_ref().is_some_and(CommandPanel::is_skills)
-    }
-
-    pub(crate) fn command_is_theme(&self) -> bool {
-        matches!(self.command, Some(CommandPanel::Theme(_)))
     }
 
     pub(crate) fn request_active(&self) -> bool {

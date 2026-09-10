@@ -53,6 +53,7 @@ fn renderable_measurement_uses_the_same_wrapped_message_rows_as_drawing() {
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
     let view = ChatHistoryView {
+        jump_label: "Ctrl+End to jump to bottom ↓",
         header: None,
         messages: &messages,
         scroll: &scroll,
@@ -150,6 +151,7 @@ fn user_message_starts_in_the_symbol_column_and_fills_the_content_row() {
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
     let view = ChatHistoryView {
+        jump_label: "Ctrl+End to jump to bottom ↓",
         header: None,
         messages: &messages,
         scroll: &scroll,
@@ -183,6 +185,7 @@ fn local_command_fills_only_its_input_rows() {
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
     let view = ChatHistoryView {
+        jump_label: "Ctrl+End to jump to bottom ↓",
         header: None,
         messages: &messages,
         scroll: &scroll,
@@ -233,6 +236,7 @@ fn transcript_actions_apply_hover_and_pressed_feedback_after_cache_reuse() {
     let mut terminal = Terminal::new(TestBackend::new(30, 4)).unwrap();
 
     let hovered = ChatHistoryView {
+        jump_label: "Ctrl+End to jump to bottom ↓",
         header: None,
         messages: &messages,
         scroll: &scroll,
@@ -251,6 +255,7 @@ fn transcript_actions_apply_hover_and_pressed_feedback_after_cache_reuse() {
     );
 
     let pressed = ChatHistoryView {
+        jump_label: "Ctrl+End to jump to bottom ↓",
         pointer: ChatHistoryPointerState {
             pressed_toggle: Some("reasoning"),
             ..Default::default()
@@ -291,6 +296,7 @@ fn wrapped_details_link_remains_visible_in_a_narrow_terminal() {
     let scroll = ChatHistoryScroll::default();
     let cache = ChatHistoryRenderCache::default();
     let view = ChatHistoryView {
+        jump_label: "Ctrl+End to jump to bottom ↓",
         header: None,
         messages: &messages,
         scroll: &scroll,
@@ -323,6 +329,7 @@ fn long_transcripts_buffer_only_visible_cells() {
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
     let view = ChatHistoryView {
+        jump_label: "Ctrl+End to jump to bottom ↓",
         header: None,
         messages: &messages,
         scroll: &scroll,
@@ -350,6 +357,7 @@ fn follow_latest_reaches_content_beyond_the_u16_row_range() {
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
     let view = ChatHistoryView {
+        jump_label: "Ctrl+End to jump to bottom ↓",
         header: None,
         messages: &messages,
         scroll: &scroll,
@@ -396,6 +404,7 @@ fn scrolled_transcript_draws_a_themed_jump_control_inside_its_bottom_row() {
     .unwrap();
     assert!(scroll.apply(target));
     let view = ChatHistoryView {
+        jump_label: "Ctrl+End to jump to bottom ↓",
         header: None,
         messages: &messages,
         scroll: &scroll,
@@ -443,6 +452,7 @@ fn scrolling_to_the_start_reveals_the_history_header_before_messages() {
     );
     scroll.apply(first_scroll_target(true, &messages).unwrap());
     let view = ChatHistoryView {
+        jump_label: "Ctrl+End to jump to bottom ↓",
         header: Some(&header),
         messages: &messages,
         scroll: &scroll,
@@ -569,6 +579,7 @@ fn jump_control_is_hidden_while_following_the_latest_content() {
     terminal
         .draw(|frame| {
             ChatHistoryView {
+                jump_label: "Ctrl+End to jump to bottom ↓",
                 header: None,
                 messages: &messages,
                 scroll: &scroll,
@@ -591,6 +602,7 @@ fn render_first_row(
     terminal
         .draw(|frame| {
             ChatHistoryView {
+                jump_label: "Ctrl+End to jump to bottom ↓",
                 header: None,
                 messages,
                 scroll,

@@ -4,7 +4,7 @@
   This script installs:
   - Visual Studio 2022 Build Tools with MSVC and the Windows SDK
   - The Rust toolchain declared by rust-toolchain.toml
-  - Git, ripgrep, just, CMake, LLVM/Clang, Protocol Buffers, Python, and cargo-insta
+  - Git, ripgrep, just, CMake, LLVM/Clang, Python, and cargo-insta
 
   Usage from the repository root:
     powershell -ExecutionPolicy Bypass -File scripts/zeta-rs/setup-windows.ps1
@@ -196,7 +196,6 @@ Install-WingetPackage -Id 'BurntSushi.ripgrep.MSVC' -Description 'ripgrep'
 Install-WingetPackage -Id 'Casey.Just' -Description 'just'
 Install-WingetPackage -Id 'Kitware.CMake' -Description 'CMake'
 Install-WingetPackage -Id 'LLVM.LLVM' -Description 'LLVM and Clang'
-Install-WingetPackage -Id 'Google.Protobuf' -Description 'Protocol Buffers'
 Install-WingetPackage -Id 'Python.Python.3.12' -Description 'Python 3.12'
 
 Refresh-ProcessPath
@@ -211,7 +210,7 @@ $env:LIBCLANG_PATH = $LlvmBin
 $env:CC = Join-Path $LlvmBin 'clang.exe'
 $env:CXX = Join-Path $LlvmBin 'clang++.exe'
 
-foreach ($Command in @('cargo', 'git', 'rg', 'just', 'cmake', 'clang', 'protoc')) {
+foreach ($Command in @('cargo', 'git', 'rg', 'just', 'cmake', 'clang')) {
   if (-not (Test-Command $Command)) {
     throw "$Command was not found on PATH after prerequisite installation"
   }

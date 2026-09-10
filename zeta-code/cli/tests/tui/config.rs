@@ -35,8 +35,8 @@ fn actual_tui_screen_mode_replaces_obsolete_pointer_settings_on_save() {
         process.down();
     }
     process.enter();
-    wait_for_config(&fixture, "screenMode = \"native\"");
-    process.wait_for_stable_screen("native");
+    wait_for_config(&fixture, "screenMode = \"inline\"");
+    process.wait_for_stable_screen("inline");
     assert!(!fixture.config_source().contains("mouseInteractions"));
     assert!(!fixture.config_source().contains("copyOnSelect"));
     process.escape();
@@ -46,7 +46,7 @@ fn actual_tui_screen_mode_replaces_obsolete_pointer_settings_on_save() {
     process.wait_for_screen("Zeta Code v");
     process.submit("/config");
     process.wait_for_stable_screen("Screen mode");
-    assert!(process.screen().contains("native"));
+    assert!(process.screen().contains("inline"));
     assert!(!process.screen().contains("Enhanced TUI"));
     assert!(!process.screen().contains("Copy on select"));
     process.escape();

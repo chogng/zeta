@@ -315,6 +315,7 @@ fn markdown_updates_render_links_and_tables_without_changing_canonical_messages(
         terminal
             .draw(|frame| {
                 ChatHistoryView {
+                    jump_label: "Ctrl+End to jump to bottom ↓",
                     header: None,
                     messages: &messages,
                     scroll: &scroll,
@@ -399,6 +400,7 @@ fn streaming_deadlines_change_the_visible_panel_without_changing_message_text() 
         terminal
             .draw(|frame| {
                 ChatHistoryView {
+                    jump_label: "Ctrl+End to jump to bottom ↓",
                     header: None,
                     messages: &messages,
                     scroll: &scroll,

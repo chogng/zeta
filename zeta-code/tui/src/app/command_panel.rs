@@ -37,7 +37,6 @@ use crate::widgets::list_selection::ListSelection;
 use crate::widgets::list_selection::ListSelectionAdjustment;
 use crate::widgets::list_selection::ListSelectionOutcome;
 use crate::widgets::list_selection::ListSelectionState;
-use crate::widgets::panel::PanelLayout;
 use crate::widgets::text_prompt;
 use crate::widgets::text_prompt::TextPrompt;
 use crossterm::event::KeyEvent;
@@ -46,7 +45,7 @@ use ratatui::layout::Rect;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug)]
-enum CommandPanelBody<'a> {
+pub(super) enum CommandPanelBody<'a> {
     Selection(&'a ListSelectionState),
     Prompt(&'a TextPrompt),
     Provider(&'a crate::config::provider::Panel),
@@ -163,11 +162,7 @@ impl CommandPanel {
 
     pub(crate) fn process_resources_visible(&self, area: Rect) -> bool {
         match self {
-            Self::Status(panel) => {
-                let content_width = PanelLayout::content_width(area.width);
-                let layout = PanelLayout::new(area, panel.tab_rows(content_width));
-                panel.process_resources_visible(layout.body)
-            }
+            Self::Status(panel) => panel.process_resources_visible(area),
             _ => false,
         }
     }
@@ -177,8 +172,6 @@ impl CommandPanel {
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent, area: Rect) -> CommandPanelOutcome {
-        let body = self.body();
-        let layout = PanelLayout::new(area, body.tab_rows(PanelLayout::content_width(area.width)));
         match self {
             Self::Help(content) => map_read_only(content.handle_key(key)),
             Self::Dirs(content) => {
@@ -220,7 +213,7 @@ impl CommandPanel {
                 map_selection(content.handle_key(key), CommandPanelOutcome::Skills)
             }
             Self::Startup(content) => map_read_only(content.handle_key(key)),
-            Self::Status(content) => match content.handle_key(key, layout.body) {
+            Self::Status(content) => match content.handle_key(key, area) {
                 StatusPanelOutcome::Consumed => CommandPanelOutcome::Consumed,
                 StatusPanelOutcome::Dismiss => CommandPanelOutcome::Dismiss,
             },
@@ -269,7 +262,7 @@ impl CommandPanel {
         }
     }
 
-    fn body(&self) -> CommandPanelBody<'_> {
+    pub(super) fn body(&self) -> CommandPanelBody<'_> {
         match self {
             Self::Help(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Dirs(selection) => CommandPanelBody::Selection(selection.state()),
@@ -293,29 +286,6 @@ impl CommandPanel {
             Self::StatusLine(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Theme(picker) => CommandPanelBody::Selection(picker.selection()),
         }
-    }
-
-    pub(crate) fn desired_height(&self, width: u16) -> u16 {
-        let body = self.body();
-        let content_width = PanelLayout::content_width(width);
-        crate::widgets::panel::HEADER_ROWS
-            .saturating_add(body.tab_rows(content_width))
-            .saturating_add(body.body_rows(content_width))
-    }
-
-    pub(crate) fn draw(
-        &self,
-        frame: &mut Frame<'_>,
-        area: Rect,
-        context: crate::render::RenderContext<'_>,
-    ) {
-        let body = self.body();
-        let content_width = PanelLayout::content_width(area.width);
-        let layout = PanelLayout::new(area, body.tab_rows(content_width));
-        let presentation_focus = body.presentation_focus().unwrap_or_else(|| context.focus());
-        crate::widgets::panel::draw_header(frame, area, body.title(), presentation_focus);
-        body.draw_tabs(frame, layout.tabs, None, None, context);
-        body.draw_body(frame, layout.body, context);
     }
 
     pub(crate) fn key_hints(&self) -> &str {
@@ -465,7 +435,7 @@ fn map_selection<A>(
 }
 
 impl<'a> CommandPanelBody<'a> {
-    fn title(self) -> &'a str {
+    pub(super) fn title(self) -> &'a str {
         match self {
             Self::Selection(selection) => selection.title(),
             Self::Prompt(prompt) => prompt.title(),
@@ -475,7 +445,7 @@ impl<'a> CommandPanelBody<'a> {
         }
     }
 
-    fn tab_rows(self, width: u16) -> u16 {
+    pub(super) fn tab_rows(self, width: u16) -> u16 {
         match self {
             Self::Selection(selection) => selection.tab_rows(width),
             Self::Status(panel) => panel.tab_rows(width),
@@ -483,7 +453,7 @@ impl<'a> CommandPanelBody<'a> {
         }
     }
 
-    fn body_rows(self, width: u16) -> u16 {
+    pub(super) fn body_rows(self, width: u16) -> u16 {
         match self {
             Self::Selection(selection) => selection.body_rows(),
             Self::Prompt(prompt) => prompt.desired_height(),
@@ -493,14 +463,14 @@ impl<'a> CommandPanelBody<'a> {
         }
     }
 
-    fn presentation_focus(self) -> Option<ratatui::style::Color> {
+    pub(super) fn presentation_focus(self) -> Option<ratatui::style::Color> {
         match self {
             Self::Selection(selection) => selection.presentation_focus(),
             Self::Prompt(_) | Self::KeyCapture(_) | Self::Status(_) | Self::Provider(_) => None,
         }
     }
 
-    fn draw_tabs(
+    pub(super) fn draw_tabs(
         self,
         frame: &mut Frame<'_>,
         area: Rect,
@@ -517,7 +487,7 @@ impl<'a> CommandPanelBody<'a> {
         }
     }
 
-    fn draw_body(
+    pub(super) fn draw_body(
         self,
         frame: &mut Frame<'_>,
         area: Rect,
@@ -532,5 +502,168 @@ impl<'a> CommandPanelBody<'a> {
             Self::Status(panel) => panel.draw_body(frame, area, context),
             Self::Provider(panel) => panel.draw_body(frame, area, context),
         }
+    }
+}
+
+/// Mutable feature editors are held by the active page and moved intact on a mode switch.
+#[derive(Debug, Default)]
+pub(super) struct Panels {
+    command: Option<CommandPanel>,
+    pub(super) overlay: Option<crate::widgets::overlay::DetailOverlay>,
+}
+
+impl Panels {
+    pub(crate) fn command(&self) -> Option<&CommandPanel> {
+        self.command.as_ref()
+    }
+
+    pub(crate) fn command_key_hints(&self) -> Option<&str> {
+        self.command.as_ref().map(CommandPanel::key_hints)
+    }
+
+    pub(crate) fn command_active(&self) -> bool {
+        self.command.is_some()
+    }
+
+    pub(crate) fn open_command(&mut self, command: CommandPanel) {
+        self.command = Some(command);
+    }
+
+    pub(crate) fn close_command(&mut self) {
+        self.command = None;
+    }
+
+    pub(crate) fn handle_command_paste(&mut self, pasted: String) -> bool {
+        let Some(command) = self.command.as_mut() else {
+            return false;
+        };
+        command.handle_paste(pasted);
+        true
+    }
+
+    pub(crate) fn command_list_selection(&self) -> Option<&ListSelectionState> {
+        self.command.as_ref().and_then(CommandPanel::list_selection)
+    }
+
+    pub(crate) fn replace_dirs(&mut self, choices: DirChoices) {
+        if let Some(command) = self.command.as_mut() {
+            command.replace_dirs(choices);
+        }
+    }
+
+    pub(crate) fn finish_dir_add(
+        &mut self,
+        request_id: u64,
+        result: Result<crate::dirs::AddedDir, String>,
+    ) {
+        if let Some(command) = self.command.as_mut() {
+            command.finish_dir_add(request_id, result);
+        }
+    }
+
+    pub(crate) fn replace_config(&mut self, choices: ConfigChoices) {
+        if let Some(command) = self.command.as_mut() {
+            command.replace_config(choices);
+        }
+    }
+
+    pub(crate) fn open_subscription(&mut self, choices: ConfigChoices) {
+        if let Some(command) = self.command.as_mut() {
+            command.open_subscription(choices);
+        }
+    }
+
+    pub(crate) fn complete_connection(&mut self, reply: crate::config::provider::Reply) {
+        if let Some(CommandPanel::Config(editor)) = self.command.as_mut() {
+            editor.complete_connection(reply);
+        }
+    }
+
+    pub(crate) fn update_subscription(&mut self, choices: ConfigChoices) {
+        if let Some(command) = self.command.as_mut() {
+            command.update_subscription(choices);
+        }
+    }
+
+    pub(crate) fn finish_config_prompt(&mut self, choices: ConfigChoices) {
+        if let Some(command) = self.command.as_mut() {
+            command.finish_config_prompt(choices);
+        }
+    }
+
+    pub(crate) fn replace_connectors(&mut self, choices: ConnectorChoices) {
+        if let Some(command) = self.command.as_mut() {
+            command.replace_connectors(choices);
+        }
+    }
+
+    pub(crate) fn replace_model(&mut self, choices: crate::models::ModelChoices) {
+        if let Some(CommandPanel::Model(selection)) = self.command.as_mut() {
+            selection.replace(choices.model, choices.actions);
+        }
+    }
+
+    pub(crate) fn replace_mcp(&mut self, choices: McpChoices) {
+        if let Some(command) = self.command.as_mut() {
+            command.replace_mcp(choices);
+        }
+    }
+
+    pub(crate) fn replace_skills(&mut self, choices: SkillChoices) {
+        if let Some(command) = self.command.as_mut() {
+            command.replace_skills(choices);
+        }
+    }
+
+    pub(crate) fn replace_keymap(&mut self, choices: KeymapChoices) {
+        if let Some(command) = self.command.as_mut() {
+            command.replace_keymap_catalog(choices);
+        }
+    }
+
+    pub(crate) fn replace_status_line(&mut self, choices: StatusLineChoices) {
+        if let Some(command) = self.command.as_mut() {
+            command.replace_status_line(choices);
+        }
+    }
+
+    pub(crate) fn apply_process_resources(&mut self, resources: ProcessResourcesView) {
+        if let Some(command) = self.command.as_mut() {
+            command.apply_process_resources(resources);
+        }
+    }
+
+    pub(crate) fn apply_memory_diagnostics(&mut self, status: crate::memory::Status) {
+        if let Some(command) = self.command.as_mut() {
+            command.apply_memory_diagnostics(status);
+        }
+    }
+
+    pub(crate) fn push_custom_theme(&mut self, choices: ThemeChoices) {
+        if let Some(command) = self.command.as_mut() {
+            command.push_custom_theme(choices);
+        }
+    }
+
+    pub(crate) fn command_is_keymap(&self) -> bool {
+        matches!(self.command, Some(CommandPanel::Keymap(_)))
+    }
+
+    pub(crate) fn command_is_connectors(&self) -> bool {
+        self.command
+            .as_ref()
+            .is_some_and(CommandPanel::is_connectors)
+    }
+
+    pub(crate) fn command_is_skills(&self) -> bool {
+        self.command.as_ref().is_some_and(CommandPanel::is_skills)
+    }
+
+    pub(crate) fn command_is_theme(&self) -> bool {
+        matches!(self.command, Some(CommandPanel::Theme(_)))
+    }
+
+    pub(super) fn command_mut(&mut self) -> Option<&mut CommandPanel> {
+        self.command.as_mut()
     }
 }

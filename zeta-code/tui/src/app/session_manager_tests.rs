@@ -154,11 +154,26 @@ fn session_manager_preview_reads_conversation_and_restores_focus_without_editing
         ),
         None
     );
-    assert!(app.session_preview().unwrap().scroll.anchor().is_some());
+    assert!(app.fullscreen.preview.scroll.anchor().is_some());
     assert_snapshot!("session_manager_preview_scrolled", render(&app));
+    let preview_anchor = app.fullscreen.preview.scroll.anchor().cloned();
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    assert_eq!(app.session_preview().unwrap().generation, generation);
+    assert!(app.inline.preview.scroll.anchor().is_none());
+    app.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL));
+    assert!(app.inline.preview.scroll.anchor().is_some());
+    settings.set_screen_mode(crate::terminal::ScreenMode::Fullscreen);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    assert_eq!(
+        app.fullscreen.preview.scroll.anchor(),
+        preview_anchor.as_ref()
+    );
+    assert_eq!(app.input(), draft);
     let background_anchor = app.transcript_scroll().anchor().cloned();
     app.handle_key(KeyEvent::new(KeyCode::End, KeyModifiers::CONTROL));
-    assert!(app.session_preview().unwrap().scroll.anchor().is_none());
+    assert!(app.fullscreen.preview.scroll.anchor().is_none());
     assert_eq!(app.transcript_scroll().anchor(), background_anchor.as_ref());
     app.handle_key(key(KeyCode::Esc));
     assert!(app.session_preview().is_none());

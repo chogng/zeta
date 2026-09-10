@@ -32,7 +32,7 @@ use crate::status::StatusLineSettings;
 use crate::status::StatusViewData;
 use crate::status::status_line_choices;
 use crate::status::status_panel;
-use crate::terminal::mouse::MouseMode;
+use crate::terminal::MouseMode;
 use crate::test_support::empty_config_snapshot;
 use crate::theme::Command as ThemeCommand;
 use crate::theme::Event as ThemeEvent;
@@ -611,7 +611,8 @@ fn submitting_after_manual_scroll_restores_follow_latest() {
     for index in 0..20 {
         app.update(ThreadEvent::FailureReported(format!("failure {index}")));
     }
-    assert!(app.scroll_transcript(
+    assert!(crate::app::fullscreen::navigation::scroll_transcript(
+        &mut app,
         crate::thread::transcript::TranscriptScrollDirection::Up,
         Rect::new(0, 0, 80, 20),
     ));
@@ -792,7 +793,7 @@ fn screen_mode_keyboard_toggle_emits_a_revision_bound_edit() {
         action,
         Some(AppCommand::Config(ConfigCommand::Edit(edit)))
             if edit.server_config.revision == 7
-                && edit.terminal.screen_mode() == crate::terminal::ScreenMode::Native
+                && edit.terminal.screen_mode() == crate::terminal::ScreenMode::Inline
     ));
 }
 
@@ -1564,10 +1565,10 @@ fn fixed_requests_do_not_capture_mouse_for_a_hidden_completion() {
         for row in 0..area.height {
             for column in 0..area.width {
                 assert_eq!(
-                    crate::app::frame::input_pointer_target_at(&app, area, column, row),
+                    crate::app::fullscreen::pointer::target_at(&app, area, column, row),
                     None
                 );
-                assert!(!crate::app::frame::overlay_mouse_contains(
+                assert!(!crate::app::fullscreen::pointer::overlay_contains(
                     &app,
                     area,
                     ratatui::layout::Position::new(column, row)
@@ -1586,31 +1587,39 @@ fn switching_to_main_screen_clears_selection() {
     let mut app = App::new();
     app.insert_text("/");
     assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
-    app.begin_screen_selection(ratatui::layout::Position::new(1, 1));
-    app.drag_screen_selection(ratatui::layout::Position::new(3, 1));
-    assert!(app.screen_selection().range().is_some());
+    app.fullscreen
+        .selection
+        .begin(ratatui::layout::Position::new(1, 1));
+    app.fullscreen
+        .selection
+        .drag(ratatui::layout::Position::new(3, 1));
+    assert!(app.fullscreen.selection.range().is_some());
 
     let mut settings = TerminalSettings::default();
-    settings.set_screen_mode(crate::terminal::ScreenMode::Native);
+    settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
     app.update(ConfigEvent::SettingsReceived(settings));
 
     assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
-    assert!(app.screen_selection().range().is_none());
+    assert!(app.fullscreen.selection.range().is_none());
 }
 
 #[test]
 fn saved_main_screen_mode_clears_pointer_feedback_and_selection() {
     let mut app = App::new();
     app.insert_text("/");
-    let target = crate::app::frame::InputPointerTarget::Composer(
+    let target = crate::app::fullscreen::pointer::PointerTarget::Composer(
         crate::thread::composer::ChatComposerPointerTarget::CompletionItem(0),
     );
-    app.update_pointer_hover(Some(target.clone()));
-    app.update_pointer_pressed(Some(target));
-    app.begin_screen_selection(ratatui::layout::Position::new(2, 1));
-    app.drag_screen_selection(ratatui::layout::Position::new(4, 1));
+    app.fullscreen.pointer.update_hover(Some(target.clone()));
+    app.fullscreen.pointer.update_pressed(Some(target));
+    app.fullscreen
+        .selection
+        .begin(ratatui::layout::Position::new(2, 1));
+    app.fullscreen
+        .selection
+        .drag(ratatui::layout::Position::new(4, 1));
     let mut settings = TerminalSettings::default();
-    settings.set_screen_mode(crate::terminal::ScreenMode::Native);
+    settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
     app.update(ConfigEvent::Updated(crate::config::ConfigEditResult {
         terminal: settings,
         status_line: StatusLineSettings::default(),
@@ -1622,9 +1631,9 @@ fn saved_main_screen_mode_clears_pointer_feedback_and_selection() {
         ),
     }));
     assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
-    assert!(app.hovered_pointer_target().is_none());
-    assert!(app.pressed_pointer_target().is_none());
-    assert!(app.screen_selection().range().is_none());
+    assert!(app.fullscreen.pointer.hovered().is_none());
+    assert!(app.fullscreen.pointer.pressed().is_none());
+    assert!(app.fullscreen.selection.range().is_none());
 }
 
 #[test]

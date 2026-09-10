@@ -24,3 +24,5 @@ pub(crate) use view::TranscriptScrollDirection;
 pub(crate) use view::TranscriptScrollTarget;
 pub(crate) use view::first_scroll_target;
 pub(crate) use view::scroll_target;
+
+pub(crate) mod viewport;

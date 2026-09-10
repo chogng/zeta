@@ -1,0 +1,21 @@
+---
+source: zeta-code/tui/src/app/mode_tests.rs
+assertion_line: 55
+expression: render(&app)
+---
+● message 09                                      
+                                                  
+● message 10                                      
+                                                  
+● message 11                                      
+                                                  
+● message 12                                      
+                                                  
+             Jump to bottom (click) ↓             
+  Queue 1: queued message · next                  
+                                                  
+──────────────────────────────────────────────────
+> shared draft                                    
+──────────────────────────────────────────────────
+                                                  
+  ⏸ ask permissions on
