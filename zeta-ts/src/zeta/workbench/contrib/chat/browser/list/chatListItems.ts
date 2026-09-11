@@ -99,6 +99,9 @@ export function chatTurnErrorListItem(turn: Turn, options: ChatTurnErrorListItem
 
 function turnErrorPresentation(turnId: string, error: TurnError): { readonly label: string; readonly detail: string; readonly action: ChatTurnErrorAction } {
 	switch (error.code) {
+		case "connectionFailed":
+		case "providerUnavailable":
+		case "providerHttp":
 		case "modelInvocationFailed":
 			return retryPresentation(turnId, "Model error", "The model request may have failed temporarily.");
 		case "contextOverflow":
@@ -107,6 +110,8 @@ function turnErrorPresentation(turnId: string, error: TurnError): { readonly lab
 				detail: "Automatic context recovery was exhausted. Start a new chat or send a smaller request.",
 				action: { type: "startNewChat", label: "Start new chat" },
 			};
+		case "modelConfiguration":
+		case "providerCredentials":
 		case "providerAuth":
 			return {
 				label: "Authentication",
@@ -123,6 +128,7 @@ function turnErrorPresentation(turnId: string, error: TurnError): { readonly lab
 			return retryPresentation(turnId, "Interaction expired", "The requested interaction expired before it received a response.");
 		case "toolRepetition":
 			return revisePresentation("Repeated tool failure", "The same tool and arguments failed five times. Ask Zeta to use a different approach or explain the blocker.");
+		case "rateLimited":
 		case "usageLimited":
 			return {
 				label: "Usage limit",

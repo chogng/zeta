@@ -165,6 +165,53 @@ impl GitTurnChangesRuntime {
         &self,
         origin: &ThreadOrigin,
     ) -> Result<(ManagedDirSource, ManagedDirTarget), CoreError> {
+        if let ThreadOrigin::Message { workspace, .. } = origin {
+            let zeta_protocol::WorkspaceCheckpoint::Git {
+                source_dir_id,
+                repositories,
+            } = workspace
+            else {
+                return Err(CoreError::Journal(
+                    "message has no restorable Git file snapshot".into(),
+                ));
+            };
+            if source_dir_id != self.dirs.id.as_str() {
+                return Err(CoreError::Journal(
+                    "message checkpoint belongs to a different source directory".into(),
+                ));
+            }
+            let mut trees = BTreeMap::new();
+            for repository in repositories {
+                let path = PathBuf::from(&repository.relative_path);
+                if path.as_os_str().is_empty()
+                    || path.components().any(|part| {
+                        !matches!(
+                            part,
+                            std::path::Component::Normal(_) | std::path::Component::CurDir
+                        )
+                    })
+                    || trees.insert(path, repository.tree_id.clone()).is_some()
+                {
+                    return Err(CoreError::Journal(
+                        "invalid repository paths in message checkpoint".into(),
+                    ));
+                }
+            }
+            let primary = repositories
+                .iter()
+                .find(|repository| repository.relative_path == ".")
+                .ok_or_else(|| {
+                    CoreError::Journal("message checkpoint has no primary repository".into())
+                })?;
+            return Ok((
+                ManagedDirSource::ImmutableTree {
+                    source_directory: self.dirs.root.clone(),
+                    tree_id: primary_tree(&trees)?,
+                    repository_trees: trees,
+                },
+                checkpoint_target(primary),
+            ));
+        }
         let parent_id = match origin {
             ThreadOrigin::Root => {
                 return Ok((
@@ -175,6 +222,9 @@ impl GitTurnChangesRuntime {
                 ));
             }
             ThreadOrigin::Fork {
+                parent_thread_id, ..
+            }
+            | ThreadOrigin::Message {
                 parent_thread_id, ..
             }
             | ThreadOrigin::Rewind {
@@ -191,6 +241,7 @@ impl GitTurnChangesRuntime {
             CoreError::Journal(format!("parent Thread {parent_id} has no dir binding"))
         })?;
         let source = match (origin, parent.kind()) {
+            (ThreadOrigin::Message { .. }, _) => unreachable!("message source returned above"),
             (ThreadOrigin::Rewind { .. }, ManagedDirKind::Directory) => {
                 return Err(CoreError::Journal(
                     "non-Git Threads do not have immutable Turn checkpoints".into(),
@@ -383,16 +434,64 @@ impl GitTurnChangesRuntime {
         let binding = self
             .dirs
             .runtime
-            .block_on(self.dirs.worktrees.provision(&ManagedDirProvisionRequest {
-                source,
-                target,
-                repository_targets: BTreeMap::new(),
-                source_dir_id: self.dirs.id.to_string(),
-                owner: ManagedDirOwner::Thread {
-                    thread_id: request.thread_id.to_string(),
-                },
-            }))
+            .block_on(
+                self.dirs.worktrees.provision(&ManagedDirProvisionRequest {
+                    source,
+                    target,
+                    repository_targets: match &request.origin {
+                        ThreadOrigin::Message {
+                            workspace: zeta_protocol::WorkspaceCheckpoint::Git { repositories, .. },
+                            ..
+                        } => repositories
+                            .iter()
+                            .filter(|checkpoint| checkpoint.relative_path != ".")
+                            .map(|checkpoint| {
+                                (
+                                    PathBuf::from(&checkpoint.relative_path),
+                                    checkpoint_target(checkpoint),
+                                )
+                            })
+                            .collect(),
+                        _ => BTreeMap::new(),
+                    },
+                    source_dir_id: self.dirs.id.to_string(),
+                    owner: ManagedDirOwner::Thread {
+                        thread_id: request.thread_id.to_string(),
+                    },
+                }),
+            )
             .map_err(|error| CoreError::Journal(format!("cannot provision Thread dir: {error}")))?;
+        if let ThreadOrigin::Message {
+            workspace: zeta_protocol::WorkspaceCheckpoint::Git { repositories, .. },
+            ..
+        } = &request.origin
+        {
+            let complete = binding.repositories().len() == repositories.len()
+                && binding.repositories().iter().all(|repository| {
+                    repositories.iter().any(|checkpoint| {
+                        repository.relative_path() == Path::new(&checkpoint.relative_path)
+                            && repository.repository_id() == checkpoint.repository_id
+                            && repository.baseline_tree() == checkpoint.tree_id
+                    })
+                });
+            if !complete {
+                self.dirs
+                    .runtime
+                    .block_on(self.dirs.worktrees.cleanup(
+                        &binding,
+                        worktree::ManagedDirCleanupEligibility::AllChangeSetsSettled,
+                    ))
+                    .map_err(|error| {
+                        CoreError::Journal(format!(
+                            "cannot clean incomplete checkpoint restoration: {error}"
+                        ))
+                    })?;
+                return Err(CoreError::Journal(
+                    "message checkpoint repository coverage no longer matches the source directory"
+                        .into(),
+                ));
+            }
+        }
         self.dirs
             .bindings
             .write()
@@ -411,6 +510,12 @@ impl GitTurnChangesRuntime {
         thread_id: &zeta_protocol::ThreadId,
         binding: &ManagedDirBinding,
     ) -> Result<(), CoreError> {
+        let source = self
+            .weak
+            .upgrade()
+            .ok_or_else(|| CoreError::Journal("Thread file owner was disposed".into()))?;
+        self.threads
+            .install_message_checkpoint_source(thread_id.clone(), source)?;
         self.dirs
             .bind_services(thread_id, binding)
             .map_err(CoreError::Journal)?;
@@ -419,5 +524,21 @@ impl GitTurnChangesRuntime {
                 .map_err(CoreError::Journal)?;
         }
         Ok(())
+    }
+}
+
+fn checkpoint_target(checkpoint: &zeta_protocol::RepositoryCheckpoint) -> ManagedDirTarget {
+    match (&checkpoint.target_branch, checkpoint.target_unborn) {
+        (Some(name), true) => ManagedDirTarget::UnbornBranch {
+            name: name.clone(),
+            anchor_object_id: checkpoint.target_head.clone(),
+        },
+        (Some(name), false) => ManagedDirTarget::Branch {
+            name: name.clone(),
+            object_id: checkpoint.target_head.clone(),
+        },
+        (None, _) => ManagedDirTarget::Detached {
+            object_id: checkpoint.target_head.clone(),
+        },
     }
 }

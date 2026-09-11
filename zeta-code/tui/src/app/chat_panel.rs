@@ -315,7 +315,10 @@ impl ChatPanel {
         self.top_tip.reset();
     }
 
-    pub(crate) fn poll_top_tip(&mut self, now: Instant) -> bool {
-        self.top_tip.poll(now)
+    pub(crate) fn poll_top_tip(&mut self, now: Instant, mode: crate::terminal::ScreenMode) -> bool {
+        match mode {
+            crate::terminal::ScreenMode::Fullscreen => self.top_tip.poll_fullscreen(now),
+            crate::terminal::ScreenMode::Inline => self.top_tip.poll(now),
+        }
     }
 }

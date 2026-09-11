@@ -6,6 +6,8 @@ mod git_turn_changes;
 mod graph;
 #[path = "sqlite/memories.rs"]
 mod memories;
+#[path = "sqlite/history.rs"]
+mod history;
 #[path = "sqlite/projects.rs"]
 mod projects;
 #[path = "sqlite/thread.rs"]

@@ -16,6 +16,8 @@ pub(crate) enum InstructionLayer {
     Product,
     Directory,
     Skill,
+    /// Per-invocation context appended after the reusable history prefix.
+    Turn,
 }
 
 /// Whether budget pressure may remove an instruction fragment.

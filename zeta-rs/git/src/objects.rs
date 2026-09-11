@@ -219,6 +219,29 @@ impl GitClient {
         Ok(())
     }
 
+    /// Retains the target commit needed to recreate a checkpoint's merge destination.
+    pub async fn pin_private_commit(
+        &self,
+        repository: &GitRepository,
+        reference: &GitPrivateRef,
+        object_id: &str,
+    ) -> GitResult<()> {
+        validate_object_id(object_id, "checkpoint target commit")?;
+        self.run_mutation(
+            repository.worktree_root(),
+            ["cat-file", "-e", &format!("{object_id}^{{commit}}")],
+        )
+        .await?
+        .require_success()?;
+        self.run_mutation(
+            repository.worktree_root(),
+            ["update-ref", reference.as_str(), object_id],
+        )
+        .await?
+        .require_success()?;
+        Ok(())
+    }
+
     /// Removes one private reachability ref. Missing refs are accepted by Git update-ref -d.
     pub async fn delete_private_ref(
         &self,
@@ -228,6 +251,31 @@ impl GitClient {
         self.run_mutation(
             repository.worktree_root(),
             ["update-ref", "-d", reference.as_str()],
+        )
+        .await?
+        .require_success()?;
+        Ok(())
+    }
+
+    /// Releases a retained checkpoint even after its linked working tree has been removed.
+    pub async fn delete_private_ref_at_git_dir(
+        &self,
+        git_directory: &Path,
+        reference: &GitPrivateRef,
+    ) -> GitResult<()> {
+        let directory = std::fs::canonicalize(git_directory).map_err(|error| GitError::Io {
+            operation: "resolve checkpoint Git directory",
+            source: error,
+        })?;
+        self.run_mutation(
+            &directory,
+            [
+                OsString::from("--git-dir"),
+                directory.as_os_str().to_owned(),
+                OsString::from("update-ref"),
+                OsString::from("-d"),
+                OsString::from(reference.as_str()),
+            ],
         )
         .await?
         .require_success()?;

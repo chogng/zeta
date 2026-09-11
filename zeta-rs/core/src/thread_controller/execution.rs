@@ -239,6 +239,8 @@ impl ThreadController {
                 snapshot,
                 vec![
                     ThreadEvent::ItemCompleted {
+                        checkpoint_after_sequence: None,
+                        workspace_checkpoint: None,
                         thread_id: thread_id.clone(),
                         turn_id: turn_id.clone(),
                         item: item.clone(),
@@ -278,6 +280,8 @@ impl ThreadController {
             let mut events = preceding_items
                 .into_iter()
                 .map(|item| ThreadEvent::ItemCompleted {
+                    checkpoint_after_sequence: None,
+                    workspace_checkpoint: None,
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
                     item,
@@ -285,6 +289,8 @@ impl ThreadController {
                 .collect::<Vec<_>>();
             events.extend([
                 ThreadEvent::ItemCompleted {
+                    checkpoint_after_sequence: None,
+                    workspace_checkpoint: None,
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
                     item: item.clone(),
@@ -317,6 +323,8 @@ impl ThreadController {
             let events = items
                 .into_iter()
                 .map(|item| ThreadEvent::ItemCompleted {
+                    checkpoint_after_sequence: None,
+                    workspace_checkpoint: None,
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
                     item,

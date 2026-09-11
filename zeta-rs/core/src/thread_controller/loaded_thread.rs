@@ -2,7 +2,7 @@ use crate::CoreError;
 use crate::ThreadSnapshot;
 use crate::ThreadStore;
 use crate::context_manager::ContextManager;
-use crate::reduce_thread_event;
+
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Condvar;
@@ -222,10 +222,11 @@ impl LoadedThreads {
         if events.is_empty() {
             return Err(CoreError::NotFound(thread_id.to_string()));
         }
+        let mut reader = crate::history::HistoryReader::new(self.store.as_ref(), &[]);
         events
             .iter()
             .try_fold(None, |snapshot, event| {
-                reduce_thread_event(snapshot, event).map(Some)
+                reader.reduce(snapshot, event).map(Some)
             })?
             .ok_or_else(|| CoreError::Journal("cannot recover an empty rollout".into()))
     }

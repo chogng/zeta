@@ -139,3 +139,40 @@ fn key_hint_style_applies_to_inline_panels_without_changing_hint_text() {
     assert_eq!(muted[(13, row)].fg, crate::render::test_context().muted());
     assert!(muted[(13, row)].modifier.contains(Modifier::ITALIC));
 }
+
+#[test]
+fn policy_stays_below_input_and_inline_tips_do_not_fade() {
+    use std::time::Duration;
+    use std::time::Instant;
+    let mut app = app();
+    let started = Instant::now();
+    app.show_policy_tip(started);
+    let before = render(&app, 80, 32);
+    let areas = super::layout(&app, before.area).session;
+    assert!(
+        text(&before)
+            .lines()
+            .last()
+            .unwrap()
+            .contains("⏸ ask permissions on")
+    );
+    assert!(!app.handle_tick(started + Duration::from_secs(4)));
+    assert_eq!(render(&app, 80, 32), before);
+    assert!(app.handle_tick(started + Duration::from_secs(5)));
+    let after = render(&app, 80, 32);
+    assert!(
+        text(&after)
+            .lines()
+            .nth(usize::from(areas.top_tip.y))
+            .unwrap()
+            .trim()
+            .is_empty()
+    );
+    assert!(
+        text(&after)
+            .lines()
+            .last()
+            .unwrap()
+            .contains("⏸ ask permissions on")
+    );
+}

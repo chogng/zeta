@@ -340,6 +340,21 @@ impl AppServer {
                     title,
                 )?,
             )),
+            SessionRequest::RestoreMessage {
+                thread_id,
+                item_id,
+                boundary,
+                title,
+            } => result(&SessionRequestResult::Thread(
+                self.restore_message_request(
+                    connection.connection_id,
+                    mutation,
+                    thread_id,
+                    item_id,
+                    boundary,
+                    title,
+                )?,
+            )),
             SessionRequest::ForkThread {
                 parent_thread_id,
                 title,
@@ -533,6 +548,102 @@ impl AppServer {
         Ok(SessionThreadResult {
             session: self.session_view(&mutation.session_id)?,
             thread_id: replaced.thread_id,
+        })
+    }
+
+    pub(super) fn message_checkpoints(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: zeta_app_server_protocol::protocol::session::MessageCheckpointsParams =
+            decode(params)?;
+        self.read_session_thread_snapshot(&params.session_id, &params.thread_id)?;
+        result(
+            &zeta_app_server_protocol::protocol::session::MessageCheckpointsResult {
+                checkpoints: self
+                    .threads
+                    .message_checkpoints(&params.thread_id)
+                    .map_err(core_error)?,
+            },
+        )
+    }
+
+    fn restore_message_request(
+        &self,
+        connection_id: u64,
+        mutation: SessionMutation,
+        thread_id: zeta_protocol::ThreadId,
+        item_id: zeta_protocol::ItemId,
+        boundary: zeta_protocol::MessageBoundary,
+        title: String,
+    ) -> Result<SessionThreadResult, RpcError> {
+        self.read_session_thread_snapshot(&mutation.session_id, &thread_id)?;
+        let restored = self
+            .threads
+            .restore_message(
+                self.thread_worktree_binder.as_ref(),
+                zeta_core::RestoreMessageRequest {
+                    command_id: mutation.command_id.clone(),
+                    source_thread_id: thread_id.clone(),
+                    item_id,
+                    boundary,
+                    title,
+                },
+            )
+            .map_err(core_error)?;
+        let zeta_protocol::ThreadOrigin::Message {
+            parent_sequence, ..
+        } = restored.origin
+        else {
+            return Err(core_error(zeta_core::CoreError::Journal(
+                "restoration origin is missing".into(),
+            )));
+        };
+        let source = self
+            .threads
+            .read_thread_at_sequence(&thread_id, parent_sequence)
+            .map_err(core_error)?;
+        for turn in source.turns.iter().filter(|turn| {
+            !matches!(
+                turn.status,
+                TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+            )
+        }) {
+            let current = self.threads.read_thread(&thread_id).map_err(core_error)?;
+            if current.turns.iter().any(|candidate| {
+                candidate.turn_id == turn.turn_id
+                    && !matches!(
+                        candidate.status,
+                        TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+                    )
+            }) {
+                self.interrupt_turn_request(
+                    thread_mutation(
+                        SessionMutation {
+                            session_id: mutation.session_id.clone(),
+                            command_id: zeta_protocol::CommandId::new(format!(
+                                "restore-interrupt:{}:{}",
+                                mutation.command_id, turn.turn_id
+                            ))
+                            .map_err(|error| {
+                                core_error(zeta_core::CoreError::InvalidInput(error.to_string()))
+                            })?,
+                        },
+                        current.sequence,
+                    ),
+                    thread_id.clone(),
+                    turn.turn_id.clone(),
+                )?;
+            }
+        }
+        self.updates.subscribe_session_thread(
+            connection_id,
+            mutation.session_id.clone(),
+            restored.thread_id.clone(),
+            0,
+        );
+        self.notify_thread_updates(&restored.thread_id, 0)?;
+        self.updates.publish_session_changed(&mutation.session_id);
+        Ok(SessionThreadResult {
+            session: self.session_view(&mutation.session_id)?,
+            thread_id: restored.thread_id,
         })
     }
 

@@ -56,6 +56,11 @@ impl CommandState {
 }
 
 pub(crate) enum CommandPreparation {
+    RestoreMessage {
+        item_id: zeta_protocol::ItemId,
+        boundary: zeta_protocol::MessageBoundary,
+        checkpoint_label: String,
+    },
     ExecuteProductCommand(super::composer::SlashCommandInvocation),
     RewindToCheckpoint {
         before_turn_id: TurnId,
@@ -185,6 +190,7 @@ pub(crate) fn prepare_command(
             Some(ThreadSnapshotHistory::Latest { .. }) | None => CommandPreparation::None,
         },
         Command::OpenRewindPicker => CommandPreparation::Request(CommandRequest::OpenRewindPicker),
+        Command::RestoreMessage { item_id, boundary, checkpoint_label } => CommandPreparation::RestoreMessage { item_id, boundary, checkpoint_label },
         Command::RewindToCheckpoint {
             before_turn_id,
             checkpoint_label,

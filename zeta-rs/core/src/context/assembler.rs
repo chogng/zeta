@@ -50,6 +50,7 @@ impl ContextAssembler {
                         .checked_sub(1)
                         .and_then(|index| u32::try_from(index).ok());
                 }
+                input.extend(turn_instruction_message(plan));
                 if let Some(evidence) = evidence_message(plan)? {
                     input.push(evidence);
                     active_user_turn = None;
@@ -298,7 +299,22 @@ fn directory_instruction_message(plan: &ContextPlan) -> Option<InputItem> {
     let body = plan
         .instructions()
         .iter()
-        .filter(|fragment| fragment.layer() >= InstructionLayer::Directory)
+        .filter(|fragment| {
+            fragment.layer() >= InstructionLayer::Directory
+                && fragment.layer() != InstructionLayer::Turn
+        })
+        .map(|fragment| fragment.body().trim())
+        .filter(|body| !body.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    (!body.is_empty()).then(|| InputItem::Message(Message::text(MessageRole::User, body)))
+}
+
+fn turn_instruction_message(plan: &ContextPlan) -> Option<InputItem> {
+    let body = plan
+        .instructions()
+        .iter()
+        .filter(|fragment| fragment.layer() == InstructionLayer::Turn)
         .map(|fragment| fragment.body().trim())
         .filter(|body| !body.is_empty())
         .collect::<Vec<_>>()

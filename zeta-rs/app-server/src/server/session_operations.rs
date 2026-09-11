@@ -272,6 +272,11 @@ impl AppServer {
         self.threads
             .delete_session_threads(&session_id)
             .map_err(core_error)?;
+        if let Some(runtime) = &self.git_turn_changes {
+            if let Err(error) = self.threads.collect_message_checkpoints(runtime.as_ref()) {
+                log::warn!("message checkpoint cleanup remains pending: {error}");
+            }
+        }
         self.clear_session_dirs(&session_id);
         self.updates.publish_session_deleted(&session_id);
         self.updates.forget_session(&session_id);

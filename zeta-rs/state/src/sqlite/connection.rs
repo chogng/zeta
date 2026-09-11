@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::{SqliteDurability, open_sqlite_database};
 
-const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 6;
+const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 7;
 
 pub(super) fn open(path: &Path) -> Result<Connection, String> {
     let mut connection = open_sqlite_database(path, SqliteDurability::Durable)?;
@@ -44,7 +44,8 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
     match locked_version {
         None => transaction
             .execute_batch(
-                "CREATE TABLE thread_streams (
+                "CREATE TABLE history_records (digest TEXT PRIMARY KEY, record_json TEXT NOT NULL);
+                 CREATE TABLE thread_streams (
                  thread_id TEXT PRIMARY KEY,
                  current_sequence INTEGER NOT NULL
              );
@@ -61,7 +62,7 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
                  sequence INTEGER NOT NULL,
                  event_id TEXT NOT NULL UNIQUE,
                  schema_version INTEGER NOT NULL,
-                 envelope_json TEXT NOT NULL,
+                 record_digest TEXT NOT NULL REFERENCES history_records(digest),
                  PRIMARY KEY (thread_id, sequence),
                  FOREIGN KEY (thread_id) REFERENCES thread_streams(thread_id)
              );
@@ -115,7 +116,7 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
                  DROP TABLE IF EXISTS session_streams;",
             )
             .map_err(sql_error)?,
-        Some(4) | Some(5) | Some(STORAGE_SQLITE_SCHEMA_VERSION) => {}
+        Some(4) | Some(5) | Some(6) | Some(STORAGE_SQLITE_SCHEMA_VERSION) => {}
         Some(version) => {
             return Err(format!(
                 "unsupported event-store SQLite schema version {version}"
@@ -174,6 +175,10 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
     ).map_err(sql_error)?;
     if locked_version.is_some_and(|version| version < 6) {
         super::graph::migrate_bindings(&transaction).map_err(sql_error)?;
+    }
+    if locked_version != Some(STORAGE_SQLITE_SCHEMA_VERSION) {
+        super::history::create_schema(&transaction)?;
+        if locked_version.is_some() { super::history::migrate_records(&transaction)?; }
     }
     transaction.commit().map_err(sql_error)?;
     Ok(connection)

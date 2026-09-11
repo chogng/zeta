@@ -28,9 +28,9 @@ expression: render(&app)
 
 
 ⠋ Starting · 0m 00s total
-                                                                         shift+tab to cycle policy
+  ⏸ ask permissions on                                                   shift+tab to cycle policy
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
   │ >                                                                                            │
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯
 
-  Enter send  ·  shift+tab permissions  ·  /home                              ⏸ ask permissions on
+  Enter send  ·  shift+tab permissions  ·  /home

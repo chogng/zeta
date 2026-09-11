@@ -724,6 +724,7 @@ pub(in crate::app) fn open_home(app: &mut App) {
     app.fullscreen.sessions.manager_mut().blur();
     app.fullscreen.home.selected = None;
     app.fullscreen.page = super::Page::Home;
+    app.chat_panel.reset_top_tip();
     app.fullscreen.focus_input();
 }
 

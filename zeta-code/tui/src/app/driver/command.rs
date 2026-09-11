@@ -278,6 +278,7 @@ impl AppDriver {
             command,
         );
         match preparation {
+            ThreadCommandPreparation::RestoreMessage { item_id, boundary, checkpoint_label } => self.execute_message_restore(request_key, item_id, boundary, checkpoint_label, origin),
             ThreadCommandPreparation::ExecuteProductCommand(invocation) => {
                 self.execute_product_command(request_key, invocation, origin);
             }
@@ -370,6 +371,46 @@ impl AppDriver {
                     command,
                     result: conversation
                         .rewind_active_thread(&mut client, before_turn_id, &checkpoint_label)
+                        .map_err(|error| error.to_string())
+                        .and_then(|change| {
+                            finish_conversation_request(
+                                &mut client,
+                                conversation,
+                                Some(subscription),
+                                change,
+                            )
+                        }),
+                })
+            },
+            &mut self.app,
+            origin,
+        );
+    }
+    fn execute_message_restore(
+        &mut self,
+        request_key: Option<RequestKey>,
+        item_id: zeta_protocol::ItemId,
+        boundary: zeta_protocol::MessageBoundary,
+        checkpoint_label: String,
+        origin: RequestOrigin,
+    ) {
+        let command = format!("/rewind {boundary:?} {checkpoint_label}");
+        self.app
+            .update(ThreadEvent::CommandStarted(command.clone()));
+        let mut client = self.client.clone();
+        let Some(current) = self.conversation.as_ref() else {
+            return;
+        };
+        let mut conversation = current.conversation.clone();
+        let subscription = current.subscription.clone();
+        self.requests.spawn(
+            request_key,
+            "zeta-tui-rewind-thread",
+            move || {
+                Completion::Sessions(SessionCompletion::Changed {
+                    command,
+                    result: conversation
+                        .restore_message(&mut client, item_id, boundary, &checkpoint_label)
                         .map_err(|error| error.to_string())
                         .and_then(|change| {
                             finish_conversation_request(

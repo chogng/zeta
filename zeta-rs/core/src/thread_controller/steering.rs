@@ -87,6 +87,8 @@ impl ThreadController {
             let mut events = items
                 .into_iter()
                 .map(|item| ThreadEvent::ItemCompleted {
+                    checkpoint_after_sequence: None,
+                    workspace_checkpoint: None,
                     thread_id: thread_id.clone(),
                     turn_id: request.turn_id.clone(),
                     item,

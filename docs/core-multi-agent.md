@@ -3,8 +3,7 @@
 > 状态：同一 Session 内的 Agent 树核心纵向切片已实现（2026-08-12）。`DelegationId`、`AgentMessageId`、`AgentJoinId`、`AgentContextSeed`、
 > `ThreadOrigin::AgentSpawn`、durable delegation/message/result events、Fresh child Thread spawn、
 > exact-once delivery、结构性 tree budget，以及 App Server 的 `spawn_agent`、
-> `send_agent_message`、`wait_agent` 工具已落地。`Selected/ForkedPrefix` 在 spawn 时物化并进入
-> immutable seed；All/Any/Quorum join、向下 cancellation tree 与 canonical Agent-tree projection
+> `send_agent_message`、`wait_agent` 工具已落地。`Selected` 和有界 `ForkedPrefix` 在 spawn 时物化进入 immutable seed；Full 通过不可变历史前缀保留原消息；All/Any/Quorum join、向下 cancellation tree 与 canonical Agent-tree projection
 > 均使用 durable Thread/Session facts。Agent role 按 Default 或精确 source/name 选择，会
 > 冻结 generation、digest、reason、自身 Tool、下放 Tool 与 Skill 上限；每一代委托只能从祖先下放
 > 上限继续收窄。Desktop 只消费 canonical tree 并可精确
@@ -664,3 +663,11 @@ projection，不公开 coordinator 内部状态机。
 - 同 Session Agent 树与跨 Session 独立 Agent 协作保持不同的身份、消息、取消、预算和恢复语义；
 - Team 只组合 Agent 树、工作协调和验证视图，不成为新的运行时事实源；
 - 在出现真实多 Thread Agent identity 需求前不增加 Agent aggregate。
+
+## 完整历史继承
+
+- 新 Full 委托把父 Thread 原事件冻结成共享前缀，子 Thread 只保存绑定和自身事件；不把完整对话改写成一段指令文本。
+- Selected、LastTurns、CheckpointAndTail 仍只接收所选内容，不能为了共享存储扩大可见历史。
+- 委托说明放在可复用前缀之后；角色与权限仍按子 Agent 独立冻结，因此不同权限不保证相同缓存请求。
+- 未完成的父执行在继承处中断；已有工具调用保留并附中断结果，子 Thread 不继承原执行资格。
+- 消息恢复属于同一 Agent 的新执行分支，委托才创建独立 Agent 身份。文件和历史生命周期见 [`protocol.md`](protocol.md#6-消息恢复点与共享历史)。

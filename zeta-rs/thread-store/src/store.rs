@@ -23,6 +23,7 @@ pub struct ThreadCatalogRecord {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ThreadEventBatch {
+    pub history_prefixes: Vec<zeta_history::HistoryPrefix>,
     pub batch_id: String,
     pub thread_id: ThreadId,
     pub expected_sequence: u64,
@@ -63,6 +64,18 @@ pub trait ThreadStore: agent_graph_store::AgentGraphStore {
     fn delete_session(&self, session_id: &SessionId) -> Result<Vec<ThreadId>, ThreadStoreError>;
 
     fn load(&self, thread_id: &ThreadId) -> Result<Vec<StoredEvent>, ThreadStoreError>;
+
+    /// Resolves and verifies a retained original prefix, including after source Thread deletion.
+    fn load_history_prefix(
+        &self,
+        prefix: &zeta_protocol::HistoryPrefixRef,
+    ) -> Result<zeta_history::HistoryPrefix, ThreadStoreError>;
+
+    /// Durable cleanup work created only after the last retained history reference is removed.
+    fn pending_checkpoint_cleanup(
+        &self,
+    ) -> Result<Vec<(String, zeta_protocol::RepositoryCheckpoint)>, ThreadStoreError>;
+    fn acknowledge_checkpoint_cleanup(&self, key: &str) -> Result<(), ThreadStoreError>;
 
     fn append_batch(&self, batch: &ThreadEventBatch)
     -> Result<AppendBatchResult, ThreadStoreError>;
@@ -119,6 +132,23 @@ pub fn validate_append_batch(
                 ));
             }
         }
+        if let zeta_protocol::ThreadEvent::ItemCompleted {
+            checkpoint_after_sequence: Some(after),
+            ..
+        } = &event.event
+        {
+            if *after < sequence
+                || *after > batch.expected_sequence + batch.events.len() as u64
+                || batch.events[index + 1..].iter().any(|next| {
+                    next.sequence <= *after
+                        && matches!(next.event, zeta_protocol::ThreadEvent::ItemCompleted { .. })
+                })
+            {
+                return Err(ThreadStoreError::InvalidBatch(
+                    "message checkpoint crosses another message or its atomic commit".into(),
+                ));
+            }
+        }
         if event.thread_id != batch.thread_id
             || event.event.thread_id() != &batch.thread_id
             || event.sequence != sequence
@@ -166,6 +196,9 @@ pub fn validate_binding_source(
             return Ok(());
         }
         zeta_protocol::ThreadOrigin::Fork {
+            parent_sequence, ..
+        }
+        | zeta_protocol::ThreadOrigin::Message {
             parent_sequence, ..
         }
         | zeta_protocol::ThreadOrigin::AgentSpawn {

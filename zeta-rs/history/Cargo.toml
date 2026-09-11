@@ -12,10 +12,8 @@ path = "src/lib.rs"
 
 [dependencies]
 serde = { workspace = true }
-zeta-protocol = { workspace = true }
-
-[dev-dependencies]
 serde_json = { workspace = true }
+zeta-protocol = { workspace = true }
 
 [lints]
 workspace = true

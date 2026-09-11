@@ -28,9 +28,9 @@ expression: render(&app)
 
 
 
-                                                                                      ← for agents
+  ⏸ ask permissions on                                                                ← for agents
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
   │ >                                                                                            │
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯
 
-  Enter send  ·  shift+tab permissions  ·  /home                              ⏸ ask permissions on
+  Enter send  ·  shift+tab permissions  ·  /home

@@ -21,6 +21,7 @@ pub use store::TurnChangeStoreError;
 #[cfg(test)]
 #[path = "turn_changes_tests.rs"]
 mod tests;
+pub use ledger::MessageCaptureTarget;
 pub use ledger::RepositoryCaptureTarget;
 pub use ledger::ToolChangeScope;
 pub use ledger::TurnChangeBeginRequest;
@@ -28,4 +29,5 @@ pub use ledger::TurnChangeLedger;
 pub use ledger::TurnChangeLedgerError;
 pub use ledger::TurnChangeSealRequest;
 pub use watcher::GitTurnChangeWatcher;
+pub use watcher::WriteCheckpointLease;
 pub use watcher::WriteLifecycleTracker;

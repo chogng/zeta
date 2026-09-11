@@ -408,3 +408,37 @@ fn run_git(root: &std::path::Path, arguments: &[&str]) -> String {
     );
     String::from_utf8(output.stdout).unwrap().trim().to_string()
 }
+
+#[test]
+fn checkpoint_leases_exclude_writes_only_in_their_own_thread() {
+    let tracker = crate::WriteLifecycleTracker::default();
+    let first = ThreadId::new("first").unwrap();
+    let second = ThreadId::new("second").unwrap();
+    let turn = TurnId::new("turn").unwrap();
+    tracker.begin(&first, &turn).unwrap();
+    assert!(tracker.try_checkpoint(&first).unwrap().is_none());
+    let lease = tracker.try_checkpoint(&second).unwrap().unwrap();
+    tracker.end(&first, &turn);
+    assert!(tracker.try_checkpoint(&first).unwrap().is_some());
+    let writer = tracker.clone();
+    let (started, waiting) = std::sync::mpsc::channel();
+    let (finished, complete) = std::sync::mpsc::channel();
+    let second_thread = second.clone();
+    let worker = std::thread::spawn(move || {
+        started.send(()).unwrap();
+        writer.begin(&second_thread, &turn).unwrap();
+        finished.send(()).unwrap();
+        writer.end(&second_thread, &turn);
+    });
+    waiting.recv().unwrap();
+    assert!(matches!(
+        complete.recv_timeout(std::time::Duration::from_millis(30)),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+    ));
+    drop(lease);
+    complete
+        .recv_timeout(std::time::Duration::from_secs(2))
+        .unwrap();
+    worker.join().unwrap();
+    assert!(tracker.try_checkpoint(&second).unwrap().is_some());
+}

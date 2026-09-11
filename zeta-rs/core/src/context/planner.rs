@@ -209,11 +209,7 @@ impl ContextPlanner {
             }
             let source_items = model_items
                 .iter()
-                .filter(|item| {
-                    input
-                        .item_sequence(item.item_id())
-                        .is_some_and(|sequence| sequence <= covered_end_sequence)
-                })
+                .filter(|item| covered_turns.contains(item.turn_id()))
                 .cloned()
                 .collect();
             return Ok(ContextPreparation::NeedsCompaction(CompactionPlan {
@@ -352,11 +348,7 @@ impl ContextPlanner {
         }
         let source_items = model_items
             .iter()
-            .filter(|item| {
-                input
-                    .item_sequence(item.item_id())
-                    .is_some_and(|sequence| sequence <= covered_end_sequence)
-            })
+            .filter(|item| covered_turns.contains(item.turn_id()))
             .cloned()
             .collect::<Vec<_>>();
         let history_tokens =
@@ -428,7 +420,7 @@ impl ContextPlanner {
             ResolvedContextBudget::ProviderManaged => None,
             ResolvedContextBudget::CoreManaged(budget) => Some(budget.maximum_compaction_input()),
         };
-        let mut selected_groups = Vec::new();
+        let mut selected_groups = Vec::<&TurnGroup>::new();
         let mut first_required = None;
         for group in safe_groups {
             let covered_end_sequence = group
@@ -440,9 +432,10 @@ impl ContextPlanner {
             let source_items = model_items
                 .iter()
                 .filter(|item| {
-                    input
-                        .item_sequence(item.item_id())
-                        .is_some_and(|sequence| sequence <= covered_end_sequence)
+                    item.turn_id() == &group.turn_id
+                        || selected_groups
+                            .iter()
+                            .any(|selected| item.turn_id() == &selected.turn_id)
                 })
                 .cloned()
                 .collect::<Vec<_>>();
@@ -485,11 +478,7 @@ impl ContextPlanner {
             .unwrap_or(checkpoint_end);
         let source_items = model_items
             .iter()
-            .filter(|item| {
-                input
-                    .item_sequence(item.item_id())
-                    .is_some_and(|sequence| sequence <= covered_end_sequence)
-            })
+            .filter(|item| covered_turns.contains(item.turn_id()))
             .cloned()
             .collect::<Vec<_>>();
         let history_tokens =
@@ -735,11 +724,7 @@ fn bounded_compaction_prefix(
             .unwrap_or(checkpoint_end);
         let source_items = model_items
             .iter()
-            .filter(|item| {
-                input
-                    .item_sequence(item.item_id())
-                    .is_some_and(|sequence| sequence <= covered_end_sequence)
-            })
+            .filter(|item| selected.contains(item.turn_id()))
             .cloned()
             .collect::<Vec<_>>();
         let required = estimate_compaction_input(

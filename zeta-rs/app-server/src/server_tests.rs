@@ -5680,3 +5680,79 @@ fn agent_identity_spans_tasks_forks_and_replacement_through_rpc() {
     );
     assert!(unknown.get("error").is_some());
 }
+
+#[test]
+fn message_restore_interrupts_the_source_and_replays_without_interrupting_later_work() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let created = create_session(&server, &mut connection, 2, "restore-session");
+    let session = created["result"]["session"]["sessionId"].as_str().unwrap();
+    let source = zeta_protocol::ThreadId::new(session).unwrap();
+    let start = |command: &str| {
+        server
+            .threads()
+            .start_turn(
+                &source,
+                StartTurnRequest {
+                    command_id: zeta_protocol::CommandId::new(command).unwrap(),
+                    expected_sequence: zeta_core::SequenceExpectation::Any,
+                    model: None,
+                    kind: Default::default(),
+                    instructions: zeta_prompts::AGENT_INSTRUCTIONS.freeze(),
+                    policy_revision: "test".into(),
+                    approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                    tool_mode: zeta_protocol::ToolMode::Direct,
+                    tool_profile: None,
+                    activated_skills: vec![],
+                    input: vec![zeta_protocol::UserInput::Text {
+                        text: command.into(),
+                    }],
+                },
+            )
+            .unwrap()
+    };
+    let first = start("active");
+    let checkpoints = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/thread/checkpoints","params":{"sessionId":session,"threadId":source}}),
+    );
+    let item = checkpoints["result"]["checkpoints"][0]["itemId"]
+        .as_str()
+        .unwrap();
+    let restore = |id| serde_json::json!({"jsonrpc":"2.0","id":id,"method":"session/request","params":{"sessionId":session,"commandId":"restore-active","request":{"type":"restoreMessage","threadId":source,"itemId":item,"boundary":"after","title":"restored"}}});
+    let restored = call(&server, &mut connection, restore(4));
+    assert!(restored.get("error").is_none(), "{restored}");
+    let current = server.threads().read_thread(&source).unwrap();
+    assert_eq!(current.turns[0].turn_id, first.turn_id);
+    assert_eq!(current.turns[0].status, TurnStatus::Interrupted);
+    let branch = server
+        .threads()
+        .read_thread(
+            &zeta_protocol::ThreadId::new(
+                restored["result"]["value"]["threadId"].as_str().unwrap(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    assert_eq!(branch.agent_id, current.agent_id);
+    assert_eq!(branch.items, current.items);
+    assert_eq!(branch.turns[0].status, TurnStatus::Interrupted);
+    let later = start("later work");
+    let replay = call(&server, &mut connection, restore(5));
+    assert!(replay.get("error").is_none(), "{replay}");
+    assert_eq!(
+        replay["result"]["value"]["threadId"],
+        restored["result"]["value"]["threadId"]
+    );
+    assert!(
+        server
+            .threads()
+            .read_thread(&source)
+            .unwrap()
+            .turns
+            .iter()
+            .any(|turn| turn.turn_id == later.turn_id && turn.status != TurnStatus::Interrupted)
+    );
+}

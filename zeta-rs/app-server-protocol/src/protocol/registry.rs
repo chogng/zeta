@@ -566,6 +566,13 @@ use crate::protocol::session::SessionCreateParams;
 use crate::protocol::session::SessionDeleted;
 use crate::protocol::session::SessionListResult;
 use crate::protocol::session::SessionReadParams;
+use crate::protocol::session::MessageCheckpointsParams;
+use crate::protocol::session::MessageCheckpointsResult;
+use zeta_protocol::MessageCheckpoint;
+use zeta_protocol::MessageBoundary;
+use zeta_protocol::WorkspaceCheckpoint;
+use zeta_protocol::RepositoryCheckpoint;
+use zeta_protocol::HistoryPrefixRef;
 use crate::protocol::session::SessionRequest;
 use crate::protocol::session::SessionRequestParams;
 use crate::protocol::session::SessionRequestResult;
@@ -1329,6 +1336,11 @@ client_methods! {
     SessionRead => "session/read" {
         params: SessionReadParams,
         response: SessionResult,
+        serialization: SessionSharedRead,
+    },
+    MessageCheckpoints => "session/thread/checkpoints" {
+        params: MessageCheckpointsParams,
+        response: MessageCheckpointsResult,
         serialization: SessionSharedRead,
     },
     SessionList => "session/list" {
@@ -3031,6 +3043,13 @@ typescript_bindings! {
     ApprovalMode,
     SessionCreateParams,
     SessionReadParams,
+    MessageCheckpointsParams,
+    MessageCheckpointsResult,
+    MessageCheckpoint,
+    MessageBoundary,
+    WorkspaceCheckpoint,
+    RepositoryCheckpoint,
+    HistoryPrefixRef,
     AgentId,
     AgentReadParams,
     AgentReadResult,

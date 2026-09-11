@@ -677,6 +677,22 @@ impl agent_graph_store::AgentGraphStore for ToggleStore {
 }
 
 impl ThreadStore for ToggleStore {
+    fn pending_checkpoint_cleanup(
+        &self,
+    ) -> Result<Vec<(String, zeta_protocol::RepositoryCheckpoint)>, ThreadStoreError> {
+        Ok(Vec::new())
+    }
+    fn acknowledge_checkpoint_cleanup(&self, _: &str) -> Result<(), ThreadStoreError> {
+        Ok(())
+    }
+
+    fn load_history_prefix(
+        &self,
+        _prefix: &zeta_protocol::HistoryPrefixRef,
+    ) -> Result<zeta_history::HistoryPrefix, ThreadStoreError> {
+        Err(ThreadStoreError::Storage("no history prefix".into()))
+    }
+
     fn list_session_thread_ids(
         &self,
         session_id: &SessionId,
@@ -750,10 +766,7 @@ fn context_checkpoint_is_durable_before_projection_and_recovers_exactly() {
         .unwrap();
     let source = threads.read_thread(&thread).unwrap();
     let checkpoint = threads
-        .commit_context_checkpoint(
-            &thread,
-            checkpoint_request(source.sequence, source.sequence),
-        )
+        .commit_context_checkpoint(&thread, checkpoint_request(&source, source.sequence))
         .unwrap();
 
     assert_eq!(
@@ -771,7 +784,7 @@ fn context_checkpoint_is_durable_before_projection_and_recovers_exactly() {
 }
 
 #[test]
-fn fork_persists_large_history_as_ordered_turn_facts() {
+fn fork_retains_large_history_without_copying_turn_events() {
     let store = Arc::new(InMemoryThreadStore::default());
     let threads = ThreadController::with_store(store.clone());
     let source_thread_id = create_thread(&threads, "large-fork-source");
@@ -804,25 +817,20 @@ fn fork_persists_large_history_as_ordered_turn_facts() {
         .into_iter()
         .filter(|event| event.thread_id == child_thread_id)
         .collect::<Vec<_>>();
-    assert_eq!(
-        child_events
-            .iter()
-            .filter(|event| matches!(event.event, ThreadEvent::ForkTurnImported { .. }))
-            .count(),
-        64
-    );
-    assert!(matches!(
-        child_events.last().map(|event| &event.event),
-        Some(ThreadEvent::ForkHistoryImportCompleted {
-            imported_turn_count: 64,
-            ..
-        })
-    ));
+    assert_eq!(child_events.len(), 2);
+    let ThreadEvent::HistoryPrefixBound { prefix, .. } = &child_events[1].event else {
+        panic!("fork must bind an immutable prefix");
+    };
+    let retained = store.load_history_prefix(prefix).unwrap();
+    assert_eq!(retained.events.len() as u64, source_sequence);
     assert!(
-        !child_events
+        retained
+            .events
             .iter()
-            .any(|event| matches!(event.event, ThreadEvent::ForkHistoryImported { .. }))
+            .all(|event| event.thread_id == prefix.source_thread_id)
     );
+    let restarted = ThreadController::with_store(store);
+    assert_eq!(restarted.read_thread(&child_thread_id).unwrap(), child);
 }
 
 #[test]
@@ -837,7 +845,7 @@ fn forked_thread_can_supersede_an_inherited_checkpoint() {
     let inherited = threads
         .commit_context_checkpoint(
             &source_thread_id,
-            checkpoint_request(source.sequence, source.sequence),
+            checkpoint_request(&source, source.sequence),
         )
         .unwrap();
     let source_sequence = threads.read_thread(&source_thread_id).unwrap().sequence;
@@ -858,10 +866,7 @@ fn forked_thread_can_supersede_an_inherited_checkpoint() {
     let child = threads.read_thread(&child_thread_id).unwrap();
 
     let child_checkpoint = threads
-        .commit_context_checkpoint(
-            &child_thread_id,
-            checkpoint_request(child.sequence, child.sequence),
-        )
+        .commit_context_checkpoint(&child_thread_id, checkpoint_request(&child, child.sequence))
         .unwrap();
 
     let checkpoints = threads
@@ -896,7 +901,7 @@ fn context_overflow_recovery_checkpoint_is_bound_once_to_the_running_turn() {
         .commit_context_overflow_recovery(
             &thread,
             &current_turn,
-            checkpoint_request(source.sequence, covered_end_sequence),
+            checkpoint_request(&source, covered_end_sequence),
         )
         .unwrap();
 
@@ -915,7 +920,7 @@ fn context_overflow_recovery_checkpoint_is_bound_once_to_the_running_turn() {
             .commit_context_overflow_recovery(
                 &thread,
                 &current_turn,
-                checkpoint_request(committed.sequence, covered_end_sequence),
+                checkpoint_request(&committed, covered_end_sequence),
             )
             .is_err()
     );
@@ -965,7 +970,7 @@ fn failed_checkpoint_commit_does_not_expose_an_uncommitted_summary() {
         threads
             .commit_context_checkpoint(
                 &thread,
-                checkpoint_request(source_sequence, source_sequence),
+                checkpoint_request(&threads.read_thread(&thread).unwrap(), source_sequence),
             )
             .is_err()
     );
@@ -979,11 +984,22 @@ fn failed_checkpoint_commit_does_not_expose_an_uncommitted_summary() {
 }
 
 fn checkpoint_request(
-    source_thread_sequence: u64,
+    snapshot: &ThreadSnapshot,
     covered_end_sequence: u64,
 ) -> CommitContextCheckpointRequest {
     CommitContextCheckpointRequest {
-        source_thread_sequence,
+        source_thread_sequence: snapshot.sequence,
+        referenced_items: snapshot
+            .items
+            .iter()
+            .filter(|item| {
+                snapshot
+                    .item_sequences
+                    .get(item.item_id())
+                    .is_some_and(|sequence| *sequence <= covered_end_sequence)
+            })
+            .map(|item| item.item_id().clone())
+            .collect(),
         covered: ContextSourceRange {
             start_sequence: 1,
             end_sequence: covered_end_sequence,
@@ -1137,6 +1153,22 @@ impl agent_graph_store::AgentGraphStore for PerThreadBlockingStore {
 }
 
 impl ThreadStore for PerThreadBlockingStore {
+    fn pending_checkpoint_cleanup(
+        &self,
+    ) -> Result<Vec<(String, zeta_protocol::RepositoryCheckpoint)>, ThreadStoreError> {
+        Ok(Vec::new())
+    }
+    fn acknowledge_checkpoint_cleanup(&self, _: &str) -> Result<(), ThreadStoreError> {
+        Ok(())
+    }
+
+    fn load_history_prefix(
+        &self,
+        prefix: &zeta_protocol::HistoryPrefixRef,
+    ) -> Result<zeta_history::HistoryPrefix, ThreadStoreError> {
+        self.inner.load_history_prefix(prefix)
+    }
+
     fn list_session_thread_ids(
         &self,
         session_id: &SessionId,

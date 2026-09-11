@@ -85,31 +85,57 @@ impl ThreadController {
         }
 
         let thread_id = request.thread_id;
-        let (snapshot, batch) = self.project_batch(
+        let mut prefixes = Vec::new();
+        let mut prefix_event = None;
+        if matches!(
+            request.context_seed.inheritance,
+            zeta_protocol::AgentContextMode::ForkedPrefix {
+                selection: zeta_protocol::ForkedAgentContext::Full
+            }
+        ) && request.context_seed.materialized_context.is_empty()
+        {
+            let prefix = zeta_history::HistoryPrefix {
+                events: self
+                    .store
+                    .load(&request.context_seed.parent_thread_id)?
+                    .into_iter()
+                    .take_while(|event| event.sequence <= request.context_seed.parent_sequence)
+                    .collect(),
+            };
+            prefix_event = Some(ThreadEvent::HistoryPrefixBound {
+                thread_id: thread_id.clone(),
+                prefix: prefix.reference().map_err(CoreError::Journal)?,
+            });
+            prefixes.push(prefix);
+        }
+        let mut events = vec![
+            ThreadEvent::ThreadCreated {
+                agent_id: Some(
+                    zeta_protocol::AgentId::new(format!("agent:{thread_id}"))
+                        .map_err(|error| CoreError::InvalidInput(error.to_string()))?,
+                ),
+                origin: ThreadOrigin::AgentSpawn {
+                    parent_thread_id: request.context_seed.parent_thread_id.clone(),
+                    parent_sequence: request.context_seed.parent_sequence,
+                    delegation_id: request.context_seed.delegation_id.clone(),
+                },
+                agent: None,
+                session_id: request.session_id,
+                thread_id: thread_id.clone(),
+                title: request.title,
+            },
+            ThreadEvent::AgentContextSeedCommitted {
+                thread_id: thread_id.clone(),
+                seed: Box::new(request.context_seed),
+            },
+        ];
+        events.extend(prefix_event);
+        let (snapshot, batch) = self.project_batch_with_history(
             None,
             &thread_id,
-            vec![
-                ThreadEvent::ThreadCreated {
-                    agent_id: Some(
-                        zeta_protocol::AgentId::new(format!("agent:{thread_id}"))
-                            .map_err(|error| CoreError::InvalidInput(error.to_string()))?,
-                    ),
-                    origin: ThreadOrigin::AgentSpawn {
-                        parent_thread_id: request.context_seed.parent_thread_id.clone(),
-                        parent_sequence: request.context_seed.parent_sequence,
-                        delegation_id: request.context_seed.delegation_id.clone(),
-                    },
-                    agent: None,
-                    session_id: request.session_id,
-                    thread_id: thread_id.clone(),
-                    title: request.title,
-                },
-                ThreadEvent::AgentContextSeedCommitted {
-                    thread_id: thread_id.clone(),
-                    seed: Box::new(request.context_seed),
-                },
-            ],
+            events,
             BatchCommand::None,
+            prefixes,
         )?;
         self.commit_batch(&batch)?;
         *loaded = Some(self.loaded_threads.install(snapshot.clone()));

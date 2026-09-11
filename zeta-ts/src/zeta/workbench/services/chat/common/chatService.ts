@@ -42,7 +42,7 @@ export type ThreadItem =
 export type TurnStatus = "created" | "running" | "waitingForApproval" | "waitingForUserInput" | "waitingForCapability" | "cancelling" | "completed" | "failed" | "interrupted";
 
 export interface TurnError {
-	readonly code: "modelInvocationFailed" | "contextOverflow" | "providerAuth" | "invalidRequest" | "invalidResponse" | "completionPersistenceFailed" | "interactionDeadlineElapsed" | "toolRepetition" | "usageLimited" | "worktreeCaptureFailed";
+	readonly code: "modelConfiguration" | "providerCredentials" | "rateLimited" | "connectionFailed" | "providerUnavailable" | "providerHttp" | "modelInvocationFailed" | "contextOverflow" | "providerAuth" | "invalidRequest" | "invalidResponse" | "completionPersistenceFailed" | "interactionDeadlineElapsed" | "toolRepetition" | "usageLimited" | "worktreeCaptureFailed";
 	readonly message: string;
 	readonly retryable: boolean;
 }
@@ -98,6 +98,7 @@ export interface ThreadGoal {
 export type ThreadOrigin =
 	| { readonly type: "root" }
 	| { readonly type: "fork"; readonly parentThreadId: ThreadId; readonly parentSequence: number }
+	| { readonly type: "message"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly itemId: string; readonly boundary: "before" | "after" }
 	| { readonly type: "rewind"; readonly parentThreadId: ThreadId; readonly beforeTurnId: string }
 	| { readonly type: "agentSpawn"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly delegationId: string }
 	| { readonly type: "replacement"; readonly sourceThreadId: ThreadId; readonly sourceSequence: number };
@@ -148,11 +149,13 @@ export type ThreadCommittedEvent =
 	| { readonly type:
 		"threadCreated"
 		| "threadArchived"
+		| "threadRestored"
 		| "goalCreated"
 		| "goalUpdated"
 		| "goalCleared"
 		| "turnExecutionBound"
 		| "agentContextSeedCommitted"
+		| "historyPrefixBound"
 			| "historyImported"
 			| "forkHistoryImported"
 			| "forkTurnImported"
@@ -165,6 +168,7 @@ export type ThreadCommittedEvent =
 		| "turnSteerDelivered"
 		| "turnExecutionAttempted"
 		| "modelUsageRecorded"
+		| "modelInvocationRecorded"
 		| "itemCompleted"
 		| "planUpdated"
 		| "interactionResolved"

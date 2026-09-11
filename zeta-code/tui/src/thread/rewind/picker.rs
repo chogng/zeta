@@ -12,6 +12,11 @@ use zeta_protocol::TurnId;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum RewindSelectionAction {
+    RestoreMessage {
+        item_id: zeta_protocol::ItemId,
+        boundary: zeta_protocol::MessageBoundary,
+        checkpoint_label: String,
+    },
     Rewind {
         before_turn_id: TurnId,
         checkpoint_label: String,
@@ -20,15 +25,18 @@ pub(crate) enum RewindSelectionAction {
 
 pub(crate) type RewindChoices = ListSelectionSpec<RewindSelectionAction>;
 
-pub(crate) fn rewind_choices(thread: &Thread) -> RewindChoices {
+pub(crate) fn rewind_choices(
+    thread: &Thread,
+    points: &[zeta_protocol::MessageCheckpoint],
+) -> RewindChoices {
     let checkpoints = thread
         .turns
         .iter()
         .filter_map(|turn| checkpoint_text(&turn.items).map(|text| (turn, text)))
+        .filter(|(turn, _)| !points.iter().any(|point| point.turn_id == turn.turn_id))
         .collect::<Vec<_>>();
-    let total = checkpoints.len();
     let mut actions = BTreeMap::new();
-    let items = checkpoints
+    let mut items = checkpoints
         .iter()
         .enumerate()
         .map(|(index, (turn, text))| {
@@ -41,17 +49,42 @@ pub(crate) fn rewind_choices(thread: &Thread) -> RewindChoices {
                     checkpoint_label: checkpoint_label.clone(),
                 },
             );
-            let removed = total.saturating_sub(index);
             ListSelectionItem::new(format!("{}. {checkpoint_label}", index + 1))
                 .with_id(item_id)
-                .with_description(format!(
-                    "remove this checkpoint and {remaining} later turn{suffix}",
-                    remaining = removed.saturating_sub(1),
-                    suffix = if removed == 2 { "" } else { "s" }
-                ))
+                .with_description("restore before this turn; keep the original branch")
         })
         .collect::<Vec<_>>();
-    let selected = items.len().saturating_sub(1);
+    for item in thread.turns.iter().flat_map(|turn| &turn.items) {
+        let Some(point) = points.iter().find(|point| &point.item_id == item.item_id()) else {
+            continue;
+        };
+        let label = message_label(item);
+        if let zeta_protocol::WorkspaceCheckpoint::Unavailable { reason } = &point.workspace {
+            items.push(
+                ListSelectionItem::new(format!("Unavailable: {label}")).with_description(reason),
+            );
+            continue;
+        }
+        for (boundary, side) in [
+            (zeta_protocol::MessageBoundary::Before, "Before"),
+            (zeta_protocol::MessageBoundary::After, "After"),
+        ] {
+            let id = ListSelectionItemId::new(format!("message:{side}:{}", point.item_id));
+            actions.insert(
+                id.clone(),
+                RewindSelectionAction::RestoreMessage {
+                    item_id: point.item_id.clone(),
+                    boundary,
+                    checkpoint_label: label.clone(),
+                },
+            );
+            items.push(ListSelectionItem::new(format!("{side} {label}")).with_id(id));
+        }
+    }
+    let selected = items
+        .iter()
+        .rposition(|item| item.id().is_some())
+        .unwrap_or(0);
 
     RewindChoices {
         model: ListSelectionModel::new(
@@ -65,6 +98,22 @@ pub(crate) fn rewind_choices(thread: &Thread) -> RewindChoices {
         .with_empty_message("No message checkpoints available"),
         actions,
     }
+}
+
+fn message_label(item: &ThreadItem) -> String {
+    let (kind, text) = match item {
+        ThreadItem::UserMessage { text, .. } => ("user", text.as_str()),
+        ThreadItem::UserContext { content, .. } => ("context", content.as_str()),
+        ThreadItem::UserImage { .. } | ThreadItem::UserImageAttachment { .. } => {
+            ("user", "[Image]")
+        }
+        ThreadItem::AgentMessage { text, .. } => ("assistant", text.as_str()),
+        ThreadItem::Reasoning { text, .. } => ("reasoning", text.as_str()),
+        ThreadItem::Plan { text, .. } => ("plan", text.as_str()),
+        ThreadItem::ToolCall { name, .. } => ("tool call", name.as_str()),
+        ThreadItem::ToolResult { text, .. } => ("tool result", text.as_str()),
+    };
+    format!("{kind}: {}", compact_label(text))
 }
 
 fn checkpoint_text(items: &[ThreadItem]) -> Option<String> {

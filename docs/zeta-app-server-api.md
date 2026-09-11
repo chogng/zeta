@@ -137,7 +137,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 ```json
 {
   "serverInfo": { "name": "zeta-app-server", "version": "0.1.0" },
-  "protocolVersion": { "major": 2, "revision": 1 },
+  "protocolVersion": { "major": 4, "revision": 1 },
   "schemaHash": "sha256:...",
   "capabilities": {
     "sessions": true,
@@ -617,7 +617,7 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 
 `agent` 使用 `{ "type": "default" }` 或 `{ "type": "exact", "source": { "type": "builtIn" }, "name": "issue" }`；目录来源为 `{ "type": "directory", "id": "<authorized-directory-id>" }`。省略 agent 等同 Default，不按标题匹配。调用方不能提交角色正文或扩大工具权限。
 
-角色及必需 Skill/Tool 校验完成后，配置随 ThreadCreated 原子提交。相同 commandId、身份、标题与角色选择返回原 Thread，不重新加载角色；改变选择或标题返回 CommandConflict。创建失败不留下半成品 Thread。协议主版本 3 要求后端理解 Agent 身份和执行分支；历史记录版本 16 保存明确的 AgentId 与来源。
+角色及必需 Skill/Tool 校验完成后，配置随 ThreadCreated 原子提交。相同 commandId、身份、标题与角色选择返回原 Thread，不重新加载角色；改变选择或标题返回 CommandConflict。创建失败不留下半成品 Thread。协议主版本 4 包含消息恢复点与共享历史前缀；历史记录版本 17 保存消息文件证据，版本 16 起保存明确的 AgentId 与来源。
 
 `agentId` 可指定已存在的长期 Agent 身份；省略时创建新身份。未知 ID 返回错误。角色选择 `agent` 与长期身份 `agentId` 分别表达，执行配置仍按新任务冻结。
 
@@ -641,7 +641,19 @@ Session planned/attached saga。
 
 ### 分叉 Thread
 
-`session/request` 的 `request.type = forkThread` 比 create 多一个 `parentThreadId`。Server 执行命令时读取父 Thread 的当前 sequence，并把它持久化进 `ThreadOrigin::Fork`。Core 只重放到这个 sequence：已结束的 Turn 逐条写成 `ForkTurnImported`；第一个正在进行的 Turn 保留已持久化内容、移除没有结果的 Tool Call，并在子 Thread 中标成 `Interrupted`；它之后尚未执行的 Turn 不导入。`ForkHistoryImportCompleted` 保存导入数量和父 Thread 的最新已验证上下文检查点。子 Thread 拥有独立历史和 sequence，父 Thread 的后续提交不会改变它。
+`session/request` 的 `request.type = forkThread` 比 create 多一个 `parentThreadId`。Server 固定父 Thread 的当前 sequence；新分支以 `HistoryPrefixBound` 引用截至该位置的原事件。它只追加自己的事件并独立计数。第一段未完成 Turn 保留已有内容并标为 Interrupted，未配对的工具调用得到中断结果，不重放旧工具；之后尚未执行的 Turn 不导入。父分支的后续提交不改变该前缀。
+
+### 消息恢复点
+
+`session/thread/checkpoints` 接受 `{ "sessionId": "...", "threadId": "..." }`，按可见消息顺序返回 `{ "checkpoints": [...] }`。每项含 `itemId`、`turnId`、原始 `sourceThreadId`、`sourceSequence`、`afterSequence` 和 `workspace`。继承的消息仍指向其原始位置；`workspace.type = unavailable` 时同时给出原因。
+
+`session/request` 接受 `{ "type": "restoreMessage", "threadId": "...", "itemId": "...", "boundary": "before" | "after", "title": "..." }`。服务端固定所选位置，新建同 AgentId、同 Session 的分支，还原对应的受管 Git 文件；返回现有 `SessionThreadResult`。`origin.type = message` 保存来源、消息和边界。相同 commandId 与参数重试返回同一分支，参数不同报冲突。
+
+Before 保留消息之前的事件；After 还包含同一原子提交中的结束事实。文件恢复使用消息提交时冻结的版本；例如工具调用前是执行前版本，工具结果处是执行后版本。恢复不会撤销已发生的外部服务副作用。源分支历史保留，操作开始时尚未结束的源 Turn 及委托后代被中断。
+
+Git 文件和目标 commit 由私有引用保留；源分支工作目录清理后仍能在同一源目录重建。无 Git、消息记录时有写工具运行、捕获失败或旧记录缺少文件证据时，该消息不能用于完整恢复。TUI 的 Rewind 列表提供消息前后选项并显示不可用原因；没有新式消息记录的历史仍显示已有 Turn 级入口。
+
+恢复不能使用选定位置之后产生的压缩摘要。共享前缀和文件引用的生命周期见 [`protocol.md`](protocol.md#6-消息恢复点与共享历史)。
 
 ### 替换 Thread
 

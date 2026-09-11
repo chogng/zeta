@@ -32,6 +32,7 @@ impl ThreadBinding {
             ThreadOrigin::Fork {
                 parent_thread_id, ..
             }
+            | ThreadOrigin::Message { parent_thread_id, .. }
             | ThreadOrigin::Rewind {
                 parent_thread_id, ..
             }

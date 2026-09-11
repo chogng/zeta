@@ -2007,3 +2007,178 @@ fn missing_model_or_provider_is_a_configuration_failure_before_invocation() {
         assert!(provider.request.lock().unwrap().is_none());
     }
 }
+
+#[test]
+fn message_restore_points_preserve_git_versions_after_restart() {
+    let profile = tempfile::tempdir().unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    run_local_git(repo.path(), &["init", "--quiet", "--initial-branch=main"]);
+    std::fs::write(repo.path().join("tracked.txt"), "initial\n").unwrap();
+    run_local_git(repo.path(), &["add", "."]);
+    run_local_git(repo.path(), &["commit", "--quiet", "-m", "initial"]);
+    let options = || {
+        LocalAppServerOptions::new(profile.path())
+            .without_built_in_skills()
+            .with_dir_root(repo.path())
+    };
+    let server = open_local_app_server(options()).unwrap();
+    let mut connection = server.connection();
+    let initialize_request = || serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"message-checkpoints","version":"1"},"capabilities":{}}});
+    local_call(&server, &mut connection, initialize_request());
+    let policy = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"execPolicy/rule/upsert",
+            "params":{"commandId":"allow-shell","expectedRevision":0,"rule":{"id":"allow-shell","selector":{"type":"source","source":"built_in_tool","sourceId":"shell-command"},"effect":{"type":"allowUnsandboxed"},"justification":"test owns this temporary repository"}}
+        }),
+    );
+    assert!(policy.get("error").is_none(), "{policy}");
+    let session = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/create","params":{"commandId":"root","title":"Restore messages"}}),
+    );
+    let session_id = session["result"]["session"]["sessionId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let thread_id = session["result"]["session"]["threads"][0]["threadId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let command = if cfg!(windows) {
+        "echo changed>tracked.txt"
+    } else {
+        "printf 'changed\\n' > tracked.txt"
+    };
+    let started = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"session/request","params":{"commandId":"write","sessionId":session_id,
+            "request":{"type":"startShellTurn","threadId":thread_id,"expectedSequence":1,"approvalMode":"bypassPermissions","command":command,"workingDirectory":"."}}
+        }),
+    );
+    assert!(started.get("error").is_none(), "{started}");
+    let mut request_id = 10;
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    loop {
+        request_id += 1;
+        let changes = local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":request_id,"method":"turnChanges/list","params":{"sessionId":session_id,"threadId":thread_id}}),
+        );
+        if changes["result"]["changeSets"][0]["captureState"] == "sealed" {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "shell Turn did not seal: {changes}; snapshot: {:?}",
+            server
+                .threads()
+                .read_thread(&zeta_protocol::ThreadId::new(thread_id.clone()).unwrap())
+                .unwrap()
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    request_id += 1;
+    let checkpoints = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":request_id,"method":"session/thread/checkpoints","params":{"sessionId":session_id,"threadId":thread_id}}),
+    );
+    let points = checkpoints["result"]["checkpoints"].as_array().unwrap();
+    assert_eq!(points.len(), 2, "{checkpoints}");
+    assert!(
+        points
+            .iter()
+            .all(|point| point["workspace"]["type"] == "git"),
+        "{checkpoints}"
+    );
+    let before_item = points[0]["itemId"].as_str().unwrap().to_string();
+    let after_item = points[1]["itemId"].as_str().unwrap().to_string();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let worktrees =
+        worktree::WorktreeManager::new(worktree::WorktreeSettings::defaults(profile.path()));
+    for (id, item, boundary, expected) in [
+        ("before", &before_item, "before", "initial"),
+        ("after", &after_item, "after", "changed"),
+    ] {
+        request_id += 1;
+        let restored = local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":request_id,"method":"session/request","params":{"commandId":id,"sessionId":session_id,
+            "request":{"type":"restoreMessage","threadId":thread_id,"itemId":item,"boundary":boundary,"title":id}}}),
+        );
+        assert!(restored.get("error").is_none(), "{restored}");
+        let restored_id = restored["result"]["value"]["threadId"].as_str().unwrap();
+        let directories = runtime.block_on(worktrees.list(repo.path())).unwrap();
+        let directory = directories
+            .iter()
+            .find(|directory| directory.owner_thread_id() == Some(restored_id))
+            .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(directory.dir().join("tracked.txt"))
+                .unwrap()
+                .trim(),
+            expected
+        );
+    }
+    assert_eq!(
+        std::fs::read_to_string(repo.path().join("tracked.txt")).unwrap(),
+        "initial\n"
+    );
+    assert!(
+        !run_local_git(repo.path(), &["for-each-ref", "refs/zeta/messages/"])
+            .trim()
+            .is_empty()
+    );
+    drop(connection);
+    drop(server);
+    // Remove test-owned linked directories, leaving only retained message refs and history.
+    // Recovery must not consult an old Thread binding or a surviving checkout.
+    for owner in [&thread_id, "restore:after"] {
+        let directories = runtime.block_on(worktrees.list(repo.path())).unwrap();
+        let directory = directories
+            .iter()
+            .find(|directory| directory.owner_thread_id() == Some(owner))
+            .unwrap();
+        let path = directory.checkout_root().to_str().unwrap();
+        run_local_git(repo.path(), &["worktree", "unlock", path]);
+        run_local_git(repo.path(), &["worktree", "remove", "--force", path]);
+    }
+    run_local_git(repo.path(), &["gc", "--prune=now"]);
+    let reopened = open_local_app_server(options()).unwrap();
+    let mut connection = reopened.connection();
+    local_call(&reopened, &mut connection, initialize_request());
+    let restored = local_call(
+        &reopened,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/request","params":{"commandId":"after-restart","sessionId":session_id,
+        "request":{"type":"restoreMessage","threadId":"restore:after","itemId":before_item,"boundary":"before","title":"after restart"}}}),
+    );
+    assert!(restored.get("error").is_none(), "{restored}");
+    let directories = runtime.block_on(worktrees.list(repo.path())).unwrap();
+    let directory = directories
+        .iter()
+        .find(|directory| directory.owner_thread_id() == Some("restore:after-restart"))
+        .unwrap();
+    assert_eq!(
+        std::fs::read_to_string(directory.dir().join("tracked.txt")).unwrap(),
+        "initial\n"
+    );
+    let deleted = local_call(
+        &reopened,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/request","params":{"commandId":"delete","sessionId":session_id,"request":{"type":"delete"}}}),
+    );
+    assert!(deleted.get("error").is_none(), "{deleted}");
+    assert!(
+        run_local_git(repo.path(), &["for-each-ref", "refs/zeta/messages/"])
+            .trim()
+            .is_empty()
+    );
+}

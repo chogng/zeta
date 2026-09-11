@@ -15,11 +15,18 @@ pub(crate) fn load_selection<T>(
 where
     T: JsonRpcTransport,
 {
-    client
+    let thread = client
         .read_session_thread(SessionThreadReadParams {
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),
             history: None,
-        })
-        .map(|result| rewind_choices(&result.thread))
+        })?
+        .thread;
+    let points = client.message_checkpoints(
+        zeta_app_server_protocol::protocol::session::MessageCheckpointsParams {
+            session_id: session_id.clone(),
+            thread_id: thread_id.clone(),
+        },
+    )?;
+    Ok(rewind_choices(&thread, &points.checkpoints))
 }

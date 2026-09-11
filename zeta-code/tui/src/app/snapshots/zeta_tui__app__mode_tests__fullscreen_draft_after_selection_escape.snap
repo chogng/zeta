@@ -12,9 +12,9 @@ expression: render(&app)
 ● focus message 07                                
                                                   
              Jump to bottom (click) ↓             
-                                                  
+  ⏸ ask permissions on                            
   ╭────────────────────────────────────────────╮  
   │ > x                                        │  
   ╰────────────────────────── Automatic model ─╯  
                                                   
-  Enter send                ⏸ ask permissions on
+  Enter send  ·  shift+tab permissions  ·  /home

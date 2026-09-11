@@ -45,7 +45,7 @@ get_session(session_id)
 原 `session_id`。这不是所有派生模式的普遍定律：需要新会话树的临时派生可以使用新的
 `session_id`。因此代码只能依赖显式字段，不能靠 ID 相等猜关系。
 
-Agent 身份、任务分组和执行分支分别表达。普通 fork、rewind 和 replacement 延续 AgentId，委托创建独立 AgentId；复用身份不共享上下文、取消域或权限。云端认证身份单独映射，不替代业务 AgentId。绑定、来源和迁移规则见 [`protocol.md`](protocol.md#2-身份)。
+Agent 身份、任务分组和执行分支分别表达。普通 fork、消息恢复、rewind 和 replacement 延续 AgentId，委托创建独立 AgentId；复用身份不共享上下文、取消域或权限。云端认证身份单独映射，不替代业务 AgentId。绑定、来源和迁移规则见 [`protocol.md`](protocol.md#2-身份)。
 
 `Project` 与会话树是弱关联。删除 Project、移动 Project 或重新归类 Thread，不得改变 Thread 与 `session_id` 的核心身份。当前关联保存在 Project 的 `session_ids` 集合中，不向 Thread 增加 Project 身份，也不建立 Session store；`ProjectId`、完整 Project 记录和命令回执由独立 Project store 持久化。窗口 Workspace、目录集合或 Session 标题都不能被客户端推断成 Project。
 

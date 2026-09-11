@@ -31,6 +31,14 @@ pub enum ThreadOrigin {
         parent_thread_id: ThreadId,
         before_turn_id: TurnId,
     },
+    Message {
+        parent_thread_id: ThreadId,
+        #[ts(type = "number")]
+        parent_sequence: u64,
+        item_id: crate::ItemId,
+        boundary: crate::MessageBoundary,
+        workspace: crate::WorkspaceCheckpoint,
+    },
     AgentSpawn {
         parent_thread_id: ThreadId,
         #[ts(type = "number")]

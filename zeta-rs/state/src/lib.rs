@@ -24,6 +24,9 @@ mod tests;
 #[cfg(test)]
 #[path = "graph_tests.rs"]
 mod graph_tests;
+#[cfg(test)]
+#[path = "history_tests.rs"]
+mod history_tests;
 
 #[cfg(test)]
 #[path = "project_store_tests.rs"]

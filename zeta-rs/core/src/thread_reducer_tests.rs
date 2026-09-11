@@ -482,6 +482,8 @@ fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
         envelope(
             3,
             ThreadEvent::ItemCompleted {
+                checkpoint_after_sequence: None,
+                workspace_checkpoint: None,
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 turn_id: TurnId::new("turn_1").unwrap(),
                 item: ThreadItem::UserMessage {
@@ -501,6 +503,8 @@ fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
         envelope(
             5,
             ThreadEvent::ItemCompleted {
+                checkpoint_after_sequence: None,
+                workspace_checkpoint: None,
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 turn_id: TurnId::new("turn_1").unwrap(),
                 item: ThreadItem::UserMessage {
@@ -800,6 +804,8 @@ fn reducer_verifies_and_rebuilds_a_context_checkpoint() {
         envelope(
             3,
             ThreadEvent::ItemCompleted {
+                checkpoint_after_sequence: None,
+                workspace_checkpoint: None,
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 turn_id: TurnId::new("turn_1").unwrap(),
                 item: ThreadItem::UserMessage {
@@ -819,6 +825,8 @@ fn reducer_verifies_and_rebuilds_a_context_checkpoint() {
         envelope(
             5,
             ThreadEvent::ItemCompleted {
+                checkpoint_after_sequence: None,
+                workspace_checkpoint: None,
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 turn_id: TurnId::new("turn_1").unwrap(),
                 item: ThreadItem::AgentMessage {
@@ -856,7 +864,7 @@ fn reducer_verifies_and_rebuilds_a_context_checkpoint() {
             .iter()
             .map(|item| item.item_id().clone())
             .collect(),
-        source_digest: snapshot.context_source_digest(covered).unwrap(),
+        source_digest: snapshot.context_items_digest(covered, &snapshot.items.iter().map(|item| item.item_id().clone()).collect::<Vec<_>>()).unwrap(),
         summary: "durable summary".into(),
         schema_revision: "context-checkpoint-v1".into(),
         prompt_revision: "compaction-v2".into(),
@@ -1021,6 +1029,8 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
         envelope(
             3,
             ThreadEvent::ItemCompleted {
+                checkpoint_after_sequence: None,
+                workspace_checkpoint: None,
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                 item: ThreadItem::UserMessage {
@@ -1040,6 +1050,8 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
         envelope(
             5,
             ThreadEvent::ItemCompleted {
+                checkpoint_after_sequence: None,
+                workspace_checkpoint: None,
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                 item: ThreadItem::ToolCall {
@@ -1055,6 +1067,8 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
         envelope(
             6,
             ThreadEvent::ItemCompleted {
+                checkpoint_after_sequence: None,
+                workspace_checkpoint: None,
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                 item: ThreadItem::ToolResult {
@@ -1070,6 +1084,8 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
         envelope(
             7,
             ThreadEvent::ItemCompleted {
+                checkpoint_after_sequence: None,
+                workspace_checkpoint: None,
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                 item: ThreadItem::AgentMessage {
@@ -1150,6 +1166,8 @@ fn reducer_rejects_a_tool_result_without_its_tool_call() {
             &envelope(
                 3,
                 ThreadEvent::ItemCompleted {
+                    checkpoint_after_sequence: None,
+                    workspace_checkpoint: None,
                     thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                     turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                     item: ThreadItem::ToolResult {
@@ -1266,6 +1284,8 @@ fn started_sandboxed_tool_snapshot() -> ThreadSnapshot {
         envelope(
             4,
             ThreadEvent::ItemCompleted {
+                checkpoint_after_sequence: None,
+                workspace_checkpoint: None,
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 turn_id: TurnId::new("turn_1").unwrap(),
                 item: ThreadItem::ToolCall {

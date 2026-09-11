@@ -90,6 +90,7 @@ fn append_created_thread(
 ) {
     store
         .append_batch(&ThreadEventBatch {
+            history_prefixes: Vec::new(),
             batch_id: format!("thread-batch-{ordinal}"),
             thread_id: thread_id.clone(),
             expected_sequence: 0,
@@ -219,6 +220,7 @@ fn sqlite_thread_store_recovers_typed_events() {
     SqliteThreadStore::open(&path)
         .unwrap()
         .append_batch(&ThreadEventBatch {
+            history_prefixes: Vec::new(),
             batch_id: "thread-batch-1".into(),
             thread_id: thread_id.clone(),
             expected_sequence: 0,
@@ -276,6 +278,7 @@ fn sqlite_thread_catalog_rejects_index_metadata_mismatch() {
     let store = SqliteThreadStore::open(&path).unwrap();
     store
         .append_batch(&ThreadEventBatch {
+            history_prefixes: Vec::new(),
             batch_id: "thread-batch-1".into(),
             thread_id: thread_id.clone(),
             expected_sequence: 0,
@@ -338,6 +341,7 @@ fn sqlite_thread_append_is_atomic_and_sequence_checked() {
     let store = SqliteThreadStore::open(&path).unwrap();
     store
         .append_batch(&ThreadEventBatch {
+            history_prefixes: Vec::new(),
             batch_id: "batch-1".into(),
             thread_id: thread_id.clone(),
             expected_sequence: 0,
@@ -346,6 +350,7 @@ fn sqlite_thread_append_is_atomic_and_sequence_checked() {
         })
         .unwrap();
     let stale = store.append_batch(&ThreadEventBatch {
+        history_prefixes: Vec::new(),
         batch_id: "batch-2".into(),
         thread_id: thread_id.clone(),
         expected_sequence: 0,
@@ -389,6 +394,7 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
     let store = SqliteThreadStore::open(&path).unwrap();
     store
         .append_batch(&ThreadEventBatch {
+            history_prefixes: Vec::new(),
             batch_id: "batch-1".into(),
             thread_id: thread_id.clone(),
             expected_sequence: 0,
@@ -417,12 +423,11 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
     ));
 
     event.schema_version = zeta_history::MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION;
-    connection
-        .execute(
-            "UPDATE thread_events SET envelope_json = ?1 WHERE thread_id = ?2 AND sequence = 1",
-            rusqlite::params![serde_json::to_string(&event).unwrap(), thread_id.as_str()],
-        )
-        .unwrap();
+    let json = serde_json::to_string(&event).unwrap();
+    let digest = zeta_protocol::ContentDigest::sha256(json.as_bytes());
+    connection.execute("INSERT INTO history_records (digest, record_json) VALUES (?1, ?2)", rusqlite::params![digest.as_str(), json]).unwrap();
+    connection.execute("UPDATE thread_events SET record_digest = ?1 WHERE thread_id = ?2 AND sequence = 1", rusqlite::params![digest.as_str(), thread_id.as_str()]).unwrap();
+
 
     assert_eq!(
         SqliteThreadStore::open(&path)

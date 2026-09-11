@@ -207,6 +207,7 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
             | ThreadCommand::LoadOlderHistory
             | ThreadCommand::OpenRewindPicker
             | ThreadCommand::RewindToCheckpoint { .. }
+            | ThreadCommand::RestoreMessage { .. }
             | ThreadCommand::SubmitTurn { .. }
             | ThreadCommand::Enqueue { .. }
             | ThreadCommand::EditQueue { .. }

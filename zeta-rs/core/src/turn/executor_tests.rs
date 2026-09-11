@@ -1873,6 +1873,7 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
             &thread_id,
             &current_turn,
             CommitContextCheckpointRequest {
+                referenced_items: source.items.iter().filter(|item| source.item_sequences.get(item.item_id()).is_some_and(|sequence| *sequence <= covered_end_sequence)).map(|item| item.item_id().clone()).collect(),
                 source_thread_sequence: source.sequence,
                 covered: zeta_protocol::ContextSourceRange {
                     start_sequence: 1,

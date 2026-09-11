@@ -471,6 +471,9 @@ impl App {
                 }
                 .into(),
             ),
+            CommandPanelOutcome::Rewind(RewindSelectionAction::RestoreMessage { item_id, boundary, checkpoint_label }) => Some(
+                ThreadCommand::RestoreMessage { item_id, boundary, checkpoint_label }.into(),
+            ),
             CommandPanelOutcome::Sessions(SessionSelectionAction::Resume { session_id }) => Some(
                 SessionCommand::Resume {
                     session_id,
@@ -1600,7 +1603,9 @@ impl App {
 
     pub(crate) fn cycle_next_approval_mode(&mut self, now: Instant) {
         self.thread.cycle_approval_mode();
-        if self.thread.has_user_message() {
+        if self.screen_mode() == crate::terminal::ScreenMode::Fullscreen
+            || self.thread.has_user_message()
+        {
             self.chat_panel.show_policy_tip(now);
         }
     }
@@ -2376,7 +2381,7 @@ impl App {
             .active_mut()
             .status_timer
             .tick(now);
-        let top_tip_changed = self.chat_panel.poll_top_tip(now);
+        let top_tip_changed = self.chat_panel.poll_top_tip(now, self.screen_mode());
         let elapsed_changed = self.agent_thread_switcher_mut().refresh_elapsed();
         let manager_changed = matches!(
             self.session_navigation().screen(),

@@ -43,7 +43,7 @@ get_session(S1) = all Threads where thread.session_id == S1
 
 根 Thread 常见 `thread_id == session_id`，但调用方不得依赖这个关系推断归属；是否同树只看显式 `session_id`。
 
-Agent 身份与云端认证分开。历史版本 16 的 `ThreadCreated` 记录 `agent_id` 和来源；Agent 记录、绑定、事件与目录记录同事务提交。普通 fork、rewind 和 replacement 保留 AgentId，委托创建独立 AgentId。删除任务只删除所属 Thread，Agent 身份继续保留。
+Agent 身份与云端认证分开。历史版本 16 起的 `ThreadCreated` 记录 `agent_id` 和来源；Agent 记录、绑定、事件与目录记录同事务提交。普通 fork、消息恢复、rewind 和 replacement 保留 AgentId，委托创建独立 AgentId。删除任务只删除所属 Thread，Agent 身份继续保留。
 
 历史版本 12–15 的各个 Thread 在迁移时获得独立的 `legacy-agent:<thread_id>`；已有 fork 不追溯合并身份。迁移保存可验证的来源锚点，保留原事件字节；迁移后的新 fork 延续源 AgentId。
 
@@ -85,7 +85,24 @@ Session 订阅没有 Session update gap。它返回当前树视图、各 Thread 
 | `zeta-state` | SQLite 实现与迁移 |
 | `zeta-app-server-protocol` | JSON-RPC DTO、方法注册和生成 schema |
 
-## 6. 修改检查
+## 6. 消息恢复点与共享历史
+
+| 内容 | 保存什么 | 恢复时怎么用 |
+| --- | --- | --- |
+| `MessageCheckpoint` | 原消息的 Thread、sequence、前后边界和文件版本 | 在选定消息前或后创建执行分支 |
+| `HistoryPrefixRef` | 原事件前缀的摘要和来源位置 | 共享原记录；分支只追加自己的事件 |
+| `ContextCheckpoint` | 覆盖指定 Items 的压缩摘要 | 仅用于模型输入，不替代消息恢复点 |
+| Rollout trace | Thread 事件和完整的被引用前缀集合 | 导出可独立读取的对话事实 |
+
+历史版本 17 的新分支用 `ThreadCreated` 与 `HistoryPrefixBound` 固定来源。原 event ID、Thread ID、sequence 和记录字节保持不变；父分支继续执行不改变已有前缀。第一段未结束的执行保留已记录消息，并标为 Interrupted；未配对的 Tool Call 附加确定性的中断结果，不继承工具执行资格。中断结果的生成属于历史版本 17 的重放规则，不能无版本修改其文本或身份。
+
+消息恢复保留 AgentId、Session 和冻结配置，在新目录还原文件。原路线继续保留；服务端停止恢复操作开始时仍在运行的源 Turn 及其委托后代，之后提交到源路线的新消息不会被带入新分支。外部系统已经发生的副作用不属于文件恢复范围。
+
+文件捕获按 Thread 绑定到其工作目录 owner；同一 Profile 的多个目录不能互相覆盖捕获服务。Git 恢复点固定仓库相对路径、tree、目标 commit 和私有引用；旧分支目录清理后仍可通过原始源目录重建。非 Git 目录、写工具运行期间的消息或捕获失败会记录明确的不可用原因。旧历史没有逐消息文件证据时不补造恢复点；已有 Turn 级 rewind 入口仍按其原证据恢复。
+
+SQLite event-store 版本 7 按内容保存一次原始记录，通过 Thread 和前缀引用关联。分支、前缀和 Agent 绑定原子提交；损坏或缺失的前缀明确失败。删除最后一个引用后才回收原记录与 Git pin；Git 清理失败保留待办，重启继续处理。压缩不会触发原始历史删除。
+
+## 7. 修改检查
 
 修改协议时必须确认：
 

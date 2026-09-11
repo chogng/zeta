@@ -88,6 +88,8 @@ fn deltas_emit_complete_upserts_and_committed_item_replaces_transient() {
         durable(
             1,
             ThreadEvent::ItemCompleted {
+                checkpoint_after_sequence: None,
+                workspace_checkpoint: None,
                 thread_id: thread_id(),
                 turn_id: turn_id(),
                 item: agent_item("item-1", "hello"),
@@ -270,6 +272,8 @@ fn stdout_and_stderr_stay_independent_until_tool_result_commits() {
         durable(
             1,
             ThreadEvent::ItemCompleted {
+                checkpoint_after_sequence: None,
+                workspace_checkpoint: None,
                 thread_id: thread_id(),
                 turn_id: turn_id(),
                 item: ThreadItem::ToolResult {

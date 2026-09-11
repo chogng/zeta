@@ -1275,3 +1275,49 @@ fn concurrent_spawns_reserve_capacity_once_per_session() {
         2
     );
 }
+
+#[test]
+fn full_context_uses_original_history_and_appends_delegation_after_the_prefix() {
+    let fixture = fixture();
+    let parent = fixture
+        .threads
+        .read_thread(&fixture.parent_thread_id)
+        .unwrap();
+    let mut request = spawn_request(&fixture);
+    request.inheritance = AgentContextMode::ForkedPrefix {
+        selection: ForkedAgentContext::Full,
+    };
+    let spawned = fixture.coordinator.spawn(request).unwrap();
+    assert!(spawned.context_seed.materialized_context.is_empty());
+    let child = fixture
+        .threads
+        .read_thread(&spawned.child_thread_id)
+        .unwrap();
+    assert_eq!(&child.items[..parent.items.len()], parent.items.as_slice());
+    let prefix = child.history_sources.get(&parent.thread_id).unwrap();
+    assert_eq!(prefix.source_sequence, parent.sequence);
+    let ModelInvocationPreparation::Ready(invocation) = fixture
+        .threads
+        .prepare_model_invocation(
+            &child.thread_id,
+            PrepareModelInvocationRequest {
+                turn_id: &spawned.child_turn_id,
+                harness_context: &HarnessContext::default(),
+                extension_fragments: vec![],
+                evidence: vec![],
+                tools: vec![tool_definition("allowed")],
+                budget: ContextBudget::provider_managed(),
+            },
+        )
+        .unwrap()
+    else {
+        panic!("context must fit");
+    };
+    let request = crate::context::ContextAssembler::assemble(invocation.context()).unwrap();
+    let boundary = request.prompt_cache_prefix_end.unwrap() as usize;
+    let prefix = serde_json::to_string(&request.input[..=boundary]).unwrap();
+    let suffix = serde_json::to_string(&request.input[boundary + 1..]).unwrap();
+    assert!(prefix.contains("Delegate a review"));
+    assert!(!prefix.contains("This is delegated work"));
+    assert!(suffix.contains("This is delegated work"));
+}

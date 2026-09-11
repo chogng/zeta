@@ -130,6 +130,11 @@ pub(crate) enum Command {
         before_turn_id: zeta_protocol::TurnId,
         checkpoint_label: String,
     },
+    RestoreMessage {
+        item_id: zeta_protocol::ItemId,
+        boundary: zeta_protocol::MessageBoundary,
+        checkpoint_label: String,
+    },
     ResolveRequest(ThreadRequestResponse),
     CycleNextApprovalMode,
     SubmitTurn {

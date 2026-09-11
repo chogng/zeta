@@ -87,6 +87,12 @@ pub enum SessionRequest {
         source_thread_id: ThreadId,
         title: String,
     },
+    RestoreMessage {
+        thread_id: ThreadId,
+        item_id: zeta_protocol::ItemId,
+        boundary: zeta_protocol::MessageBoundary,
+        title: String,
+    },
     ForkThread {
         parent_thread_id: ThreadId,
         title: String,
@@ -182,6 +188,19 @@ pub struct SessionThreadReadParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub history: Option<ThreadSnapshotHistory>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageCheckpointsParams {
+    pub session_id: SessionId,
+    pub thread_id: ThreadId,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageCheckpointsResult {
+    pub checkpoints: Vec<zeta_protocol::MessageCheckpoint>,
 }
 
 /// Maximum Turn count accepted by one bounded Thread snapshot request.

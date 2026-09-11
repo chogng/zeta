@@ -16,9 +16,9 @@ expression: "render(&app, 80, 20)"
   Queue 1: Run the focused tests · next                                         
   Queue 2: Review the result · paused                                           
 ⠋ Starting · 0m 00s total                                                       
-                                                                                
+  ⏸ ask permissions on                                                          
   ╭──────────────────────────────────────────────────────────────────────────╮  
   │ >                                                                        │  
   ╰──────────────────────────────────────────────────────── Automatic model ─╯  
                                                                                 
-  Enter send  ·  shift+tab permissions  ·  /home          ⏸ ask permissions on
+  Enter send  ·  shift+tab permissions  ·  /home

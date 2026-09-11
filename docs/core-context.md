@@ -390,7 +390,11 @@ usage 维护 Thread/Turn 聚合，再按 Thread 内的模型与 estimator revisi
 
 ## 8. 压缩
 
-### 8.1 持久化检查点
+### 8.1 持久化压缩摘要
+
+本节的 `ContextCheckpoint` 是模型输入摘要。用户选择消息节点回到过去使用 `MessageCheckpoint`，其历史和文件边界见 [`protocol.md`](protocol.md#6-消息恢复点与共享历史)。共享历史前缀可在一个绑定事件内覆盖多个 Turn；压缩必须按 `referenced_items` 选择完整 Turn，摘要 digest 同时覆盖事件来源和实际 Items。后续摘要不能覆盖倒退或不连续的内容。
+
+恢复分支只读取选定消息边界之前的原记录；在该位置之后产生的摘要不会继承。压缩保留原始消息和文件恢复证据。
 
 Checkpoint 至少记录：
 
@@ -491,7 +495,11 @@ wait for safe point
 → create new ModelInvocationSnapshot
 ```
 
-Core 为普通 Turn 请求写入 Session 级 prompt cache key，并在 `ContextPlan` 组装时标出当前 Turn 之前的可复用输入前缀；同一 Session 内的 fork 因而保持 key 和父历史前缀连续。Provider response ID、cache 命中和 connection state 不能成为恢复正确性的前提。
+Core 为普通 Turn 请求写入 Session 级 prompt cache key，并在 `ContextPlan` 组装时标出当前 Turn 之前的可复用输入前缀。同一 Session 内的 fork 保留原消息与 key；委托说明追加在前缀之后。模型、工具集、权限指令或模型可见环境变化仍可能改变请求，不能由 AgentId 相同推断缓存命中。
+
+OpenAI Responses 对 GPT-5.6 及以后模型将 Core 前缀终点映射到合法输入内容块的显式缓存断点；旧模型保持自动缓存。计量请求不带缓存断点。该适配不改变原始消息。供应商行为以 [OpenAI Prompt caching 文档](https://developers.openai.com/api/docs/guides/prompt-caching) 为准；本地请求一致性验证不能代替实际 `cachedInputTokens` 测量。
+
+Provider response ID、缓存命中和连接状态都不是恢复正确性的前提。
 
 ## 10. 多 Agent 规则
 
@@ -512,7 +520,7 @@ Selected(item/artifact references)
 ForkedPrefix(full | last turns | checkpoint plus tail)
 ```
 
-所有模式都固定 parent Thread sequence 和 provenance。Spawn 后 parent compaction 或继续执行不改变
+Full 模式以 `HistoryPrefixBound` 引用原始事件；Selected、LastTurns 与 CheckpointAndTail 只物化明确选中的有界内容。所有模式都固定 parent Thread sequence 和 provenance。Spawn 后 parent compaction 或继续执行不改变
 child 的 seed。Child result 回到 parent 后只是一个有界、可追踪的 durable result Item，由 parent
 ContextManager 决定是否选入下一次 ContextPlan。
 

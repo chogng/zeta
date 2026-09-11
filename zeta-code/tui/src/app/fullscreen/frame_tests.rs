@@ -166,7 +166,12 @@ fn conversation_chrome_keeps_home_and_input_visible_without_a_welcome_message() 
     assert!(
         rendered
             .lines()
-            .last()
+            .nth(usize::from(
+                layout(&App::new(), Rect::new(0, 0, 80, 20))
+                    .session
+                    .top_tip
+                    .y
+            ))
             .unwrap()
             .contains("ask permissions on")
     );
@@ -604,12 +609,16 @@ fn empty_session_input_offers_manager_navigation() {
 
     assert!(rows[top_tip_row].contains("← for agents"));
     assert!(!rows[top_tip_row].contains("shift+tab"));
-    assert!(rows[19].trim_end().ends_with("⏸ ask permissions on"));
+    assert!(!rows[19].contains("permissions on"));
+    assert!(
+        rows[usize::from(layout(&app, Rect::new(0, 0, 80, 20)).session.top_tip.y)]
+            .contains("⏸ ask permissions on")
+    );
 
-    assert!(!app.handle_tick(Instant::now() + Duration::from_secs(10)));
+    assert!(app.handle_tick(Instant::now() + Duration::from_secs(10)));
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
-    assert!(rows[top_tip_row].contains("← for agents"));
+    assert!(rows[top_tip_row].trim().is_empty());
     assert!(!rows[top_tip_row].contains("shift+tab"));
 
     app.insert_text("draft");
@@ -619,12 +628,12 @@ fn empty_session_input_offers_manager_navigation() {
 
     assert!(!rows[top_tip_row].contains("← for agents"));
     assert!(!rows[top_tip_row].contains("shift+tab"));
-    assert!(status_line.trim_end().ends_with("⏸ ask permissions on"));
+    assert!(!status_line.contains("permissions on"));
     assert!(!status_line.contains("← for agents"));
 }
 
 #[test]
-fn narrow_session_keeps_manager_tip_above_input_and_status_below() {
+fn narrow_session_prioritizes_policy_above_input_and_keeps_shortcuts_below() {
     let mut app = App::new();
     enter_session(
         &mut app,
@@ -637,9 +646,9 @@ fn narrow_session_keeps_manager_tip_above_input_and_status_below() {
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert!(rows[top_tip_row].contains("← for agents"));
+    assert_eq!(rows[top_tip_row].trim(), "⏸ ask permissions on");
     assert!(!rows[top_tip_row].contains("shift+tab"));
-    assert_eq!(rows[19].trim_end(), "  Enter send    ⏸ ask…");
+    assert_eq!(rows[19].trim_end(), "  Enter send");
 }
 
 #[test]
@@ -738,7 +747,7 @@ fn pending_steer_is_shown_once_in_chat_history() {
 }
 
 #[test]
-fn hintbar_keeps_the_permission_mode_beside_input_shortcuts() {
+fn top_tip_shows_permission_modes_above_input_shortcuts() {
     let mut app = App::new();
     for (mode, label) in [
         (
@@ -758,7 +767,15 @@ fn hintbar_keeps_the_permission_mode_beside_input_shortcuts() {
         let screen = render(&app, 100, 20);
         let hints = screen.lines().last().unwrap().trim_end();
         assert!(hints.starts_with("  Enter send"));
-        assert!(hints.ends_with(label), "{hints}");
+        assert!(!hints.contains("permissions on") && !hints.contains("auto review on"));
+        let top_tip = layout(&app, Rect::new(0, 0, 100, 20)).session.top_tip;
+        assert!(
+            screen
+                .lines()
+                .nth(usize::from(top_tip.y))
+                .unwrap()
+                .contains(label)
+        );
         assert!(screen.lines().nth(18).unwrap().trim().is_empty());
     }
 }
@@ -841,7 +858,7 @@ fn queue_focus_and_pointer_target_share_the_visible_row_identity() {
 }
 
 #[test]
-fn hintbar_uses_a_distinct_color_for_each_approval_mode_symbol() {
+fn top_tip_uses_a_distinct_color_for_each_approval_mode_symbol() {
     let mut app = App::new();
     for (mode, icon, color) in [
         (
@@ -862,29 +879,33 @@ fn hintbar_uses_a_distinct_color_for_each_approval_mode_symbol() {
     ] {
         app.set_next_approval_mode(mode);
         let buffer = render_buffer(&app, 100, 20);
+        let row = layout(&app, buffer.area).session.top_tip.y;
         let column = (0..100)
-            .find(|x| buffer[(*x, 19)].symbol() == icon)
+            .find(|x| buffer[(*x, row)].symbol() == icon)
             .unwrap();
-        assert_eq!(buffer[(column, 19)].fg, color);
+        assert_eq!(buffer[(column, row)].fg, color);
         assert_eq!(
-            buffer[(column + icon.width() as u16, 19)].fg,
+            buffer[(column + icon.width() as u16, row)].fg,
             test_context().chat_input_chrome()
         );
     }
 }
 
 #[test]
-fn hintbar_colors_current_and_next_modes_independently() {
+fn top_tip_colors_current_and_next_modes_independently() {
     let mut app = App::new();
     app.set_current_approval_mode(Some(zeta_protocol::ApprovalMode::AskPermissions));
     app.set_next_approval_mode(zeta_protocol::ApprovalMode::AutoReview);
     let buffer = render_buffer(&app, 120, 20);
-    let current = (0..120).find(|x| buffer[(*x, 19)].symbol() == "⏸").unwrap();
-    let next = (0..120)
-        .find(|x| buffer[(*x, 19)].symbol() == "⏩")
+    let row = layout(&app, buffer.area).session.top_tip.y;
+    let current = (0..120)
+        .find(|x| buffer[(*x, row)].symbol() == "⏸")
         .unwrap();
-    assert_eq!(buffer[(current, 19)].fg, test_context().warning());
-    assert_eq!(buffer[(next, 19)].fg, test_context().accent());
+    let next = (0..120)
+        .find(|x| buffer[(*x, row)].symbol() == "⏩")
+        .unwrap();
+    assert_eq!(buffer[(current, row)].fg, test_context().warning());
+    assert_eq!(buffer[(next, row)].fg, test_context().accent());
 }
 
 #[test]
@@ -1001,12 +1022,13 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
     assert_eq!(hint.symbol(), "s");
     assert_eq!(hint.fg, test_context().muted());
     assert!(hint.modifier.contains(Modifier::ITALIC));
+    assert_eq!(buffer[(2, top_tip_row)].symbol(), "⏸");
+    assert_eq!(buffer[(2, top_tip_row)].fg, test_context().warning());
     assert!(
-        (0..80)
+        !(0..80)
             .map(|x| buffer[(x, bottom_row)].symbol())
             .collect::<String>()
-            .trim_end()
-            .ends_with("⏸ ask permissions on")
+            .contains("permissions on")
     );
     assert_eq!(buffer[(2, composer.y)].symbol(), "╭");
     assert_eq!(buffer[(77, composer.y)].symbol(), "╮");
@@ -1045,7 +1067,195 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
 }
 
 #[test]
-fn policy_tip_does_not_replace_navigation_before_the_conversation_starts() {
+fn entire_top_tip_holds_then_fades_without_moving_the_composer() {
+    use crate::render::RenderTheme;
+    use crate::render::ThemePalette;
+    use zeta_terminal_detection::ColorLevel;
+
+    let started = Instant::now();
+    for palette in [ThemePalette::dark(), ThemePalette::light()] {
+        let mut app = App::new();
+        app.update(crate::theme::Event::RenderChanged(
+            RenderTheme::from_palette(palette, ColorLevel::TrueColor),
+        ));
+        app.show_policy_tip(started);
+        let area = Rect::new(0, 0, 80, 20);
+        let areas = layout(&app, area).session;
+        let before = render_buffer(&app, 80, 20);
+        assert_eq!(before[(2, areas.top_tip.y)].symbol(), "⏸");
+        assert_eq!(
+            before[(2, areas.top_tip.y)].fg,
+            app.render_context().warning()
+        );
+        assert!(!app.handle_tick(started + Duration::from_secs(3)));
+        assert_eq!(before, render_buffer(&app, 80, 20));
+        assert!(app.handle_tick(started + Duration::from_secs(4)));
+        let fading = render_buffer(&app, 80, 20);
+        assert_eq!(fading, render_buffer(&app, 80, 20));
+        let Color::Rgb(br, bg, bb) = app.render_context().background() else {
+            unreachable!()
+        };
+        for (full, faded) in before.content.iter().zip(&fading.content) {
+            assert_eq!(full.symbol(), faded.symbol());
+        }
+        // The mode icon, mode label and keyboard hint all lose contrast together.
+        for x in [2, 4, 54] {
+            let full = &before[(x, areas.top_tip.y)];
+            let faded = &fading[(x, areas.top_tip.y)];
+            let Color::Rgb(r, g, b) = full.fg else {
+                unreachable!()
+            };
+            let Color::Rgb(fr, fg, fb) = faded.fg else {
+                unreachable!()
+            };
+            assert_ne!(full.fg, faded.fg);
+            assert_ne!(faded.fg, app.render_context().background());
+            for (original, intermediate, background) in [(r, fr, br), (g, fg, bg), (b, fb, bb)] {
+                assert!(intermediate.abs_diff(background) < original.abs_diff(background));
+            }
+        }
+        for y in 0..20 {
+            if y != areas.top_tip.y {
+                for x in 0..80 {
+                    assert_eq!(before[(x, y)], fading[(x, y)]);
+                }
+            }
+        }
+        assert!(app.handle_tick(started + Duration::from_secs(5)));
+        let hidden = render_buffer(&app, 80, 20);
+        assert!(!(0..80).any(|x| hidden[(x, areas.top_tip.y)].symbol() != " "));
+        assert_eq!(layout(&app, area).session, areas);
+        assert!(!app.handle_tick(started + Duration::from_secs(6)));
+    }
+}
+
+#[test]
+fn policy_changes_restart_the_fade_and_keep_current_and_next_modes_visible() {
+    let mut app = App::new();
+    let started = Instant::now();
+    app.set_current_approval_mode(Some(zeta_protocol::ApprovalMode::AskPermissions));
+    app.cycle_next_approval_mode(started);
+    assert_eq!(app.approval_mode(), zeta_protocol::ApprovalMode::AutoReview);
+    let visible = render(&app, 120, 20);
+    assert!(visible.contains("current: ask permissions on"));
+    assert!(visible.contains("next: auto review on"));
+    assert_snapshot!("policy_top_tip_current_and_next", visible);
+    assert!(app.handle_tick(started + Duration::from_secs(4)));
+    app.cycle_next_approval_mode(started + Duration::from_secs(4));
+    assert_eq!(
+        app.approval_mode(),
+        zeta_protocol::ApprovalMode::BypassPermissions
+    );
+    let restarted = render_buffer(&app, 120, 20);
+    let row = layout(&app, Rect::new(0, 0, 120, 20)).session.top_tip.y;
+    assert_eq!(restarted[(2, row)].fg, test_context().warning());
+    assert!(render(&app, 120, 20).contains("next: bypass permissions on"));
+    assert!(!app.handle_tick(started + Duration::from_secs(7)));
+    assert!(app.handle_tick(started + Duration::from_secs(9)));
+    assert_snapshot!("policy_top_tip_expired", render(&app, 120, 20));
+}
+
+#[test]
+fn notices_and_clipboard_tips_share_the_fullscreen_fade_and_refresh() {
+    let started = Instant::now();
+    for text in ["Copied", "image in clipboard · ctrl+v to paste"] {
+        let mut app = App::new();
+        if text == "Copied" {
+            app.chat_panel.show_notice(text.into(), started);
+        } else {
+            app.chat_panel
+                .show_clipboard_image(ClipboardImageFingerprint(1), started);
+        }
+        let area = Rect::new(0, 0, 80, 20);
+        let row = layout(&app, area).session.top_tip.y;
+        let x = 78 - text.width() as u16;
+        assert_eq!(
+            render_buffer(&app, 80, 20)[(x, row)].fg,
+            test_context().muted()
+        );
+        assert!(app.handle_tick(started + Duration::from_secs(4)));
+        assert_ne!(
+            render_buffer(&app, 80, 20)[(x, row)].fg,
+            test_context().muted()
+        );
+        if text == "Copied" {
+            app.chat_panel
+                .show_notice(text.into(), started + Duration::from_secs(4));
+        } else {
+            app.chat_panel.show_clipboard_image(
+                ClipboardImageFingerprint(2),
+                started + Duration::from_secs(4),
+            );
+        }
+        assert_eq!(
+            render_buffer(&app, 80, 20)[(x, row)].fg,
+            test_context().muted()
+        );
+        assert!(app.handle_tick(started + Duration::from_secs(9)));
+        assert!(
+            render(&app, 80, 20)
+                .lines()
+                .nth(usize::from(row))
+                .unwrap()
+                .trim()
+                .is_empty()
+        );
+    }
+}
+
+#[test]
+fn auto_theme_fades_to_the_reported_terminal_background_without_painting_it() {
+    use crate::render::RenderTheme;
+    use crate::render::ThemePalette;
+    use zeta_terminal_detection::ColorLevel;
+    let mut app = App::new();
+    app.update(crate::theme::Event::RenderChanged(
+        RenderTheme::from_palette(ThemePalette::dark(), ColorLevel::TrueColor)
+            .with_terminal_defaults()
+            .with_terminal_background([0, 0, 0]),
+    ));
+    let started = Instant::now();
+    app.show_policy_tip(started);
+    assert!(app.handle_tick(started + Duration::from_secs(4)));
+    let buffer = render_buffer(&app, 80, 20);
+    let cell = &buffer[(2, layout(&app, buffer.area).session.top_tip.y)];
+    assert_eq!(cell.fg, Color::Rgb(128, 83, 44));
+    assert_eq!(cell.bg, Color::Reset);
+    assert!(!cell.modifier.contains(Modifier::DIM));
+}
+
+#[test]
+fn fullscreen_tip_respects_terminal_color_capabilities() {
+    use crate::render::RenderTheme;
+    use crate::render::ThemePalette;
+    use zeta_terminal_detection::ColorLevel;
+    let started = Instant::now();
+    for capability in [
+        ColorLevel::Ansi256,
+        ColorLevel::Ansi16,
+        ColorLevel::Monochrome,
+    ] {
+        let mut app = App::new();
+        app.update(crate::theme::Event::RenderChanged(
+            RenderTheme::from_palette(ThemePalette::dark(), capability),
+        ));
+        app.show_policy_tip(started);
+        app.handle_tick(started + Duration::from_millis(4500));
+        let buffer = render_buffer(&app, 80, 20);
+        let row = layout(&app, buffer.area).session.top_tip.y;
+        let cell = &buffer[(2, row)];
+        if capability == ColorLevel::Ansi256 {
+            assert!(matches!(cell.fg, Color::Indexed(_)));
+            assert_ne!(cell.fg, app.render_context().warning());
+        } else {
+            assert_eq!(cell.fg, app.render_context().warning());
+            assert!(cell.modifier.contains(Modifier::DIM));
+        }
+    }
+}
+
+#[test]
+fn policy_change_shows_the_new_mode_before_the_first_submission() {
     let mut app = App::new();
     enter_session(
         &mut app,
@@ -1056,8 +1266,9 @@ fn policy_tip_does_not_replace_navigation_before_the_conversation_starts() {
     app.cycle_next_approval_mode(Instant::now());
 
     let rendered = render(&app, 80, 20);
-    assert!(rendered.contains("← for agents"));
-    assert!(!rendered.contains("shift+tab to cycle policy"));
+    assert!(!rendered.contains("← for agents"));
+    assert!(rendered.contains("auto review on"));
+    assert!(rendered.contains("shift+tab to cycle policy"));
 }
 
 #[test]
@@ -1119,18 +1330,30 @@ fn multiline_chat_input_grows_upward_and_keeps_all_lines_visible() {
     assert!(rows[usize::from(input.y + 1)].contains("first"));
     assert!(rows[usize::from(input.y + 2)].contains("second"));
     assert!(rows[usize::from(input.y + 3)].contains("third"));
-    assert!(rows[19].trim_end().ends_with("⏸ ask permissions on"));
+    assert!(!rows[19].contains("permissions on"));
+    assert!(
+        rows[usize::from(layout(&app, Rect::new(0, 0, 80, 20)).session.top_tip.y)]
+            .contains("⏸ ask permissions on")
+    );
 }
 
 #[test]
-fn turn_activity_does_not_replace_the_permission_mode_in_hintbar() {
+fn turn_activity_does_not_replace_the_permission_mode_in_top_tip() {
     let mut app = App::new();
     app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
 
     let rendered = render(&app, 80, 20);
     let status_line = rendered.lines().last().unwrap();
 
-    assert!(status_line.trim_end().ends_with("⏸ ask permissions on"));
+    assert!(!status_line.contains("permissions on"));
+    let top_tip = layout(&app, Rect::new(0, 0, 80, 20)).session.top_tip;
+    assert!(
+        rendered
+            .lines()
+            .nth(usize::from(top_tip.y))
+            .unwrap()
+            .contains("⏸ ask permissions on")
+    );
     assert!(status_line.starts_with("  Enter send"));
     assert!(!status_line.contains("Working"));
 }
@@ -1255,7 +1478,11 @@ fn completed_error_remains_visible_in_the_scrollable_transcript() {
     assert!(rendered.contains("The configured model is unavailable."));
     assert!(rendered.contains("ask permissions on"));
     assert!(!rows.iter().any(|line| line.trim() == "error"));
-    assert!(rows[19].trim_end().ends_with("⏸ ask permissions on"));
+    assert!(!rows[19].contains("permissions on"));
+    assert!(
+        rows[usize::from(layout(&app, Rect::new(0, 0, 80, 20)).session.top_tip.y)]
+            .contains("⏸ ask permissions on")
+    );
     assert!(!rendered.contains("ready to retry"));
     assert!(!rendered.contains("esc esc rewind"));
     assert!(!rendered.contains("StableTurnError"));

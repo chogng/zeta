@@ -45,3 +45,60 @@ fn trace_groups_thread_streams_by_session_id() {
     assert_eq!(trace.threads[0].thread_id, thread_id);
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn trace_contains_the_complete_nested_history_prefix_closure() {
+    let root = temporary_root();
+    let state = StateRuntime::open(&root).unwrap();
+    let repository = LocalStateRepository::open(&state).unwrap();
+    let threads = repository.recover_threads().unwrap();
+    let first = threads
+        .start_thread(
+            &zeta_core::NoThreadWorktreeBinder,
+            zeta_core::StartThreadRequest {
+                agent_id: None,
+                agent: None,
+                command_id: zeta_protocol::CommandId::new("root").unwrap(),
+                title: "root".into(),
+            },
+        )
+        .unwrap();
+    let mut source = first.thread_id.clone();
+    for id in ["first-fork", "second-fork"] {
+        source = threads
+            .fork_thread(
+                &zeta_core::NoThreadWorktreeBinder,
+                zeta_core::ForkThreadRequest {
+                    command_id: zeta_protocol::CommandId::new(id).unwrap(),
+                    source_thread_id: source,
+                    title: id.into(),
+                },
+            )
+            .unwrap()
+            .thread_id;
+    }
+    let trace =
+        capture_session_trace(repository.thread_store().as_ref(), &first.session_id).unwrap();
+    assert_eq!(trace.history_prefixes.len(), 2);
+    let retained = trace
+        .history_prefixes
+        .iter()
+        .map(|prefix| prefix.reference().unwrap().digest.as_str().to_string())
+        .collect::<std::collections::BTreeSet<_>>();
+    for event in trace
+        .threads
+        .iter()
+        .flat_map(|thread| &thread.events)
+        .chain(
+            trace
+                .history_prefixes
+                .iter()
+                .flat_map(|prefix| &prefix.events),
+        )
+    {
+        if let zeta_protocol::ThreadEvent::HistoryPrefixBound { prefix, .. } = &event.event {
+            assert!(retained.contains(prefix.digest.as_str()));
+        }
+    }
+    fs::remove_dir_all(root).unwrap();
+}

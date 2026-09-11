@@ -4,3 +4,4 @@
 - Thread 事件流是对话、Turn、Item、交互、分支关系和 `session_id` 的唯一持久事实源；没有独立 Session store。
 - 后端必须 complete-or-none 提交并保留精确顺序；恢复与 reducer 属于 `zeta-core`，SQLite 实现属于 `zeta-state`。
 - 组合 Agent 关系读取契约；绑定随创建事件提交，Session 查询直接使用成员索引。
+- 追加时同时保存不可变前缀，提供前缀读取及文件引用清理的待办与确认契约。

@@ -8,7 +8,7 @@ use crate::ThreadStore;
 use crate::ThreadWorktreeBinder;
 use crate::ThreadWorktreeBindingRequest;
 use crate::WriterLease;
-use crate::reduce_thread_event;
+
 use crate::thread_reducer::validate_agent_request;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -75,6 +75,8 @@ mod context;
 mod execution;
 mod graph;
 mod identity;
+mod restore;
+pub use restore::RestoreMessageRequest;
 pub(crate) mod live_interaction;
 mod loaded_thread;
 mod mailbox;
@@ -387,6 +389,7 @@ pub struct RecordedToolResult {
 }
 
 pub(crate) struct CommitContextCheckpointRequest {
+    pub(crate) referenced_items: Vec<ItemId>,
     pub(crate) source_thread_sequence: u64,
     pub(crate) covered: ContextSourceRange,
     pub(crate) summary: String,
@@ -440,6 +443,7 @@ impl Default for ExtensionRegistries {
 
 /// Coordinates durable mutations for each loaded Thread.
 pub struct ThreadController {
+    checkpoint_sources: RwLock<BTreeMap<ThreadId, Weak<dyn crate::MessageCheckpointSource>>>,
     store: Arc<dyn ThreadStore>,
     writer_lease: Option<Arc<dyn WriterLease<ThreadId>>>,
     loaded_threads: Arc<loaded_thread::LoadedThreads>,
@@ -452,6 +456,31 @@ pub struct ThreadController {
 }
 
 impl ThreadController {
+    /// Binds file capture to the owner of this Thread's managed working directory.
+    pub fn install_message_checkpoint_source(
+        &self,
+        thread_id: ThreadId,
+        source: Arc<dyn crate::MessageCheckpointSource>,
+    ) -> Result<(), CoreError> {
+        self.checkpoint_sources
+            .write()
+            .map_err(|_| CoreError::Journal("checkpoint source lock poisoned".into()))?
+            .insert(thread_id, Arc::downgrade(&source));
+        Ok(())
+    }
+
+    /// Releases unreferenced files through the caller's live host, then acknowledges durable cleanup.
+    pub fn collect_message_checkpoints(
+        &self,
+        source: &dyn crate::MessageCheckpointSource,
+    ) -> Result<(), CoreError> {
+        let pending = self.store.pending_checkpoint_cleanup()?;
+        for (key, checkpoint) in pending {
+            source.release(&checkpoint)?;
+            self.store.acknowledge_checkpoint_cleanup(&key)?;
+        }
+        Ok(())
+    }
     pub fn with_store(store: Arc<dyn ThreadStore>) -> Self {
         Self::with_store_and_image_attachments(store, Arc::new(ImageAttachments::in_memory()))
     }
@@ -464,6 +493,7 @@ impl ThreadController {
         let loaded_threads = Arc::new(loaded_thread::LoadedThreads::new(store.clone()));
         Self {
             store,
+            checkpoint_sources: RwLock::new(BTreeMap::new()),
             writer_lease: None,
             execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
             live_interactions: live_interaction::LiveInteractionWaiters::default(),
@@ -497,6 +527,7 @@ impl ThreadController {
         let loaded_threads = Arc::new(loaded_thread::LoadedThreads::new(store.clone()));
         Self {
             store,
+            checkpoint_sources: RwLock::new(BTreeMap::new()),
             writer_lease: Some(writer_lease),
             execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
             live_interactions: live_interaction::LiveInteractionWaiters::default(),
@@ -555,6 +586,15 @@ impl ThreadController {
         request: CreateThreadRequest,
         initial_events: Vec<ThreadEvent>,
     ) -> Result<ThreadSnapshot, CoreError> {
+        self.create_thread_with_history(request, initial_events, Vec::new())
+    }
+
+    fn create_thread_with_history(
+        &self,
+        request: CreateThreadRequest,
+        initial_events: Vec<ThreadEvent>,
+        history_prefixes: Vec<zeta_history::HistoryPrefix>,
+    ) -> Result<ThreadSnapshot, CoreError> {
         if let Some(agent) = &request.agent {
             agent
                 .validate()
@@ -586,8 +626,13 @@ impl ThreadController {
             title: request.title,
         }];
         events.extend(initial_events);
-        let (snapshot, batch) =
-            self.project_batch(None, &request.thread_id, events, BatchCommand::None)?;
+        let (snapshot, batch) = self.project_batch_with_history(
+            None,
+            &request.thread_id,
+            events,
+            BatchCommand::None,
+            history_prefixes,
+        )?;
         self.commit_batch(&batch)?;
         *loaded = Some(self.loaded_threads.install(snapshot.clone()));
         Ok(snapshot)
@@ -751,33 +796,39 @@ impl ThreadController {
                 "rewind source belongs to another Session".into(),
             ));
         }
-        let checkpoint = source
-            .turns
-            .iter()
-            .position(|turn| turn.turn_id == request.before_turn_id)
-            .ok_or_else(|| CoreError::NotFound(request.before_turn_id.to_string()))?;
-        let mut imported_turns = source.public_thread().turns[..checkpoint].to_vec();
-        for turn in &mut imported_turns {
-            turn.usage = zeta_protocol::ModelUsageSummary::default();
-        }
-        self.create_thread_with_events(
+        let owner = source
+            .message_checkpoints
+            .values()
+            .find(|point| point.turn_id == request.before_turn_id)
+            .map(|point| point.source_thread_id.clone())
+            .unwrap_or_else(|| source.thread_id.clone());
+        let events = self.source_history(&source, &owner)?;
+        let boundary = events.iter().find(|event| matches!(&event.event, ThreadEvent::TurnAccepted { turn_id, .. } if turn_id == &request.before_turn_id))
+            .ok_or_else(|| CoreError::NotFound(request.before_turn_id.to_string()))?.sequence;
+        let prefix = zeta_history::HistoryPrefix {
+            events: events
+                .into_iter()
+                .take_while(|event| event.sequence < boundary)
+                .collect(),
+        };
+        let reference = prefix.reference().map_err(CoreError::Journal)?;
+        self.create_thread_with_history(
             CreateThreadRequest {
                 agent_id: source.agent_id.clone(),
                 origin: ThreadOrigin::Rewind {
                     parent_thread_id: source.thread_id.clone(),
-                    before_turn_id: request.before_turn_id.clone(),
+                    before_turn_id: request.before_turn_id,
                 },
                 agent: source.agent_configuration().cloned(),
                 session_id: request.session_id,
                 thread_id: request.thread_id.clone(),
                 title: request.title,
             },
-            vec![ThreadEvent::HistoryImported {
+            vec![ThreadEvent::HistoryPrefixBound {
                 thread_id: request.thread_id,
-                source_thread_id: request.source_thread_id,
-                before_turn_id: request.before_turn_id,
-                turns: imported_turns,
+                prefix: reference,
             }],
+            vec![prefix],
         )
     }
 
@@ -796,32 +847,16 @@ impl ThreadController {
                 "fork source belongs to another Session".into(),
             ));
         }
-        let imported_turns = fork_snapshot_turns(source.public_thread().turns);
-        let context_checkpoint = inherited_fork_checkpoint(&source, &imported_turns)?;
-        let imported_turn_count = u64::try_from(imported_turns.len())
-            .map_err(|_| CoreError::Journal("fork Turn count exceeds u64".into()))?;
-        let mut events = imported_turns
-            .into_iter()
-            .enumerate()
-            .map(|(index, turn)| {
-                Ok(ThreadEvent::ForkTurnImported {
-                    thread_id: request.thread_id.clone(),
-                    source_thread_id: request.source_thread_id.clone(),
-                    source_sequence: request.source_sequence,
-                    turn_index: u64::try_from(index)
-                        .map_err(|_| CoreError::Journal("fork Turn index exceeds u64".into()))?,
-                    turn: Box::new(turn),
-                })
-            })
-            .collect::<Result<Vec<_>, CoreError>>()?;
-        events.push(ThreadEvent::ForkHistoryImportCompleted {
-            thread_id: request.thread_id.clone(),
-            source_thread_id: request.source_thread_id.clone(),
-            source_sequence: request.source_sequence,
-            imported_turn_count,
-            context_checkpoint,
-        });
-        self.create_thread_with_events(
+        let prefix = zeta_history::HistoryPrefix {
+            events: self
+                .store
+                .load(&request.source_thread_id)?
+                .into_iter()
+                .take_while(|event| event.sequence <= request.source_sequence)
+                .collect(),
+        };
+        let reference = prefix.reference().map_err(CoreError::Journal)?;
+        self.create_thread_with_history(
             CreateThreadRequest {
                 agent_id: source.agent_id.clone(),
                 origin: ThreadOrigin::Fork {
@@ -830,10 +865,14 @@ impl ThreadController {
                 },
                 agent: source.agent_configuration().cloned(),
                 session_id: request.session_id,
-                thread_id: request.thread_id,
+                thread_id: request.thread_id.clone(),
                 title: request.title,
             },
-            events,
+            vec![ThreadEvent::HistoryPrefixBound {
+                thread_id: request.thread_id,
+                prefix: reference,
+            }],
+            vec![prefix],
         )
     }
 
@@ -1012,6 +1051,8 @@ impl ThreadController {
                 input_items
                     .into_iter()
                     .map(|item| ThreadEvent::ItemCompleted {
+                        checkpoint_after_sequence: None,
+                        workspace_checkpoint: None,
                         thread_id: thread_id.clone(),
                         turn_id: turn_id.clone(),
                         item,
@@ -1459,6 +1500,8 @@ impl ThreadController {
                     tool_profile: None,
                 },
                 ThreadEvent::ItemCompleted {
+                    checkpoint_after_sequence: None,
+                    workspace_checkpoint: None,
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
                     item: tool_call,
@@ -1765,6 +1808,8 @@ impl ThreadController {
             self.record_batch(
                 snapshot,
                 vec![ThreadEvent::ItemCompleted {
+                    checkpoint_after_sequence: None,
+                    workspace_checkpoint: None,
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
                     item: item.clone(),
@@ -2006,6 +2051,13 @@ impl ThreadController {
             .collect::<Result<Vec<_>, _>>()?;
         let deleted = self.store.delete_session(session_id)?;
         self.loaded_threads.forget(&deleted)?;
+        let mut sources = self
+            .checkpoint_sources
+            .write()
+            .map_err(|_| CoreError::Journal("checkpoint source lock poisoned".into()))?;
+        for thread_id in &deleted {
+            sources.remove(thread_id);
+        }
         Ok(deleted)
     }
 
@@ -2143,10 +2195,11 @@ impl ThreadController {
         if events.is_empty() {
             return Err(CoreError::NotFound(thread_id.to_string()));
         }
+        let mut reader = crate::history::HistoryReader::new(self.store.as_ref(), &[]);
         events
             .iter()
             .try_fold(None, |snapshot, event| {
-                reduce_thread_event(snapshot, event).map(Some)
+                reader.reduce(snapshot, event).map(Some)
             })?
             .ok_or_else(|| CoreError::Journal("cannot recover an empty rollout".into()))
     }
@@ -2169,11 +2222,12 @@ impl ThreadController {
                 actual,
             }));
         }
+        let mut reader = crate::history::HistoryReader::new(self.store.as_ref(), &[]);
         events
             .iter()
             .take_while(|event| event.sequence <= sequence)
             .try_fold(None, |snapshot, event| {
-                reduce_thread_event(snapshot, event).map(Some)
+                reader.reduce(snapshot, event).map(Some)
             })?
             .ok_or_else(|| CoreError::NotFound(thread_id.to_string()))
     }
@@ -2196,6 +2250,8 @@ impl ThreadController {
             self.record_batch(
                 snapshot,
                 vec![ThreadEvent::ItemCompleted {
+                    checkpoint_after_sequence: None,
+                    workspace_checkpoint: None,
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
                     item,
@@ -2272,19 +2328,84 @@ impl ThreadController {
         thread_id: &ThreadId,
         events: Vec<ThreadEvent>,
         command: BatchCommand,
-    ) -> Result<(ThreadSnapshot, ThreadEventBatch), CoreError> {
+    ) -> Result<
+        (
+            ThreadSnapshot,
+            crate::message_checkpoint::PreparedThreadBatch,
+        ),
+        CoreError,
+    > {
+        self.project_batch_with_history(snapshot, thread_id, events, command, Vec::new())
+    }
+
+    fn project_batch_with_history(
+        &self,
+        snapshot: Option<ThreadSnapshot>,
+        thread_id: &ThreadId,
+        events: Vec<ThreadEvent>,
+        command: BatchCommand,
+        history_prefixes: Vec<zeta_history::HistoryPrefix>,
+    ) -> Result<
+        (
+            ThreadSnapshot,
+            crate::message_checkpoint::PreparedThreadBatch,
+        ),
+        CoreError,
+    > {
         if events.is_empty() {
             return Err(CoreError::ThreadStore(ThreadStoreError::InvalidBatch(
                 "batch must contain at least one event".into(),
             )));
         }
         let expected_sequence = snapshot.as_ref().map_or(0, |snapshot| snapshot.sequence);
+        let mut reader = crate::history::HistoryReader::new(self.store.as_ref(), &history_prefixes);
         let mut projection = snapshot;
         let mut envelopes = Vec::with_capacity(events.len());
-        for (index, event) in events.into_iter().enumerate() {
+        let mut captures = Vec::<Box<dyn crate::CheckpointCapture>>::new();
+        let batch_end = expected_sequence + events.len() as u64;
+        let last_item_index = events
+            .iter()
+            .rposition(|event| matches!(event, ThreadEvent::ItemCompleted { .. }));
+        for (index, mut event) in events.into_iter().enumerate() {
+            let event_id = self.next_identifier("event");
+            if let ThreadEvent::ItemCompleted {
+                turn_id,
+                item,
+                workspace_checkpoint,
+                checkpoint_after_sequence,
+                ..
+            } = &mut event
+            {
+                *checkpoint_after_sequence = Some(if last_item_index == Some(index) {
+                    batch_end
+                } else {
+                    expected_sequence + index as u64 + 1
+                });
+                if captures.is_empty() {
+                    let source = self
+                        .checkpoint_sources
+                        .read()
+                        .map_err(|_| CoreError::Journal("checkpoint source lock poisoned".into()))?
+                        .get(thread_id)
+                        .cloned();
+                    let capture: Box<dyn crate::CheckpointCapture> = match source {
+                        Some(source) => source
+                            .upgrade()
+                            .ok_or_else(|| {
+                                CoreError::Journal("checkpoint source was disposed".into())
+                            })?
+                            .capture(thread_id, turn_id, item.item_id(), &event_id)?,
+                        None => Box::new(crate::message_checkpoint::NoFilesCapture(
+                            zeta_protocol::WorkspaceCheckpoint::NoFiles,
+                        )),
+                    };
+                    captures.push(capture);
+                }
+                *workspace_checkpoint = Some(captures[0].workspace().clone());
+            }
             let envelope = StoredEvent {
                 schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
-                event_id: EventId(self.next_identifier("event")),
+                event_id: EventId(event_id),
                 sequence: expected_sequence + index as u64 + 1,
                 thread_id: thread_id.clone(),
                 recorded_at: self.timestamp()?,
@@ -2298,24 +2419,31 @@ impl ThreadController {
                 },
                 event,
             };
-            projection = Some(reduce_thread_event(projection, &envelope)?);
+            projection = Some(reader.reduce(projection, &envelope)?);
             envelopes.push(envelope);
         }
         let projection = projection.expect("a non-empty event batch always creates a projection");
         let catalog = thread_catalog_record(&projection);
         Ok((
             projection,
-            ThreadEventBatch {
-                batch_id: self.next_identifier("batch"),
-                thread_id: thread_id.clone(),
-                expected_sequence,
-                events: envelopes,
-                catalog,
+            crate::message_checkpoint::PreparedThreadBatch {
+                captures,
+                data: ThreadEventBatch {
+                    history_prefixes,
+                    batch_id: self.next_identifier("batch"),
+                    thread_id: thread_id.clone(),
+                    expected_sequence,
+                    events: envelopes,
+                    catalog,
+                },
             },
         ))
     }
 
-    fn commit_batch(&self, batch: &ThreadEventBatch) -> Result<AppendBatchResult, CoreError> {
+    fn commit_batch(
+        &self,
+        batch: &crate::message_checkpoint::PreparedThreadBatch,
+    ) -> Result<AppendBatchResult, CoreError> {
         let registries = self
             .extensions
             .read()
@@ -2327,6 +2455,9 @@ impl ThreadController {
             .clone();
         drop(registries);
         let result = self.store.append_batch(batch).map_err(CoreError::from)?;
+        for capture in &batch.captures {
+            capture.commit();
+        }
         for stored in &batch.events {
             use zeta_extension_api::ThreadLifecycle;
             let lifecycle = match &stored.event {
@@ -2557,76 +2688,6 @@ fn validate_thread_expectation(
     }
 }
 
-fn is_terminal_turn_status(status: TurnStatus) -> bool {
-    matches!(
-        status,
-        TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
-    )
-}
-
-fn fork_snapshot_turns(turns: Vec<zeta_protocol::Turn>) -> Vec<zeta_protocol::Turn> {
-    let mut imported = Vec::new();
-    for mut turn in turns {
-        let terminal = is_terminal_turn_status(turn.status);
-        if !terminal {
-            turn.status = TurnStatus::Interrupted;
-            turn.pending_interaction = None;
-            turn.error = None;
-        }
-        turn.usage = zeta_protocol::ModelUsageSummary::default();
-        turn.context_usage = None;
-        retain_complete_tool_exchanges(&mut turn.items);
-        imported.push(turn);
-        if !terminal {
-            break;
-        }
-    }
-    imported
-}
-
-fn retain_complete_tool_exchanges(items: &mut Vec<ThreadItem>) {
-    let completed_calls = items
-        .iter()
-        .filter_map(|item| match item {
-            ThreadItem::ToolResult { tool_call_id, .. } => Some(tool_call_id.clone()),
-            _ => None,
-        })
-        .collect::<BTreeSet<_>>();
-    items.retain(|item| {
-        !matches!(
-            item,
-            ThreadItem::ToolCall { tool_call_id, .. }
-                if !completed_calls.contains(tool_call_id)
-        )
-    });
-}
-
-fn inherited_fork_checkpoint(
-    source: &ThreadSnapshot,
-    imported_turns: &[zeta_protocol::Turn],
-) -> Result<Option<zeta_protocol::ContextCheckpoint>, CoreError> {
-    let Some(checkpoint) = source.context_checkpoints.last().cloned() else {
-        return Ok(None);
-    };
-    let imported_items = imported_turns
-        .iter()
-        .flat_map(|turn| turn.items.iter())
-        .map(ThreadItem::item_id)
-        .collect::<Vec<_>>();
-    if checkpoint.referenced_items.len() > imported_items.len()
-        || checkpoint
-            .referenced_items
-            .iter()
-            .zip(imported_items)
-            .any(|(referenced, imported)| referenced != imported)
-    {
-        return Err(CoreError::Journal(
-            "fork source checkpoint is not a prefix of the imported history".into(),
-        ));
-    }
-    Ok(Some(checkpoint))
-}
-
 fn matching_created_thread(
     snapshot: &ThreadSnapshot,
     request: &CreateThreadRequest,
@@ -2846,6 +2907,8 @@ pub struct InMemoryThreadStore(Mutex<InMemoryThreadStoreState>);
 
 #[derive(Default)]
 struct InMemoryThreadStoreState {
+    checkpoint_cleanup: BTreeMap<String, zeta_protocol::RepositoryCheckpoint>,
+    prefixes: BTreeMap<String, zeta_history::HistoryPrefix>,
     agents: BTreeMap<zeta_protocol::AgentId, agent_graph_store::AgentRecord>,
     threads: BTreeMap<ThreadId, Vec<StoredEvent>>,
     catalog: BTreeMap<ThreadId, ThreadCatalogRecord>,
@@ -2866,6 +2929,44 @@ impl InMemoryThreadStore {
 }
 
 impl ThreadStore for InMemoryThreadStore {
+    fn pending_checkpoint_cleanup(
+        &self,
+    ) -> Result<Vec<(String, zeta_protocol::RepositoryCheckpoint)>, ThreadStoreError> {
+        Ok(self
+            .0
+            .lock()
+            .map_err(|_| ThreadStoreError::Storage("in-memory store lock poisoned".into()))?
+            .checkpoint_cleanup
+            .iter()
+            .map(|(key, point)| (key.clone(), point.clone()))
+            .collect())
+    }
+    fn acknowledge_checkpoint_cleanup(&self, key: &str) -> Result<(), ThreadStoreError> {
+        self.0
+            .lock()
+            .map_err(|_| ThreadStoreError::Storage("in-memory store lock poisoned".into()))?
+            .checkpoint_cleanup
+            .remove(key);
+        Ok(())
+    }
+    fn load_history_prefix(
+        &self,
+        reference: &zeta_protocol::HistoryPrefixRef,
+    ) -> Result<zeta_history::HistoryPrefix, ThreadStoreError> {
+        let state = self
+            .0
+            .lock()
+            .map_err(|_| ThreadStoreError::Storage("in-memory store lock poisoned".into()))?;
+        let prefix = state
+            .prefixes
+            .get(reference.digest.as_str())
+            .ok_or_else(|| ThreadStoreError::Storage("history prefix is missing".into()))?;
+        prefix
+            .validate(reference)
+            .map_err(ThreadStoreError::Storage)?;
+        Ok(prefix.clone())
+    }
+
     fn list_session_thread_ids(
         &self,
         session_id: &SessionId,
@@ -2956,6 +3057,7 @@ impl ThreadStore for InMemoryThreadStore {
             .0
             .lock()
             .map_err(|_| ThreadStoreError::Storage("in-memory store lock poisoned".into()))?;
+        let before = memory_checkpoints(&state)?;
         let thread_ids = state
             .catalog
             .iter()
@@ -2966,6 +3068,38 @@ impl ThreadStore for InMemoryThreadStore {
             state.catalog.remove(thread_id);
             state.threads.remove(thread_id);
         }
+        let mut retained = BTreeSet::new();
+        let mut pending = state
+            .threads
+            .values()
+            .flatten()
+            .filter_map(|event| match &event.event {
+                ThreadEvent::HistoryPrefixBound { prefix, .. } => {
+                    Some(prefix.digest.as_str().to_string())
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        while let Some(digest) = pending.pop() {
+            if !retained.insert(digest.clone()) {
+                continue;
+            }
+            if let Some(prefix) = state.prefixes.get(&digest) {
+                pending.extend(prefix.events.iter().filter_map(|event| match &event.event {
+                    ThreadEvent::HistoryPrefixBound { prefix, .. } => {
+                        Some(prefix.digest.as_str().to_string())
+                    }
+                    _ => None,
+                }));
+            }
+        }
+        state.prefixes.retain(|digest, _| retained.contains(digest));
+        let after = memory_checkpoints(&state)?;
+        state.checkpoint_cleanup.extend(
+            before
+                .into_iter()
+                .filter(|(key, _)| !after.contains_key(key)),
+        );
         Ok(thread_ids)
     }
 
@@ -2977,6 +3111,31 @@ impl ThreadStore for InMemoryThreadStore {
             .0
             .lock()
             .map_err(|_| ThreadStoreError::Storage("in-memory store lock poisoned".into()))?;
+        let staged = batch
+            .history_prefixes
+            .iter()
+            .map(|prefix| {
+                prefix
+                    .reference()
+                    .map(|reference| (reference.digest.as_str().to_string(), prefix.clone()))
+                    .map_err(ThreadStoreError::Storage)
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
+        for event in batch.events.iter().chain(
+            batch
+                .history_prefixes
+                .iter()
+                .flat_map(|prefix| prefix.events.iter()),
+        ) {
+            if let ThreadEvent::HistoryPrefixBound { prefix, .. } = &event.event {
+                staged
+                    .get(prefix.digest.as_str())
+                    .or_else(|| state.prefixes.get(prefix.digest.as_str()))
+                    .ok_or_else(|| ThreadStoreError::Storage("history prefix is missing".into()))?
+                    .validate(prefix)
+                    .map_err(ThreadStoreError::Storage)?;
+            }
+        }
         if state.batch_ids.contains(&batch.batch_id) {
             return Err(ThreadStoreError::InvalidBatch(
                 "batch ID already exists".into(),
@@ -3035,7 +3194,30 @@ impl ThreadStore for InMemoryThreadStore {
         state
             .catalog
             .insert(batch.thread_id.clone(), batch.catalog.clone());
+        state.prefixes.extend(staged);
         state.batch_ids.insert(batch.batch_id.clone());
         Ok(result)
     }
+}
+
+fn memory_checkpoints(
+    state: &InMemoryThreadStoreState,
+) -> Result<BTreeMap<String, zeta_protocol::RepositoryCheckpoint>, ThreadStoreError> {
+    state
+        .threads
+        .values()
+        .flatten()
+        .chain(state.prefixes.values().flat_map(|prefix| &prefix.events))
+        .flat_map(|event| zeta_history::repository_checkpoints(&event.event))
+        .map(|point| {
+            let json = serde_json::to_vec(point)
+                .map_err(|error| ThreadStoreError::Storage(error.to_string()))?;
+            Ok((
+                zeta_protocol::ContentDigest::sha256(&json)
+                    .as_str()
+                    .to_string(),
+                point.clone(),
+            ))
+        })
+        .collect()
 }

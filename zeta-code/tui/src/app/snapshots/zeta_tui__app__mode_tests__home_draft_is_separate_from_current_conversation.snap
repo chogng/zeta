@@ -12,9 +12,9 @@ expression: render(&app)
   │  Settings                                  │  
   │  Help and shortcuts                        │  
   ╰────────────────────────────────────────────╯  
-  Type a new task · Tab actions · Esc return      
+  ⏸ ask permissions on                            
   ╭────────────────────────────────────────────╮  
   │ > new task draft                           │  
   ╰────────────────────────── Automatic model ─╯  
                                                   
-  Enter send                ⏸ ask permissions on
+  Enter send  ·  Tab actions  ·  / commands

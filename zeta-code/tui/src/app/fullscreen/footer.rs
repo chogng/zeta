@@ -1,7 +1,6 @@
 use crate::app::App;
 use crate::keymap::bindings;
 use crate::render::horizontal_margin;
-use crate::status as status_line;
 use crate::thread::composer as chat_input;
 use crate::widgets::key_hint;
 use crate::widgets::key_hint::KeyHints;
@@ -9,7 +8,6 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Paragraph;
-use unicode_width::UnicodeWidthStr;
 
 enum BottomContent<'a> {
     Keys(&'a KeyHints),
@@ -48,30 +46,7 @@ pub(super) fn draw(
         BottomContent::InputHints => {
             let content = horizontal_margin(bottom_row(area), 2);
             let hints = input_hints(app);
-            let first_hint_width = hints.text().split('·').next().unwrap().trim().width() as u16;
-            let policy = status_line::policy_line(
-                app.status_line(),
-                usize::from(content.width.saturating_sub((first_hint_width + 3).max(14))),
-                app.approval_mode_status(),
-                context,
-            );
-            let policy_width = policy.width() as u16;
-            let hint_area = Rect {
-                width: content
-                    .width
-                    .saturating_sub(policy_width + if policy_width > 0 { 3 } else { 0 }),
-                ..content
-            };
-            key_hint::draw_content(frame, hint_area, &hints, app.key_hint_style(), context);
-            frame.render_widget(
-                Paragraph::new(policy),
-                Rect::new(
-                    content.right().saturating_sub(policy_width),
-                    content.y,
-                    policy_width,
-                    content.height,
-                ),
-            );
+            key_hint::draw_content(frame, content, &hints, app.key_hint_style(), context);
         }
     }
 }
@@ -161,35 +136,46 @@ pub(super) fn draw_tip(
     app: &App,
     context: crate::render::RenderContext<'_>,
 ) {
-    if app.fullscreen.home_visible() {
-        let text = if app.sessions.pending_submission.is_some() {
-            "Starting session…"
-        } else if let Some(error) = &app.sessions.creation_error {
-            error
+    let navigation = if app.fullscreen.home_visible() {
+        let persistent = if app.sessions.pending_submission.is_some() {
+            Some(("Starting session…", context.muted()))
         } else {
-            if app.sessions.active_session_id().is_some() {
-                "Type a new task · Tab actions · Esc return"
-            } else if area.width < 54 {
-                "Type a task · Tab actions"
-            } else {
-                "Type a task to begin, or use Tab to choose an action."
-            }
+            app.sessions
+                .creation_error
+                .as_deref()
+                .map(|error| (error, context.danger()))
         };
-        frame.render_widget(
-            Paragraph::new(text).style(Style::default().fg(
-                if app.sessions.creation_error.is_some() {
-                    context.danger()
-                } else {
-                    context.muted()
-                },
-            )),
-            chat_input::content_area(area),
-        );
-        return;
-    }
-    if !area.is_empty()
-        && let Some(text) = app.top_tip().text(app.screen_navigation_tip())
-    {
-        key_hint::draw_right(frame, area, text, context);
-    }
+        if let Some((text, color)) = persistent {
+            frame.render_widget(
+                Paragraph::new(text).style(Style::default().fg(color)),
+                chat_input::content_area(area),
+            );
+            return;
+        }
+        Some(if app.sessions.active_session_id().is_some() {
+            "Type a new task · Tab actions · Esc return"
+        } else if area.width < 54 {
+            "Type a task · Tab actions"
+        } else {
+            "Type a task to begin, or use Tab to choose an action."
+        })
+    } else {
+        app.screen_navigation_tip()
+    };
+    app.top_tip().draw_fullscreen(
+        frame,
+        area,
+        navigation,
+        if !super::modal::is_open(app) && matches!(bottom_content(app), BottomContent::InputHints) {
+            crate::status::policy_line(
+                app.status_line(),
+                horizontal_margin(area, 2).width.into(),
+                app.approval_mode_status(),
+                context,
+            )
+        } else {
+            Default::default()
+        },
+        context,
+    );
 }

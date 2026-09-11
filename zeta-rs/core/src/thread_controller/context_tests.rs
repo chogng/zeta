@@ -239,6 +239,7 @@ fn checkpoint_continuation_keeps_its_boundary_and_does_not_reinsert_a_covered_re
         .commit_context_checkpoint(
             &fixture.thread,
             CommitContextCheckpointRequest {
+                referenced_items: snapshot.items.iter().filter(|item| snapshot.item_sequences.get(item.item_id()).is_some_and(|sequence| *sequence <= covered_end)).map(|item| item.item_id().clone()).collect(),
                 source_thread_sequence: snapshot.sequence,
                 covered: ContextSourceRange {
                     start_sequence: 1,

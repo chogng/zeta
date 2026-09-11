@@ -65,6 +65,8 @@ mod approval;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ThreadSnapshot {
+    pub(crate) history_sources: BTreeMap<ThreadId, zeta_protocol::HistoryPrefixRef>,
+    pub(crate) message_checkpoints: BTreeMap<ItemId, zeta_protocol::MessageCheckpoint>,
     pub agent_id: zeta_protocol::AgentId,
     pub origin: zeta_protocol::ThreadOrigin,
     pub session_id: SessionId,
@@ -162,6 +164,29 @@ impl ThreadSnapshot {
         }
         ContextSourceDigest::new(format!("sha256:{:x}", hasher.finalize()))
             .map_err(|error| CoreError::Context(error.to_string()))
+    }
+
+    pub(crate) fn context_items_digest(
+        &self,
+        range: ContextSourceRange,
+        items: &[ItemId],
+    ) -> Result<ContextSourceDigest, CoreError> {
+        let source = self.context_source_digest(range)?;
+        let selected = items
+            .iter()
+            .map(|id| {
+                self.items
+                    .iter()
+                    .find(|item| item.item_id() == id)
+                    .ok_or_else(|| {
+                        CoreError::Journal("checkpoint refers to missing history content".into())
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let encoded = serde_json::to_vec(&(source, selected))
+            .map_err(|error| CoreError::Journal(error.to_string()))?;
+        ContextSourceDigest::new(format!("sha256:{:x}", Sha256::digest(encoded)))
+            .map_err(|error| CoreError::Journal(error.to_string()))
     }
 
     /// Builds the canonical public Thread projection without exposing command receipts.
@@ -344,6 +369,14 @@ pub fn reduce_thread_event(
     snapshot: Option<ThreadSnapshot>,
     envelope: &StoredEvent,
 ) -> Result<ThreadSnapshot, CoreError> {
+    reduce_thread_event_with_prefix(snapshot, envelope, None)
+}
+
+pub(crate) fn reduce_thread_event_with_prefix(
+    snapshot: Option<ThreadSnapshot>,
+    envelope: &StoredEvent,
+    prefix_source: Option<&ThreadSnapshot>,
+) -> Result<ThreadSnapshot, CoreError> {
     if !supports_stored_event_schema_version(envelope.schema_version) {
         return Err(CoreError::Journal(format!(
             "unsupported Thread event schema version {}",
@@ -377,6 +410,8 @@ pub fn reduce_thread_event(
                 let mut event_digests = BTreeMap::new();
                 event_digests.insert(envelope.sequence, event_digest(&envelope.event)?);
                 Ok(ThreadSnapshot {
+                    history_sources: BTreeMap::new(),
+                    message_checkpoints: BTreeMap::new(),
                     agent_id: zeta_history::created_thread_agent_id(envelope)
                         .map_err(CoreError::Journal)?,
                     origin: origin.clone(),
@@ -454,6 +489,47 @@ pub fn reduce_thread_event(
         }
     }
     match &envelope.event {
+        ThreadEvent::HistoryPrefixBound { prefix, .. } => {
+            require_no_command(envelope)?;
+            let source = prefix_source.ok_or_else(|| {
+                CoreError::Journal("history prefix must be resolved before replay".into())
+            })?;
+            if source.thread_id != prefix.source_thread_id
+                || source.sequence != prefix.source_sequence
+                || source.session_id != snapshot.session_id
+            {
+                return Err(CoreError::Journal(
+                    "resolved history prefix has an invalid source".into(),
+                ));
+            }
+            let turns = branch_history_turns(source)?;
+            import_history(
+                &mut snapshot,
+                &source.thread_id,
+                HistoryImportBoundary::Fork {
+                    source_sequence: source.sequence,
+                },
+                &turns,
+            )?;
+            for item in &snapshot.items {
+                snapshot
+                    .item_sequences
+                    .insert(item.item_id().clone(), envelope.sequence);
+            }
+            snapshot.context_checkpoints = source.context_checkpoints.clone();
+            snapshot.message_checkpoints = source.message_checkpoints.clone();
+            for point in snapshot
+                .message_checkpoints
+                .values_mut()
+                .filter(|point| point.source_thread_id == source.thread_id)
+            {
+                point.after_sequence = point.after_sequence.min(source.sequence);
+            }
+            snapshot.history_sources = source.history_sources.clone();
+            snapshot
+                .history_sources
+                .insert(source.thread_id.clone(), prefix.clone());
+        }
         ThreadEvent::ThreadCreated { .. } => {
             return Err(CoreError::Journal(
                 "Thread cannot be created more than once".into(),
@@ -787,7 +863,7 @@ pub fn reduce_thread_event(
         }
         ThreadEvent::ContextCheckpointCommitted { checkpoint, .. } => {
             require_no_command(envelope)?;
-            validate_context_checkpoint(&snapshot, checkpoint)?;
+            validate_context_checkpoint(&snapshot, checkpoint, envelope.schema_version)?;
             snapshot.context_checkpoints.push(checkpoint.clone());
         }
         ThreadEvent::ContextOverflowRecoveryCommitted {
@@ -825,7 +901,7 @@ pub fn reduce_thread_event(
                     "context overflow recovery checkpoint cannot absorb the current Turn".into(),
                 ));
             }
-            validate_context_checkpoint(&snapshot, checkpoint)?;
+            validate_context_checkpoint(&snapshot, checkpoint, envelope.schema_version)?;
             snapshot
                 .context_overflow_recoveries
                 .insert(turn_id.clone(), checkpoint.checkpoint_id.clone());
@@ -1051,7 +1127,26 @@ pub fn reduce_thread_event(
                 ));
             }
         }
-        ThreadEvent::ItemCompleted { turn_id, item, .. } => {
+        ThreadEvent::ItemCompleted {
+            turn_id,
+            item,
+            workspace_checkpoint,
+            checkpoint_after_sequence,
+            ..
+        } => {
+            if let Some(workspace) = workspace_checkpoint {
+                snapshot.message_checkpoints.insert(
+                    item.item_id().clone(),
+                    zeta_protocol::MessageCheckpoint {
+                        item_id: item.item_id().clone(),
+                        turn_id: turn_id.clone(),
+                        source_thread_id: snapshot.thread_id.clone(),
+                        source_sequence: envelope.sequence,
+                        workspace: workspace.clone(),
+                        after_sequence: checkpoint_after_sequence.unwrap_or(envelope.sequence),
+                    },
+                );
+            }
             require_no_command(envelope)?;
             if item.turn_id() != turn_id {
                 return Err(CoreError::Journal(
@@ -2027,7 +2122,15 @@ fn import_history(
             "imported Thread history must come from another Thread".into(),
         ));
     }
-    if snapshot.sequence != 1 || !snapshot.turns.is_empty() || !snapshot.items.is_empty() {
+    let initial_sequence = if snapshot.agent_context_seed.is_some() {
+        2
+    } else {
+        1
+    };
+    if snapshot.sequence != initial_sequence
+        || !snapshot.turns.is_empty()
+        || !snapshot.items.is_empty()
+    {
         return Err(CoreError::Journal(
             "Thread history can only be imported immediately after creation".into(),
         ));
@@ -2291,6 +2394,7 @@ fn validate_inherited_context_checkpoint(
 fn validate_context_checkpoint(
     snapshot: &ThreadSnapshot,
     checkpoint: &ContextCheckpoint,
+    schema_version: u32,
 ) -> Result<(), CoreError> {
     if checkpoint.source_thread_id != snapshot.thread_id {
         return Err(CoreError::Journal(
@@ -2340,13 +2444,27 @@ fn validate_context_checkpoint(
         })
         .map(|item| item.item_id().clone())
         .collect::<Vec<_>>();
-    if checkpoint.referenced_items != expected_items {
+    let valid_items = if schema_version < 17 {
+        checkpoint.referenced_items == expected_items
+    } else {
+        expected_items.starts_with(&checkpoint.referenced_items)
+            && snapshot.context_checkpoints.last().is_none_or(|previous| {
+                checkpoint
+                    .referenced_items
+                    .starts_with(&previous.referenced_items)
+            })
+    };
+    if !valid_items {
         return Err(CoreError::Journal(
             "context checkpoint Item provenance does not match its covered Thread prefix".into(),
         ));
     }
 
-    let expected_digest = snapshot.context_source_digest(checkpoint.covered)?;
+    let expected_digest = if schema_version < 17 {
+        snapshot.context_source_digest(checkpoint.covered)?
+    } else {
+        snapshot.context_items_digest(checkpoint.covered, &checkpoint.referenced_items)?
+    };
     if checkpoint.source_digest != expected_digest {
         return Err(CoreError::Journal(
             "context checkpoint source digest does not match its covered Thread prefix".into(),
@@ -2691,3 +2809,56 @@ fn resolution_command(
 #[cfg(test)]
 #[path = "thread_reducer_tests.rs"]
 mod tests;
+
+fn branch_history_turns(source: &ThreadSnapshot) -> Result<Vec<Turn>, CoreError> {
+    let mut turns = Vec::new();
+    for mut turn in source.public_thread().turns {
+        let terminal = matches!(
+            turn.status,
+            TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+        );
+        if !terminal {
+            turn.status = TurnStatus::Interrupted;
+            turn.pending_interaction = None;
+            turn.error = None;
+        }
+        turn.usage = ModelUsageSummary::default();
+        turn.context_usage = None;
+        let results = turn
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                ThreadItem::ToolResult { tool_call_id, .. } => Some(tool_call_id.clone()),
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>();
+        let unfinished = turn
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                ThreadItem::ToolCall { tool_call_id, .. } if !results.contains(tool_call_id) => {
+                    Some(tool_call_id.clone())
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        for call in unfinished {
+            let identity = zeta_protocol::ContentDigest::sha256(
+                format!("{}:{}:{}", source.thread_id, turn.turn_id, call).as_bytes(),
+            );
+            turn.items.push(ThreadItem::ToolResult {
+                item_id: ItemId::new(format!("branch-interruption:{}", identity.as_str())).map_err(|error| CoreError::Journal(error.to_string()))?,
+                turn_id: turn.turn_id.clone(), tool_call_id: call,
+                text: "Interrupted at the history branch point. No result is inherited; prior external effects are not undone.".into(),
+                content: None, is_error: true,
+            });
+        }
+        if !turn.items.is_empty() {
+            turns.push(turn);
+        }
+        if !terminal {
+            break;
+        }
+    }
+    Ok(turns)
+}

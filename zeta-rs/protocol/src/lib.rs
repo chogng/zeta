@@ -14,6 +14,14 @@ mod session;
 mod skill;
 mod stream;
 mod thread;
+#[path = "thread/history.rs"]
+mod history;
+
+pub use history::HistoryPrefixRef;
+pub use history::MessageBoundary;
+pub use history::MessageCheckpoint;
+pub use history::RepositoryCheckpoint;
+pub use history::WorkspaceCheckpoint;
 mod tool_binding;
 mod tool_execution;
 mod tool_mode;

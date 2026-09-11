@@ -95,6 +95,7 @@ pub(crate) struct ThemeResource {
     product_root: PathBuf,
     capability: ColorLevel,
     system_appearance: ThemeAppearance,
+    terminal_background: Option<TerminalRgb>,
 }
 
 pub(crate) struct ThemeLoad {
@@ -120,6 +121,7 @@ impl ThemeResource {
             product_root,
             capability: detect_host_terminal().color_level,
             system_appearance: detect_system_appearance(terminal_background),
+            terminal_background,
         }
     }
 
@@ -133,6 +135,7 @@ impl ThemeResource {
             product_root,
             capability,
             system_appearance,
+            terminal_background: None,
         }
     }
 
@@ -149,7 +152,7 @@ impl ThemeResource {
             }
         };
         Ok(ThemeLoad {
-            theme: selected.render(self.capability),
+            theme: self.render(&selected),
             diagnostics,
         })
     }
@@ -215,11 +218,19 @@ impl ThemeResource {
         let themes = available_themes(&self.product_root, &mut diagnostics);
         let theme = resolve_theme(&themes, preference, self.system_appearance)
             .ok_or_else(|| format!("theme '{preference}' is not a Zeta Code theme"))?;
-        let rendered = theme.render(self.capability);
+        let rendered = self.render(&theme);
         Ok(ThemeSelection {
             label: theme.label,
             theme: rendered,
         })
+    }
+
+    fn render(&self, theme: &AvailableTheme) -> RenderTheme {
+        let theme = theme.render(self.capability);
+        match self.terminal_background {
+            Some(rgb) => theme.with_terminal_background([rgb.red, rgb.green, rgb.blue]),
+            None => theme,
+        }
     }
 }
 

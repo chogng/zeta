@@ -6,8 +6,8 @@ use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadId;
 
 /// Schema version written for newly persisted Thread history records.
-/// Version 16 records independent Agent identities and immutable Thread origins.
-pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 16;
+/// Version 17 adds retained history prefixes and message-level workspace checkpoints.
+pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 17;
 
 /// Resolves the identity at the history-version boundary. Legacy branches each receive one
 /// deterministic identity; current records must carry their explicitly allocated identity.

@@ -139,7 +139,7 @@ fn session_queries_do_not_replay_unrelated_corrupt_history() {
     let connection = rusqlite::Connection::open(&path).unwrap();
     connection
         .execute(
-            "UPDATE thread_events SET envelope_json = 'invalid' WHERE thread_id = ?1",
+            "UPDATE history_records SET record_json = 'invalid' WHERE digest IN (SELECT record_digest FROM thread_events WHERE thread_id = ?1)",
             [unrelated.thread_id.as_str()],
         )
         .unwrap();
@@ -205,7 +205,7 @@ fn migration_indexes_legacy_identity_without_rewriting_history() {
     let connection = rusqlite::Connection::open(&path).unwrap();
     let raw: String = connection
         .query_row(
-            "SELECT envelope_json FROM thread_events WHERE thread_id = ?1",
+            "SELECT records.record_json FROM thread_events events JOIN history_records records ON records.digest = events.record_digest WHERE events.thread_id = ?1",
             [root.thread_id.as_str()],
             |row| row.get(0),
         )
@@ -215,13 +215,12 @@ fn migration_indexes_legacy_identity_without_rewriting_history() {
     legacy["event"].as_object_mut().unwrap().remove("agentId");
     legacy["event"].as_object_mut().unwrap().remove("origin");
     let legacy = serde_json::to_string(&legacy).unwrap();
-    connection
-        .execute(
-            "UPDATE thread_events SET schema_version = 15, envelope_json = ?1 WHERE thread_id = ?2",
-            rusqlite::params![legacy, root.thread_id.as_str()],
-        )
-        .unwrap();
-    connection.execute_batch("DROP TABLE agent_threads; DROP TABLE agents; UPDATE zeta_schema_migrations SET version = 5 WHERE component = 'event-store';").unwrap();
+    connection.execute_batch("CREATE TABLE legacy_thread_events (thread_id TEXT, sequence INTEGER, event_id TEXT, schema_version INTEGER, envelope_json TEXT);").unwrap();
+    connection.execute("INSERT INTO legacy_thread_events SELECT thread_id, sequence, event_id, 15, ?1 FROM thread_events", [&legacy]).unwrap();
+    connection.execute_batch("DROP TABLE thread_events; ALTER TABLE legacy_thread_events RENAME TO thread_events;
+        DROP TABLE thread_history_prefixes; DROP TABLE history_prefix_links; DROP TABLE history_prefix_records; DROP TABLE history_prefixes;
+        DROP TABLE history_workspace_refs; DROP TABLE history_checkpoint_cleanup; DROP TABLE history_records;
+        DROP TABLE agent_threads; DROP TABLE agents; UPDATE zeta_schema_migrations SET version = 5 WHERE component = 'event-store';").unwrap();
     let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
     let threads = ThreadController::with_store(store.clone());
     let recovered = threads.read_thread(&root.thread_id).unwrap();
@@ -243,7 +242,7 @@ fn migration_indexes_legacy_identity_without_rewriting_history() {
     );
     let after: String = connection
         .query_row(
-            "SELECT envelope_json FROM thread_events WHERE thread_id = ?1",
+            "SELECT records.record_json FROM thread_events events JOIN history_records records ON records.digest = events.record_digest WHERE events.thread_id = ?1",
             [root.thread_id.as_str()],
             |row| row.get(0),
         )

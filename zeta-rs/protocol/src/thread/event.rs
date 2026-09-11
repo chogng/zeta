@@ -96,6 +96,11 @@ pub enum ThreadEvent {
     ThreadRestored {
         thread_id: ThreadId,
     },
+    /// Imports model-visible history from a retained original event prefix without copying it.
+    HistoryPrefixBound {
+        thread_id: ThreadId,
+        prefix: crate::HistoryPrefixRef,
+    },
     GoalCreated {
         thread_id: ThreadId,
         goal: crate::ThreadGoal,
@@ -224,6 +229,12 @@ pub enum ThreadEvent {
         record: ModelInvocationRecord,
     },
     ItemCompleted {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable, type = "number")]
+        checkpoint_after_sequence: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        workspace_checkpoint: Option<crate::WorkspaceCheckpoint>,
         thread_id: ThreadId,
         turn_id: TurnId,
         item: ThreadItem,
@@ -358,6 +369,7 @@ impl ThreadEvent {
             Self::ModelUsageRecorded { .. } => "model.usage_recorded",
             Self::ModelInvocationRecorded { .. } => "model.invocation_recorded",
             Self::ItemCompleted { .. } => "item.completed",
+            Self::HistoryPrefixBound { .. } => "history.prefix.bound",
             Self::PlanUpdated { .. } => "plan.updated",
             Self::InteractionRequested { .. } => "interaction.requested",
             Self::InteractionResolved { .. } => "interaction.resolved",
@@ -407,6 +419,7 @@ impl ThreadEvent {
             | Self::ModelUsageRecorded { thread_id, .. }
             | Self::ModelInvocationRecorded { thread_id, .. }
             | Self::ItemCompleted { thread_id, .. }
+            | Self::HistoryPrefixBound { thread_id, .. }
             | Self::PlanUpdated { thread_id, .. }
             | Self::InteractionRequested { thread_id, .. }
             | Self::InteractionResolved { thread_id, .. }

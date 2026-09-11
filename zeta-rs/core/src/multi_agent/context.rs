@@ -29,7 +29,7 @@ pub(crate) fn agent_context_fragments(snapshot: &ThreadSnapshot) -> Vec<Instruct
     if let Some(seed) = &snapshot.agent_context_seed {
         fragments.push(InstructionFragment::new(
             InstructionSource::new("agent-delegation", seed.delegation_id.to_string(), seed.digest.as_str()),
-            InstructionLayer::Directory,
+            InstructionLayer::Turn,
             InstructionRetention::Required,
             format!("This is delegated work from Agent Thread {}. Complete the assigned task within your own role and permissions, and return the result and verification evidence to the caller.", seed.parent_thread_id),
         ));

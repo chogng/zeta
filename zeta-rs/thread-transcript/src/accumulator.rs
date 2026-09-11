@@ -215,7 +215,8 @@ impl TranscriptAccumulator {
                     changes.push(ThreadTranscriptChange::Remove { entry_ids: removed });
                 }
             }
-            ThreadEvent::ThreadCreated { .. }
+            ThreadEvent::HistoryPrefixBound { .. }
+            | ThreadEvent::ThreadCreated { .. }
             | ThreadEvent::ThreadArchived { .. }
             | ThreadEvent::ThreadRestored { .. }
             | ThreadEvent::GoalCreated { .. }

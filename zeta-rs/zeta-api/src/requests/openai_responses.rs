@@ -28,6 +28,35 @@ use zeta_client::SseDecoder;
 
 const MAX_STREAM_EVENT_BYTES: usize = 1024 * 1024;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CacheSupport {
+    Automatic,
+    Breakpoints,
+}
+
+// Block breakpoints are part of the documented GPT-5.6-and-later Responses contract.
+fn cache_support(model: &str) -> CacheSupport {
+    let Some(version) = model
+        .strip_prefix("gpt-")
+        .and_then(|name| name.split('-').next())
+    else {
+        return CacheSupport::Automatic;
+    };
+    let mut parts = version.split('.');
+    let major = parts.next().and_then(|part| part.parse::<u32>().ok());
+    let minor = parts
+        .next()
+        .and_then(|part| part.parse::<u32>().ok())
+        .unwrap_or(0);
+    if parts.next().is_none()
+        && (major.is_some_and(|major| major > 5) || major == Some(5) && minor >= 6)
+    {
+        CacheSupport::Breakpoints
+    } else {
+        CacheSupport::Automatic
+    }
+}
+
 pub(crate) fn complete(
     endpoint: ApiEndpoint,
     target: &ResolvedApiTarget,
@@ -160,6 +189,19 @@ fn build_count_request(model: &str, request: &ModelRequest) -> Result<Value, Api
     ] {
         body.remove(field);
     }
+    if let Some(Value::Array(input)) = body.get_mut("input") {
+        for item in input {
+            for field in ["content", "output"] {
+                if let Some(Value::Array(parts)) = item.get_mut(field) {
+                    for part in parts {
+                        if let Some(part) = part.as_object_mut() {
+                            part.remove("prompt_cache_breakpoint");
+                        }
+                    }
+                }
+            }
+        }
+    }
     Ok(Value::Object(body))
 }
 
@@ -168,7 +210,14 @@ fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError>
     crate::requests::require_materialized_images(request)?;
     let mut body = Map::from_iter([
         ("model".into(), Value::String(model.into())),
-        ("input".into(), Value::Array(convert_input(&request.input)?)),
+        (
+            "input".into(),
+            Value::Array(convert_input(
+                &request.input,
+                cache_support(model),
+                request.prompt_cache_prefix_end,
+            )?),
+        ),
         ("stream".into(), Value::Bool(false)),
         ("store".into(), Value::Bool(false)),
     ]);
@@ -216,12 +265,30 @@ fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError>
     Ok(Value::Object(body))
 }
 
-fn convert_input(input: &[InputItem]) -> Result<Vec<Value>, ApiError> {
+fn convert_input(
+    input: &[InputItem],
+    cache: CacheSupport,
+    prefix_end: Option<u32>,
+) -> Result<Vec<Value>, ApiError> {
     let mut converted = Vec::new();
-    for item in input {
+    let mut candidates = Vec::new();
+    if prefix_end.is_some_and(|end| end as usize >= input.len()) {
+        return Err(ApiError::InvalidRequest(
+            "prompt cache boundary is outside the input".into(),
+        ));
+    }
+    for (index, item) in input.iter().enumerate() {
         match item {
             InputItem::Message(message) => {
                 if !message.content.is_empty() {
+                    if message.role != MessageRole::Assistant {
+                        candidates.push((
+                            index,
+                            converted.len(),
+                            "content",
+                            message.content.len() - 1,
+                        ));
+                    }
                     converted.push(json!({
                         "role": role(message.role),
                         "content": message
@@ -240,11 +307,28 @@ fn convert_input(input: &[InputItem]) -> Result<Vec<Value>, ApiError> {
                     })
                 }));
             }
-            InputItem::ToolResult(result) => converted.push(json!({
-                "type": "function_call_output",
-                "call_id": result.call_id,
-                "output": content_text(&result.content),
-            })),
+            InputItem::ToolResult(result) => {
+                let output = if cache == CacheSupport::Breakpoints {
+                    if !result.content.is_empty() {
+                        candidates.push((
+                            index,
+                            converted.len(),
+                            "output",
+                            result.content.len() - 1,
+                        ));
+                    }
+                    Value::Array(
+                        result
+                            .content
+                            .iter()
+                            .map(|part| convert_content(MessageRole::User, part))
+                            .collect(),
+                    )
+                } else {
+                    Value::String(content_text(&result.content))
+                };
+                converted.push(json!({ "type": "function_call_output", "call_id": result.call_id, "output": output }));
+            }
         }
     }
     if converted.is_empty() {
@@ -252,8 +336,24 @@ fn convert_input(input: &[InputItem]) -> Result<Vec<Value>, ApiError> {
             "input contains no encodable items".into(),
         ));
     }
+    if cache == CacheSupport::Breakpoints {
+        if let Some(end) = prefix_end {
+            if let Some((_, item, field, part)) = candidates
+                .into_iter()
+                .rev()
+                .find(|(index, ..)| *index <= end as usize)
+            {
+                converted[item][field][part]["prompt_cache_breakpoint"] =
+                    json!({ "mode": "explicit" });
+            }
+        }
+    }
     Ok(converted)
 }
+
+#[cfg(test)]
+#[path = "openai_responses_tests.rs"]
+mod tests;
 
 fn convert_content(role: MessageRole, part: &ContentPart) -> Value {
     match part {

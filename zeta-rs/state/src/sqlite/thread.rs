@@ -35,6 +35,19 @@ impl SqliteThreadStore {
 }
 
 impl ThreadStore for SqliteThreadStore {
+    fn pending_checkpoint_cleanup(&self) -> Result<Vec<(String, zeta_protocol::RepositoryCheckpoint)>, ThreadStoreError> {
+        let connection = self.connection()?;
+        let mut statement = connection.prepare("SELECT cleanup_key, checkpoint_json FROM history_checkpoint_cleanup ORDER BY cleanup_key").map_err(storage_error)?;
+        statement.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))).map_err(storage_error)?
+            .map(|row| { let (key, json) = row.map_err(storage_error)?; Ok((key, serde_json::from_str(&json).map_err(storage_error)?)) }).collect()
+    }
+    fn acknowledge_checkpoint_cleanup(&self, key: &str) -> Result<(), ThreadStoreError> {
+        self.connection()?.execute("DELETE FROM history_checkpoint_cleanup WHERE cleanup_key = ?1", [key]).map_err(storage_error)?;
+        Ok(())
+    }
+    fn load_history_prefix(&self, prefix: &zeta_protocol::HistoryPrefixRef) -> Result<zeta_history::HistoryPrefix, ThreadStoreError> {
+        super::history::read_prefix(&*self.connection()?, prefix)
+    }
     fn list_session_thread_ids(
         &self,
         session_id: &SessionId,
@@ -161,6 +174,7 @@ impl ThreadStore for SqliteThreadStore {
                 .collect::<Result<Vec<_>, _>>()?
         };
         for thread_id in &thread_ids {
+            transaction.execute("DELETE FROM thread_history_prefixes WHERE thread_id = ?1", [thread_id.as_str()]).map_err(storage_error)?;
             transaction
                 .execute(
                     "DELETE FROM agent_threads WHERE thread_id = ?1",
@@ -198,6 +212,7 @@ impl ThreadStore for SqliteThreadStore {
                 )
                 .map_err(storage_error)?;
         }
+        super::history::collect(&transaction)?;
         transaction.commit().map_err(storage_error)?;
         Ok(thread_ids)
     }
@@ -221,8 +236,8 @@ impl ThreadStore for SqliteThreadStore {
         let events = {
             let mut statement = transaction
                 .prepare(
-                    "SELECT sequence, event_id, schema_version, envelope_json FROM thread_events
-                     WHERE thread_id = ?1 ORDER BY sequence",
+                    "SELECT events.sequence, events.event_id, events.schema_version, records.record_json, records.digest
+                     FROM thread_events AS events JOIN history_records AS records ON records.digest = events.record_digest WHERE events.thread_id = ?1 ORDER BY events.sequence",
                 )
                 .map_err(storage_error)?;
             let rows = statement
@@ -232,15 +247,15 @@ impl ThreadStore for SqliteThreadStore {
                         row.get::<_, String>(1)?,
                         row.get::<_, u32>(2)?,
                         row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
                     ))
                 })
                 .map_err(storage_error)?;
             let mut events = Vec::new();
             for row in rows {
-                let (sequence, event_id, schema_version, envelope) = row.map_err(storage_error)?;
+                let (sequence, event_id, schema_version, envelope, digest) = row.map_err(storage_error)?;
                 let sequence = from_sql_integer(sequence).map_err(ThreadStoreError::Storage)?;
-                let event = serde_json::from_str::<StoredEvent>(&envelope)
-                    .map_err(|error| ThreadStoreError::Storage(error.to_string()))?;
+                let event = super::history::decode_record(&envelope, &digest)?;
                 if event.sequence != sequence
                     || event.event_id.0 != event_id
                     || event.schema_version != schema_version
@@ -292,6 +307,7 @@ impl ThreadStore for SqliteThreadStore {
             .map_err(storage_error)
             .and_then(|value| from_sql_integer(value).map_err(ThreadStoreError::Storage))?;
         let result = validate_append_batch(batch, actual)?;
+        for prefix in &batch.history_prefixes { super::history::write_prefix(&transaction, prefix)?; }
         let duplicate_batch = transaction
             .query_row(
                 "SELECT 1 FROM thread_batches WHERE thread_id = ?1 AND batch_id = ?2",
@@ -336,18 +352,19 @@ impl ThreadStore for SqliteThreadStore {
             )
             .map_err(storage_error)?;
         for event in &batch.events {
+            let record_digest = super::history::write_record(&transaction, event)?;
+            super::history::bind_prefix(&transaction, event)?;
             transaction
                 .execute(
                     "INSERT INTO thread_events
-                     (thread_id, sequence, event_id, schema_version, envelope_json)
+                     (thread_id, sequence, event_id, schema_version, record_digest)
                      VALUES (?1, ?2, ?3, ?4, ?5)",
                     params![
                         batch.thread_id.as_str(),
                         to_sql_integer(event.sequence).map_err(ThreadStoreError::Storage)?,
                         event.event_id.0,
                         event.schema_version,
-                        serde_json::to_string(event)
-                            .map_err(|error| ThreadStoreError::Storage(error.to_string()))?,
+                        record_digest,
                     ],
                 )
                 .map_err(storage_error)?;

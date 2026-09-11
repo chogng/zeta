@@ -193,3 +193,22 @@ fn graphical_theme_tokens_are_rejected_by_the_tui_theme_reader() {
     );
     fs::remove_dir_all(product_root).unwrap();
 }
+
+#[test]
+fn loading_and_switching_the_auto_theme_preserve_the_reported_background_for_fades() {
+    let root = tempfile::tempdir().unwrap();
+    let mut resource = ThemeResource::for_test(
+        root.path().into(),
+        ColorLevel::TrueColor,
+        ThemeAppearance::Dark,
+    );
+    resource.terminal_background = Some(TerminalRgb::new(1, 2, 3));
+    let expected = crate::render::RenderTheme::from_palette(
+        crate::render::ThemePalette::dark(),
+        ColorLevel::TrueColor,
+    )
+    .with_terminal_defaults()
+    .with_terminal_background([1, 2, 3]);
+    assert_eq!(resource.load("system").unwrap().theme, expected);
+    assert_eq!(resource.resolve("system").unwrap().theme, expected);
+}

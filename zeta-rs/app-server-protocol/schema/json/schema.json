@@ -3513,6 +3513,22 @@
         {
           "properties": {
             "method": {
+              "const": "session/thread/checkpoints",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/MessageCheckpointsParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "session/list",
               "type": "string"
             },
@@ -7490,6 +7506,22 @@
             },
             "result": {
               "$ref": "#/$defs/SessionResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "session/thread/checkpoints",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/MessageCheckpointsResult"
             }
           },
           "required": [
@@ -17210,6 +17242,28 @@
       ],
       "type": "object"
     },
+    "HistoryPrefixRef": {
+      "description": "Immutable original event prefix. Its records retain their original Thread IDs and sequences.",
+      "properties": {
+        "digest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "sourceSequence": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sourceThreadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "digest",
+        "sourceThreadId",
+        "sourceSequence"
+      ],
+      "type": "object"
+    },
     "HookActionDto": {
       "description": "Runtime-free Hook action. Execution still requires policy and sandbox approval.",
       "oneOf": [
@@ -23094,6 +23148,79 @@
       ],
       "type": "string"
     },
+    "MessageBoundary": {
+      "enum": [
+        "before",
+        "after"
+      ],
+      "type": "string"
+    },
+    "MessageCheckpoint": {
+      "description": "A committed message's original location, independent of the branch displaying it.",
+      "properties": {
+        "afterSequence": {
+          "description": "Includes trailing lifecycle facts from the same atomic message commit.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "itemId": {
+          "$ref": "#/$defs/ItemId"
+        },
+        "sourceSequence": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sourceThreadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "turnId": {
+          "$ref": "#/$defs/TurnId"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceCheckpoint"
+        }
+      },
+      "required": [
+        "itemId",
+        "turnId",
+        "sourceThreadId",
+        "sourceSequence",
+        "workspace",
+        "afterSequence"
+      ],
+      "type": "object"
+    },
+    "MessageCheckpointsParams": {
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "MessageCheckpointsResult": {
+      "properties": {
+        "checkpoints": {
+          "items": {
+            "$ref": "#/$defs/MessageCheckpoint"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "checkpoints"
+      ],
+      "type": "object"
+    },
     "ModelAccess": {
       "description": "How a user gains access to a model.\n\n[`ModelRef::provider`] identifies the model vendor. Product composition may use this access\nmode to choose an execution backend, but it is not proof of authentication, entitlement, or\nremote availability.",
       "enum": [
@@ -25438,6 +25565,52 @@
       ],
       "type": "string"
     },
+    "RepositoryCheckpoint": {
+      "description": "Exact immutable Git version retained for one repository at a message boundary.",
+      "properties": {
+        "gitDirectory": {
+          "type": "string"
+        },
+        "reference": {
+          "type": "string"
+        },
+        "relativePath": {
+          "type": "string"
+        },
+        "repositoryId": {
+          "type": "string"
+        },
+        "targetBranch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "targetHead": {
+          "type": "string"
+        },
+        "targetReference": {
+          "type": "string"
+        },
+        "targetUnborn": {
+          "type": "boolean"
+        },
+        "treeId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "repositoryId",
+        "relativePath",
+        "treeId",
+        "reference",
+        "gitDirectory",
+        "targetHead",
+        "targetUnborn",
+        "targetReference"
+      ],
+      "type": "object"
+    },
     "RequestId": {
       "description": "Stable identity for one outstanding bidirectional Agent interaction.",
       "minLength": 1,
@@ -26771,6 +26944,34 @@
           "required": [
             "type",
             "sourceThreadId",
+            "title"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "boundary": {
+              "$ref": "#/$defs/MessageBoundary"
+            },
+            "itemId": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "title": {
+              "type": "string"
+            },
+            "type": {
+              "const": "restoreMessage",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "itemId",
+            "boundary",
             "title"
           ],
           "type": "object"
@@ -29209,6 +29410,27 @@
           "type": "object"
         },
         {
+          "description": "Imports model-visible history from a retained original event prefix without copying it.",
+          "properties": {
+            "prefix": {
+              "$ref": "#/$defs/HistoryPrefixRef"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "historyPrefixBound",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "prefix"
+          ],
+          "type": "object"
+        },
+        {
           "properties": {
             "goal": {
               "$ref": "#/$defs/ThreadGoal"
@@ -29732,6 +29954,14 @@
         },
         {
           "properties": {
+            "checkpointAfterSequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "item": {
               "$ref": "#/$defs/ThreadItem"
             },
@@ -29744,6 +29974,16 @@
             "type": {
               "const": "itemCompleted",
               "type": "string"
+            },
+            "workspaceCheckpoint": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WorkspaceCheckpoint"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
@@ -30779,6 +31019,40 @@
             "type",
             "parentThreadId",
             "beforeTurnId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "boundary": {
+              "$ref": "#/$defs/MessageBoundary"
+            },
+            "itemId": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "parentSequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "parentThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "message",
+              "type": "string"
+            },
+            "workspace": {
+              "$ref": "#/$defs/WorkspaceCheckpoint"
+            }
+          },
+          "required": [
+            "type",
+            "parentThreadId",
+            "parentSequence",
+            "itemId",
+            "boundary",
+            "workspace"
           ],
           "type": "object"
         },
@@ -32971,6 +33245,62 @@
         "question"
       ],
       "type": "object"
+    },
+    "WorkspaceCheckpoint": {
+      "description": "File restoration evidence. Missing coverage is explicit and cannot restore current files.",
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "noFiles",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "repositories": {
+              "items": {
+                "$ref": "#/$defs/RepositoryCheckpoint"
+              },
+              "type": "array"
+            },
+            "sourceDirId": {
+              "type": "string"
+            },
+            "type": {
+              "const": "git",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "sourceDirId",
+            "repositories"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "reason": {
+              "type": "string"
+            },
+            "type": {
+              "const": "unavailable",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "reason"
+          ],
+          "type": "object"
+        }
+      ]
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",

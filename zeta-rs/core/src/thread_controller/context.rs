@@ -79,18 +79,9 @@ impl ThreadController {
                 .expect("generated context checkpoint ID is non-empty"),
                 source_thread_id: snapshot.thread_id.clone(),
                 covered: request.covered,
-                referenced_items: snapshot
-                    .items
-                    .iter()
-                    .filter(|item| {
-                        snapshot
-                            .item_sequences
-                            .get(item.item_id())
-                            .is_some_and(|sequence| *sequence <= request.covered.end_sequence)
-                    })
-                    .map(|item| item.item_id().clone())
-                    .collect(),
-                source_digest: snapshot.context_source_digest(request.covered)?,
+                source_digest: snapshot
+                    .context_items_digest(request.covered, &request.referenced_items)?,
+                referenced_items: request.referenced_items,
                 summary: request.summary,
                 schema_revision: request.schema_revision,
                 prompt_revision: request.prompt_revision,

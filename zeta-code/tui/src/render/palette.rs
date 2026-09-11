@@ -243,6 +243,7 @@ const fn hex_digit(value: u8) -> Option<u8> {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct RenderTheme {
     cursor_color: Option<[u8; 3]>,
+    terminal_background: Option<[u8; 3]>,
     accent: Color,
     accent_surface_background: Color,
     accent_surface_foreground: Color,
@@ -286,6 +287,7 @@ impl RenderTheme {
         Self {
             cursor_color: (capability != ColorLevel::Monochrome)
                 .then(|| palette.focus.components()),
+            terminal_background: None,
             accent: projected(palette.accent),
             accent_surface_background: projected(palette.accent_surface_background),
             accent_surface_foreground: projected(palette.accent_surface_foreground),
@@ -330,9 +332,15 @@ impl RenderTheme {
         self
     }
 
+    pub(crate) const fn with_terminal_background(mut self, background: [u8; 3]) -> Self {
+        self.terminal_background = Some(background);
+        self
+    }
+
     pub(crate) const fn fallback() -> Self {
         Self {
             cursor_color: Some(ThemePalette::dark().focus.components()),
+            terminal_background: None,
             accent: hex("#69aaff"),
             accent_surface_background: hex("#6658c7"),
             accent_surface_foreground: hex("#ffffff"),
@@ -486,6 +494,42 @@ pub(crate) struct RenderContext<'a> {
 }
 
 impl<'a> RenderContext<'a> {
+    pub(crate) fn fade_style(
+        self,
+        style: ratatui::style::Style,
+        opacity: f32,
+    ) -> ratatui::style::Style {
+        if opacity >= 1.0 {
+            return style;
+        }
+        let blend = |foreground: [u8; 3], background: [u8; 3]| {
+            std::array::from_fn(|index| {
+                (f32::from(background[index])
+                    + (f32::from(foreground[index]) - f32::from(background[index])) * opacity)
+                    .round() as u8
+            })
+        };
+        let background = match (self.background(), self.theme.terminal_background) {
+            (Color::Reset, Some([r, g, b])) => Color::Rgb(r, g, b),
+            (background, _) => background,
+        };
+        match (style.fg, background) {
+            (Some(Color::Rgb(r, g, b)), Color::Rgb(br, bg, bb)) => {
+                let [r, g, b] = blend([r, g, b], [br, bg, bb]);
+                style.fg(Color::Rgb(r, g, b))
+            }
+            (Some(Color::Indexed(fg)), Color::Indexed(bg)) if fg >= 16 && bg >= 16 => style.fg(
+                Color::Indexed(nearest_ansi256(blend(ansi256_rgb(fg), ansi256_rgb(bg)))),
+            ),
+            (Some(Color::Indexed(fg)), Color::Rgb(r, g, b)) if fg >= 16 => style.fg(
+                Color::Indexed(nearest_ansi256(blend(ansi256_rgb(fg), [r, g, b]))),
+            ),
+            // Terminal-defined colors have no known RGB value to interpolate.
+            _ if opacity < 0.5 => style.add_modifier(ratatui::style::Modifier::DIM),
+            _ => style,
+        }
+    }
+
     pub(crate) fn with_hyperlinks(
         mut self,
         links: &'a std::cell::RefCell<crate::terminal::hyperlinks::FrameLinks>,

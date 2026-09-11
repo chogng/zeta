@@ -29,6 +29,7 @@ use zeta_state::{SqliteTurnChangeStore, TurnChangeCommandOutcome};
 
 /// App Server adapter from Turn execution events to the Git ChangeSet domain.
 pub(super) struct GitTurnChangesRuntime {
+    pub(super) weak: std::sync::Weak<Self>,
     pub(super) dirs: Arc<ThreadDirs>,
     pub(super) store: Arc<SqliteTurnChangeStore>,
     pub(super) ledger: TurnChangeLedger,
@@ -57,7 +58,8 @@ impl GitTurnChangesRuntime {
         );
         let ledger_store: Arc<dyn TurnChangeStore> = store.clone();
         let ledger = TurnChangeLedger::start(ledger_store).map_err(|error| error.to_string())?;
-        let runtime = Arc::new(Self {
+        let runtime = Arc::new_cyclic(|weak| Self {
+            weak: weak.clone(),
             dirs: Arc::clone(&dirs),
             store,
             ledger,
@@ -79,6 +81,10 @@ impl GitTurnChangesRuntime {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
         {
+            runtime
+                .threads
+                .install_message_checkpoint_source(thread_id.clone(), runtime.clone())
+                .map_err(|error| error.to_string())?;
             if binding.kind() == worktree::ManagedDirKind::Git {
                 runtime.start_watcher(thread_id.clone(), [binding.dir().to_path_buf()])?;
             }

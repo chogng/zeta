@@ -15,10 +15,46 @@ const WATCH_STARTUP_TIMEOUT: Duration = Duration::from_secs(15);
 #[derive(Clone, Default)]
 pub struct WriteLifecycleTracker {
     active: Arc<RwLock<BTreeMap<(ThreadId, TurnId), usize>>>,
+    checkpoints: Arc<CheckpointGate>,
+}
+
+#[derive(Default)]
+struct CheckpointGate {
+    threads: std::sync::Mutex<std::collections::BTreeSet<ThreadId>>,
+    released: std::sync::Condvar,
+}
+
+/// Keeps new write lifecycles out of one Thread until a file checkpoint commits.
+pub struct WriteCheckpointLease {
+    gate: Arc<CheckpointGate>,
+    thread_id: ThreadId,
+}
+
+impl Drop for WriteCheckpointLease {
+    fn drop(&mut self) {
+        self.gate
+            .threads
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&self.thread_id);
+        self.gate.released.notify_all();
+    }
 }
 
 impl WriteLifecycleTracker {
     pub fn begin(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<(), String> {
+        let mut gate = self
+            .checkpoints
+            .threads
+            .lock()
+            .map_err(|_| "checkpoint gate poisoned".to_string())?;
+        while gate.contains(thread_id) {
+            gate = self
+                .checkpoints
+                .released
+                .wait(gate)
+                .map_err(|_| "checkpoint gate poisoned".to_string())?;
+        }
         let mut active = self
             .active
             .write()
@@ -30,6 +66,29 @@ impl WriteLifecycleTracker {
             .checked_add(1)
             .ok_or_else(|| "write lifecycle count exhausted".to_string())?;
         Ok(())
+    }
+
+    pub fn try_checkpoint(
+        &self,
+        thread_id: &ThreadId,
+    ) -> Result<Option<WriteCheckpointLease>, String> {
+        let mut gate = self
+            .checkpoints
+            .threads
+            .lock()
+            .map_err(|_| "checkpoint gate poisoned".to_string())?;
+        let active = self
+            .active
+            .read()
+            .map_err(|_| "write lifecycle lock poisoned".to_string())?;
+        if gate.contains(thread_id) || active.keys().any(|(thread, _)| thread == thread_id) {
+            return Ok(None);
+        }
+        gate.insert(thread_id.clone());
+        Ok(Some(WriteCheckpointLease {
+            gate: self.checkpoints.clone(),
+            thread_id: thread_id.clone(),
+        }))
     }
 
     pub fn end(&self, thread_id: &ThreadId, turn_id: &TurnId) {

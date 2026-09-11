@@ -20,6 +20,17 @@ pub struct RepositoryCaptureTarget {
     pub baseline_dependency_paths: BTreeSet<PathBuf>,
 }
 
+/// File and destination versions required to restore a message after its worktree is removed.
+#[derive(Clone, Debug)]
+pub struct MessageCaptureTarget {
+    pub repository_id: String,
+    pub worktree_root: PathBuf,
+    pub relative_path: PathBuf,
+    pub target_branch: Option<String>,
+    pub target_head: String,
+    pub target_unborn: bool,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TurnChangeBeginRequest {
     pub session_id: SessionId,
@@ -88,6 +99,22 @@ impl TurnChangeLedger {
                 };
                 while let Ok(command) = receiver.recv() {
                     match command {
+                        LedgerCommand::CaptureMessage {
+                            event_id,
+                            repositories,
+                            response,
+                        } => {
+                            let _ = response.send(
+                                runtime.block_on(worker.capture_message(&event_id, repositories)),
+                            );
+                        }
+                        LedgerCommand::ReleaseMessage {
+                            checkpoint,
+                            response,
+                        } => {
+                            let _ = response
+                                .send(runtime.block_on(worker.release_message(&checkpoint)));
+                        }
                         LedgerCommand::Begin(request, response) => {
                             let _ = response.send(runtime.block_on(worker.begin(request)));
                         }
@@ -155,6 +182,42 @@ impl TurnChangeLedger {
         request: TurnChangeBeginRequest,
     ) -> Result<Vec<TurnChangeSet>, TurnChangeLedgerError> {
         self.call(|response| LedgerCommand::Begin(request, response))
+    }
+
+    pub fn capture_message(
+        &self,
+        event_id: String,
+        repositories: Vec<MessageCaptureTarget>,
+    ) -> Result<Vec<zeta_protocol::RepositoryCheckpoint>, TurnChangeLedgerError> {
+        let (response, receiver) = mpsc::sync_channel(1);
+        self.inner
+            .sender
+            .send(LedgerCommand::CaptureMessage {
+                event_id,
+                repositories,
+                response,
+            })
+            .map_err(|_| TurnChangeLedgerError::WorkerStopped)?;
+        receiver
+            .recv()
+            .map_err(|_| TurnChangeLedgerError::WorkerStopped)?
+    }
+
+    pub fn release_message(
+        &self,
+        checkpoint: zeta_protocol::RepositoryCheckpoint,
+    ) -> Result<(), TurnChangeLedgerError> {
+        let (response, receiver) = mpsc::sync_channel(1);
+        self.inner
+            .sender
+            .send(LedgerCommand::ReleaseMessage {
+                checkpoint,
+                response,
+            })
+            .map_err(|_| TurnChangeLedgerError::WorkerStopped)?;
+        receiver
+            .recv()
+            .map_err(|_| TurnChangeLedgerError::WorkerStopped)?
     }
 
     pub fn seal_turn(
@@ -236,6 +299,17 @@ impl TurnChangeLedger {
 }
 
 enum LedgerCommand {
+    CaptureMessage {
+        event_id: String,
+        repositories: Vec<MessageCaptureTarget>,
+        response: mpsc::SyncSender<
+            Result<Vec<zeta_protocol::RepositoryCheckpoint>, TurnChangeLedgerError>,
+        >,
+    },
+    ReleaseMessage {
+        checkpoint: zeta_protocol::RepositoryCheckpoint,
+        response: mpsc::SyncSender<Result<(), TurnChangeLedgerError>>,
+    },
     Begin(
         TurnChangeBeginRequest,
         mpsc::SyncSender<Result<Vec<TurnChangeSet>, TurnChangeLedgerError>>,
@@ -277,6 +351,76 @@ struct LedgerWorker {
 }
 
 impl LedgerWorker {
+    async fn release_message(
+        &self,
+        checkpoint: &zeta_protocol::RepositoryCheckpoint,
+    ) -> Result<(), TurnChangeLedgerError> {
+        for name in [&checkpoint.reference, &checkpoint.target_reference] {
+            if !name.starts_with("refs/zeta/messages/") {
+                return Err(TurnChangeLedgerError::InvalidRequest(
+                    "checkpoint ref is outside the message namespace".into(),
+                ));
+            }
+            let reference = GitPrivateRef::new(name.clone())?;
+            self.git
+                .delete_private_ref_at_git_dir(
+                    std::path::Path::new(&checkpoint.git_directory),
+                    &reference,
+                )
+                .await?;
+        }
+        Ok(())
+    }
+
+    async fn capture_message(
+        &self,
+        event_id: &str,
+        repositories: Vec<MessageCaptureTarget>,
+    ) -> Result<Vec<zeta_protocol::RepositoryCheckpoint>, TurnChangeLedgerError> {
+        let mut captured = Vec::new();
+        let result: Result<(), TurnChangeLedgerError> = async {
+            for target in repositories {
+                let repository = self.git.open_repository(&target.worktree_root).await?;
+                let tree = self.git.capture_worktree_tree(&repository).await?;
+                let digest = zeta_protocol::ContentDigest::sha256(
+                    format!("{event_id}:{}", target.repository_id).as_bytes(),
+                );
+                let reference = GitPrivateRef::new(format!(
+                    "refs/zeta/messages/{}",
+                    digest.as_str().trim_start_matches("sha256:")
+                ))?;
+                let target_reference =
+                    GitPrivateRef::new(format!("{}-target", reference.as_str()))?;
+                captured.push(zeta_protocol::RepositoryCheckpoint {
+                    repository_id: target.repository_id,
+                    relative_path: target.relative_path.to_string_lossy().into_owned(),
+                    tree_id: tree.as_str().to_string(),
+                    reference: reference.as_str().to_string(),
+                    git_directory: repository.common_dir().to_string_lossy().into_owned(),
+                    target_branch: target.target_branch,
+                    target_head: target.target_head.clone(),
+                    target_unborn: target.target_unborn,
+                    target_reference: target_reference.as_str().to_string(),
+                });
+                self.git
+                    .pin_private_ref(&repository, &reference, &tree)
+                    .await?;
+                self.git
+                    .pin_private_commit(&repository, &target_reference, &target.target_head)
+                    .await?;
+            }
+            Ok(())
+        }
+        .await;
+        if let Err(error) = result {
+            for checkpoint in &captured {
+                self.release_message(checkpoint).await?;
+            }
+            return Err(error);
+        }
+        Ok(captured)
+    }
+
     async fn begin(
         &self,
         request: TurnChangeBeginRequest,

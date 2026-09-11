@@ -753,6 +753,9 @@ impl MultiAgentCoordinator {
                 }
                 materialized
             }
+            AgentContextMode::ForkedPrefix {
+                selection: zeta_protocol::ForkedAgentContext::Full,
+            } => Vec::new(),
             AgentContextMode::ForkedPrefix { selection } => {
                 materialize_parent_prefix(parent, selection)?
             }

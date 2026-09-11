@@ -82,6 +82,14 @@ impl ContextCompactionRequest {
         &self.source_items
     }
 
+    pub(crate) fn referenced_items(&self) -> Vec<zeta_protocol::ItemId> {
+        self.previous_checkpoint
+            .iter()
+            .flat_map(|checkpoint| checkpoint.referenced_items.iter().cloned())
+            .chain(self.source_items.iter().map(|item| item.item_id().clone()))
+            .collect()
+    }
+
     pub const fn target_tokens(&self) -> ContextTokenCount {
         self.target_tokens
     }

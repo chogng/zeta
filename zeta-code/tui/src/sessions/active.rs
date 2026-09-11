@@ -282,6 +282,45 @@ impl ActiveConversation {
         })
     }
 
+    pub(crate) fn restore_message<T>(
+        &mut self,
+        client: &mut AppServerClient<T>,
+        item_id: zeta_protocol::ItemId,
+        boundary: zeta_protocol::MessageBoundary,
+        checkpoint_label: &str,
+    ) -> Result<ConversationChange, SessionsError>
+    where
+        T: JsonRpcTransport,
+    {
+        let title = format!("Rewind of {}", self.session.title);
+        let result = client
+            .request_session(SessionRequestParams {
+                command_id: new_command_id("rewind"),
+                session_id: self.session.session_id.clone(),
+                request: SessionRequest::RestoreMessage {
+                    thread_id: self.thread_id.clone(),
+                    item_id,
+                    boundary,
+                    title,
+                },
+            })
+            .and_then(expect_thread_result)?;
+        let snapshot = client
+            .read_session_thread(SessionThreadReadParams {
+                session_id: result.session.session_id.clone(),
+                thread_id: result.thread_id.clone(),
+                history: None,
+            })?
+            .thread;
+        self.session = result.session;
+        self.thread_id = result.thread_id;
+        self.thread_sequence = snapshot.sequence;
+        Ok(ConversationChange {
+            notice: format!("Restored {boundary:?}: {checkpoint_label}"),
+            transcript: ConversationTranscript::Replace,
+        })
+    }
+
     pub(crate) fn open<T: JsonRpcTransport>(
         client: &mut AppServerClient<T>,
         arguments: &str,
