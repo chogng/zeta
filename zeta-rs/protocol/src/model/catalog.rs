@@ -144,8 +144,7 @@ pub enum ModelAccess {
 /// How one configured model runtime obtains completion output from its provider endpoint.
 ///
 /// This describes the immutable adapter path, not whether a remote request is entitled or will
-/// succeed. Unary runtimes may still publish one buffered final delta through Core's compatibility
-/// bridge.
+/// succeed. Unary runtimes return the completed result without synthesizing incremental deltas.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum ModelOutputTransport {

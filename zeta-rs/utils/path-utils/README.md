@@ -5,13 +5,14 @@
 > `docs/*.md` 文档拥有。
 
 `zeta-utils-path` 只处理当前 host 文件系统上的路径比较、canonical containment、symlink
-写入目标解析和原子替换。
+写入目标解析、相对路径拼接和原子替换。
 它不定义远程文件身份、workspace 授权边界或 Session 恢复策略。
 
 ## 边界与公共契约
 
 | API | 当前职责 | Failure semantics |
 | --- | --- | --- |
+| `join_descendant` | 绝对根路径下拼接非空相对路径，保留操作系统路径字节 | 拒绝父级、根与平台前缀；不检查符号链接或授予访问权限 |
 | `normalize_for_path_comparison` | canonicalize existing path，并应用 WSL mount case 规则 | 路径不存在或无法 canonicalize 时返回 `io::Error` |
 | `paths_match_after_normalization` | 比较两个可能具有 symlink/host alias 的路径 | 任一路径无法规范化时退回原始 `Path` 相等 |
 | `CanonicalPathRoot::new` / `canonicalize_within` | 缓存 canonical root，并验证 existing candidate 的真实 host path containment | candidate 不可用与 canonical path 逃出 root 分别返回 `Unavailable` / `OutsideRoot` |
@@ -66,11 +67,14 @@ ownership 已经漂移。`inspect_without_symlinks` 只报告路径事实，是�
 
 ## 集成与测试
 
+`zeta-install-context` 的随包资源定位和 `zeta-file-access::Dir` 的路径解析复用 `join_descendant`。
+文件访问层仍负责后续真实路径范围与符号链接检查；词法拼接成功不代表操作已获授权。
+
 consumer 只应依赖本 crate 的公开 API，不应依赖 private module。需要跨 RPC 序列化的路径应使用
 `zeta-utils-path-uri` 或所属 protocol 的 root-relative path contract。
 
 ```text
-cargo test -p zeta-utils-path
+just test zeta-utils-path
 bazel test //zeta-rs/utils/path-utils:path-utils-unit-tests
 ```
 

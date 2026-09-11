@@ -16,7 +16,7 @@ def main() -> None:
     args = parser.parse_args()
     root = Path(__file__).resolve().parent
     origin = args.upstream.resolve()
-    metadata = json.loads((root / "upstream.json").read_text())
+    metadata = json.loads((root / "upstream.json").read_text(encoding="utf-8"))
     revision = subprocess.check_output(
         ["git", "-C", str(origin), "rev-parse", "HEAD"], text=True
     ).strip()
@@ -65,16 +65,26 @@ def main() -> None:
                 raise SystemExit(
                     "linked files are not permitted in the SDK source snapshot"
                 )
-            a = old.read_text() if old.exists() else ""
-            b = new.read_text() if new.exists() else ""
             name = (Path("src") / package / path).as_posix()
             destination_name = (Path("src") / package / target).as_posix()
+            # The pinned tree contains mixed line endings. Read original Git
+            # bytes so checkout autocrlf never changes the patch's old side.
+            a = subprocess.check_output(
+                ["git", "-C", str(origin), "show", "HEAD:" + name]
+            ).decode("utf-8") if old.exists() else ""
+            b = new.read_text(encoding="utf-8") if new.exists() else ""
             if path in renames:
                 chunks.append(
                     f"diff --git a/{name} b/{destination_name}\nrename from {name}\nrename to {destination_name}\n"
                 )
             if a == b and path not in renames:
                 continue
+            if path not in renames:
+                chunks.append(f"diff --git a/{name} b/{destination_name}\n")
+                if not old.exists():
+                    chunks.append("new file mode 100644\n")
+                elif not new.exists():
+                    chunks.append("deleted file mode 100644\n")
             changed.append(destination_name)
             chunks.extend(
                 difflib.unified_diff(
@@ -87,9 +97,14 @@ def main() -> None:
     patch = "".join(chunks)
     destination = root / "changes.patch"
     if args.write_patch:
-        destination.write_text(patch)
-    elif not destination.exists() or destination.read_text() != patch:
+        destination.write_text(patch, encoding="utf-8", newline="\n")
+    elif not destination.exists() or destination.read_bytes().decode("utf-8") != patch:
         raise SystemExit("MXC sources differ from the reviewed changes.patch")
+    subprocess.run(
+        ["git", "-C", str(origin), "apply", "--cached", "--check", "-"],
+        input=patch.encode("utf-8"),
+        check=True,
+    )
     print(
         f"Verified MXC {revision}: {len(changed)} changed files across {len(packages)} existing SDK packages"
     )

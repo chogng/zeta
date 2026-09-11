@@ -4,6 +4,39 @@ use std::time::Duration;
 use super::EndpointPaths;
 
 #[test]
+fn bound_endpoint_connects_through_the_private_directory_and_validates_its_peer() {
+    let profile = tempfile::tempdir().unwrap();
+    let endpoint = EndpointPaths::prepare(profile.path()).unwrap();
+    let listener = endpoint.bind_listener().unwrap();
+    let accepted = std::thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        zeta_app_server_transport::validate_local_peer(&stream).unwrap();
+        stream
+    });
+    let stream = super::connect_existing(&endpoint.socket).unwrap().unwrap();
+    zeta_app_server_transport::validate_local_peer(&stream).unwrap();
+    drop(accepted.join().unwrap());
+    drop(stream);
+}
+
+#[cfg(windows)]
+#[test]
+fn existing_runtime_directory_with_inherited_permissions_is_rejected() {
+    let profile = tempfile::tempdir().unwrap();
+    std::fs::create_dir(profile.path().join("run")).unwrap();
+    assert!(EndpointPaths::prepare(profile.path()).is_err());
+}
+
+#[test]
+fn ordinary_file_at_endpoint_is_not_removed_or_replaced() {
+    let profile = tempfile::tempdir().unwrap();
+    let endpoint = EndpointPaths::prepare(profile.path()).unwrap();
+    std::fs::write(&endpoint.socket, "keep").unwrap();
+    assert!(endpoint.bind_listener().is_err());
+    assert_eq!(std::fs::read_to_string(&endpoint.socket).unwrap(), "keep");
+}
+
+#[test]
 fn profile_operation_lock_serializes_mutating_lifecycle_commands() {
     let profile = tempfile::tempdir().unwrap();
     let endpoint = EndpointPaths::prepare(profile.path()).unwrap();

@@ -2069,6 +2069,35 @@ fn model_usage_and_goal_projection_are_identical_after_recovery() {
 }
 
 #[test]
+fn unary_turns_commit_the_final_message_without_incremental_updates() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let updates = Arc::new(RecordingUpdates::default());
+    let model = Arc::new(ScriptedModel::new([Ok(text_response("complete answer"))]));
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone())
+        .with_thread_updates(updates.clone());
+
+    let result = executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+
+    assert!(
+        matches!(result, TurnExecutionOutcome::Completed(crate::CompletedTurn {
+        item: ThreadItem::AgentMessage { ref text, .. }, ..
+    }) if text == "complete answer")
+    );
+    assert_eq!(model.requests().len(), 1);
+    assert!(
+        !updates
+            .updates()
+            .iter()
+            .any(|update| matches!(update.update, ThreadUpdate::ItemDelta { .. }))
+    );
+    assert!(threads.read_thread(&thread_id).unwrap().items.iter().any(
+        |item| matches!(item, ThreadItem::AgentMessage { text, .. } if text == "complete answer")
+    ));
+}
+
+#[test]
 fn streaming_delta_and_final_item_share_one_identity() {
     let (threads, thread_id, turn_id) = started_turn();
     let updates = Arc::new(RecordingUpdates::default());
@@ -2608,6 +2637,22 @@ struct SteeringModel {
 }
 
 impl ModelService for SteeringModel {
+    fn stream(
+        &self,
+        selection: ModelSelection<'_>,
+        request: &ModelRequest,
+        cancellation: &CancellationToken,
+        sink: &mut dyn ModelStreamSink,
+    ) -> Result<ModelResponse, CoreError> {
+        let first = self.requests.lock().unwrap().is_empty();
+        sink.emit(if first {
+            ModelStreamEvent::ReasoningDelta("stale reasoning".into())
+        } else {
+            ModelStreamEvent::TextDelta("steered answer".into())
+        })?;
+        self.invoke(selection, request, cancellation)
+    }
+
     fn invoke(
         &self,
         _: ModelSelection<'_>,

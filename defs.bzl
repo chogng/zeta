@@ -1,9 +1,9 @@
 """Shared Bazel definitions for Rust crates in the Zeta workspace."""
 
-load("@crates//:defs.bzl", "all_crate_deps")
+load("@crates//:defs.bzl", "aliases", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
 
-def zeta_rust_crate(name, crate_name, data = [], crate_features = []):
+def zeta_rust_crate(name, crate_name, data = [], crate_features = [], test_env_inherit = [], test_env = {}):
     """Defines a Cargo library crate and its unit-test target.
 
     The crate's dependencies come from the workspace Cargo.lock through the
@@ -17,6 +17,7 @@ def zeta_rust_crate(name, crate_name, data = [], crate_features = []):
 
     rust_library(
         name = name,
+        aliases = aliases(),
         crate_name = crate_name,
         crate_features = crate_features,
         compile_data = data,
@@ -28,8 +29,11 @@ def zeta_rust_crate(name, crate_name, data = [], crate_features = []):
 
     rust_test(
         name = name + "-unit-tests",
+        aliases = aliases(),
         crate = ":" + name,
         data = data,
+        env = test_env,
+        env_inherit = test_env_inherit,
         deps = all_crate_deps(
             normal = True,
             normal_dev = True,
@@ -44,6 +48,7 @@ def zeta_rust_binary(name, crate_name, crate_root, deps, data = []):
     """
     rust_binary(
         name = name,
+        aliases = aliases(),
         crate_name = crate_name,
         compile_data = data,
         crate_root = crate_root,

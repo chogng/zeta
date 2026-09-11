@@ -9,4 +9,5 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::OpenAiChatCompletions,
         "https://router.huggingface.co/v1",
     )
+    .with_native_streaming()
 }

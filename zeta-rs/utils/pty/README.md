@@ -5,7 +5,7 @@
 
 `zeta-utils-pty` 为 Zeta 提供统一的 interactive PTY、non-interactive pipe 与 externally-driven
 process handle。它拥有 process spawn plumbing、stdin/output/exit channels、resize、interrupt 和
-best-effort process-tree cleanup。
+process-tree cleanup。Windows 子进程在运行前必须加入 Job；失败直接返回错误。
 
 它不拥有 Tool authorization、sandbox policy、command allow-list、timeout、output persistence 或
 Agent execution lifecycle。
@@ -88,8 +88,8 @@ spawn_pipe_process / spawn_pipe_process_no_stdin
    │  ├─ detach_from_tty
    │  ├─ set_parent_death_signal [Linux]
    │  └─ close_inherited_fds_except
-   ├─ Windows JobObject assignment [best effort]
-   ├─ spawn child
+   ├─ Windows: create Job → suspended spawn → assign → resume
+   ├─ Unix: spawn child
    ├─ stdin writer task
    ├─ stdout/stderr read_output_stream tasks
    ├─ wait task → exit code/state/oneshot
@@ -99,9 +99,13 @@ spawn_pipe_process / spawn_pipe_process_no_stdin
 Unix pipe child 进入独立 session/process group；terminate/interrupt 作用于 group。Linux
 `set_parent_death_signal` 在 `pre_exec` 设置 SIGTERM 并复查 parent PID，降低 fork/exec race。
 
-Windows pipe backend 在 process spawn 后分配 Job Object，因此 child 在 assignment 前创建 descendant
-时存在逃逸 race。Assignment 失败会 fallback 到只终止 root process。ConPTY path 的 containment
-与 pipe path 不同，相关保证必须按 platform test 而不是统一假设。
+Windows pipe 通过 `JobObject::spawn_contained` 挂起创建进程，加入禁止主动脱离的 Job 后才恢复执行。
+创建、加入或恢复失败都会终止启动；不会返回缺少 Job 管理的进程。后台 pipe 不创建控制台窗口。
+ConPTY 继续通过进程创建属性加入 Job。正常根进程退出后，现有 pipe/ConPTY 契约允许后台后代继续运行。
+
+`JobObject::spawn_contained` 也供 `zeta-git` 使用。调用方必须在整个操作期间保留 Job；取消或错误退出时
+释放 Job 会结束后代。只有完整成功后才调用 `preserve_descendants`，释放后的 Job 不能再次创建进程。
+Windows 模块入口由 `src/win/mod.rs` 移到 `src/win.rs`，子模块仍位于 `src/win/`。
 
 ## PTY spawn 调用图
 

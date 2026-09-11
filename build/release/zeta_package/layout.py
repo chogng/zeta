@@ -21,6 +21,14 @@ METADATA_FILE = "zeta-package.json"
 SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
+def copy_uds_notices(repository_root: Path, licenses: Path) -> None:
+    """Retain the notices for socket-security code linked into both product packages."""
+    destination = licenses / "uds"
+    destination.mkdir(parents=True)
+    for name in ("LICENSE-APACHE", "NOTICE"):
+        shutil.copyfile(repository_root / "zeta-rs" / "uds" / name, destination / name)
+
+
 def build_package_directory(
     output: Path,
     repository_root: Path,
@@ -115,6 +123,7 @@ def build_package_directory(
             repository_root / "zeta-rs" / "vendor" / "mxc" / "LICENSE.md",
             mxc_license_directory / "LICENSE.md",
         )
+        copy_uds_notices(repository_root, staging / "zeta-resources" / "licenses")
         for name in ("LICENSE-MIT", "UNLICENSE"):
             shutil.copyfile(
                 repository_root / "third_party" / "ripgrep" / name,
@@ -340,6 +349,10 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
         )
         if not license_path.is_file():
             raise RuntimeError("Missing ripgrep license: {}".format(license_path))
+    for name in ("LICENSE-APACHE", "NOTICE"):
+        notice = package / "zeta-resources" / "licenses" / "uds" / name
+        if notice.is_symlink() or not notice.is_file():
+            raise RuntimeError("Missing UDS notice: {}".format(notice))
     mxc_license = package / "zeta-resources" / "licenses" / "mxc" / "LICENSE.md"
     if mxc_license.is_symlink() or not mxc_license.is_file():
         raise RuntimeError("Missing MXC license")

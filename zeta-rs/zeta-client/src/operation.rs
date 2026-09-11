@@ -101,23 +101,15 @@ pub trait OperationClient: Send + Sync {
 
     /// Executes one operation and incrementally emits its successful body.
     ///
-    /// The default bridge preserves compatibility with unary clients. A
-    /// successful response is returned without a buffered body after emission;
-    /// non-success responses retain their body for status handling.
+    /// Clients without incremental execution reject this operation before sending a request.
+    /// Streaming implementations retain non-success bodies for status handling.
     fn execute_streaming(
         &self,
-        request: &ClientRequest,
-        sink: &mut dyn OperationStreamSink,
+        _: &ClientRequest,
+        _: &mut dyn OperationStreamSink,
     ) -> Result<ClientResponse, ClientError> {
-        let response = self.execute(request)?;
-        if !response.is_success() {
-            return Ok(response);
-        }
-        sink.emit(response.body())?;
-        Ok(HttpResponse::new(
-            response.status(),
-            response.headers().to_vec(),
-            Vec::new(),
+        Err(ClientError::InvalidRequest(
+            "operation client does not support streaming".into(),
         ))
     }
 

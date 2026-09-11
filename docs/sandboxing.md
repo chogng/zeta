@@ -1,83 +1,90 @@
 # 沙箱架构
 
-Zeta 决定权限与执行要求，Microsoft MXC 负责满足这些要求的系统隔离。Zeta 的 `mxc-sandbox` 是适配器；它与 Microsoft MXC 执行框架是两个不同的层。
+Zeta 的 `sandboxing` 拥有统一权限契约和执行前的后端选择。`mxc-sandbox` 是 Microsoft MXC 的薄适配器，平台实现可以独立替换。
 
 ## 调用与所有权
 
 ```mermaid
 flowchart TD
-    core["Core / action-policy：授权与审批"] --> executor["tool-executor：执行作用域"]
-    executor --> contract["sandboxing：策略、目录与进程接口"]
-    contract --> adapter["注入的 mxc-sandbox：SDK 适配"]
+    core["Core / action-policy：授权与审批"] --> executor["tool-executor：执行作用域与预算"]
+    executor --> contract["sandboxing：统一契约与 SandboxBackends"]
+    contract --> adapter["mxc-sandbox：MXC 适配"]
     adapter --> sdk["Microsoft MXC SDK"]
-    sdk --> windows["MXC ProcessContainer"]
-    sdk --> linux["MXC Bubblewrap"]
-    sdk --> macos["MXC Seatbelt"]
-    executor --> proxy["network-proxy：连接检查与转发"]
+    sdk --> windows["Windows：PSEC"]
+    sdk --> linux["Linux：Bubblewrap"]
+    sdk --> macos["macOS：Seatbelt"]
+    executor --> proxy["network-proxy：连接授权与转发"]
     proxy --> core
 ```
 
-编译依赖为 `mxc-sandbox → sandboxing + mxc-sdk`。产品组合注入后端，Core、Agent 和 Executor 不依赖 MXC 或具体系统后端。
+当前产品注册 MXC 一个候选。Codex Windows 后端尚未接入；图中不把候选研究描述为已实现能力。
 
 | Owner | 职责 |
 | --- | --- |
 | `action-policy` / Core | 操作及网络授权、审查、持久审批、重试决定 |
-| `sandboxing` | 获批权限、目录范围、宿主改动要求、启动与进程句柄契约 |
-| `tool-executor` | 输入输出、执行环境、预算、超时、取消和代理作用域 |
-| `network-proxy` | 观察真实连接目标，执行授权结果并转发 |
-| `mxc-sandbox` | 请求、句柄与错误的机械转换 |
-| Microsoft MXC | 能力检查、后端选择、进程创建、系统策略与资源清理 |
-| `install-context` | 包布局与外部可执行文件候选 |
+| `sandboxing` | 策略、目录范围、候选选择、准备与进程契约 |
+| `tool-executor` | 输入输出、环境、预算、超时、取消和代理作用域 |
+| `network-proxy` | 检查真实连接目标，执行授权结果并转发 |
+| `mxc-sandbox` | 请求、错误和进程句柄的机械转换 |
+| 具体后端 | 系统能力检查、进程创建、隔离与清理 |
+| App Server 装配 | 注册候选后端；不维护 Windows 版本或令牌分支 |
 
+后端 crate 依赖统一契约，统一契约不依赖 MXC 或 Codex。平台 crate 用于能力和依赖隔离，不按转发层数拆 crate。
 授权语义见 [permissions.md](permissions.md)，审查语义见 [auto-review.md](auto-review.md)。
+
+## 选择与执行
+
+1. Executor 为已授权请求建立代理，Manager 验证并解析工作目录。
+2. `SandboxBackends` 按注册顺序准备候选；每个候选收到完整且相同的策略和目录范围。
+3. 只有 `UnsupportedPolicy` 表示能力不支持，可以考虑下一候选。此结果必须发生在命令启动和宿主配置变更之前。
+4. 无效请求、运行时损坏、读取错误和其他运行故障直接返回，不能用换后端掩盖。
+5. 准备成功后固定后端。任何启动错误都不触发重新选择或自动重跑。
+6. 被选中的后端随 `PreparedCommand` 移交给 `ProcessHandle`，由它解释该进程的拒绝证据；不保存全局“当前后端”。
+7. 结束时终止并等待进程树，排空输出，再释放隔离资源和代理。
+
+注册的候选必须完整实施请求。准备出普通进程不能满足受限请求；只有显式 `FullAccess + Allowed` 且单目录、无隐藏范围时使用普通进程。
+当前可用性检查不等于生产安全资格，发布前仍需完成承诺支持的策略与平台验收。
 
 ## 权限契约
 
-- `ReadOnly` 保持宿主文件只读；`DirectoryWrite` 开放授予的可写目录，并保护目录元数据。
-- `FullAccess` 扩大文件权限，但仍保留明确的只读、隐藏目录和网络限制。
-- `Denied` 禁止外部网络；`Managed` 只允许通过执行专属代理；`Allowed` 允许网络。
+- `ReadOnly` 保持宿主文件只读；`DirectoryWrite` 开放授予的可写目录，并保护已存在的目录元数据。
+- `FullAccess` 扩大文件权限，但不清除明确的隐藏、只读或网络要求。
+- `Denied` 禁止外部网络；`Managed` 只允许通过本次执行的代理；`Allowed` 允许网络。
 - `SandboxScope` 隐藏共享存储并开放本次 Grant，拒绝重复、重叠或跨 Environment 的目录集合。
-- `HostAclChanges::Denied` 禁止以修改宿主 ACL 的方式实施隔离；`Scoped` 允许 SDK 对策略中的路径做必要配置，并要求正常关闭清理。
-- App Server 与配置 Hook 的固定执行策略明确选取 `Scoped`，命令参数不能选择它；基础策略构造器默认 `Denied`。
-- `FullAccess + Allowed` 且普通单目录范围是显式的普通进程执行，不通过能力缺失触发。
+- `HostAclChanges::Scoped` 单独授权 Grant 与隐藏目录内的 ACL 配置；宿主可读范围不能扩大这份修改授权。
+- 账户、服务、持久网络规则与设备 ACL 的安装授权必须独立处理，不能隐含在普通命令准备中。
+- 子进程输出只是可能已有副作用的诊断，不能据此声称用户代码没有执行。
 
-后端只能在满足要求的实现中选择。缺失能力时返回不支持，不能开放更多目录、网络或宿主改动。
-Windows ProcessContainer 的不同实现不保证能力等价：断网请求可使用合规的 AppContainer/DACL 路径；精确代理、身份等要求仍受 SDK 能力限制。
+## MXC 接入边界
 
-## 启动与生命周期
+- 保留固定 revision 的 SDK、独立 ACL 授权、文件对象身份检查、目录例外及进程生命周期补丁。
+- Windows 的 Zeta 请求只走能够实施完整策略的 PSEC；缺少能力返回 `UnsupportedPolicy`。不会在 MXC 内转入账户实现、AppContainer/DACL 或普通进程。
+- 按运行时能力检查 PSEC，不能用“24H2 以上”代替检查。
+- Linux 与 macOS 继续通过同一适配器接入 Bubblewrap 和 Seatbelt。
+- 本轮自写 `mxc-user` 账户运行器已退出源码、编译、打包、签名和 CI 配置；不再安装它。
 
-1. 授权后建立执行专属代理，取得单个 HTTP/SOCKS 共享端点。
-2. `SandboxManager` 验证目录，适配器构造 SDK 请求；尚未启动用户命令。
-3. `PreparedCommand` 持有 `SandboxLaunch`。Executor 在执行起点调用它，得到通用 `ProcessHandle`。
-4. SDK 持有隔离进程与系统资源，Executor 排空输出并检查取消和超时。
-5. 结束时通过 SDK 终止、等待进程树，排空输出，再释放句柄和代理。
+补丁来源与校验见 [MXC 依赖](../zeta-rs/vendor/mxc/README.md)。原型源码与校验清单保存在本机 `.build/acceptance/mxc-local/prototype-source`，历史测试与系统清理结果保留在 [Windows 验收手册](windows-sandbox-acceptance-runbook.md)。
 
-适配器不会把 SDK 启动阶段的未知失败标成可安全重跑。子进程输出的权限错误只用于“可能已有副作用”的诊断。
-普通进程实现仍由通用进程层持有；不与受限后端的能力选择混用。
+## Windows 候选评估
 
-## SDK 承接与旧实现
+Codex 的 Windows 实现是候选基线，不能未经核对直接注册：
 
-| 原路径或职责 | 当前归属 |
-| --- | --- |
-| `sandboxing/src/macos.rs` 的系统执行 | MXC `seatbelt_common` |
-| `linux-sandbox/` 的隔离与网络辅助程序 | MXC `bwrap_common` |
-| `windows-sandbox-rs/` 的系统隔离 | MXC `appcontainer_common` / ProcessContainer |
-| `windows-sandbox-service/`、worker、MSI | 自建服务链退出；使用 SDK 的系统实施与生命周期 |
-| 前一版 `mxc-sandbox` 中的 PSEC、Seatbelt、FD 转交实现 | 已移除，改为 SDK 启动与句柄 |
+- 固定的账户名、服务名、管道名和配置位置需要独立于用户现有 Codex 安装。
+- 当前 crate 依赖 Codex 协议、网络代理、PTY 工具及遥测；适配必须限制依赖和类型的传播范围。
+- 自动安装、刷新 ACL、重试及较弱模式切换必须符合 Zeta 的独立授权和不自动重跑契约。
+- NUL 设备权限、可写目录扫描、隐藏父目录下的授权例外、PowerShell/PTY 和异常恢复需要同一套端到端测试。
 
-补丁、来源和验证说明见 [MXC 依赖](../zeta-rs/vendor/mxc/README.md)。
-补丁覆盖 SDK 请求控制、目录例外、代理环境和退出观察；没有把旧 Zeta 平台后端复制进适配器。
-Linux 包保留上游 Bubblewrap；Windows 不再携带 Zeta command runner 或系统服务。
+这不是已经注册的第二后端，也没有因此取得 Windows 23H2 支持。兼容实现未完成验收时，能力不足的系统明确拒绝受限执行。
 
-## 当前支持与验收限制
+## 当前验证范围
 
 | 项目 | 状态 |
 | --- | --- |
-| macOS SDK 执行、目录与代理隔离 | 有真实进程回归测试 |
-| Linux SDK 受管网络 | 有实机测试入口；依赖 slirp4netns、util-linux、iptables 和相应内核功能 |
-| Windows SDK 文件与断网策略 | 完整 SDK 可编译；仍需实机验证所选实现 |
-| Windows 当前严格 `Managed` 请求 | 明确不支持：代理身份和入站约束不能按当前部署完整表达 |
-| Windows ACL 崩溃恢复、完整平台逃逸验证 | 尚未完成 |
+| 执行前选择、故障停止、启动不重跑、每进程拒绝判定 | 有本机单测与 Executor 调用链回归 |
+| macOS MXC 执行、目录与代理隔离 | 保留真实进程回归入口 |
+| Linux MXC 受管网络 | 保留实机入口；依赖相应内核与隔离工具 |
+| Windows MXC PSEC | 当前 23H2 本机不具备相应能力，不能据此宣布端到端通过 |
+| 已退出的账户原型 | 曾完成 2 项完整用例、4 项失败；测试账户、网络对象和运行时目录已清理 |
+| Codex Windows 候选、IPv6、完整并发/崩溃恢复、WSL | 尚未完成接入或验收 |
 
-SDK 接口接通、交叉编译和包测试不能替代系统隔离验收。固定 MXC 版本仍为早期预览，尚未取得生产安全边界资格。
-Windows 步骤见 [验收手册](windows-sandbox-acceptance-runbook.md)，网络规则见 [network-proxy](../zeta-rs/network-proxy/README.md)。
+固定 MXC 版本仍为早期预览。统一接口、编译和部分测试不能替代系统隔离验收。

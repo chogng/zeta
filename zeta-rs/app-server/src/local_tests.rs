@@ -1615,7 +1615,16 @@ struct SnapshotModel {
 }
 
 impl ModelInvoker for SnapshotModel {
-    fn invoke(&self, _: &ModelRequest) -> Result<ModelResponse, ModelProviderError> {
+    fn output_transport(&self) -> zeta_protocol::ModelOutputTransport {
+        zeta_protocol::ModelOutputTransport::Unary
+    }
+
+    fn stream_with_cancellation(
+        &self,
+        _: &ModelRequest,
+        _: &zeta_async_utils::CancellationToken,
+        _: &mut dyn zeta_model_provider::ModelEventSink,
+    ) -> Result<ModelResponse, ModelProviderError> {
         self.gate.wait_until_released();
         Ok(ModelResponse {
             output: vec![ResponseItem::Text(self.model.clone())],

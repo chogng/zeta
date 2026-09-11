@@ -7,6 +7,9 @@ pub enum SandboxError {
     OutsideDir(PathBuf),
     InvalidRelativePath(PathBuf),
     InvalidScope(String),
+    /// The backend cannot represent this exact policy. No command has started
+    /// and no host configuration may have changed when returning this error.
+    UnsupportedPolicy(String),
     BackendUnavailable {
         backend: SandboxKind,
         message: String,
@@ -32,6 +35,9 @@ impl fmt::Display for SandboxError {
                 )
             }
             Self::InvalidScope(message) => write!(formatter, "invalid sandbox scope: {message}"),
+            Self::UnsupportedPolicy(message) => {
+                write!(formatter, "unsupported sandbox policy: {message}")
+            }
             Self::BackendUnavailable { backend, message } => {
                 write!(formatter, "{backend:?} sandbox is unavailable: {message}")
             }

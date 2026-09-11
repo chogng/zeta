@@ -1,39 +1,25 @@
 # Windows MXC 验收手册
 
 本手册验证 `CommandExecutor → mxc-sandbox → Microsoft MXC SDK → ProcessContainer`。
-2026-09-10 在 Windows 11 23H2 实机执行：已修复不存在保护路径导致的错误；实机仍受 `C:\` ACL 权限限制，尚未通过系统隔离验收。
+优先在普通权限本机运行。2026-09-10 的旧实现失败记录保留在文末；新的 MXC 账户实现已在 23H2 本机运行：完整用例 2 项通过、4 项失败，尚未取得 Windows 整体验收资格。
 实现契约见 [mxc-sandbox](../zeta-rs/mxc-sandbox/README.md)。
 
-## 入口
+## 当前入口
 
-不安装 Zeta command runner、配置服务、worker 或 Runtime MSI。
-记录 Windows build、架构、SDK revision、执行策略和 SDK 诊断，不能仅按是否存在 PSEC 判断整个产品是否可用。
+当前 MXC Windows 后端只接受完整 PSEC 能力。此前的账户原型已退出源码和产品包，不能再通过 `mxc-user` 或 `tests/local.ps1` 安装它。历史结果保留在下文。
 
 ```powershell
-just check zeta-mxc-sandbox --tests
-just test zeta-mxc-sandbox --test windows
+just test zeta-sandboxing --lib
+just test zeta-tool-executor --lib
+just test zeta-mxc-sandbox --lib --test windows
+python -B scripts/cargo.py build -p zeta-network-proxy --example probe --locked
+$env:ZETA_NETWORK_PROBE = Join-Path $PWD '.build/cargo/debug/examples/probe.exe'
+# 需要具备完整策略能力的 PSEC 主机：
 just test zeta-mxc-sandbox --test windows -- --ignored --test-threads=1
 ```
 
-非忽略测试验证当前严格受管网络请求被拒绝，且用户命令没有启动。
-忽略测试要求真实文件隔离与进程树能力，验证目录范围、退出码、取消和超时。
-测试显式允许 SDK 为策略中的路径配置宿主 ACL；能力或权限不满足时记录失败，不把未执行当作通过。
-
-## 必须验证的行为
-
-| 场景 | 预期 |
-| --- | --- |
-| 多根文件范围 | 工作目录可写，参考目录只读，其他 Agent 目录不可读 |
-| 元数据 | `.git` 等保护路径不可写，路径别名不能扩大权限 |
-| 退出码 | 用户进程 `125` 保留为普通退出码，不伪装成私有运行器启动失败 |
-| 网络禁止 | 禁止直连与宿主回环，不依赖代理环境变量实现隔离 |
-| 严格受管网络 | 当前部署明确拒绝，不能放开入站或一般回环来使其运行 |
-| 后端选择 | SDK 仅使用能够实施本次请求且符合宿主 ACL 要求的实现 |
-| 取消、超时、关闭 | 主进程及后代结束，无延迟文件副作用 |
-| 宿主 ACL | 对比执行前、正常关闭后和异常退出后的 ACL；分别记录清理与恢复结果 |
-| 包 | 不再要求自建沙箱辅助程序，保留 MXC 许可证 |
-
-还需手工核对链接与准备后替换路径、并发 ACL 改动、IPv6、宿主崩溃后的资源恢复。
+23H2 本机不能作为 PSEC 完整执行的通过证据。缺少能力时应在准备阶段拒绝，不转入旧账户原型或普通进程。
+端到端用例继续覆盖工作目录写入、参考目录只读、隐藏目录、元数据、真实退出码、受管网络、账户或执行身份隔离、取消与后代回收。
 
 ## WSL 验收边界
 
@@ -60,12 +46,14 @@ WSL 2 的 Linux 验收复用 [Linux 测试入口](../zeta-rs/mxc-sandbox/README.
 WSL 2 使用 Linux 内核，但提供跨系统文件与命令互操作；mirrored 模式还改变宿主回环的可达性。
 因此普通 Linux CI 通过不足以证明上述边界通过，见 [WSL 版本区别](https://learn.microsoft.com/en-us/windows/wsl/compare-versions)、[文件与命令互操作](https://learn.microsoft.com/en-us/windows/wsl/filesystems)、[网络模式](https://learn.microsoft.com/en-us/windows/wsl/networking)。
 
-## 严格代理的缺口
+## 已退出账户原型的受管网络记录
 
-当前 Zeta 要求只连自己的代理并保持其他入站和回环关闭。
-固定版本的 ProcessContainer 代理模式需要相应代理身份及不同的私网入站配置，普通宿主代理不满足这一契约。
-SDK 返回不支持；不能用成功启动、HTTP_PROXY 存在或更宽的网络配置作为验收通过。
-要开放这项能力，必须先补齐实际部署与 SDK 能力，并重新进行网络绕过和并发执行验收。
+账户原型曾以 WFP 按账户拒绝 IPv4/IPv6 连接、监听及接收，仅给 Managed 槽位开放一个固定 TCP 回环端口。
+执行期间独占该端口并转发至本次 Core 代理，其他槽位不能使用这个端口。
+SDK 原有 runtime proxy 身份模式仍保留原校验，账户实现不通过放宽它来获得启动。
+
+真实验收必须确认限制令牌仍命中 WFP 的账户条件；还须检查 IPv6、DNS、跨槽位代理、端口占用、账户并发和宿主崩溃恢复。
+不能用进程启动、HTTP_PROXY 存在或单个 TCP 拒绝作为全部网络边界通过的证据。
 
 ## 证据与发布状态
 
@@ -95,6 +83,7 @@ Microsoft 对固定预览版的限制见 [上游说明](https://github.com/micro
 当时适配器把全部保护目录名加入只读策略，SDK 对这些路径使用 `OPEN_EXISTING` 检查访问权；当次错误是路径不存在，不能仅根据外层错误文案判断为用户缺少 ACL 权限。
 
 文件隔离、退出码、进程树终止、ACL 正常与异常恢复、网络绕过和 WSL 跨系统边界均仍待验收。
+
 ### 2026-09-10 修复与复测
 
 适配器按元数据契约检查路径是否存在：已存在的文件、目录及链接仍进入只读策略，确认不存在的路径不提交给 ACL 实现，也不创建空目录。
@@ -116,3 +105,128 @@ Microsoft 对固定预览版的限制见 [上游说明](https://github.com/micro
 | `just test zeta-mxc-sandbox --test windows -- --include-ignored --test-threads=1` | 1 | 1 项通过、2 项失败、0 项忽略；失败原因均为上述 `C:\` 权限限制 |
 
 本轮编译未报告 warning。对应本机日志位于同一证据目录的 `fix-lib.log`、`fix-check.log`、`fix-build.log`、`fix-windows-final.log`。
+
+### 2026-09-10 VMware 普通用户与管理员结果
+
+用户在虚拟机内分别运行验收光盘中的 `START.cmd` 和提升权限后的 `ADMIN.cmd`，并返回两份结果包。
+测试程序的 SHA-256 与分发包一致：`5436fd082ad160ba6dfa0bf4d38a78fa408a712ff936b9ee18d3dc1b5c3c3218`。
+构建来源为 `3275ffc3019cf5e05c628cf455d362bfb2e68c71`；执行命令为 `windows.exe --include-ignored --test-threads=1 --nocapture`。
+
+虚拟机系统为 Windows 11 专业版 23H2，build `22631.2861`，64 位。
+日志中的实际管理员标志分别为 `false` 和 `true`，已确认两次权限不同。
+
+| 执行身份 | 结果 | 测试程序退出码 | 失败位置 |
+| --- | --- | --- | --- |
+| 普通用户 | 1 项通过、2 项失败、0 项忽略 | 101 | `C:\` 的 `WRITE_DAC` 检查被拒绝 |
+| 管理员 | 1 项通过、2 项失败、0 项忽略 | 101 | `C:\DumpStack.log.tmp` 打开失败，`os error 32`（共享冲突） |
+
+两次均未触发验收脚本的 150 秒超时；失败来自测试本身。
+唯一通过项是严格受管网络请求被拒绝。多根目录、元数据和退出码用例，以及超时和取消用例，均在 SDK 启动检查阶段失败，尚未执行对应的隔离断言。
+
+管理员结果说明，当前问题不能仅归结为未提升权限：Zeta 的 `mxc_engine` 补丁将宿主磁盘根目录及所有直接子项展开成文件授权，所选 DACL 实现随后逐项检查访问权。
+管理员可以越过 `C:\` 检查，但系统占用文件仍会使该请求失败。当前宿主文件基线与所选实现的匹配问题尚未解决，不能通过删除系统文件、关闭分页或放宽隔离要求取得通过。
+
+ACL 证据的边界：
+
+- 两份日志各采样 17 个路径；普通用户成功读取 11 个，管理员成功读取 14 个，其余路径有读取错误。
+- 独立重算执行前后样本差异，成功读取的 ACL 没有变化，读取错误也相同，与 `acl-changes.json` 的空数组一致。
+- 这不代表全盘 ACL 清理或异常恢复通过；本次启动检查失败，没有验证正常沙箱执行后的清理，也没有执行崩溃恢复测试。
+
+原始结果包及独立核对摘要保存在本机 `.build/acceptance/mxc-windows-20260910/vm-results/`：`results-current.zip`、`results-elevated.zip`、`summary.json`。
+原始归档 SHA-256 分别为 `5ce4b734091491df1927efa3d2f10fed60e076cd591b77d556b67afae7475f08` 和 `4725dfc3b0ddf23d22290e73df1d5b484fedebb3eb4a12f249d5f4e1df161b61`。
+本轮结论是该 Windows 11 23H2 环境未通过验收；其他 Windows build、完整网络绕过、WSL 和异常恢复仍未验收。
+
+### 2026-09-11 新账户实现的本机准备检查
+
+准备检查时，系统为上述 23H2 本机，执行令牌未提升；当时尚未配置账户运行时，也未创建本机账户或 WFP 规则。
+
+| 验证 | 结果 |
+| --- | --- |
+| SDK 独立 ACL 授权测试 | 4 项通过 |
+| SDK 请求与精确代理测试 | 2 项通过 |
+| MXC 账户实现测试 | 7 项通过；其中 2 项直接调用本机 Windows 的限制令牌、文件 ACL、独立桌面和子进程 API |
+| Zeta 适配器 lib / Windows 非忽略测试 | 4 + 1 项通过；5 项完整执行测试待配置后运行 |
+| `just check zeta-mxc-sandbox --tests --locked` | 通过 |
+| Cargo 正常构建 `mxc-user` / 网络 probe | 通过 |
+| Bazel `//zeta-rs/vendor/mxc:mxc-user` | 通过 |
+| 打包与签名流程单测 | 42 项中 38 项通过，4 项既有平台条件跳过；没有进行正式代码签名 |
+| 未配置运行时与缺少授权参数的 setup | 均拒绝，运行时目录未创建 |
+| vendor 差异与固定上游复核 | 已重新生成；源文件对照通过 |
+
+本机真实文件测试发现并修正了错误的限制 SID 类型；当前使用每次执行随机生成的 SID。
+测试复用实际运行器的令牌创建方法，确认工作目录写入、元数据只读和后续执行不能借用旧文件所有权。
+独立桌面测试确认受限子进程经实际标准流退出并保留 `125`；这些仍不代表专用账户登录和 WFP 网络限制已通过。
+
+适配器 Bazel 目标另外遇到上游 `plm` build script 的 Windows 版本资源编译工具缺失（`program not found`）。
+账户 helper 的 Bazel 目标已单独通过；不能把该结果写成整个适配器 Bazel 构建通过。
+完整账户、网络、并发、崩溃恢复和 WSL 验收继续待完成。
+
+### 2026-09-11 清理补强
+
+- 移除原先保留 helper 和锁文件的行为；加入账户、账户配置目录与 WFP 对象删除后的重新查询。
+- 正在获取账户槽位的执行与配置/删除互斥，避免清理开始后仍启动新命令。
+- 3 项新增临时目录清理回归通过：已知产物清理、未知文件/未完成执行保留恢复记录、被替换的 helper 拒绝删除。账户模块共 10 项测试通过。
+- 本轮没有配置或删除真实本机账户与网络规则；这些系统对象的清理仍需在获得明确授权后的完整验收中验证。
+- 测试报告和构建产物继续保存在工作区；Windows 自身的审计记录不属于测试清理目标。
+
+### 2026-09-11 授权后的本机账户验收
+
+宿主仍为 Windows 11 23H2 / 22631，正式测试进程的 `elevated=false`。用户明确授权配置、测试和清理后，执行 5 轮配置与清理；每轮只有 6 个账户和其 26 个过滤器，前一轮清理成功后才创建下一轮。
+
+发现并修复：
+
+- 新账户加入本地 Users 组，名称通过固定 SID 解析，不依赖系统语言。
+- 运行器复制后单独设置文件 ACL，修复目录 ACL 没有应用到已有子文件的问题。
+- 运行时移至本次独占的 ProgramData 目录，使系统登录服务能够读取运行器；凭据文件不继承账户的读取权限。
+- 配置阶段需要的 Shell32 API 改为从 System32 按需加载，避免登录工作进程尚未执行就因界面 DLL 初始化而失败。
+- 可信启动进程退出后、用户命令恢复执行前应用 Job 的界面限制；用户命令仍在相同文件、网络与限制令牌要求下执行。
+- Windows 接受的套接字显式改为阻塞模式，避免代理转发收到 `WSAEWOULDBLOCK` 后提前关闭连接。
+- 增补启动进程的错误和退出码诊断；ACL 采样使用系统 .NET 文件接口，避免测试依赖 PowerShell 模块自动加载。
+
+| 实际运行 | 结果 |
+| --- | --- |
+| `just test appcontainer_common --manifest-path zeta-rs/vendor/mxc/Cargo.toml --lib user:: --locked -- --include-ignored --test-threads=1` | 12 项通过，包括真实账户登录、运行器/凭据访问边界、限制令牌、文件写权限和独立桌面 |
+| `tests/local.ps1 -Phase Test -Output .build/acceptance/mxc-local/round5` | 2 项通过、4 项失败、0 项忽略；测试程序退出码 101 |
+| 受管网络 | 获批 HTTP 与 SOCKS 请求成功，未获批目标返回拒绝；直接 TCP、其他端口、监听和后代绕过被阻止，UDP 没有到达宿主接收端 |
+| PowerShell 文件与退出用例 | 超时，没有进入预期断言；不能记作文件范围与退出码验收通过 |
+| PowerShell 后代终止用例 | 没有生成预期子进程 PID；取消、超时与正常退出后的后代终止仍未通过完整调用链验收 |
+| 每轮 Remove | 均成功，删除后按记录重新查询账户与 WFP 对象，并移除运行时文件 |
+
+PowerShell 未完成初始化的根因仍需定位。没有放宽文件、网络、界面或宿主 ACL 要求来取得通过。此次结果只覆盖本机及上述探针；IPv6、跨执行并发、完整崩溃恢复和 WSL 仍未验收。
+
+最终清理核验记录在 `.build/acceptance/mxc-local/round5/cleanup-verification.json`：
+
+- 最后一轮 6 个账户已不存在，对应用户配置目录为 0。
+- 查询测试使用的 powershell / mxc-user / probe / cmd 进程，没有属于这些账户的进程。
+- 每个记录的 WFP filter、sublayer 和 provider 删除后均查询为不存在。
+- ProgramData 运行时目录和前几轮 LocalAppData 运行时目录均不存在。
+- 工作区中的测试日志、源码和构建产物保留；不删除 Windows 审计记录。
+
+完整日志位于 `.build/acceptance/mxc-local/round1` 至 `round5`；最初一次测试另保存为 `test-1.log`。最后一轮 helper SHA-256 为 `e2637448c13ad504afc3592ceb2e60e8f5c900942ef506f77bb2f77c419f14d6`。
+
+最终 helper 的 Bazel 构建通过。一次重复 Cargo 构建在等待其他任务的 `zeta-app-server` 构建锁时被取消；没有把这次取消记为通过。此前本轮 MSVC 正常 helper 构建、12 项账户测试和完整调用链测试均已实际完成。
+
+额外按 SID 查询可读取的进程，未发现测试 SID；有 140 个进程的所有者信息不可读取，完整输出在 `process-owner-audit.json`。该结果不能扩大为对所有受保护系统进程的证明。共享 MXC ACL 恢复目录内没有剩余恢复文件。
+
+### 2026-09-11 统一契约与原型退出
+
+- Zeta `sandboxing` 增加执行前候选选择；仅 `UnsupportedPolicy` 允许考虑下一个候选，运行故障和启动错误均不自动换实现。
+- 被选后端与该进程绑定，Executor 使用实际进程的后端解释拒绝，覆盖并发准备后反序启动的情况。
+- App Server 的两个本地执行入口通过同一注册方式装配。目前只有 MXC 实际注册；Codex Windows 候选没有被伪装成已接入。
+- 删除原型账户运行器、构建目标、打包/签名入口及 CI 配置。15 份原型源码及摘要、原 vendor 补丁和打包补丁保存在 `.build/acceptance/mxc-local/prototype-source`。
+- Windows 的 MXC 请求要求完整 PSEC 能力；原先的账户选择和 AppContainer/DACL 转入路径不再用于 Zeta 的请求。23H2 没有被宣布支持。
+- 保留独立 ACL 授权、对象身份检查、跨平台测试和 MXC 许可证；App 包也保留许可证，且不包含退场运行器。
+
+| 本轮验证 | 结果 |
+| --- | --- |
+| `just test zeta-sandboxing --lib` | 10 项通过，含 6 项新增选择/生命周期回归 |
+| `just test zeta-tool-executor --lib` | 4 项通过，含真实子进程结果由选中后端判定的调用链回归 |
+| `just test zeta-mxc-sandbox --lib --test windows` | 4 + 1 项通过；5 项 PSEC 端到端用例保留但本机未执行 |
+| SDK `host_changes::tests` / `request::tests` | 4 + 2 项通过 |
+| `just check zeta-app-server --lib` | 通过 |
+| `python -B scripts/cargo.py build -p zeta-mxc-sandbox --locked` | 通过 |
+| `bazel build //zeta-rs/sandboxing:sandboxing` | 通过；保留仓库既有 GTK 依赖注解提示 |
+| Windows 打包与签名相关检查 | 9 项通过，含退场运行器排除和许可证保留 |
+| 完整相关 Python 套件 | 38 项中 1 项失败、4 项跳过：现有协议主版本断言为 2，当前工作区生成为 3；未修改并行的协议工作 |
+
+这次没有重新安装测试账户或网络规则。候选 Windows 实现仍需要解决安装身份、宿主修改授权与完整策略兼容性，并通过独立验收；本轮接口和构建结果不能替代这项资格。

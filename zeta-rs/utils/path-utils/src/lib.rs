@@ -5,6 +5,7 @@ mod canonical_root;
 mod comparison;
 mod environment;
 mod persistence;
+mod relative;
 
 pub use canonical_root::CanonicalContainmentError;
 pub use canonical_root::CanonicalPathRoot;
@@ -18,6 +19,7 @@ pub use persistence::SymlinkWritePaths;
 pub use persistence::resolve_symlink_write_paths;
 pub use persistence::write_atomically;
 pub use persistence::write_text_atomically;
+pub use relative::join_descendant;
 
 #[cfg(test)]
 #[path = "path_utils_tests.rs"]

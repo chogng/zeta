@@ -12,6 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 dunce = { workspace = true }
+path-utils = { package = "zeta-utils-path", path = "../utils/path-utils" }
 schemars = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true }

@@ -59,3 +59,18 @@ windows_sandbox_lifecycle = { git = "https://github.com/microsoft/mxc", rev = "6
 winreg = "0.55"
 wslc_common = { git = "https://github.com/microsoft/mxc", rev = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
 wxc_common = { path = "core/wxc_common" }
+
+[patch."https://github.com/microsoft/mxc"]
+mxc_engine = { path = "core/mxc_engine" }
+wxc_common = { path = "core/wxc_common" }
+appcontainer_common = { path = "backends/appcontainer/common" }
+bwrap_common = { path = "backends/bubblewrap/common" }
+seatbelt_common = { path = "backends/seatbelt/common" }
+
+[profile.dev]
+debug = "limited"
+incremental = true
+opt-level = 1
+
+[profile.test.package."*"]
+opt-level = 1

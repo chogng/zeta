@@ -190,8 +190,8 @@ impl SandboxProcessDenial {
     }
 }
 
-/// A prepared backend launch. Implementations retain their SDK request until the executor
-/// reaches the authorized start boundary; no SDK type crosses this interface.
+/// A prepared backend launch. Implementations retain their prepared state until the executor
+/// reaches the authorized start boundary; implementation types do not cross this interface.
 pub trait SandboxLaunch: Send {
     fn spawn(
         self: Box<Self>,
@@ -209,6 +209,7 @@ pub struct PreparedCommand {
     kind: SandboxKind,
     command: SandboxCommand,
     launch: Launch,
+    backend: Option<std::sync::Arc<dyn crate::SandboxBackend>>,
 }
 
 impl std::fmt::Debug for PreparedCommand {
@@ -232,6 +233,7 @@ impl PreparedCommand {
             kind,
             command: SandboxCommand::new(program, arguments, working_directory),
             launch: Launch::Command,
+            backend: None,
         }
     }
     pub fn sandboxed(command: &SandboxCommand, launch: impl SandboxLaunch + 'static) -> Self {
@@ -239,6 +241,7 @@ impl PreparedCommand {
             kind: SandboxKind::Restricted,
             command: command.clone(),
             launch: Launch::Sandbox(Box::new(launch)),
+            backend: None,
         }
     }
     pub fn unrestricted(command: &SandboxCommand) -> Self {
@@ -246,6 +249,7 @@ impl PreparedCommand {
             kind: SandboxKind::Unrestricted,
             command: command.clone(),
             launch: Launch::Command,
+            backend: None,
         }
     }
     pub fn kind(&self) -> SandboxKind {
@@ -261,8 +265,18 @@ impl PreparedCommand {
         self.command.working_directory()
     }
 
+    pub(crate) fn with_default_backend(
+        mut self,
+        backend: std::sync::Arc<dyn crate::SandboxBackend>,
+    ) -> Self {
+        if self.kind == SandboxKind::Restricted && self.backend.is_none() {
+            self.backend = Some(backend);
+        }
+        self
+    }
+
     pub fn spawn(self, environment: &[(String, String)]) -> Result<ProcessHandle, SandboxError> {
-        match self.launch {
+        let process = match self.launch {
             Launch::Sandbox(launch) => launch.spawn(environment),
             Launch::Command => {
                 let mut command = Command::new(self.command.program());
@@ -279,7 +293,8 @@ impl PreparedCommand {
                     message: error.to_string(),
                 })
             }
-        }
+        }?;
+        Ok(process.with_backend(self.backend))
     }
 }
 

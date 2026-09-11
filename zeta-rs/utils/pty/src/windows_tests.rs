@@ -71,10 +71,9 @@ async fn assert_terminate_kills_descendant(
         "import pathlib,time; print('{READY_MARKER}',flush=True); time.sleep(1); pathlib.Path(bytes.fromhex('{}').decode()).write_text('survived')",
         utf8_hex(&marker.to_string_lossy())
     );
-    // Exercise descendants created after the best-effort pipe assignment,
-    // without making the test depend on winning the intentionally accepted race.
+    // Spawn the descendant immediately: containment must precede user code.
     let code = format!(
-        "import subprocess,sys,time; time.sleep(0.5); code=bytes.fromhex('{}').decode(); subprocess.Popen([sys.executable,'-u','-c',code]); time.sleep(60)",
+        "import subprocess,sys,time; code=bytes.fromhex('{}').decode(); subprocess.Popen([sys.executable,'-u','-c',code]); time.sleep(60)",
         utf8_hex(&child_code)
     );
     let args = vec!["-u".to_string(), "-c".to_string(), code];
@@ -161,8 +160,7 @@ async fn assert_normal_exit_preserves_descendant(
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn terminate_kills_descendants_for_best_effort_pipe_and_atomic_conpty() -> anyhow::Result<()>
-{
+async fn terminate_kills_immediate_descendants_for_pipe_and_conpty() -> anyhow::Result<()> {
     let Some(python) = find_python() else {
         eprintln!("python not found; skipping Windows process-tree termination test");
         return Ok(());
@@ -262,7 +260,17 @@ async fn conpty_ctrl_c_interrupts_powershell_foreground_child() -> anyhow::Resul
     let Some(program) = find_powershell() else {
         return Ok(());
     };
-    let args = vec!["-NoLogo".to_string(), "-NoProfile".to_string()];
+    // Some test runners disable Ctrl-C in their descendants. Establish the shell fixture's
+    // signal state inside that child without changing the concurrent test harness.
+    // https://learn.microsoft.com/en-us/windows/console/ctrl-c-and-ctrl-break-signals
+    let startup = r#"Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class ConsoleSignals { [DllImport("kernel32.dll", SetLastError=true)] public static extern bool SetConsoleCtrlHandler(IntPtr handler, bool add); }'; if (-not [ConsoleSignals]::SetConsoleCtrlHandler([IntPtr]::Zero, $false)) { throw 'cannot enable Ctrl-C' }; Write-Output '__ZETA_SHELL_READY__'"#;
+    let args = vec![
+        "-NoLogo".to_string(),
+        "-NoProfile".to_string(),
+        "-NoExit".to_string(),
+        "-Command".to_string(),
+        startup.to_string(),
+    ];
     let env: HashMap<String, String> = std::env::vars().collect();
     let spawned = spawn_pty_process(
         &program,
@@ -276,6 +284,12 @@ async fn conpty_ctrl_c_interrupts_powershell_foreground_child() -> anyhow::Resul
     .await?;
     let (session, mut output_rx, exit_rx) = combine_spawned_output(spawned);
     let writer = session.writer_sender();
+    wait_for_output_contains(
+        &mut output_rx,
+        "__ZETA_SHELL_READY__",
+        /*timeout_ms*/ 10_000,
+    )
+    .await?;
     writer.send(b"ping.exe -4 -t localhost\n".to_vec()).await?;
     wait_for_output_contains(&mut output_rx, "127.0.0.1", /*timeout_ms*/ 10_000).await?;
 

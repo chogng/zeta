@@ -26,23 +26,15 @@ pub trait HttpClient: Send + Sync {
     /// Executes one request and incrementally emits a successful response body.
     ///
     /// Non-success response bodies remain buffered in the returned response so
-    /// operation-level retry and status handling can inspect them. The default
-    /// bridge preserves compatibility for transports that only implement unary
-    /// execution.
+    /// operation-level retry and status handling can inspect them. Transports
+    /// without incremental execution reject the operation before sending a request.
     fn execute_streaming(
         &self,
-        request: &HttpRequest,
-        sink: &mut dyn HttpBodySink,
+        _: &HttpRequest,
+        _: &mut dyn HttpBodySink,
     ) -> Result<HttpResponse, HttpClientError> {
-        let response = self.execute(request)?;
-        if !response.is_success() {
-            return Ok(response);
-        }
-        sink.emit(response.body())?;
-        Ok(HttpResponse::new(
-            response.status(),
-            response.headers().to_vec(),
-            Vec::new(),
+        Err(HttpClientError::InvalidRequest(
+            "HTTP client does not support streaming".into(),
         ))
     }
 }

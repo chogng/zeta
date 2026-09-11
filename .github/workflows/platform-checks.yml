@@ -116,10 +116,13 @@ jobs:
           ${{ matrix.python }} -B scripts/cargo.py test -p zeta-mxc-sandbox --lib --target "${{ matrix.target }}"
           ${{ matrix.python }} -B scripts/cargo.py test -p zeta-mxc-sandbox --test linux --target "${{ matrix.target }}" -- --ignored
 
-      - name: Test Windows MXC execution
+      - name: Test Windows MXC PSEC execution
         if: matrix.checks != false && runner.os == 'Windows'
         shell: pwsh
         run: |
+          ${{ matrix.python }} -B scripts/cargo.py build -p zeta-network-proxy --example probe --locked --target "${{ matrix.target }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:ZETA_NETWORK_PROBE = "$env:GITHUB_WORKSPACE/.build/cargo/${{ matrix.target }}/debug/examples/probe.exe"
           ${{ matrix.python }} -B scripts/cargo.py test -p zeta-mxc-sandbox --lib --target "${{ matrix.target }}"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ${{ matrix.python }} -B scripts/cargo.py test -p zeta-mxc-sandbox --test windows --target "${{ matrix.target }}" -- --include-ignored --test-threads=1

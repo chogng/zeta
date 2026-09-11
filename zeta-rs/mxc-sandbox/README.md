@@ -18,12 +18,12 @@ Core / action-policy → tool-executor → sandboxing
                                     └─ Seatbelt
 ```
 
-`SandboxLaunch` 保存已构造的 SDK 请求，直到 Executor 确认执行起点后才启动。
+`SandboxLaunch` 保存已完成能力选择和对象身份检查的 SDK 请求，直到 Executor 确认执行起点后才启动。
 `SandboxProcess` 接口暴露标准流、等待和关闭；SDK 句柄保留到输出排空后再释放。
 正常结束、取消和超时均调用 SDK 的终止与等待，随后关闭 Zeta 的代理。
 
 动作授权属于 `action-policy` / Core。代理按同一授权检查真实目标。
-执行环境、输入输出预算和超时属于 `tool-executor`。后端选择、系统进程创建和隔离资源清理由 MXC 负责。
+执行环境、输入输出预算和超时属于 `tool-executor`。Zeta 的 `SandboxBackends` 在执行前选择后端；MXC 负责自身实现的进程创建和资源清理。
 
 ## 权限与支持范围
 
@@ -31,14 +31,15 @@ Core / action-policy → tool-executor → sandboxing
 | --- | --- |
 | 目录读写、隐藏存储和授权例外 | 转换为 SDK 文件策略；适配器在启动前重新检查规范路径 |
 | 保护元数据 | 构造请求时，将已存在的 `.git`、`.agents`、`.codex`、`.zeta` 文件或目录设为只读；不存在的路径不创建，其他检查错误拒绝请求 |
-| 宿主 ACL | `HostAclChanges::Denied` 禁止改动；`Scoped` 允许 SDK 为策略中的路径配置 ACL，并在正常关闭时撤销 |
+| 宿主 ACL | `HostAclChanges::Denied` 禁止改动；`Scoped` 单独授权 Grant 与隐藏目录内的 ACL 改动，并在正常关闭时撤销；宿主只读范围不隐含 ACL 修改权 |
 | 网络禁止 / 允许 | 传入 schema 0.8 的明确网络要求，由 SDK 判断后端能否完整实施 |
 | 受管网络 | 一个执行专属端口承载 HTTP、CONNECT、SOCKS；保持禁止直连及其他入站要求 |
-| Windows 后端 | SDK 按请求和系统能力选择；不固定为 PSEC |
-| Windows 严格受管网络 | 当前普通宿主代理缺少 SDK 所需身份，且入站限制与其代理模式要求不兼容；明确拒绝，不开放更宽网络 |
+| Windows 后端 | MXC 只接受具备完整策略能力的 PSEC；其他实现由 Zeta 沙箱层分别评估和选择 |
+| Windows 严格受管网络 | 只接受 PSEC 能完整实施的端点和入站约束；本机 23H2 不具备该能力 |
 | 完全文件访问＋允许网络 | 显式授权的普通进程，使用通用进程实现 |
 
 App Server 的固定沙箱配置允许策略范围内的宿主 ACL 改动，命令参数不能更改此要求。
+本轮账户原型及 `mxc-user.exe` 已退出源码和产品包。适配器不配置账户或持久网络规则。
 SDK 的 ACL 正常关闭清理不等于宿主崩溃后的恢复保证；Windows 异常退出仍需实机验收。
 子进程退出码不再经过私有运行器重映射。输出中的权限错误只产生“可能已有副作用”的诊断，不能证明进程未启动或授权重跑。
 

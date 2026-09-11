@@ -30,7 +30,7 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 use zeta_file_access::Dir;
-use zeta_uds::UnixListener;
+use zeta_uds::SocketDirectory;
 use zeta_uds::UnixStream;
 
 const PROTOCOL_VERSION: u16 = 1;
@@ -69,6 +69,7 @@ pub struct FastRegexWorkerClient {
     storage: PathBuf,
     limits: FastRegexSearchLimits,
     endpoint_directory: PathBuf,
+    directory: Option<SocketDirectory>,
     endpoint: PathBuf,
     child: Mutex<Option<Child>>,
     mutation: Mutex<()>,
@@ -82,7 +83,8 @@ impl FastRegexWorkerClient {
         storage: impl Into<PathBuf>,
         limits: FastRegexSearchLimits,
     ) -> Result<Self, FastRegexError> {
-        let endpoint_directory = create_endpoint_directory()?;
+        let directory = create_endpoint_directory()?;
+        let endpoint_directory = directory.path().to_path_buf();
         let endpoint = endpoint_directory.join("worker.sock");
         let client = Self {
             command,
@@ -90,6 +92,7 @@ impl FastRegexWorkerClient {
             storage: storage.into(),
             limits,
             endpoint_directory,
+            directory: Some(directory),
             endpoint,
             child: Mutex::new(None),
             mutation: Mutex::new(()),
@@ -188,12 +191,19 @@ impl FastRegexWorkerClient {
     }
 
     fn request_without_gate(&self, request: WorkerRequest) -> Result<WorkerValue, FastRegexError> {
-        let mut stream = match UnixStream::connect(&self.endpoint) {
+        let mut stream = match self.connect_worker() {
             Ok(stream) => stream,
-            Err(_) => {
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::NotFound | io::ErrorKind::ConnectionRefused
+                ) =>
+            {
                 self.start_worker()?;
-                UnixStream::connect(&self.endpoint).map_err(|error| worker_io("connect", error))?
+                self.connect_worker()
+                    .map_err(|error| worker_io("connect", error))?
             }
+            Err(error) => return Err(worker_io("connect", error)),
         };
         let envelope = RequestEnvelope {
             version: PROTOCOL_VERSION,
@@ -225,6 +235,31 @@ impl FastRegexWorkerClient {
         response.result.map_err(WireError::into_error)
     }
 
+    fn connect_worker(&self) -> io::Result<UnixStream> {
+        let stream = self
+            .directory
+            .as_ref()
+            .expect("live worker owns its directory")
+            .connect(Path::new("worker.sock"))?;
+        validate_worker_peer(&stream)?;
+        Ok(stream)
+    }
+
+    fn worker_is_ready(&self) -> Result<bool, FastRegexError> {
+        match self.connect_worker() {
+            Ok(_) => Ok(true),
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::NotFound | io::ErrorKind::ConnectionRefused
+                ) =>
+            {
+                Ok(false)
+            }
+            Err(error) => Err(worker_io("validate worker endpoint", error)),
+        }
+    }
+
     fn start_worker(&self) -> Result<(), FastRegexError> {
         let mut child = self
             .child
@@ -233,7 +268,7 @@ impl FastRegexWorkerClient {
         if child
             .as_mut()
             .is_some_and(|child| child.try_wait().ok().flatten().is_none())
-            && UnixStream::connect(&self.endpoint).is_ok()
+            && self.worker_is_ready()?
         {
             return Ok(());
         }
@@ -241,7 +276,10 @@ impl FastRegexWorkerClient {
             let _ = previous.kill();
             let _ = previous.wait();
         }
-        remove_socket_if_present(&self.endpoint)
+        self.directory
+            .as_ref()
+            .expect("live worker owns its directory")
+            .remove_socket(Path::new("worker.sock"))
             .map_err(|error| worker_io("remove socket", error))?;
         let limits = serde_json::to_string(&self.limits)
             .map_err(|error| protocol_error(error.to_string()))?;
@@ -260,7 +298,7 @@ impl FastRegexWorkerClient {
 
         let started = Instant::now();
         loop {
-            if UnixStream::connect(&self.endpoint).is_ok() {
+            if self.worker_is_ready()? {
                 return Ok(());
             }
             if let Some(status) = child
@@ -306,7 +344,10 @@ impl FastRegexWorkerClient {
             let _ = previous.wait();
         }
         drop(child);
-        remove_socket_if_present(&self.endpoint)
+        self.directory
+            .as_ref()
+            .expect("live worker owns its directory")
+            .remove_socket(Path::new("worker.sock"))
             .map_err(|error| worker_io("remove socket", error))?;
         self.start_worker()
     }
@@ -315,6 +356,7 @@ impl FastRegexWorkerClient {
 impl Drop for FastRegexWorkerClient {
     fn drop(&mut self) {
         if self.child.get_mut().ok().and_then(Option::as_mut).is_none() {
+            self.directory.take();
             let _ = remove_endpoint_directory(&self.endpoint, &self.endpoint_directory);
             return;
         }
@@ -323,6 +365,7 @@ impl Drop for FastRegexWorkerClient {
             let deadline = Instant::now() + Duration::from_millis(250);
             while Instant::now() < deadline {
                 if child.try_wait().ok().flatten().is_some() {
+                    self.directory.take();
                     let _ = remove_endpoint_directory(&self.endpoint, &self.endpoint_directory);
                     return;
                 }
@@ -331,6 +374,7 @@ impl Drop for FastRegexWorkerClient {
             let _ = child.kill();
             let _ = child.wait();
         }
+        self.directory.take();
         let _ = remove_endpoint_directory(&self.endpoint, &self.endpoint_directory);
     }
 }
@@ -351,8 +395,23 @@ pub fn serve_worker_from_environment() -> Result<(), FastRegexError> {
         FastRegexSearchStorage::Persistent(storage),
         limits,
     )?);
-    remove_socket_if_present(&endpoint).map_err(|error| worker_io("remove socket", error))?;
-    let listener = UnixListener::bind(&endpoint).map_err(|error| worker_io("bind", error))?;
+    let directory = SocketDirectory::open(
+        endpoint
+            .parent()
+            .ok_or_else(|| protocol_error("worker endpoint has no parent"))?,
+    )
+    .map_err(|error| worker_io("validate endpoint directory", error))?;
+    let name = Path::new(
+        endpoint
+            .file_name()
+            .ok_or_else(|| protocol_error("worker endpoint has no filename"))?,
+    );
+    directory
+        .remove_socket(name)
+        .map_err(|error| worker_io("remove socket", error))?;
+    let listener = directory
+        .bind(name)
+        .map_err(|error| worker_io("bind", error))?;
     listener
         .set_nonblocking(true)
         .map_err(|error| worker_io("configure listener", error))?;
@@ -360,6 +419,9 @@ pub fn serve_worker_from_environment() -> Result<(), FastRegexError> {
     while !stopping.load(Ordering::Acquire) {
         match listener.accept() {
             Ok((stream, _address)) => {
+                if validate_worker_peer(&stream).is_err() {
+                    continue;
+                }
                 stream
                     .set_nonblocking(false)
                     .map_err(|error| worker_io("configure connection", error))?;
@@ -373,7 +435,21 @@ pub fn serve_worker_from_environment() -> Result<(), FastRegexError> {
             Err(error) => return Err(worker_io("accept", error)),
         }
     }
-    remove_socket_if_present(&endpoint).map_err(|error| worker_io("remove socket", error))
+    directory
+        .remove_socket(name)
+        .map_err(|error| worker_io("remove socket", error))
+}
+
+fn validate_worker_peer(stream: &UnixStream) -> io::Result<()> {
+    let peer = zeta_uds::peer_identity(stream)?;
+    if peer.same_user && peer.same_elevation {
+        Ok(())
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "worker peer has a different user or elevation context",
+        ))
+    }
 }
 
 fn handle_connection(mut stream: UnixStream, search: &FastRegexSearch, stopping: &AtomicBool) {
@@ -525,16 +601,13 @@ fn required_path_environment(name: &str) -> Result<PathBuf, FastRegexError> {
         .ok_or_else(|| protocol_error(format!("{name} is missing")))
 }
 
-fn create_endpoint_directory() -> Result<PathBuf, FastRegexError> {
+fn create_endpoint_directory() -> Result<SocketDirectory, FastRegexError> {
     let root = std::env::temp_dir();
     for _ in 0..100 {
         let sequence = ENDPOINT_COUNTER.fetch_add(1, Ordering::Relaxed);
         let directory = root.join(format!("zeta-fast-regex-{}-{sequence}", std::process::id()));
-        match fs::create_dir(&directory) {
-            Ok(()) => {
-                set_private_directory_permissions(&directory)?;
-                return Ok(directory);
-            }
+        match SocketDirectory::create(&directory) {
+            Ok(directory) => return Ok(directory),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
             Err(error) => return Err(worker_io("create endpoint directory", error)),
         }
@@ -542,30 +615,17 @@ fn create_endpoint_directory() -> Result<PathBuf, FastRegexError> {
     Err(protocol_error("could not allocate a worker endpoint"))
 }
 
-#[cfg(unix)]
-fn set_private_directory_permissions(path: &Path) -> Result<(), FastRegexError> {
-    use std::os::unix::fs::PermissionsExt;
-
-    fs::set_permissions(path, fs::Permissions::from_mode(0o700))
-        .map_err(|error| worker_io("secure endpoint directory", error))
-}
-
-#[cfg(not(unix))]
-fn set_private_directory_permissions(_path: &Path) -> Result<(), FastRegexError> {
-    Ok(())
-}
-
 fn remove_endpoint_directory(endpoint: &Path, directory: &Path) -> io::Result<()> {
-    remove_socket_if_present(endpoint)?;
+    let guard = match SocketDirectory::open(directory) {
+        Ok(guard) => guard,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error),
+    };
+    guard.remove_socket(Path::new(
+        endpoint.file_name().ok_or(io::ErrorKind::InvalidInput)?,
+    ))?;
+    drop(guard);
     match fs::remove_dir(directory) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error),
-    }
-}
-
-fn remove_socket_if_present(path: &Path) -> io::Result<()> {
-    match fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error),
@@ -861,5 +921,11 @@ mod tests {
             .refresh_observed_paths(&[dir.path().join("alpha.txt")])
             .expect("refresh");
         assert!(matches!(outcome, FastRegexUpdateOutcome::Published(_)));
+        let endpoint_directory = client.endpoint_directory.clone();
+        drop(client);
+        assert!(
+            !endpoint_directory.exists(),
+            "worker endpoint directory must be released and removed"
+        );
     }
 }

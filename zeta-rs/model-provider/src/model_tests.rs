@@ -29,6 +29,9 @@ use zeta_secrets::SecretKey;
 use zeta_secrets::SecretStore;
 use zeta_secrets::SecretValue;
 
+#[path = "streaming_tests.rs"]
+mod streaming;
+
 #[path = "chatgpt_recovery_tests.rs"]
 mod chatgpt_recovery;
 
@@ -75,6 +78,18 @@ impl OperationClient for CapturingTransport {
         let response = serde_json::to_vec(&self.response)
             .map_err(|_| ClientError::InvalidResponse("test response did not encode".into()))?;
         Ok(ClientResponse::new(200, Vec::new(), response))
+    }
+
+    fn execute_streaming(
+        &self,
+        request: &ClientRequest,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        self.execute(request)?;
+        let body: Value = serde_json::from_slice(request.body()).unwrap();
+        assert_eq!(body["stream"], true);
+        sink.emit(streaming::response_stream(&self.response).as_bytes())?;
+        Ok(ClientResponse::new(200, Vec::new(), Vec::new()))
     }
 }
 
@@ -551,7 +566,7 @@ fn registered_models_report_their_declared_output_transport() {
         (
             "deepseek",
             "deepseek-test",
-            zeta_protocol::ModelOutputTransport::Unary,
+            zeta_protocol::ModelOutputTransport::NativeStreaming,
         ),
     ] {
         let config = if provider == "openai-compatible" {
@@ -588,10 +603,11 @@ impl OperationClient for CancellationRecordingTransport {
         panic!("registered models must use the cancellable operation path")
     }
 
-    fn execute_with_cancellation(
+    fn execute_streaming_with_cancellation(
         &self,
         _: &ClientRequest,
         _: &zeta_async_utils::CancellationToken,
+        _: &mut dyn OperationStreamSink,
     ) -> Result<ClientResponse, ClientError> {
         self.cancellable_path.store(true, Ordering::Relaxed);
         Err(ClientError::Cancelled(
@@ -754,7 +770,7 @@ fn chatgpt_subscription_runtime_uses_local_oauth_and_zeta_agent_loop() {
             .stream_with_cancellation(&input, &CancellationSource::new().token(), &mut events)
             .unwrap()
             .text(),
-        "live"
+        "Hello from ChatGPT"
     );
     let (_, headers, request) = transport.0.request.lock().unwrap().clone().unwrap();
     assert!(
@@ -872,8 +888,7 @@ impl OperationClient for CapturingSubscriptionTransport {
         request: &ClientRequest,
         sink: &mut dyn OperationStreamSink,
     ) -> Result<ClientResponse, ClientError> {
-        self.0.execute(request)?;
-        StreamingTransport.execute_streaming(request, sink)
+        self.0.execute_streaming(request, sink)
     }
 }
 
@@ -1654,10 +1669,10 @@ fn default_transport_posts_to_the_normalized_endpoint() {
         let (mut stream, _) = listener.accept().unwrap();
         let request = read_http_request(&mut stream);
         *captured_request.lock().unwrap() = request;
-        let body = r#"{"id":"chatcmpl_1","choices":[{"message":{"content":"Provider reply"},"finish_reason":"stop"}]}"#;
+        let body = streaming::response_stream(&completion_response("Provider reply"));
         write!(
             stream,
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
             body.len()
         )
         .unwrap();

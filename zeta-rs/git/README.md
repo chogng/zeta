@@ -55,9 +55,11 @@ watch subscription、operation queue 或 wire DTO 放进上述 module，意味�
 
 ## 公共接口与真实调用路径
 
-`GitClient` 冻结 executable path 和 `GitExecutionLimits`。`GitClient::system()` 使用进程启动环境
-解析 `git`；需要 bundled/显式 executable identity 的 host 应在启动阶段调用
-`GitClient::with_executable`，并长期复用返回值。
+- `GitClient::system()` 捕获系统安装目录，每次操作通过 `install-context::SystemExecutables` 定位 Git；不从工作目录或环境 PATH 选择主程序。查询与配置探测使用相同安装目录生成的子进程 PATH。
+- `GitClient::with_executable` 只接受调用方明确选择的绝对路径；相对路径直接返回配置错误。此入口保留调用方的子进程环境。
+- `GitClient::executable()` 返回 `GitResult<PathBuf>`；系统程序不存在、不可访问或越出安装根时返回错误。
+- 普通命令的超时覆盖等待退出、写入 stdin 和读取 stdout/stderr。输出采集直接属于当前 future，取消时同步释放，避免读写任务脱离操作生命周期。
+- Windows 普通命令与流式查询均通过 `pty::JobObject::spawn_contained` 创建。Job 在完整操作期间存活，超时、取消或错误释放时结束进程树；成功后保留正常启动的后台后代。
 
 ```text
 GitClient::open_repository

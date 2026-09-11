@@ -154,6 +154,12 @@ pub(crate) fn compose_local_tools_with_config(
         ));
     }
     let install_context = InstallContext::current();
+    let sandbox = || {
+        zeta_sandboxing::SandboxBackends::new(vec![(
+            "mxc",
+            Arc::new(mxc_sandbox::MxcSandbox::new(install_context.clone())),
+        )])
+    };
     let ripgrep = resolve_ripgrep(&install_context).map_err(LocalToolError::ripgrep)?;
     let environment_id = zeta_tools::EnvId::local();
     let exec_policy = config.snapshot()?;
@@ -174,7 +180,7 @@ pub(crate) fn compose_local_tools_with_config(
         ShellCommandTool::new(
             environment_id.clone(),
             authorization.dir().clone(),
-            mxc_sandbox::MxcSandbox::new(install_context.clone()),
+            sandbox(),
             CoreAuthorized,
             ShellCommandLimits {
                 timeout: DEFAULT_TIMEOUT,
@@ -198,7 +204,7 @@ pub(crate) fn compose_local_tools_with_config(
     let shell = LocalShellToolService::new_with_action_policy_revision(
         authorization.clone(),
         ripgrep.clone(),
-        mxc_sandbox::MxcSandbox::new(install_context.clone()),
+        sandbox(),
         action_policy_revision.clone(),
         shell_policy,
     )?;

@@ -57,7 +57,16 @@ struct RecordingInvoker {
 }
 
 impl ModelInvoker for RecordingInvoker {
-    fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelProviderError> {
+    fn output_transport(&self) -> zeta_protocol::ModelOutputTransport {
+        zeta_protocol::ModelOutputTransport::Unary
+    }
+
+    fn stream_with_cancellation(
+        &self,
+        request: &ModelRequest,
+        _: &zeta_async_utils::CancellationToken,
+        _: &mut dyn zeta_model_provider::ModelEventSink,
+    ) -> Result<ModelResponse, ModelProviderError> {
         self.requests.lock().unwrap().push(request.clone());
         Ok(ModelResponse {
             output: vec![ResponseItem::Text(
@@ -73,7 +82,16 @@ impl ModelInvoker for RecordingInvoker {
 struct StaticResponseInvoker(String);
 
 impl ModelInvoker for StaticResponseInvoker {
-    fn invoke(&self, _: &ModelRequest) -> Result<ModelResponse, ModelProviderError> {
+    fn output_transport(&self) -> zeta_protocol::ModelOutputTransport {
+        zeta_protocol::ModelOutputTransport::Unary
+    }
+
+    fn stream_with_cancellation(
+        &self,
+        _: &ModelRequest,
+        _: &zeta_async_utils::CancellationToken,
+        _: &mut dyn zeta_model_provider::ModelEventSink,
+    ) -> Result<ModelResponse, ModelProviderError> {
         Ok(ModelResponse {
             output: vec![ResponseItem::Text(self.0.clone())],
             usage: None,

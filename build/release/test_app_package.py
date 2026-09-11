@@ -40,6 +40,22 @@ class AppPackageTests(unittest.TestCase):
             metadata = json.loads((package / "app-package.json").read_text())
             self.assertEqual("x86_64-pc-windows-msvc", metadata["target"])
             self.assertEqual("bin/app.exe", metadata["binary"]["path"])
+            for name in ("LICENSE-APACHE", "NOTICE"):
+                self.assertEqual(
+                    (
+                        Path(__file__).resolve().parents[2] / "zeta-rs" / "uds" / name
+                    ).read_bytes(),
+                    (package / "licenses" / "uds" / name).read_bytes(),
+                )
+            self.assertNotIn("mxcUserRuntime", metadata)
+            self.assertFalse((package / "bin/mxc-user.exe").exists())
+            self.assertEqual(
+                (
+                    Path(__file__).resolve().parents[2]
+                    / "zeta-rs/vendor/mxc/LICENSE.md"
+                ).read_bytes(),
+                (package / "licenses/mxc/LICENSE.md").read_bytes(),
+            )
             sign_package.assert_called_once_with(package.resolve())
             verify_package.assert_called_once_with(package.resolve())
 

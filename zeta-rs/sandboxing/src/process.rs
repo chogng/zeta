@@ -15,12 +15,14 @@ pub trait SandboxProcess: Send {
 /// Ensures a backend process is closed on success, cancellation and early error returns.
 pub struct ProcessHandle {
     inner: Box<dyn SandboxProcess>,
+    backend: Option<std::sync::Arc<dyn crate::SandboxBackend>>,
 }
 
 impl ProcessHandle {
     pub fn new(process: impl SandboxProcess + 'static) -> Self {
         Self {
             inner: Box::new(process),
+            backend: None,
         }
     }
     pub(crate) fn spawn_command(command: Command) -> io::Result<Self> {
@@ -40,6 +42,24 @@ impl ProcessHandle {
     }
     pub fn close(&mut self) -> io::Result<()> {
         self.inner.close()
+    }
+    pub(crate) fn with_backend(
+        mut self,
+        backend: Option<std::sync::Arc<dyn crate::SandboxBackend>>,
+    ) -> Self {
+        self.backend = backend;
+        self
+    }
+    /// Only the implementation selected for this process may interpret its result.
+    pub fn classify_denial(
+        &self,
+        status: SandboxProcessExitStatus,
+        stdout: &str,
+        stderr: &str,
+    ) -> Option<crate::SandboxProcessDenial> {
+        self.backend
+            .as_ref()
+            .and_then(|backend| backend.classify_denial(status, stdout, stderr))
     }
 }
 impl Drop for ProcessHandle {

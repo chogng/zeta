@@ -154,10 +154,24 @@ impl SandboxBackend for ReplacingBackend {
             policy,
             SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Denied)
         );
+        // Build cmd.exe paths from components; forward slashes in its argv[0]
+        // can be interpreted as command switches.
+        #[cfg(windows)]
+        let (program, arguments) = (
+            PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+                .join("System32")
+                .join("cmd.exe"),
+            vec!["/d", "/c", "echo", "prepared-by-backend"],
+        );
+        #[cfg(not(windows))]
+        let (program, arguments) = (
+            std::path::PathBuf::from("/bin/sh"),
+            vec!["-c", "printf prepared-by-backend"],
+        );
         Ok(PreparedCommand::new(
             SandboxKind::Unrestricted,
-            "/bin/sh",
-            ["-c", "printf prepared-by-backend"],
+            program,
+            arguments,
             command.working_directory(),
         ))
     }
@@ -166,6 +180,116 @@ impl SandboxBackend for ReplacingBackend {
 struct MissingSandboxLauncher;
 
 struct PassThroughBackend;
+
+#[test]
+fn executor_uses_the_selected_backend_to_classify_the_actual_process_result() {
+    struct Unsupported;
+    impl SandboxBackend for Unsupported {
+        fn kind(&self) -> SandboxKind {
+            SandboxKind::Restricted
+        }
+        fn prepare(
+            &self,
+            _: &SandboxCommand,
+            _: SandboxPolicy,
+            _: &Dir,
+        ) -> Result<PreparedCommand, SandboxError> {
+            Err(SandboxError::UnsupportedPolicy(
+                "required capability is absent".into(),
+            ))
+        }
+        fn classify_denial(
+            &self,
+            _: SandboxProcessExitStatus,
+            _: &str,
+            _: &str,
+        ) -> Option<zeta_sandboxing::SandboxProcessDenial> {
+            panic!("an unselected backend must not classify this process")
+        }
+    }
+    struct Selected;
+    impl SandboxBackend for Selected {
+        fn kind(&self) -> SandboxKind {
+            SandboxKind::Restricted
+        }
+        fn prepare(
+            &self,
+            command: &SandboxCommand,
+            _: SandboxPolicy,
+            _: &Dir,
+        ) -> Result<PreparedCommand, SandboxError> {
+            #[cfg(windows)]
+            let (program, arguments) = (
+                PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+                    .join("System32/WindowsPowerShell/v1.0/powershell.exe"),
+                vec![
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    "[Console]::Out.Write('selected'); exit 7",
+                ],
+            );
+            #[cfg(not(windows))]
+            let (program, arguments) = (
+                PathBuf::from("/bin/sh"),
+                vec!["-c", "printf selected; exit 7"],
+            );
+            Ok(PreparedCommand::new(
+                SandboxKind::Restricted,
+                program,
+                arguments,
+                command.working_directory(),
+            ))
+        }
+        fn classify_denial(
+            &self,
+            status: SandboxProcessExitStatus,
+            _: &str,
+            _: &str,
+        ) -> Option<zeta_sandboxing::SandboxProcessDenial> {
+            assert_eq!(status, SandboxProcessExitStatus::Code(7));
+            Some(
+                zeta_sandboxing::SandboxProcessDenial::process_may_have_started(
+                    "selected backend evidence",
+                ),
+            )
+        }
+    }
+    let dir = TestDir::new();
+    let backends = zeta_sandboxing::SandboxBackends::new(vec![
+        ("unsupported", std::sync::Arc::new(Unsupported)),
+        ("selected", std::sync::Arc::new(Selected)),
+    ]);
+    let executor = CommandExecutor::new(dir.root(), backends, AllowAll, test_limits());
+    let outcome = executor
+        .execute(
+            CommandRequest {
+                program: "must-not-run".into(),
+                arguments: Vec::new(),
+                working_directory: ".".into(),
+                input: CommandInput::Closed,
+            },
+            CommandExecutionAuthority::Sandboxed(SandboxPolicy::new(
+                FileSystemAccess::ReadOnly,
+                NetworkAccess::Denied,
+            )),
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    let CommandExecutionOutcome::SandboxDenied(denial) = outcome else {
+        panic!("{outcome:?}")
+    };
+    assert_eq!(
+        denial.replay_safety(),
+        zeta_protocol::ToolReplaySafety::MayHaveSideEffects
+    );
+    assert_eq!(
+        denial.output().exit_status(),
+        zeta_protocol::ProcessExitStatus::Code(7)
+    );
+    assert_eq!(denial.output().stdout(), "selected");
+}
 
 #[test]
 fn managed_network_rejects_an_unrestricted_backend_before_spawn() {
@@ -251,8 +375,11 @@ fn executor_spawns_only_the_command_prepared_by_the_sandbox_backend() {
         panic!("unrestricted test backend should complete normally");
     };
 
-    assert_eq!(output.exit_code, Some(0));
-    assert_eq!(output.stdout, "prepared-by-backend");
+    assert_eq!(output.exit_code, Some(0), "{output:?}");
+    #[cfg(windows)]
+    assert_eq!(output.stdout, "prepared-by-backend\r\n", "{output:?}");
+    #[cfg(not(windows))]
+    assert_eq!(output.stdout, "prepared-by-backend", "{output:?}");
 }
 
 #[test]

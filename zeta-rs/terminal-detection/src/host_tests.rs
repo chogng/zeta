@@ -96,3 +96,55 @@ fn zellij_version_is_retained_when_available() {
         })
     );
 }
+
+#[test]
+fn multiplexer_program_keeps_the_underlying_terminal_and_separate_versions() {
+    for (program, expected) in [
+        (
+            "TMUX",
+            TerminalMultiplexer::Tmux {
+                version: Some("3.5".into()),
+            },
+        ),
+        (
+            "Zellij",
+            TerminalMultiplexer::Zellij {
+                version: Some("3.5".into()),
+            },
+        ),
+    ] {
+        let terminal = detect(
+            &FakeEnvironment::default()
+                .with("TERM_PROGRAM", program)
+                .with("TERM_PROGRAM_VERSION", "3.5")
+                .with("WEZTERM_VERSION", "2026.1")
+                .with("TERM", "xterm-256color"),
+        );
+        assert_eq!(
+            terminal,
+            HostTerminal {
+                kind: TerminalKind::WezTerm,
+                program: Some(program.into()),
+                version: Some("2026.1".into()),
+                term: Some("xterm-256color".into()),
+                multiplexer: Some(expected),
+                color_level: ColorLevel::Ansi256,
+            }
+        );
+    }
+}
+
+#[test]
+fn ghostty_is_detected_from_resources_or_term_behind_tmux() {
+    for environment in [
+        FakeEnvironment::default().with("GHOSTTY_RESOURCES_DIR", "/opt/ghostty"),
+        FakeEnvironment::default().with("TERM", "xterm-ghostty"),
+    ] {
+        let terminal = detect(&environment.with("TERM_PROGRAM", "tmux"));
+        assert_eq!(terminal.kind, TerminalKind::Ghostty);
+        assert_eq!(
+            terminal.multiplexer,
+            Some(TerminalMultiplexer::Tmux { version: None })
+        );
+    }
+}

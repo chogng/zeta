@@ -1,7 +1,12 @@
 //! Runtime description of the Zeta installation and its managed resource locations.
 //!
-//! This crate identifies package layout and produces ordered executable candidates. Consumers
-//! remain responsible for validating, canonicalizing, probing, and executing those resources.
+//! Package resources are returned as candidates for consumers to validate and probe.
+//! SystemExecutables separately resolves automatic helpers within trusted installation roots.
+//! Consumers retain execution authority for both kinds of resource.
+
+mod system;
+
+pub use system::SystemExecutables;
 
 use std::env;
 use std::ffi::OsString;
@@ -104,6 +109,8 @@ impl HostExecutableName {
             || name == ".."
             || name.contains('/')
             || name.contains('\\')
+            || name.contains('\0')
+            || (cfg!(windows) && name.contains(':'))
         {
             return Err(InvalidHostExecutableName(name));
         }
@@ -171,7 +178,9 @@ impl InstallContext {
         if !is_safe_resource_name(name) {
             return None;
         }
-        let candidate = self.package_layout.as_ref()?.resources_directory.join(name);
+        let candidate =
+            path_utils::join_descendant(&self.package_layout.as_ref()?.resources_directory, name)
+                .ok()?;
         candidate.is_file().then_some(candidate)
     }
 
@@ -184,7 +193,9 @@ impl InstallContext {
         if !is_safe_resource_name(name) {
             return None;
         }
-        let candidate = self.package_layout.as_ref()?.resources_directory.join(name);
+        let candidate =
+            path_utils::join_descendant(&self.package_layout.as_ref()?.resources_directory, name)
+                .ok()?;
         candidate.is_dir().then_some(candidate)
     }
 
@@ -286,11 +297,8 @@ fn detect_package_layout(executable: &Path) -> Option<PackageLayout> {
 }
 
 fn is_safe_resource_name(name: &Path) -> bool {
-    let mut components = name.components();
-    components
-        .next()
-        .is_some_and(|component| matches!(component, Component::Normal(_)))
-        && components.all(|component| matches!(component, Component::Normal(_)))
+    name.components()
+        .any(|component| matches!(component, Component::Normal(_)))
 }
 
 fn push_executable_candidates(

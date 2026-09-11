@@ -23673,7 +23673,7 @@
       "type": "object"
     },
     "ModelOutputTransport": {
-      "description": "How one configured model runtime obtains completion output from its provider endpoint.\n\nThis describes the immutable adapter path, not whether a remote request is entitled or will\nsucceed. Unary runtimes may still publish one buffered final delta through Core's compatibility\nbridge.",
+      "description": "How one configured model runtime obtains completion output from its provider endpoint.\n\nThis describes the immutable adapter path, not whether a remote request is entitled or will\nsucceed. Unary runtimes return the completed result without synthesizing incremental deltas.",
       "enum": [
         "nativeStreaming",
         "unary"

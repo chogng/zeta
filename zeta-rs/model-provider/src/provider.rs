@@ -8,7 +8,9 @@ use std::borrow::Cow;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
+use zeta_api::ApiEndpoint;
 use zeta_api::ApiProtocol;
+use zeta_api::ApiStreamSink;
 use zeta_api::ContentPart;
 use zeta_api::InputItem;
 use zeta_api::ModelRequest;
@@ -147,6 +149,7 @@ impl OperationClient for AttemptClient<'_> {
     ) -> Result<ClientResponse, ClientError> {
         self.observe(self.client.execute_with_cancellation(request, cancellation))
     }
+
     fn execute_streaming(
         &self,
         request: &ClientRequest,
@@ -256,7 +259,7 @@ impl Provider {
     }
 
     pub fn protocol(&self) -> ApiProtocol {
-        self.adapter.protocol()
+        self.adapter.endpoint().protocol()
     }
 
     pub fn build_model(
@@ -284,53 +287,26 @@ impl Provider {
         request: &ModelRequest,
         cancellation: &CancellationToken,
     ) -> Result<ModelResponse, ModelProviderError> {
-        let model = self.resolve_model(model_id)?;
-        let mut request = request.clone();
-        let supports_original =
-            model.capabilities.image_detail_original == CapabilitySupport::Supported;
-        let _image_detail_decisions = request.sanitize_image_details(supports_original);
-        check_cancellation(cancellation)?;
-        let target = self.target.resolve()?;
-        let attempt_client = AttemptClient::new(self.client.as_ref());
-        let response = self.adapter.complete(
-            &target,
-            model.id.as_str(),
-            &request,
-            &attempt_client,
-            cancellation,
-        );
-        if matches!(
-            response,
-            Err(ModelProviderError::AuthFailed(_)
-                | ModelProviderError::Api(zeta_api::ApiError::HttpStatus(401)))
-        ) && attempt_client.was_unauthorized()
-        {
-            check_cancellation(cancellation)?;
-            if let Some(renewed) = self.target.recover_unauthorized(&target)? {
-                let retry_client = AttemptClient::new(self.client.as_ref());
-                let response = self.adapter.complete(
-                    &renewed,
-                    model.id.as_str(),
-                    &request,
-                    &retry_client,
-                    cancellation,
-                );
-                if matches!(
-                    response,
-                    Err(ModelProviderError::AuthFailed(_)
-                        | ModelProviderError::Api(zeta_api::ApiError::HttpStatus(401)))
-                ) && retry_client.was_unauthorized()
-                {
-                    self.target.note_rejected(&renewed);
-                }
-                return response;
-            }
-            self.target.note_rejected(&target);
-        }
-        response
+        self.execute_with_cancellation(model_id, request, cancellation, &mut DiscardModelEvents)
     }
 
     pub fn stream_with_cancellation(
+        &self,
+        model_id: &ModelId,
+        request: &ModelRequest,
+        cancellation: &CancellationToken,
+        sink: &mut dyn ModelEventSink,
+    ) -> Result<ModelResponse, ModelProviderError> {
+        check_cancellation(cancellation)?;
+        if self.definition.output_transport == ModelOutputTransport::Unary {
+            return Err(ModelProviderError::Unavailable(
+                "the configured model endpoint does not support streaming".into(),
+            ));
+        }
+        self.execute_with_cancellation(model_id, request, cancellation, sink)
+    }
+
+    fn execute_with_cancellation(
         &self,
         model_id: &ModelId,
         request: &ModelRequest,
@@ -349,7 +325,7 @@ impl Provider {
             sink,
             emitted: false,
         };
-        let response = self.adapter.stream(
+        let response = self.execute_attempt(
             &target,
             model.id.as_str(),
             &request,
@@ -367,7 +343,7 @@ impl Provider {
             check_cancellation(cancellation)?;
             if let Some(renewed) = self.target.recover_unauthorized(&target)? {
                 let retry_client = AttemptClient::new(self.client.as_ref());
-                let response = self.adapter.stream(
+                let response = self.execute_attempt(
                     &renewed,
                     model.id.as_str(),
                     &request,
@@ -383,11 +359,34 @@ impl Provider {
                 {
                     self.target.note_rejected(&renewed);
                 }
+                check_cancellation(cancellation)?;
                 return response;
             }
             self.target.note_rejected(&target);
         }
+        check_cancellation(cancellation)?;
         response
+    }
+
+    fn execute_attempt(
+        &self,
+        target: &ResolvedApiTarget,
+        model: &str,
+        request: &ModelRequest,
+        client: &dyn OperationClient,
+        cancellation: &CancellationToken,
+        sink: &mut dyn ModelEventSink,
+    ) -> Result<ModelResponse, ModelProviderError> {
+        let endpoint = self.adapter.endpoint();
+        let model = self.adapter.model_id(model);
+        match self.definition.output_transport {
+            ModelOutputTransport::NativeStreaming => {
+                stream_endpoint(endpoint, target, model, request, client, cancellation, sink)
+            }
+            ModelOutputTransport::Unary => endpoint
+                .complete_with_client_and_cancellation(target, model, request, client, cancellation)
+                .map_err(Into::into),
+        }
     }
 
     pub fn input_token_measurement_capability(
@@ -595,12 +594,6 @@ impl ModelProviderRuntime {
                     .map_err(|error| ModelProviderError::Credential(error.to_string()))?,
             );
         }
-        if definition.adapter == zeta_model_provider_config::ProviderAdapter::Anthropic {
-            headers.push(zeta_http_client::HttpHeader::new(
-                "anthropic-version",
-                "2023-06-01",
-            ));
-        }
         let target = ResolvedApiTarget::new(normalized.base_url, headers);
         let cancellation = CancellationSource::new();
         if let Some(model) = model {
@@ -608,13 +601,26 @@ impl ModelProviderRuntime {
                 .map_err(|error| ModelProviderError::InvalidRequest(error.to_string()))?;
             let mut request = ModelRequest::text("Reply with OK.");
             request.max_output_tokens = Some(1024);
-            adapter.complete(
-                &target,
-                model,
-                &request,
-                self.client.as_ref(),
-                &cancellation.token(),
-            )?;
+            let endpoint = adapter.endpoint();
+            let model = adapter.model_id(model);
+            match definition.output_transport {
+                ModelOutputTransport::NativeStreaming => stream_endpoint(
+                    endpoint,
+                    &target,
+                    model,
+                    &request,
+                    self.client.as_ref(),
+                    &cancellation.token(),
+                    &mut DiscardModelEvents,
+                )?,
+                ModelOutputTransport::Unary => endpoint.complete_with_client_and_cancellation(
+                    &target,
+                    model,
+                    &request,
+                    self.client.as_ref(),
+                    &cancellation.token(),
+                )?,
+            };
             return Ok(None);
         }
         let request = ClientRequest::new(
@@ -928,12 +934,12 @@ impl ModelRuntimeRequest {
 /// state or mutable product configuration; a newly resolved invoker is used when configuration
 /// changes should affect a later invocation.
 pub trait ModelInvoker: Send + Sync {
-    fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelProviderError>;
+    fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelProviderError> {
+        self.invoke_with_cancellation(request, &CancellationSource::new().token())
+    }
 
     /// Reports whether this immutable runtime uses a native provider stream or a unary call.
-    fn output_transport(&self) -> ModelOutputTransport {
-        ModelOutputTransport::Unary
-    }
+    fn output_transport(&self) -> ModelOutputTransport;
 
     /// Reports the cost category of this immutable model's input-token measurement contract.
     fn input_token_measurement_capability(&self) -> ContextTokenMeasurementCapability {
@@ -961,37 +967,29 @@ pub trait ModelInvoker: Send + Sync {
         Ok(ContextTokenMeasurementOutcome::Unavailable)
     }
 
-    /// Invokes this immutable model snapshot within one caller-owned cancellation scope.
-    ///
-    /// Implementations with a cancellable transport must override this method and propagate the
-    /// token to the active operation. The compatibility default rejects cancellation before and
-    /// after synchronous implementations so their late result cannot be accepted.
+    /// Returns the final result of the same invocation used for incremental output.
+    /// Explicitly unary runtimes override this method and reject stream requests.
     fn invoke_with_cancellation(
         &self,
         request: &ModelRequest,
         cancellation: &CancellationToken,
     ) -> Result<ModelResponse, ModelProviderError> {
         check_cancellation(cancellation)?;
-        let response = self.invoke(request)?;
+        let response =
+            self.stream_with_cancellation(request, cancellation, &mut DiscardModelEvents)?;
         check_cancellation(cancellation)?;
         Ok(response)
     }
 
-    /// Streams incremental output within one caller-owned cancellation scope.
-    ///
-    /// The compatibility default invokes the unary implementation and emits
-    /// final text and reasoning items as one event each. Wire-streaming model
-    /// runtimes should override this method.
+    /// Delivers incremental output before completion and returns the authoritative final result.
+    /// Implementations propagate cancellation and receiver errors. A unary runtime must return
+    /// an unsupported error rather than turn a completed response into incremental events.
     fn stream_with_cancellation(
         &self,
         request: &ModelRequest,
         cancellation: &CancellationToken,
         sink: &mut dyn ModelEventSink,
-    ) -> Result<ModelResponse, ModelProviderError> {
-        let response = self.invoke_with_cancellation(request, cancellation)?;
-        emit_model_response(&response, sink)?;
-        Ok(response)
-    }
+    ) -> Result<ModelResponse, ModelProviderError>;
 }
 
 /// Resolves declarative provider configuration into immutable Zeta model runtimes.
@@ -1021,10 +1019,6 @@ struct RegisteredModelInvoker {
 }
 
 impl ModelInvoker for RegisteredModelInvoker {
-    fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelProviderError> {
-        self.invoke_with_cancellation(request, &CancellationSource::new().token())
-    }
-
     fn invoke_with_cancellation(
         &self,
         request: &ModelRequest,
@@ -1095,7 +1089,17 @@ impl UnavailableModel {
 }
 
 impl ModelInvoker for UnavailableModel {
-    fn invoke(&self, _: &ModelRequest) -> Result<ModelResponse, ModelProviderError> {
+    fn output_transport(&self) -> ModelOutputTransport {
+        ModelOutputTransport::Unary
+    }
+
+    fn stream_with_cancellation(
+        &self,
+        _: &ModelRequest,
+        cancellation: &CancellationToken,
+        _: &mut dyn ModelEventSink,
+    ) -> Result<ModelResponse, ModelProviderError> {
+        check_cancellation(cancellation)?;
         Err(self.error.clone())
     }
 }
@@ -1104,7 +1108,17 @@ impl ModelInvoker for UnavailableModel {
 pub struct EchoModel;
 
 impl ModelInvoker for EchoModel {
-    fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelProviderError> {
+    fn output_transport(&self) -> ModelOutputTransport {
+        ModelOutputTransport::NativeStreaming
+    }
+
+    fn stream_with_cancellation(
+        &self,
+        request: &ModelRequest,
+        cancellation: &CancellationToken,
+        sink: &mut dyn ModelEventSink,
+    ) -> Result<ModelResponse, ModelProviderError> {
+        check_cancellation(cancellation)?;
         let prompt = request
             .input
             .iter()
@@ -1119,8 +1133,11 @@ impl ModelInvoker for EchoModel {
                 InputItem::ToolResult(_) => None,
             })
             .unwrap_or_default();
+        let text = format!("Zeta: {prompt}");
+        sink.emit(ModelStreamEvent::TextDelta(text.clone()))?;
+        check_cancellation(cancellation)?;
         Ok(ModelResponse {
-            output: vec![OutputItem::Text(format!("Zeta: {prompt}"))],
+            output: vec![OutputItem::Text(text)],
             usage: None,
             billing: None,
             stop_reason: StopReason::Completed,
@@ -1134,19 +1151,54 @@ fn check_cancellation(cancellation: &CancellationToken) -> Result<(), ModelProvi
         .map_err(|signal| ModelProviderError::Cancelled(signal.reason().to_string()))
 }
 
-fn emit_model_response(
-    response: &ModelResponse,
-    sink: &mut dyn ModelEventSink,
-) -> Result<(), ModelProviderError> {
-    for item in &response.output {
-        let event = match item {
-            OutputItem::Text(text) => Some(ModelStreamEvent::TextDelta(text.clone())),
-            OutputItem::Reasoning(text) => Some(ModelStreamEvent::ReasoningDelta(text.clone())),
-            OutputItem::Refusal(_) | OutputItem::ToolCall(_) => None,
-        };
-        if let Some(event) = event {
-            sink.emit(event)?;
-        }
+struct DiscardModelEvents;
+
+impl ModelEventSink for DiscardModelEvents {
+    fn emit(&mut self, _: ModelStreamEvent) -> Result<(), ModelProviderError> {
+        Ok(())
     }
-    Ok(())
+}
+
+fn stream_endpoint(
+    endpoint: ApiEndpoint,
+    target: &zeta_client::ResolvedApiTarget,
+    model: &str,
+    request: &ModelRequest,
+    client: &dyn OperationClient,
+    cancellation: &CancellationToken,
+    sink: &mut dyn ModelEventSink,
+) -> Result<ModelResponse, ModelProviderError> {
+    let mut sink = ProviderApiStreamSink {
+        inner: sink,
+        failure: None,
+    };
+    let response = endpoint.stream_with_client_and_cancellation(
+        target,
+        model,
+        request,
+        client,
+        cancellation,
+        &mut sink,
+    );
+    if let Some(error) = sink.failure {
+        return Err(error);
+    }
+    response.map_err(Into::into)
+}
+
+struct ProviderApiStreamSink<'a> {
+    inner: &'a mut dyn ModelEventSink,
+    failure: Option<ModelProviderError>,
+}
+
+impl ApiStreamSink for ProviderApiStreamSink<'_> {
+    fn emit(&mut self, event: ModelStreamEvent) -> Result<(), zeta_api::ApiError> {
+        if let Err(error) = self.inner.emit(event) {
+            self.failure = Some(error);
+            return Err(zeta_api::ApiError::Transport(
+                "model stream consumer rejected an event".into(),
+            ));
+        }
+        Ok(())
+    }
 }

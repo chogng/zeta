@@ -50,6 +50,9 @@ consumer 可以直接依赖本 crate；需要 operation retry 或 SSE framing �
 包括 3xx/4xx/5xx 在内的 HTTP 状态都是 `HttpResponse` 事实，不是传输错误。是否重试以及如何
 解释状态，由上层操作或协议决定。
 
+`execute_streaming` 必须在响应读取过程中交付 chunk。仅实现 `execute` 的 client 在发送前返回
+`InvalidRequest`；默认实现不会读取完整响应后再把 body 当作流交付。
+
 ### 配置
 
 | Symbol | 当前 contract |

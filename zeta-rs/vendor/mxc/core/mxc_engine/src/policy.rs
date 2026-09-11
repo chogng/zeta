@@ -617,6 +617,7 @@ impl SandboxRequest {
     /// `spawnSandbox(script)` / `process.commandLine` is — behavior is identical
     /// across the SDK and this crate.
     pub fn set_script(&mut self, script: impl Into<String>) -> &mut Self {
+        self.inner.prepared_files = None;
         self.inner.script_code = script.into();
         self
     }
@@ -624,6 +625,7 @@ impl SandboxRequest {
     /// Override the working directory the sandboxed child starts in. Left unset,
     /// it defaults to the policy's resolution.
     pub fn set_working_directory(&mut self, working_directory: impl Into<String>) -> &mut Self {
+        self.inner.prepared_files = None;
         self.inner.working_directory = working_directory.into();
         self
     }
@@ -1716,9 +1718,4 @@ mod tests {
     }
 }
 
-/// Broad host access beneath explicit per-directory restrictions.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum HostFilesystemAccess {
-    ReadOnly,
-    ReadWrite,
-}
+pub use wxc_common::host_changes::HostFilesystemAccess;

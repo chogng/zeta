@@ -115,7 +115,7 @@ fn assert_response(mut stream: TcpStream, code: &str, body: &str) {
     stream.read_to_string(&mut response).unwrap();
     assert!(
         response.starts_with(&format!("HTTP/1.1 {code}")),
-        "{response}"
+        "expected HTTP {code}, received {response:?}"
     );
     assert!(response.ends_with(body), "{response}");
 }

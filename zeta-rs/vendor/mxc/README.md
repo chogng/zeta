@@ -13,11 +13,11 @@
 
 | 上游包 | 修正 |
 | --- | --- |
-| `mxc_engine` | 提供结构化 argv、宿主文件基线、ACL 改动要求、固定 Bubblewrap 路径和 Unix socket 控制 |
-| `wxc_common` | 退出观察保留 PID 到回收；代理环境保留 SOCKS 协议并统一固定端点 |
+| `mxc_engine` | 结构化 argv、独立 ACL 授权、宿主读取基线、准备阶段要求完整 PSEC 能力和文件身份、固定 Bubblewrap 路径和 Unix socket 控制 |
+| `wxc_common` | 文件对象身份与 ACL 授权；退出观察保留 PID 到回收；代理环境保留 SOCKS 协议 |
 | `seatbelt_common` | 隐藏父目录中的授权例外；独立禁止 Unix socket；完整环境与句柄生命周期 |
 | `bwrap_common` | 固定执行路径；恢复根挂载后的虚拟文件系统；封闭隐藏父目录；代理环境与退出观察 |
-| `appcontainer_common` | Windows 代理环境与统一 SDK 环境规则一致 |
+| `appcontainer_common` | PSEC 完整策略检查；禁止 Zeta 请求转入其他 Windows 实现 |
 
 Cargo 清单具体化了上游 workspace 继承，以便根 Cargo 与 Bazel 对路径依赖得到同一结果。
 五个 `mod.rs` 改为同名文件模块，保留模块路径与可见性。
@@ -42,5 +42,14 @@ just check zeta-mxc-sandbox --target aarch64-unknown-linux-gnu --tests
 bazel build //zeta-rs/mxc-sandbox:mxc-sandbox
 ```
 
-Windows 严格受管网络仍受 SDK 的代理身份和入站约束限制。本补丁不放宽这些校验。
+Windows 账户原型已退出本 fork 和产品包。Zeta 的后端选择属于 `sandboxing`，MXC 不负责调用其他供应商实现。
+
+SDK 自身测试使用本目录的 workspace 与 lockfile：
+
+```sh
+just test wxc_common --manifest-path zeta-rs/vendor/mxc/Cargo.toml --lib host_changes::tests --locked
+just test mxc_engine --manifest-path zeta-rs/vendor/mxc/Cargo.toml --lib request::tests --locked
+```
+
+两份 lockfile 分别锁定产品消费图和 SDK 测试图；发布使用根 lockfile。
 Linux/Windows 系统隔离与异常恢复仍须实机验证；固定上游版本的预览限制继续适用。

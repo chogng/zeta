@@ -1,5 +1,7 @@
 # `zeta-tui`
 
+终端启动失败会保留原始 I/O 错误，并附上 `zeta-terminal-detection` 检测的终端、版本、复用器、TERM 和颜色能力；模式获取失败仍执行已有的终端状态恢复。
+
 `zeta-tui` 是 Zeta 的终端界面，主要负责：
 
 - 接收文字、图片和命令，处理会话、设置与批准面板。
@@ -23,7 +25,7 @@ just zeta
 | 输入、附件、补全和排队发送 | [composer](src/thread/composer)、[submission.rs](src/thread/composer/submission.rs) |
 | 批准或回答问题 | [interaction](src/thread/interaction) |
 | 正文、执行输出、缓存与滚动 | [transcript](src/thread/transcript) |
-| Issue 分组、搜索、分页与工作详情 | [issues.rs](src/issues.rs)、[board.rs](src/issues/board.rs)、[assignment.rs](src/issues/assignment.rs) |
+| Issue 分组、搜索、分页与工作详情 | [issues.rs](src/issues.rs) |
 | Markdown 排版与表格 | [markdown.rs](src/render/markdown.rs)、[table.rs](src/render/markdown/table.rs) |
 | 流式显示进度与提交队列 | [streaming.rs](src/thread/transcript/streaming.rs) |
 | 流式块复用与节奏策略 | [render.rs](src/thread/transcript/streaming/render.rs)、[chunking.rs](src/thread/transcript/streaming/chunking.rs) |

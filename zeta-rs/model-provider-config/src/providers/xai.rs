@@ -9,4 +9,5 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::OpenAiChatCompletions,
         "https://api.x.ai/v1",
     )
+    .with_native_streaming()
 }

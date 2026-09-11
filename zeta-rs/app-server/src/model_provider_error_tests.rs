@@ -26,6 +26,54 @@ use zeta_protocol::TurnStatus;
 use zeta_protocol::UserInput;
 
 #[test]
+fn unary_provider_services_return_final_results_without_requesting_a_stream() {
+    struct UnaryInvoker;
+    impl ModelInvoker for UnaryInvoker {
+        fn output_transport(&self) -> zeta_protocol::ModelOutputTransport {
+            zeta_protocol::ModelOutputTransport::Unary
+        }
+
+        fn invoke_with_cancellation(
+            &self,
+            _: &ModelRequest,
+            _: &zeta_async_utils::CancellationToken,
+        ) -> Result<ModelResponse, ModelProviderError> {
+            Ok(ModelResponse {
+                output: vec![ResponseItem::Text("complete".into())],
+                usage: None,
+                billing: None,
+                stop_reason: StopReason::Completed,
+            })
+        }
+
+        fn stream_with_cancellation(
+            &self,
+            _: &ModelRequest,
+            _: &zeta_async_utils::CancellationToken,
+            _: &mut dyn zeta_model_provider::ModelEventSink,
+        ) -> Result<ModelResponse, ModelProviderError> {
+            panic!("a declared unary provider must use its complete operation")
+        }
+    }
+    struct NoDeltas;
+    impl zeta_core::ModelStreamSink for NoDeltas {
+        fn emit(&mut self, _: zeta_protocol::ModelStreamEvent) -> Result<(), zeta_core::CoreError> {
+            panic!("a unary result must not be turned into an incremental event")
+        }
+    }
+    let service = ProviderModelService::new(Arc::new(UnaryInvoker));
+    let response = zeta_core::ModelService::stream(
+        &service,
+        zeta_core::ModelSelection::ConfiguredDefault,
+        &ModelRequest::text("hello"),
+        &zeta_async_utils::CancellationSource::new().token(),
+        &mut NoDeltas,
+    )
+    .unwrap();
+    assert_eq!(response.text(), "complete");
+}
+
+#[test]
 fn provider_failure_categories_cross_the_product_boundary_without_raw_details() {
     let cases = [
         (
@@ -201,7 +249,16 @@ struct RecoveringOverflowProviderInvoker {
 }
 
 impl ModelInvoker for RecoveringOverflowProviderInvoker {
-    fn invoke(&self, _: &ModelRequest) -> Result<ModelResponse, ModelProviderError> {
+    fn output_transport(&self) -> zeta_protocol::ModelOutputTransport {
+        zeta_protocol::ModelOutputTransport::Unary
+    }
+
+    fn stream_with_cancellation(
+        &self,
+        _: &ModelRequest,
+        _: &zeta_async_utils::CancellationToken,
+        _: &mut dyn zeta_model_provider::ModelEventSink,
+    ) -> Result<ModelResponse, ModelProviderError> {
         match self.invocations.fetch_add(1, Ordering::Relaxed) {
             0 => Err(ApiError::ContextOverflow("raw overflow response".into()).into()),
             1 => Ok(ModelResponse {
@@ -222,7 +279,16 @@ impl ModelInvoker for RecoveringOverflowProviderInvoker {
 }
 
 impl ModelInvoker for FailingProviderInvoker {
-    fn invoke(&self, _: &ModelRequest) -> Result<ModelResponse, ModelProviderError> {
+    fn output_transport(&self) -> zeta_protocol::ModelOutputTransport {
+        zeta_protocol::ModelOutputTransport::Unary
+    }
+
+    fn stream_with_cancellation(
+        &self,
+        _: &ModelRequest,
+        _: &zeta_async_utils::CancellationToken,
+        _: &mut dyn zeta_model_provider::ModelEventSink,
+    ) -> Result<ModelResponse, ModelProviderError> {
         self.invocations.fetch_add(1, Ordering::Relaxed);
         Err(match self.failure {
             ProviderFailure::Auth => ApiError::AuthFailed("raw auth response".into()).into(),

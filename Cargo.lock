@@ -12140,6 +12140,7 @@ dependencies = [
  "zeta-environment",
  "zeta-protocol",
  "zeta-utils-absolute-path",
+ "zeta-utils-path",
 ]
 
 [[package]]
@@ -12213,6 +12214,8 @@ dependencies = [
  "tempfile",
  "tokio",
  "zeta-diff",
+ "zeta-install-context",
+ "zeta-utils-pty",
 ]
 
 [[package]]
@@ -12306,6 +12309,7 @@ name = "zeta-install-context"
 version = "0.1.0"
 dependencies = [
  "dunce",
+ "zeta-utils-path",
 ]
 
 [[package]]
@@ -13171,8 +13175,10 @@ dependencies = [
 name = "zeta-uds"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "tempfile",
  "uds_windows",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

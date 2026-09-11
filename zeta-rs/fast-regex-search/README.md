@@ -1,5 +1,7 @@
 # `zeta-fast-regex-search`
 
+Worker 端点由 [`zeta-uds`](../uds/README.md) 的私有目录对象保护。服务端读取请求前、客户端发送请求前均要求同用户与同提权上下文。权限或身份错误直接失败；仅连接不存在或监听者退出时重新启动 worker。退出后先释放目录句柄，再移除端点目录。
+
 > Agent `grep` 的执行选择与配置由 [`zeta-rs/app-server/README.md`](../app-server/README.md) 维护；编辑器工作区搜索的独立契约见 [`docs/search.md`](../../docs/search.md)。
 
 1. `FastRegexSearch` 使用[固定且版本化的 ASCII 字符对频率表](data/README.md)，以稀有边界构造稀疏 n-gram；查询从正则前缀、后缀和分支提取必需文字，生成覆盖 n-gram 并交叉 posting list，随后重读候选文件执行完整正则验证。哈希冲突只会增加候选，不能直接产生命中；算法对应 [Cursor 的 Fast Regex Search](https://cursor.com/blog/fast-regex-search)。

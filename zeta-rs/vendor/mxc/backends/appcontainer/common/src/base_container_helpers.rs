@@ -57,8 +57,28 @@ pub(super) fn build_psec_spec(request: &ExecutionRequest) -> Vec<u8> {
     spec.capabilities = (!capabilities.is_empty()).then(|| capabilities.join(","));
     spec.disallow_win32k_system_calls = request.policy.ui.disable;
     spec.ui_restrictions = ui_restrictions;
-    spec.fs_read_write = non_empty_paths(&request.policy.readwrite_paths);
-    spec.fs_read_only = non_empty_paths(&request.policy.readonly_paths);
+    let mut writable = request.policy.readwrite_paths.clone();
+    let mut readonly = request.policy.readonly_paths.clone();
+    if let Some(access) = request.host_filesystem {
+        for path in &request.host_filesystem_roots {
+            if writable.contains(path)
+                || readonly.contains(path)
+                || request.policy.denied_paths.contains(path)
+            {
+                continue;
+            }
+            match access {
+                wxc_common::host_changes::HostFilesystemAccess::ReadOnly => {
+                    readonly.push(path.clone())
+                }
+                wxc_common::host_changes::HostFilesystemAccess::ReadWrite => {
+                    writable.push(path.clone())
+                }
+            }
+        }
+    }
+    spec.fs_read_write = non_empty_paths(&writable);
+    spec.fs_read_only = non_empty_paths(&readonly);
     spec.fs_deny = non_empty_paths(&request.policy.denied_paths);
     spec.network_policy = Some(Box::new(build_psec_network_policy(&request.policy)));
     let spec = spec.pack(&mut builder);

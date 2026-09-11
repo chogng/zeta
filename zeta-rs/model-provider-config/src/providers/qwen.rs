@@ -9,4 +9,5 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::OpenAiChatCompletions,
         "https://dashscope.aliyuncs.com/compatible-mode/v1",
     )
+    .with_native_streaming()
 }

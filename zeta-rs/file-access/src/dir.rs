@@ -1,6 +1,6 @@
 use crate::{DirId, EnvId};
 use std::hash::{Hash, Hasher};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 use zeta_utils_absolute_path::AbsolutePathBuf;
 
@@ -165,19 +165,8 @@ impl Dir {
     }
 
     fn candidate(&self, relative_path: &Path) -> Result<PathBuf, DirPathError> {
-        if relative_path.as_os_str().is_empty()
-            || relative_path.components().any(|component| {
-                matches!(
-                    component,
-                    Component::ParentDir | Component::RootDir | Component::Prefix(_)
-                )
-            })
-        {
-            return Err(DirPathError::InvalidRelativePath(
-                relative_path.to_path_buf(),
-            ));
-        }
-        Ok(self.canonical.join(relative_path))
+        path_utils::join_descendant(&self.canonical, relative_path)
+            .map_err(|_| DirPathError::InvalidRelativePath(relative_path.to_path_buf()))
     }
 
     fn ensure_contained(&self, canonical: PathBuf) -> Result<PathBuf, DirPathError> {

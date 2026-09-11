@@ -26,15 +26,9 @@ use crate::process::exit_code_from_status;
 #[cfg(target_os = "linux")]
 use libc;
 
-#[cfg(windows)]
-enum WindowsChildTerminator {
-    Job(Arc<crate::win::JobObject>),
-    Process(u32),
-}
-
 struct PipeChildTerminator {
     #[cfg(windows)]
-    windows: WindowsChildTerminator,
+    job: Arc<crate::win::JobObject>,
     #[cfg(unix)]
     process_group_id: u32,
 }
@@ -64,34 +58,13 @@ impl ChildTerminator for PipeChildTerminator {
 
         #[cfg(windows)]
         {
-            match &self.windows {
-                WindowsChildTerminator::Job(job) => job.terminate(),
-                WindowsChildTerminator::Process(pid) => kill_process(*pid),
-            }
+            self.job.terminate()
         }
 
         #[cfg(not(any(unix, windows)))]
         {
             Ok(())
         }
-    }
-}
-
-#[cfg(windows)]
-fn kill_process(pid: u32) -> io::Result<()> {
-    unsafe {
-        let handle = winapi::um::processthreadsapi::OpenProcess(
-            winapi::um::winnt::PROCESS_TERMINATE,
-            0,
-            pid,
-        );
-        if handle.is_null() {
-            return Err(io::Error::last_os_error());
-        }
-        let success = winapi::um::processthreadsapi::TerminateProcess(handle, 1);
-        let err = io::Error::last_os_error();
-        winapi::um::handleapi::CloseHandle(handle);
-        if success == 0 { Err(err) } else { Ok(()) }
     }
 }
 
@@ -118,8 +91,7 @@ enum PipeStdinMode {
     Null,
 }
 
-/// On Windows, process-tree containment is best-effort because Tokio returns
-/// only after the root process starts, so job assignment cannot be atomic.
+/// Windows children join their Job Object before any user code runs.
 async fn spawn_process_with_stdin_mode(
     program: &str,
     args: &[String],
@@ -177,32 +149,11 @@ async fn spawn_process_with_stdin_mode(
     command.stderr(Stdio::piped());
 
     #[cfg(windows)]
-    let job = crate::win::JobObject::create().map(Arc::new);
-    let mut child = command.spawn()?;
+    let job = Arc::new(crate::win::JobObject::create()?);
     #[cfg(windows)]
-    let windows_terminator = {
-        // Accept the small race: a descendant created between spawn and
-        // assignment is not guaranteed to join the job and can escape termination.
-        let pid = child
-            .id()
-            .ok_or_else(|| io::Error::other("missing child pid"))?;
-        let assigned_job = job.and_then(|job| {
-            let process_handle = child
-                .raw_handle()
-                .ok_or_else(|| io::Error::other("missing child process handle"))?;
-            job.assign_process(process_handle)?;
-            Ok(job)
-        });
-        match assigned_job {
-            Ok(job) => WindowsChildTerminator::Job(job),
-            Err(err) => {
-                log::warn!(
-                    "Windows pipe process tree containment unavailable for pid {pid}: {err}"
-                );
-                WindowsChildTerminator::Process(pid)
-            }
-        }
-    };
+    let mut child = job.spawn_contained(&mut command)?;
+    #[cfg(not(windows))]
+    let mut child = command.spawn()?;
     #[cfg(unix)]
     let process_group_id = child
         .id()
@@ -262,17 +213,12 @@ async fn spawn_process_with_stdin_mode(
     let exit_code = Arc::new(StdMutex::new(None));
     let wait_exit_code = Arc::clone(&exit_code);
     #[cfg(windows)]
-    let wait_job = match &windows_terminator {
-        WindowsChildTerminator::Job(job) => Some(Arc::clone(job)),
-        WindowsChildTerminator::Process(_) => None,
-    };
+    let wait_job = Arc::clone(&job);
     let wait_handle: JoinHandle<()> = tokio::spawn(async move {
         let code = match child.wait().await {
             Ok(status) => {
                 #[cfg(windows)]
-                if let Some(job) = wait_job
-                    && let Err(err) = job.preserve_descendants()
-                {
+                if let Err(err) = wait_job.preserve_descendants() {
                     log::warn!(
                         "Windows pipe failed to preserve descendants after root exit: {err}"
                     );
@@ -292,7 +238,7 @@ async fn spawn_process_with_stdin_mode(
         writer_tx,
         Box::new(PipeChildTerminator {
             #[cfg(windows)]
-            windows: windows_terminator,
+            job,
             #[cfg(unix)]
             process_group_id,
         }),

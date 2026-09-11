@@ -24,11 +24,13 @@ zeta-tui
 └─ features/theme           # TUI-owned palettes, preference, and terminal colors
 ```
 
-Detection favors `TERM_PROGRAM`, then terminal-specific variables, then `TERM`; multiplexer identity
-is retained independently. It never starts helper processes, so detection is deterministic over the
-current process environment.
+Detection favors `TERM_PROGRAM`, then terminal-specific variables, then `TERM`; tmux and Zellij
+program markers identify the multiplexer and do not hide the underlying terminal or overwrite its
+version. Ghostty is recognized through its program name, resources directory, or `xterm-ghostty`.
+Detection never starts helper processes. TUI startup failures include these same terminal facts
+and retain the original I/O error and terminal-mode cleanup.
 
 ```bash
-cargo test -p zeta-terminal-detection
+just test zeta-terminal-detection
 bazel test //zeta-rs/terminal-detection:terminal-detection-unit-tests
 ```

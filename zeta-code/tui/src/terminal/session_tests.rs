@@ -18,6 +18,37 @@ const FINISH_SCREEN: &str = "finish screen";
 const DISABLE_RAW_MODE: &str = "disable raw mode";
 
 #[test]
+fn startup_error_preserves_failure_kind_and_reports_terminal_facts() {
+    use zeta_terminal_detection::ColorLevel;
+    use zeta_terminal_detection::HostTerminal;
+    use zeta_terminal_detection::TerminalKind;
+    use zeta_terminal_detection::TerminalMultiplexer;
+    let host = HostTerminal {
+        kind: TerminalKind::WezTerm,
+        program: Some("tmux".into()),
+        version: Some("2026.1".into()),
+        term: Some("xterm-256color".into()),
+        multiplexer: Some(TerminalMultiplexer::Tmux {
+            version: Some("3.5".into()),
+        }),
+        color_level: ColorLevel::Ansi256,
+    };
+    let error = super::startup_error(
+        &host,
+        "set terminal modes",
+        io::Error::new(io::ErrorKind::PermissionDenied, "denied"),
+    );
+    assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+    assert_eq!(
+        std::error::Error::source(error.get_ref().unwrap())
+            .unwrap()
+            .to_string(),
+        "denied"
+    );
+    insta::assert_snapshot!(error.to_string(), @r###"cannot set terminal modes: denied; terminal=WezTerm, version=Some("2026.1"), multiplexer=Some(Tmux { version: Some("3.5") }), TERM=Some("xterm-256color"), color=Ansi256"###);
+}
+
+#[test]
 fn main_screen_keeps_mouse_and_screen_with_the_terminal_across_resume() {
     let calls = Rc::new(RefCell::new(Vec::new()));
     let mut guard =

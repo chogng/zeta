@@ -168,12 +168,12 @@ fn expected_ripgrep_candidates<'a>(
 
 static NEXT_DIRECTORY: AtomicUsize = AtomicUsize::new(0);
 
-struct TestDirectory {
+pub(crate) struct TestDirectory {
     path: PathBuf,
 }
 
 impl TestDirectory {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let sequence = NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed);
         let path = env::temp_dir().join(format!(
             "zeta-install-context-tests-{}-{sequence}",
@@ -183,7 +183,7 @@ impl TestDirectory {
         Self { path }
     }
 
-    fn path(&self) -> &Path {
+    pub(crate) fn path(&self) -> &Path {
         &self.path
     }
 }

@@ -42,3 +42,6 @@ wslc = ["dep:wslc_common", "wslc_common/link-wslcsdk"]
 hyperlight = ["dep:hyperlight_common", "hyperlight_common/hyperlight"]
 isolation_session = ["dep:isolation_session_bindings", "dep:isolation_session_common"]
 tier2_bfs = ["appcontainer_common/tier2_bfs"]
+
+[dev-dependencies]
+tempfile = "3"

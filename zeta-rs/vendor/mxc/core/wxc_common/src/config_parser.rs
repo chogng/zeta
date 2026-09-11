@@ -1343,6 +1343,10 @@ fn convert_wire_config(
     }
 
     Ok(ExecutionRequest {
+        host_acl_scope: None,
+        host_filesystem: None,
+        host_filesystem_roots: Vec::new(),
+        prepared_files: None,
         bubblewrap_executable: None,
         schema_version,
         container_id,

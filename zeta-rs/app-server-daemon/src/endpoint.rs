@@ -1,6 +1,4 @@
 use std::fs;
-#[cfg(unix)]
-use std::fs::DirBuilder;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io;
@@ -19,8 +17,6 @@ use std::time::UNIX_EPOCH;
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
 #[cfg(unix)]
-use std::os::unix::fs::DirBuilderExt;
-#[cfg(unix)]
 use std::os::unix::fs::FileTypeExt;
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
@@ -32,6 +28,7 @@ use std::os::unix::fs::PermissionsExt;
 use sha2::Digest;
 use sha2::Sha256;
 use zeta_app_server_protocol::schema_hash;
+use zeta_uds::SocketDirectory;
 use zeta_uds::UnixListener;
 use zeta_uds::UnixStream;
 
@@ -47,8 +44,9 @@ const STALE_OPERATION_LOCK_AGE: Duration = Duration::from_secs(30);
 #[cfg(test)]
 const STALE_OPERATION_LOCK_AGE: Duration = Duration::from_millis(250);
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub(crate) struct EndpointPaths {
+    directory: SocketDirectory,
     pub(crate) socket: PathBuf,
     pub(crate) operation_lock: PathBuf,
     pub(crate) log: PathBuf,
@@ -60,13 +58,15 @@ impl EndpointPaths {
         fs::create_dir_all(profile_root).map_err(io_error)?;
         let profile_root = dunce::canonicalize(profile_root).map_err(io_error)?;
         let runtime_root = runtime_root(&profile_root);
-        ensure_private_runtime_root(&runtime_root)?;
+        let directory = SocketDirectory::prepare(&runtime_root).map_err(io_error)?;
+        let runtime_root = directory.path();
         let identity = endpoint_identity(&profile_root);
         Ok(Self {
             socket: runtime_root.join(format!("{identity}.sock")),
             operation_lock: runtime_root.join(format!("{identity}.operation")),
             log: runtime_root.join(format!("{identity}.log")),
             pid: runtime_root.join(format!("{identity}.pid.json")),
+            directory,
         })
     }
 
@@ -126,11 +126,14 @@ impl EndpointPaths {
     pub(crate) fn bind_listener(&self) -> Result<UnixListener, String> {
         match connect_existing(&self.socket)? {
             Some(_) => return Err("Local App Server daemon is already running".into()),
-            None => remove_stale_socket(&self.socket)?,
+            None => self
+                .directory
+                .remove_socket(self.socket.file_name().unwrap().as_ref())
+                .map_err(io_error)?,
         }
-        let listener = UnixListener::bind(&self.socket).map_err(io_error)?;
-        set_socket_permissions(&self.socket)?;
-        Ok(listener)
+        self.directory
+            .bind(self.socket.file_name().unwrap().as_ref())
+            .map_err(io_error)
     }
 
     pub(crate) fn open_log(&self) -> Result<File, String> {
@@ -213,8 +216,13 @@ impl Drop for SocketCleanup {
 }
 
 pub(crate) fn connect_existing(path: &Path) -> Result<Option<UnixStream>, String> {
-    match UnixStream::connect(path) {
-        Ok(stream) => Ok(Some(stream)),
+    let directory =
+        SocketDirectory::open(path.parent().ok_or("socket has no parent")?).map_err(io_error)?;
+    match directory.connect(path.file_name().ok_or("socket has no filename")?.as_ref()) {
+        Ok(stream) => {
+            zeta_app_server_transport::validate_local_peer(&stream).map_err(io_error)?;
+            Ok(Some(stream))
+        }
         Err(error)
             if matches!(
                 error.kind(),
@@ -266,78 +274,8 @@ fn runtime_root(profile_root: &Path) -> PathBuf {
     profile_root.join("run")
 }
 
-#[cfg(unix)]
-fn ensure_private_runtime_root(path: &Path) -> Result<(), String> {
-    let effective_uid = rustix::process::geteuid().as_raw();
-    match fs::symlink_metadata(path) {
-        Ok(metadata) => validate_private_directory(path, &metadata, effective_uid),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            match DirBuilder::new().mode(0o700).create(path) {
-                Ok(()) => {}
-                Err(create_error) if create_error.kind() == io::ErrorKind::AlreadyExists => {}
-                Err(create_error) => return Err(io_error(create_error)),
-            }
-            let metadata = fs::symlink_metadata(path).map_err(io_error)?;
-            validate_private_directory(path, &metadata, effective_uid)
-        }
-        Err(error) => Err(io_error(error)),
-    }
-}
-
-#[cfg(unix)]
-fn validate_private_directory(
-    path: &Path,
-    metadata: &fs::Metadata,
-    effective_uid: u32,
-) -> Result<(), String> {
-    if metadata.file_type().is_symlink()
-        || !metadata.is_dir()
-        || metadata.uid() != effective_uid
-        || metadata.permissions().mode() & 0o077 != 0
-    {
-        return Err(format!(
-            "Local App Server runtime directory is not private: {}",
-            path.display()
-        ));
-    }
-    Ok(())
-}
-
-#[cfg(windows)]
-fn ensure_private_runtime_root(path: &Path) -> Result<(), String> {
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if !metadata.file_type().is_symlink() && metadata.is_dir() => Ok(()),
-        Ok(_) => Err(format!(
-            "Local App Server runtime directory is invalid: {}",
-            path.display()
-        )),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => match fs::create_dir(path) {
-            Ok(()) => Ok(()),
-            Err(create_error) if create_error.kind() == io::ErrorKind::AlreadyExists => {
-                let metadata = fs::symlink_metadata(path).map_err(io_error)?;
-                if !metadata.file_type().is_symlink() && metadata.is_dir() {
-                    Ok(())
-                } else {
-                    Err(format!(
-                        "Local App Server runtime directory is invalid: {}",
-                        path.display()
-                    ))
-                }
-            }
-            Err(create_error) => Err(io_error(create_error)),
-        },
-        Err(error) => Err(io_error(error)),
-    }
-}
-
-#[cfg(unix)]
 fn create_private_directory(path: &Path) -> io::Result<()> {
-    DirBuilder::new().mode(0o700).create(path)
-}
-
-#[cfg(windows)]
-fn create_private_directory(path: &Path) -> io::Result<()> {
-    fs::create_dir(path)
+    SocketDirectory::create(path).map(drop)
 }
 
 fn write_heartbeat(path: &Path) -> Result<(), String> {
@@ -412,38 +350,6 @@ fn read_log_tail(path: &Path, byte_limit: u64) -> Result<Option<String>, String>
     }
     let contents = String::from_utf8_lossy(bytes).trim_end().to_string();
     Ok((!contents.is_empty()).then_some(contents))
-}
-
-#[cfg(unix)]
-fn set_socket_permissions(path: &Path) -> Result<(), String> {
-    fs::set_permissions(path, fs::Permissions::from_mode(0o600)).map_err(io_error)
-}
-
-#[cfg(windows)]
-fn set_socket_permissions(_path: &Path) -> Result<(), String> {
-    Ok(())
-}
-
-#[cfg(unix)]
-fn remove_stale_socket(path: &Path) -> Result<(), String> {
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_socket() => fs::remove_file(path).map_err(io_error),
-        Ok(_) => Err("Local App Server endpoint is not a Unix socket".into()),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(io_error(error)),
-    }
-}
-
-#[cfg(windows)]
-fn remove_stale_socket(path: &Path) -> Result<(), String> {
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if !metadata.file_type().is_symlink() && metadata.is_file() => {
-            fs::remove_file(path).map_err(io_error)
-        }
-        Ok(_) => Err("Local App Server endpoint is invalid".into()),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(io_error(error)),
-    }
 }
 
 #[cfg(unix)]

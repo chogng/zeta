@@ -75,6 +75,36 @@ pub struct NetworkSection {
 }
 
 impl NetworkSection {
+    /// Only the embedding application's loopback TCP proxy may be reached.
+    /// Platform-specific enforcement remains inside MXC; ingress stays denied.
+    pub fn managed_proxy(port: std::num::NonZeroU16) -> Self {
+        let egress = NetworkEgressSection {
+            default: Some(NetworkAction::Deny),
+            allow: cfg!(windows).then(|| {
+                vec![NetworkRuleSection {
+                    to: Some(vec![NetworkPeerSection::new("127.0.0.1/32")]),
+                    ports: Some(vec![NetworkPortSection {
+                        protocol: Some(NetworkProtocol::Tcp),
+                        port: Some(port.get()),
+                        end_port: None,
+                    }]),
+                }]
+            }),
+            ..Default::default()
+        };
+        Self {
+            egress: Some(egress),
+            ingress: Some(NetworkIngressSection {
+                default: Some(NetworkAction::Deny),
+                host_loopback: Some(NetworkAction::Deny),
+            }),
+            runtime_config: (!cfg!(windows)).then(|| RuntimeConfigSection {
+                network_proxy: Some(format!("http://127.0.0.1:{port}")),
+            }),
+            ..Default::default()
+        }
+    }
+
     pub(super) fn has_directional_fields(&self) -> bool {
         self.egress.is_some()
             || self.ingress.is_some()

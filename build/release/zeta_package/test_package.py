@@ -238,6 +238,13 @@ class PackageTests(unittest.TestCase):
             )
             self.assertEqual(b"zeta-cli", (output / "bin" / "zeta").read_bytes())
             self.assertEqual(b"ripgrep", (output / "zeta-path" / "rg").read_bytes())
+            for name in ("LICENSE-APACHE", "NOTICE"):
+                self.assertEqual(
+                    (REPOSITORY_ROOT / "zeta-rs" / "uds" / name).read_bytes(),
+                    (
+                        output / "zeta-resources" / "licenses" / "uds" / name
+                    ).read_bytes(),
+                )
             self.assertEqual(
                 b"node",
                 (output / "zeta-resources" / "node" / "bin" / "node").read_bytes(),
@@ -335,7 +342,10 @@ class PackageTests(unittest.TestCase):
             )
             self.assertEqual("local-override", metadata["components"]["node"]["source"])
             self.assertRegex(metadata["buildId"], r"^sha256:[a-f0-9]{64}$")
-            self.assertEqual(2, metadata["protocol"]["major"])
+            self.assertEqual(
+                load_protocol_metadata(REPOSITORY_ROOT)["major"],
+                metadata["protocol"]["major"],
+            )
             self.assertRegex(
                 metadata["protocol"]["schemaHash"], r"^sha256:[a-f0-9]{64}$"
             )
@@ -569,7 +579,7 @@ class PackageTests(unittest.TestCase):
                 metadata["components"]["bubblewrap"]["source"],
             )
 
-    def test_windows_package_contains_sandbox_runtime(self) -> None:
+    def test_windows_package_excludes_retired_account_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             server_binary = root / "zeta-server.exe"
@@ -610,6 +620,8 @@ class PackageTests(unittest.TestCase):
             ]:
                 self.assertFalse((resources / name).exists())
             artifacts = system_signing_artifacts(output, spec)
+            self.assertNotIn("mxcUserRuntime", artifacts)
+            self.assertFalse((output / "bin/mxc-user.exe").exists())
             self.assertEqual(
                 set(),
                 {name for name in artifacts if name.startswith("windows")},

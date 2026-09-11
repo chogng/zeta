@@ -2,9 +2,7 @@ use super::ProviderAdapter;
 use super::api_endpoint;
 use crate::ModelProviderError;
 use zeta_api::ApiEndpoint;
-use zeta_api::ApiProtocol;
 use zeta_api::ModelRequest;
-use zeta_api::ModelResponse;
 use zeta_async_utils::CancellationToken;
 use zeta_client::OperationClient;
 use zeta_client::ResolvedApiTarget;
@@ -31,8 +29,8 @@ impl KimiAdapter {
 }
 
 impl ProviderAdapter for KimiAdapter {
-    fn protocol(&self) -> ApiProtocol {
-        self.endpoint.protocol()
+    fn endpoint(&self) -> ApiEndpoint {
+        self.endpoint
     }
 
     fn input_token_measurement_capability(&self, model: &str) -> ContextTokenMeasurementCapability {
@@ -69,25 +67,11 @@ impl ProviderAdapter for KimiAdapter {
         super::measurement::estimated_provider_measurement(count, "kimi-estimate-token-count-v1")
     }
 
-    fn complete(
-        &self,
-        target: &ResolvedApiTarget,
-        model: &str,
-        request: &ModelRequest,
-        client: &dyn OperationClient,
-        cancellation: &CancellationToken,
-    ) -> Result<ModelResponse, ModelProviderError> {
-        let model = upstream_model(model);
-        self.endpoint
-            .complete_with_client_and_cancellation(target, model, request, client, cancellation)
-            .map_err(Into::into)
-    }
-}
-
-fn upstream_model(model: &str) -> &str {
-    match model {
-        "kimi-k2.7-code" => "kimi-for-coding",
-        "kimi-k2.7-code-highspeed" => "kimi-for-coding-highspeed",
-        _ => model,
+    fn model_id<'a>(&self, model: &'a str) -> &'a str {
+        match model {
+            "kimi-k2.7-code" => "kimi-for-coding",
+            "kimi-k2.7-code-highspeed" => "kimi-for-coding-highspeed",
+            _ => model,
+        }
     }
 }

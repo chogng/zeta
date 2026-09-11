@@ -1,13 +1,9 @@
 use super::ProviderAdapter;
 use super::api_endpoint;
-use super::stream_endpoint;
 use crate::ModelProviderError;
-use crate::provider::ModelEventSink;
 use zeta_api::ApiEndpoint;
 use zeta_api::ApiError;
-use zeta_api::ApiProtocol;
 use zeta_api::ModelRequest;
-use zeta_api::ModelResponse;
 use zeta_async_utils::CancellationToken;
 use zeta_client::OperationClient;
 use zeta_client::ResolvedApiTarget;
@@ -35,8 +31,8 @@ impl GoogleAdapter {
 }
 
 impl ProviderAdapter for GoogleAdapter {
-    fn protocol(&self) -> ApiProtocol {
-        self.endpoint.protocol()
+    fn endpoint(&self) -> ApiEndpoint {
+        self.endpoint
     }
 
     fn fixed_headers(&self) -> Vec<HttpHeader> {
@@ -78,38 +74,5 @@ impl ProviderAdapter for GoogleAdapter {
             Err(error) => return Err(error),
         };
         super::measurement::estimated_provider_measurement(count, "google-gemini-count-tokens-v1")
-    }
-
-    fn complete(
-        &self,
-        target: &ResolvedApiTarget,
-        model: &str,
-        request: &ModelRequest,
-        client: &dyn OperationClient,
-        cancellation: &CancellationToken,
-    ) -> Result<ModelResponse, ModelProviderError> {
-        self.endpoint
-            .complete_with_client_and_cancellation(target, model, request, client, cancellation)
-            .map_err(Into::into)
-    }
-
-    fn stream(
-        &self,
-        target: &ResolvedApiTarget,
-        model: &str,
-        request: &ModelRequest,
-        client: &dyn OperationClient,
-        cancellation: &CancellationToken,
-        sink: &mut dyn ModelEventSink,
-    ) -> Result<ModelResponse, ModelProviderError> {
-        stream_endpoint(
-            self.endpoint,
-            target,
-            model,
-            request,
-            client,
-            cancellation,
-            sink,
-        )
     }
 }

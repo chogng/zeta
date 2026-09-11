@@ -27,6 +27,7 @@ from zeta_package.cargo_paths import cargo_artifact_executable
 from zeta_package.cargo_paths import cargo_rendered_diagnostic
 from zeta_package.cargo_paths import parse_cargo_message
 from zeta_package.cargo_paths import resolve_cargo_target_directory
+from zeta_package.layout import copy_uds_notices
 
 APP_ROOT = REPOSITORY_ROOT / "app"
 
@@ -229,6 +230,13 @@ def build_package(
         staged_binary = staging / "bin" / spec.app_name
         staged_binary.parent.mkdir(parents=True)
         shutil.copy2(binary, staged_binary)
+        copy_uds_notices(REPOSITORY_ROOT, staging / "licenses")
+        mxc_license = staging / "licenses" / "mxc"
+        mxc_license.mkdir(parents=True)
+        shutil.copyfile(
+            REPOSITORY_ROOT / "zeta-rs/vendor/mxc/LICENSE.md",
+            mxc_license / "LICENSE.md",
+        )
         if os.name != "nt":
             staged_binary.chmod(staged_binary.stat().st_mode | 0o111)
         shutil.copy2(

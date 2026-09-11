@@ -336,7 +336,7 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             stderr_truncated,
         };
         if matches!(authority, CommandExecutionAuthority::Sandboxed(_))
-            && let Some(denial) = self.sandbox.classify_denial(
+            && let Some(denial) = child.classify_denial(
                 output.exit_code.map_or(
                     SandboxProcessExitStatus::Terminated,
                     SandboxProcessExitStatus::Code,

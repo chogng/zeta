@@ -95,6 +95,51 @@ enum PathResolution {
     Unknown,
 }
 
+/// Existing filesystem objects retained as the identity of a prepared request.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct FilesystemSnapshot {
+    objects: Vec<(std::path::PathBuf, ObjectId)>,
+}
+
+impl FilesystemSnapshot {
+    pub fn capture(paths: impl IntoIterator<Item = std::path::PathBuf>) -> std::io::Result<Self> {
+        let mut objects = Vec::new();
+        for path in paths {
+            let path = std::fs::canonicalize(path)?;
+            let PathResolution::Object(identity) = resolve_object(&path) else {
+                return Err(std::io::Error::other(format!(
+                    "cannot capture filesystem identity for '{}'",
+                    path.display()
+                )));
+            };
+            objects.push((path, identity));
+        }
+        objects.sort_by(|left, right| left.0.cmp(&right.0));
+        objects.dedup();
+        Ok(Self { objects })
+    }
+
+    pub fn paths(&self) -> impl Iterator<Item = &Path> {
+        self.objects.iter().map(|(path, _)| path.as_path())
+    }
+
+    pub fn validate(&self) -> std::io::Result<()> {
+        for (path, expected) in &self.objects {
+            if !matches!(resolve_object(path), PathResolution::Object(actual) if actual == *expected)
+            {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    format!(
+                        "filesystem object changed after preparation: '{}'",
+                        path.display()
+                    ),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Result of comparing two paths by filesystem-object identity.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ExistingObjectComparison {

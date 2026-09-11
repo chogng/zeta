@@ -211,6 +211,31 @@ impl ClientTelemetry for CapturingTelemetry {
 
 struct StaticClient;
 
+#[test]
+fn unary_operation_clients_reject_streaming_before_sending() {
+    struct UnaryOnly;
+    impl OperationClient for UnaryOnly {
+        fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            panic!("a streaming request must not execute a unary operation")
+        }
+    }
+    let request = ClientRequest::post(
+        "https://example.test/stream",
+        Vec::new(),
+        Vec::new(),
+        RetryPolicy::never(),
+    )
+    .unwrap();
+    let mut sink = CollectedBytes::default();
+    assert_eq!(
+        UnaryOnly.execute_streaming(&request, &mut sink),
+        Err(ClientError::InvalidRequest(
+            "operation client does not support streaming".into()
+        ))
+    );
+    assert!(sink.bytes.is_empty());
+}
+
 impl OperationClient for StaticClient {
     fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
         Ok(ClientResponse::new(

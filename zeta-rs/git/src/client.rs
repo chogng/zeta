@@ -1,3 +1,5 @@
+use install_context::HostExecutableName;
+use install_context::SystemExecutables;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::path::Path;
@@ -108,30 +110,47 @@ impl Default for GitExecutionLimits {
 /// Concrete owner of system Git process identity and execution limits.
 #[derive(Clone, Debug)]
 pub struct GitClient {
-    executable: PathBuf,
+    executable: ExecutableSource,
     limits: GitExecutionLimits,
 }
 
+#[derive(Clone, Debug)]
+enum ExecutableSource {
+    System(SystemExecutables),
+    Explicit(PathBuf),
+}
+
 impl GitClient {
+    /// Uses conventional installation directories, reporting missing Git when an operation starts.
     pub fn system() -> Self {
         Self {
-            executable: PathBuf::from("git"),
+            executable: ExecutableSource::System(SystemExecutables::current()),
             limits: GitExecutionLimits::default(),
         }
     }
 
+    /// Uses a caller-authorized absolute executable path and its inherited process environment.
     pub fn with_executable(executable: PathBuf, limits: GitExecutionLimits) -> GitResult<Self> {
-        if executable.as_os_str().is_empty() {
+        if !executable.is_absolute() {
             return Err(GitError::InvalidConfiguration {
                 field: "executable",
-                requirement: "must not be empty",
+                requirement: "must be absolute",
             });
         }
-        Ok(Self { executable, limits })
+        Ok(Self {
+            executable: ExecutableSource::Explicit(executable),
+            limits,
+        })
     }
 
-    pub fn executable(&self) -> &Path {
-        &self.executable
+    /// Resolves the selected executable without consulting the working directory or PATH.
+    pub fn executable(&self) -> GitResult<PathBuf> {
+        match &self.executable {
+            ExecutableSource::System(system) => system
+                .find(&HostExecutableName::new("git").expect("fixed executable basename"))
+                .map_err(|source| GitError::io("locate system Git", source)),
+            ExecutableSource::Explicit(path) => Ok(path.clone()),
+        }
     }
 
     pub fn limits(&self) -> GitExecutionLimits {
@@ -259,8 +278,16 @@ impl GitClient {
         S: AsRef<OsStr>,
     {
         let invocation = GitInvocation::query(cwd, args, FsmonitorOverride::Disabled);
-        let (mut command, command_for_log) = self.configure_command(&invocation);
+        let (mut command, command_for_log) = self.configure_command(&invocation)?;
         command.stdin(Stdio::null());
+        #[cfg(windows)]
+        let job = pty::JobObject::create()
+            .map_err(|source| GitError::io("create Git process job", source))?;
+        #[cfg(windows)]
+        let mut child = job
+            .spawn_contained(&mut command)
+            .map_err(|source| GitError::io("spawn Git process", source))?;
+        #[cfg(not(windows))]
         let mut child = command
             .spawn()
             .map_err(|source| GitError::io("spawn Git process", source))?;
@@ -275,6 +302,8 @@ impl GitClient {
         let stderr_task = tokio::spawn(read_bounded(stderr, self.limits.max_output_bytes));
         Ok(GitQueryStream {
             child,
+            #[cfg(windows)]
+            job,
             stdout: BufReader::new(stdout),
             stderr_task: Some(stderr_task),
             command: command_for_log,
@@ -284,9 +313,20 @@ impl GitClient {
         })
     }
 
-    fn configure_command(&self, invocation: &GitInvocation) -> (Command, String) {
-        let command_for_log = render_command(&self.executable, &invocation.args);
-        let mut command = Command::new(&self.executable);
+    fn configure_command(&self, invocation: &GitInvocation) -> GitResult<(Command, String)> {
+        let executable = self.executable()?;
+        let command_for_log = render_command(&executable, &invocation.args);
+        let mut command = Command::new(&executable);
+        if let ExecutableSource::System(system) = &self.executable
+            && !matches!(invocation.profile, GitCommandProfile::Mutation)
+        {
+            command.env(
+                "PATH",
+                system
+                    .search_path()
+                    .map_err(|source| GitError::io("build system Git PATH", source))?,
+            );
+        }
         for name in REPOSITORY_SELECTOR_ENVIRONMENT {
             command.env_remove(name);
         }
@@ -315,13 +355,21 @@ impl GitClient {
         } else {
             command.stdin(Stdio::null());
         }
-        (command, command_for_log)
+        Ok((command, command_for_log))
     }
 
     async fn run(&self, invocation: GitInvocation) -> GitResult<GitCommandOutput> {
         let timeout_duration = invocation.profile.timeout(self.limits);
-        let (mut command, command_for_log) = self.configure_command(&invocation);
+        let (mut command, command_for_log) = self.configure_command(&invocation)?;
 
+        #[cfg(windows)]
+        let job = pty::JobObject::create()
+            .map_err(|source| GitError::io("create Git process job", source))?;
+        #[cfg(windows)]
+        let mut child = job
+            .spawn_contained(&mut command)
+            .map_err(|source| GitError::io("spawn Git process", source))?;
+        #[cfg(not(windows))]
         let mut child = command
             .spawn()
             .map_err(|source| GitError::io("spawn Git process", source))?;
@@ -333,35 +381,35 @@ impl GitClient {
             .stderr
             .take()
             .ok_or_else(|| GitError::runtime("capture Git stderr", "stderr pipe was missing"))?;
-        let stdout_task = tokio::spawn(read_bounded(stdout, self.limits.max_output_bytes));
-        let stderr_task = tokio::spawn(read_bounded(stderr, self.limits.max_output_bytes));
-        let stdin_task = invocation.stdin.map(|input| {
-            let stdin = child.stdin.take();
-            tokio::spawn(write_stdin(stdin, input))
-        });
-
-        let status = match timeout(timeout_duration, child.wait()).await {
-            Ok(result) => result.map_err(|source| GitError::io("wait for Git process", source))?,
+        let stdin = child.stdin.take();
+        let captured = timeout(timeout_duration, async {
+            tokio::try_join!(
+                child.wait(),
+                read_bounded(stdout, self.limits.max_output_bytes),
+                read_bounded(stderr, self.limits.max_output_bytes),
+                async {
+                    match invocation.stdin {
+                        Some(input) => write_stdin(stdin, input).await,
+                        None => Ok(()),
+                    }
+                },
+            )
+        })
+        .await;
+        let (status, stdout, stderr, ()) = match captured {
+            Ok(result) => result.map_err(|source| GitError::io("capture Git process", source))?,
             Err(_) => {
+                #[cfg(windows)]
+                job.terminate()
+                    .map_err(|source| GitError::io("terminate Git process job", source))?;
                 let _ = child.kill().await;
                 let _ = child.wait().await;
-                drain_task(stdout_task).await?;
-                drain_task(stderr_task).await?;
-                if let Some(stdin_task) = stdin_task {
-                    let _ = drain_stdin_task(stdin_task).await;
-                }
                 return Err(GitError::TimedOut {
                     command: command_for_log,
                     timeout: timeout_duration,
                 });
             }
         };
-
-        if let Some(stdin_task) = stdin_task {
-            drain_stdin_task(stdin_task).await?;
-        }
-        let stdout = drain_task(stdout_task).await?;
-        let stderr = drain_task(stderr_task).await?;
         if stdout.truncated {
             return Err(GitError::OutputLimitExceeded {
                 command: command_for_log,
@@ -375,6 +423,11 @@ impl GitClient {
                 stream: "stderr",
                 limit_bytes: self.limits.max_output_bytes,
             });
+        }
+        #[cfg(windows)]
+        if status.success() {
+            job.preserve_descendants()
+                .map_err(|source| GitError::io("release completed Git process job", source))?;
         }
         Ok(GitCommandOutput {
             command: command_for_log,
@@ -505,6 +558,8 @@ pub(crate) struct GitCommandOutput {
 
 pub(crate) struct GitQueryStream {
     child: Child,
+    #[cfg(windows)]
+    job: pty::JobObject,
     stdout: BufReader<ChildStdout>,
     stderr_task: Option<JoinHandle<std::io::Result<BoundedRead>>>,
     command: String,
@@ -569,10 +624,14 @@ impl GitQueryStream {
         let status = match timeout(self.timeout, self.child.wait()).await {
             Ok(result) => result.map_err(|source| GitError::io("wait for Git process", source))?,
             Err(_) => {
+                #[cfg(windows)]
+                self.job
+                    .terminate()
+                    .map_err(|source| GitError::io("terminate Git process job", source))?;
                 let _ = self.child.kill().await;
                 let _ = self.child.wait().await;
                 if let Some(stderr_task) = self.stderr_task.take() {
-                    let _ = drain_task(stderr_task).await;
+                    stderr_task.abort();
                 }
                 return Err(GitError::TimedOut {
                     command: self.command.clone(),
@@ -580,12 +639,20 @@ impl GitQueryStream {
                 });
             }
         };
-        let stderr = drain_task(
+        let stderr = timeout(
+            self.timeout,
             self.stderr_task
-                .take()
+                .as_mut()
                 .expect("Git query stream stderr task is present before finish"),
         )
-        .await?;
+        .await
+        .map_err(|_| GitError::TimedOut {
+            command: self.command.clone(),
+            timeout: self.timeout,
+        })?
+        .map_err(|error| GitError::runtime("join Git output reader", error.to_string()))?
+        .map_err(|source| GitError::io("read Git output", source))?;
+        self.stderr_task.take();
         if stderr.truncated {
             return Err(GitError::OutputLimitExceeded {
                 command: self.command.clone(),
@@ -594,6 +661,10 @@ impl GitQueryStream {
             });
         }
         if status.success() {
+            #[cfg(windows)]
+            self.job
+                .preserve_descendants()
+                .map_err(|source| GitError::io("release completed Git process job", source))?;
             return Ok(());
         }
         Err(GitError::CommandFailed {
@@ -662,18 +733,6 @@ async fn write_stdin(stdin: Option<ChildStdin>, input: Vec<u8>) -> std::io::Resu
         Err(error) if error.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
         Err(error) => Err(error),
     }
-}
-
-async fn drain_task(task: JoinHandle<std::io::Result<BoundedRead>>) -> GitResult<BoundedRead> {
-    task.await
-        .map_err(|error| GitError::runtime("join Git output reader", error.to_string()))?
-        .map_err(|source| GitError::io("read Git output", source))
-}
-
-async fn drain_stdin_task(task: JoinHandle<std::io::Result<()>>) -> GitResult<()> {
-    task.await
-        .map_err(|error| GitError::runtime("join Git stdin writer", error.to_string()))?
-        .map_err(|source| GitError::io("write Git stdin", source))
 }
 
 fn collect_args<I, S>(args: I) -> Vec<OsString>

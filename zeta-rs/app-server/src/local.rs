@@ -2326,7 +2326,7 @@ impl ModelService for ProviderModelService {
 
     fn stream(
         &self,
-        _: ModelSelection<'_>,
+        selection: ModelSelection<'_>,
         request: &zeta_protocol::ModelRequest,
         cancellation: &CancellationToken,
         sink: &mut dyn CoreModelStreamSink,
@@ -2334,6 +2334,9 @@ impl ModelService for ProviderModelService {
         cancellation
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
+        if self.invoker.output_transport() == zeta_protocol::ModelOutputTransport::Unary {
+            return self.invoke(selection, request, cancellation);
+        }
         let mut adapter = CoreProviderStreamSink {
             inner: sink,
             failure: None,

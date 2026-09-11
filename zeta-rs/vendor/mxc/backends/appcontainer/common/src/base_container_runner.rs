@@ -871,6 +871,11 @@ impl BaseContainerRunner {
         )
     }
 
+    /// Whether this exact request can use PSEC without another containment implementation.
+    pub fn supports_psec(request: &ExecutionRequest) -> bool {
+        Self::new().uses_process_security_environment(request)
+    }
+
     pub(crate) fn is_usable_for_request(request: &ExecutionRequest) -> bool {
         #[cfg(test)]
         if let Ok(forced) = std::env::var("MXC_FORCE_BC_USABLE") {
@@ -1166,6 +1171,12 @@ impl BaseContainerRunner {
 
         let capture_denials = request.policy.capture_denials.clone();
         let use_process_security_environment = self.uses_process_security_environment(&request);
+        if request.host_filesystem.is_some() && !use_process_security_environment {
+            let mut error =
+                ScriptResponse::error("the prepared PSEC implementation is no longer available");
+            error.failure_phase = wxc_common::models::FailurePhase::BackendUnavailable;
+            return Err(error);
+        }
         Self::validate_resolved_network_contract(&request, use_process_security_environment)?;
         let use_guarded_capture = capture_denials.is_some() && !use_process_security_environment;
         let spec_bytes = if !use_process_security_environment {

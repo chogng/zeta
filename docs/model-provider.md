@@ -368,10 +368,17 @@ model-provider
   → ModelInvoker stream
 ```
 
-`ProviderDefinition.output_transport` 是该路径的 capability authority。OpenAI Responses、通用
-OpenAI-compatible Chat、Google 与 Anthropic 声明 `nativeStreaming`；其他内置 adapter 当前声明
-`unary` 并使用 final-response bridge。App Server 将 exact value 投影进 model catalog，Desktop 不按
-provider 名称或协议 family 猜测。
+`ProviderDefinition.output_transport` 是该路径的能力声明。所有内置供应商显式声明流式输出，
+`Provider` 统一调用 `zeta-api` 的协议实现。私有 adapter 只提供 endpoint、模型名映射、固定
+Header 和专属计数差异，不实现生成请求的 `complete` 或 `stream` 转发。
+
+`ModelInvoker::stream_with_cancellation` 必须明确实现。只需要最终结果的调用复用同一次流式
+执行，等待协议层返回工具调用、用量和结束原因；不会另发一份非流式请求。显式声明 `unary`
+的端点保留完整结果调用，流式请求在发送前返回不支持。Core/App Server 按声明消费最终结果，
+不合成增量；仅支持非流式执行的 operation/HTTP client 同样在发送前拒绝流式请求。
+
+App Server 将声明传给模型目录，Desktop 不按供应商名称或协议类型猜测。回归测试必须检查
+响应结束前的事件交付，以及取消、截断、接收方错误和已交付内容不得重放的行为。
 
 `output_transport` 只区分当前 HTTP invocation 是否提供原生增量输出，不代表 WebSocket。
 `websocket_api_profile` 是另一条 fail-closed capability：当前只有 OpenAI definition 声明
@@ -469,8 +476,8 @@ zeta-rs/model-provider/
     │   ├── recovery.rs
     │   ├── cloud/
     │   └── credential_tests.rs
+    ├── providers.rs
     ├── providers/
-    │   ├── mod.rs
     │   ├── openai.rs
     │   ├── anthropic.rs
     │   ├── google.rs

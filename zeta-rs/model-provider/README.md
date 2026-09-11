@@ -46,13 +46,13 @@ invocation，不原地修改已经运行的 `RegisteredModelInvoker`。
 | `LazyOperationClient` | private struct | 第一次 operation 才创建 production HTTP client，并缓存结果 | App Server 启动和 config inspection 不接触 TLS/proxy |
 | `Provider::instantiate` | crate-private | enforce definition/config ID equality，materialize adapter | 不读取 mutable config/credential store |
 | `providers::instantiate` | crate-private function | exhaustive `ProviderAdapter` enum dispatch | provider selection 唯一 switch |
-| `ProviderAdapter` | crate-private trait | protocol + explicit token measurement capability + complete | 不按 model ID 或 URL 猜能力 |
+| `ProviderAdapter` | crate-private trait | endpoint、模型名映射、固定 Header 与 token measurement | 不拥有生成请求执行或响应解析 |
 | `LocalInputTokenCounter` | crate-private struct | 官方预检不可用时把整份请求交给本地计数服务 | 不下载资产、不按 provider 猜 tokenizer revision |
 | `api_endpoint` | private function | `ApiProfile → zeta_api::ApiEndpoint` | 按 profile，不按 provider name 猜 |
-| provider `*Adapter::new` | crate-private | normalized base URL + fixed headers + endpoint | one immutable runtime snapshot |
+| provider `*Adapter::new` | crate-private | endpoint 与供应商专属计数配置 | one immutable runtime snapshot |
 | `Provider::resolve_model` | private method | 委托 shared manager 的 static typed resolution | 不复制 catalog policy 或做远端请求 |
 | `RegisteredModelInvoker` | private struct | bind exact Provider + resolved Model | request 时只应用 normalized defaults |
-| `RegisteredModelInvoker::invoke` | private trait impl | clone canonical request、apply max tokens、complete | 不读取 product config |
+| `RegisteredModelInvoker::invoke_with_cancellation` | private trait impl | apply defaults、取得共享执行路径的最终结果 | 不读取 product config |
 
 ## 运行时调用图
 
@@ -69,16 +69,15 @@ ModelProviderRuntime::runtime(ModelRuntimeRequest)
       │  └─ ModelsManager::resolve_static
       └─ RegisteredModelInvoker { provider, model }
 
-RegisteredModelInvoker::invoke(request)
-├─ clone canonical ModelRequest
-├─ apply normalized max_output_tokens when the request has no explicit limit
-└─ Provider::complete
-   ├─ resolve_model
-   └─ ProviderAdapter::complete
-      └─ zeta_api::ApiEndpoint::complete_with_client
-         └─ LazyOperationClient
-            ├─ first operation: build fallible production client
-            └─ OperationClient
+RegisteredModelInvoker::{invoke_with_cancellation, stream_with_cancellation}
+├─ prepare_request: apply normalized defaults
+└─ Provider::execute_with_cancellation
+   ├─ resolve_model + sanitize request + resolve authenticated target
+   ├─ ProviderAdapter::{endpoint, model_id}: provider-specific selection
+   └─ execute_attempt: dispatch by explicit output_transport
+      ├─ streaming: zeta_api::ApiEndpoint::stream_with_client_and_cancellation
+      └─ unary: zeta_api::ApiEndpoint::complete_with_client_and_cancellation
+         └─ OperationClient → HttpClient
 ```
 
 `RegisteredModelInvoker::measure_input_with_cancellation` 复用同一个 `prepare_request`，因此 provider
@@ -97,12 +96,12 @@ invoker 使用相同 catalog policy。App Server 通过 `ModelProviderRuntime::m
 
 每个 `src/providers/<name>.rs` 定义 private adapter，通常持有：
 
-- `ResolvedApiTarget`：normalized base URL 与 fixed headers；
 - `ApiEndpoint`：由 declarative `ApiProfile` 映射；
-- 必要 provider-fixed header。
+- 必要的模型名映射、固定 Header 与专属计数配置。
 
-Adapter 不手写 request JSON；它委托 `zeta-api` codec。相同 provider adapter 可以选择不同
-profile，但只有 configuration definition 可以决定 profile。
+Adapter 不执行生成请求、不手写 JSON、不解析响应。`Provider` 持有最终 `ResolvedApiTarget`，
+统一组织认证、取消和错误处理，并调用 `zeta-api` 的协议实现。相同 adapter 可选择不同 profile，
+profile 与输出方式由 configuration definition 明确声明。
 
 新增 provider/profile 时同步检查 config enum/definition、`providers::instantiate` exhaustive match、
 `api_endpoint`、fixed headers、codec support、fake transport tests 和系统 provider matrix。
@@ -138,7 +137,7 @@ availability。`ListedOnly` 由 manager 在任何 network call 前拒绝。
 ## 测试、限制与演进
 
 ```text
-cargo test -p zeta-model-provider
+just test zeta-model-provider
 bazel test //zeta-rs/model-provider:model-provider-unit-tests
 ```
 
@@ -149,14 +148,16 @@ bazel test //zeta-rs/model-provider:model-provider-unit-tests
 当前 completion `ModelInvoker` 已有 concrete provider adapters；embedding/rerank 已有 canonical
 invoker、request/response validation、OpenAI-compatible/Ollama runtime resolver，以及本地
 `zeta-codebase` 和 Tool Search consumers。
-当前 completion invocation 同时支持 unary 与 OpenAI Responses、OpenAI-compatible Chat Completions、
-Google Chat-compatible、Anthropic Messages 原生 HTTP/SSE stream。每个 immutable provider definition
-显式发布 `ModelOutputTransport::{NativeStreaming, Unary}`；catalog/Desktop 只消费该声明，不从
-provider 名称或 `ApiProfile` 猜测；
+所有内置供应商都通过共享路径使用协议流式执行。完整结果调用等待同一次流式执行返回的
+`ModelResponse`；增量与最终工具调用、用量和结束原因由 `zeta-api` 解析。`ModelInvoker` 必须声明
+输出方式并实现流式契约，不能把完整文本包装成增量。显式 `Unary` 端点只接受完整结果调用，流式请求在发送前
+返回不支持；Core/App Server 按声明消费最终结果，不合成增量。
+每个 immutable provider definition 显式发布输出方式；catalog/Desktop 只消费该声明，
+不从 provider 名称或 `ApiProfile` 猜测。
 WebSocket eligibility 由独立的 `WebSocketApiProfile` fail closed 声明，不能从
 `ModelOutputTransport` 或 HTTP compatibility 推断。底层 connector 已实现，但 protocol codec、session
 reuse、sticky turn state、prewarm、`previous_response_id` 和 HTTP fallback 尚未进入本 runtime。
-`ProviderCredentialService` 是供应商 API Key 的唯一所有者：App Server 通过它校验并写入 host 注入的 `SecretStore`，direct 和 semantic runtime 通过它解析 `ApiKeyPolicy` 与 `ApiKeyHeader`。`Provider` 合并 adapter 声明的固定 Header 与认证 Header，并唯一持有最终 `ResolvedApiTarget`；各 provider adapter 只负责协议、endpoint、固定 Header 和响应处理。Anthropic 使用 `x-api-key`、Google 使用 `x-goog-api-key`，其余远端 adapter 使用 Bearer Header；Ollama 不读取 Key，OpenAI-compatible 允许无 Key endpoint。
+`ProviderCredentialService` 是供应商 API Key 的唯一所有者：App Server 通过它校验并写入 host 注入的 `SecretStore`，direct 和 semantic runtime 通过它解析 `ApiKeyPolicy` 与 `ApiKeyHeader`。`Provider` 合并 adapter 声明的固定 Header 与认证 Header，并唯一持有最终 `ResolvedApiTarget`；各 provider adapter 只负责 endpoint、模型名映射、固定 Header 和专属计数。Anthropic 使用 `x-api-key`、Google 使用 `x-goog-api-key`，其余远端 adapter 使用 Bearer Header；Ollama 不读取 Key，OpenAI-compatible 允许无 Key endpoint。
 更多 stream profile 与动态 catalog 的长期设计仍在系统文档中演进。完整
 ChatGPT subscription 通过 `zeta-chatgpt` 提供的 fresh authenticated target 进入 OpenAI Responses adapter；Agent loop 仍由 Zeta Core `TurnExecutor` 持有。
 新增能力应保持 invoker immutable、profile explicit、
@@ -176,8 +177,12 @@ Call/Result 历史的请求返回 unavailable。DeepSeek/Hugging Face 的本地 
 磁盘缓存和内存 LRU；其他 provider/model 仍需宿主提供固定资产清单。官方预检或本地计数的非取消
 错误不会中止真实模型调用，而是继续降级到下一计量来源。
 
-`RegisteredModelInvoker::invoke_with_cancellation` 把 caller token 逐层传给 private
-`ProviderAdapter::complete` 和 `OperationClient::execute_with_cancellation`。取消是独立的
+完整结果与增量调用共用 `Provider::execute_with_cancellation`，caller token 经 `zeta-api` 传给
+`OperationClient`。取消是独立的
 `ModelProviderError::Cancelled`，App Server 不会把它误报为 model failure。同步 HTTP attempt
 可能已进入底层 socket；operation 立即停止等待且不 retry，attempt 本身由 transport timeout
 有界结束，迟到 response 不会被接受。
+
+流式回归测试覆盖所有 Chat Completions 供应商的响应结束前交付、两种消费方式的结果一致性、
+分块工具参数、DeepSeek 缓存用量、取消、截断、接收方错误与禁止重放；Responses 和 Messages
+复用已有协议测试。模型准备、下载进度和产品界面仍由各自 owner 负责。

@@ -14,6 +14,31 @@ use crate::LocalSocketAccept;
 use crate::PollingLocalListener;
 
 #[test]
+fn local_endpoint_rejects_other_users_and_elevation_contexts() {
+    for peer in [
+        zeta_uds::PeerIdentity {
+            same_user: false,
+            same_elevation: true,
+        },
+        zeta_uds::PeerIdentity {
+            same_user: true,
+            same_elevation: false,
+        },
+        zeta_uds::PeerIdentity {
+            same_user: false,
+            same_elevation: false,
+        },
+    ] {
+        assert_eq!(
+            crate::local_socket::validate_local_identity(peer)
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::PermissionDenied
+        );
+    }
+}
+
+#[test]
 fn polling_listener_returns_blocking_connections() -> io::Result<()> {
     let socket_directory = tempfile::tempdir()?;
     let socket_path = socket_directory.path().join("polling-listener.sock");

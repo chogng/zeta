@@ -2,13 +2,14 @@ use crate::{
     PreparedCommand, SandboxCommand, SandboxError, SandboxKind, SandboxPolicy,
     SandboxProcessDenial, SandboxProcessExitStatus, SandboxScope,
 };
+use std::sync::Arc;
 use zeta_file_access::Dir;
 
 /// Converts a validated command and policy into a platform-enforced launch command.
 ///
 /// Implementations must fail closed when the requested restrictions cannot be enforced. They
 /// receive a command whose working directory has already been canonicalized inside `dir`.
-pub trait SandboxBackend: Send + Sync {
+pub trait SandboxBackend: Send + Sync + 'static {
     fn kind(&self) -> SandboxKind;
 
     /// Whether HTTP and SOCKS must share the one endpoint allowed by this backend.
@@ -49,10 +50,9 @@ pub trait SandboxBackend: Send + Sync {
         scope: &SandboxScope,
     ) -> Result<PreparedCommand, SandboxError> {
         if !scope.is_single_unhidden() {
-            return Err(SandboxError::BackendUnavailable {
-                backend: self.kind(),
-                message: "the backend cannot enforce this multi-directory visibility scope".into(),
-            });
+            return Err(SandboxError::UnsupportedPolicy(
+                "the backend cannot enforce this multi-directory visibility scope".into(),
+            ));
         }
         self.prepare(command, policy, scope.command_dir())
     }
@@ -61,12 +61,15 @@ pub trait SandboxBackend: Send + Sync {
 /// Validates command paths and delegates platform-specific sandbox construction.
 pub struct SandboxManager<B> {
     dir: Dir,
-    backend: B,
+    backend: Arc<B>,
 }
 
 impl<B: SandboxBackend> SandboxManager<B> {
     pub fn new(dir: Dir, backend: B) -> Self {
-        Self { dir, backend }
+        Self {
+            dir,
+            backend: Arc::new(backend),
+        }
     }
 
     pub fn backend_kind(&self) -> SandboxKind {
@@ -104,16 +107,16 @@ impl<B: SandboxBackend> SandboxManager<B> {
             .command_dir()
             .resolve_existing(command.working_directory())?;
         let command = command.with_working_directory(working_directory);
-        self.backend.prepare_scoped(&command, policy, scope)
-    }
-
-    pub fn classify_denial(
-        &self,
-        exit_status: SandboxProcessExitStatus,
-        stdout: &str,
-        stderr: &str,
-    ) -> Option<SandboxProcessDenial> {
-        self.backend.classify_denial(exit_status, stdout, stderr)
+        self.backend
+            .prepare_scoped(&command, policy, scope)
+            .map(|prepared| prepared.with_default_backend(self.backend.clone()))
+            .map_err(|error| match error {
+                SandboxError::UnsupportedPolicy(message) => SandboxError::BackendUnavailable {
+                    backend: self.backend.kind(),
+                    message,
+                },
+                error => error,
+            })
     }
 }
 

@@ -179,34 +179,12 @@ fn registry_applies_endpoint_and_token_defaults_during_normalization() {
 #[test]
 fn builtins_declare_native_streaming_without_inference_from_api_profile() {
     let registry = ProviderConfigRegistry::builtin();
-    for provider in ["openai", "openai-compatible", "anthropic", "google"] {
+    for provider in registry.providers() {
         assert_eq!(
-            registry
-                .get(&provider_id(provider))
-                .unwrap()
-                .output_transport,
+            provider.output_transport,
             ModelOutputTransport::NativeStreaming,
-            "provider {provider}",
-        );
-    }
-    for provider in [
-        "xai",
-        "qwen",
-        "kimi",
-        "deepseek",
-        "ollama",
-        "huggingface",
-        "zai",
-        "minimax",
-        "mimo",
-    ] {
-        assert_eq!(
-            registry
-                .get(&provider_id(provider))
-                .unwrap()
-                .output_transport,
-            ModelOutputTransport::Unary,
-            "provider {provider}",
+            "provider {}",
+            provider.id,
         );
     }
 }

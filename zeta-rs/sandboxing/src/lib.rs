@@ -2,12 +2,14 @@
 //!
 //! Owns policy, directory scopes and process lifecycle. Implementations are injected by the host.
 
+mod backends;
 mod dir;
 mod error;
 mod manager;
 mod model;
 mod process;
 mod scope;
+pub use backends::SandboxBackends;
 pub use model::HostAclChanges;
 pub use model::SandboxLaunch;
 pub use process::ProcessHandle;

@@ -9,6 +9,7 @@ pub use local_socket::LocalConnectionGuard;
 pub use local_socket::LocalConnections;
 pub use local_socket::LocalSocketAccept;
 pub use local_socket::PollingLocalListener;
+pub use local_socket::validate_local_peer;
 pub use websocket::CapabilityTokenSha256;
 pub use websocket::StartedWebSocketListener;
 pub use websocket::WebSocketReader;
@@ -119,7 +120,3 @@ impl StdioTransport {
         "stdio://"
     }
 }
-
-#[cfg(test)]
-#[path = "local_socket_tests.rs"]
-mod tests;

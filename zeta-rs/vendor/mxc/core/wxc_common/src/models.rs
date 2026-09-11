@@ -948,6 +948,16 @@ pub struct TelemetryConfig {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ExecutionRequest {
+    /// Embedding-only authority; never supplied by a serialized command.
+    #[serde(skip)]
+    pub host_acl_scope: Option<crate::host_changes::HostAclScope>,
+    /// Host access ceiling, materialized by the chosen implementation.
+    #[serde(skip)]
+    pub host_filesystem: Option<crate::host_changes::HostFilesystemAccess>,
+    #[serde(skip)]
+    pub host_filesystem_roots: Vec<String>,
+    #[serde(skip)]
+    pub prepared_files: Option<crate::filesystem_object::FilesystemSnapshot>,
     /// Host-resolved executable; unavailable to untrusted serialized requests.
     #[serde(skip)]
     pub bubblewrap_executable: Option<std::path::PathBuf>,

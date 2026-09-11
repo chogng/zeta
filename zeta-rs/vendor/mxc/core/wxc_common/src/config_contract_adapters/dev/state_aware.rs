@@ -450,5 +450,5 @@ pub(super) fn into_state_aware_wire_input(
 }
 
 #[cfg(test)]
-#[path = "state_aware_tests/mod.rs"]
+#[path = "state_aware_tests.rs"]
 mod tests;

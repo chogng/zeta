@@ -146,10 +146,38 @@ fn spawn_seatbelt(
 }
 
 #[cfg(target_os = "windows")]
+pub(crate) fn require_windows_psec(request: &ExecutionRequest) -> Result<(), MxcError> {
+    if appcontainer_common::base_container_runner::BaseContainerRunner::supports_psec(request) {
+        Ok(())
+    } else {
+        Err(MxcError::unsupported_containment(
+            "the MXC Windows provider requires PSEC support for the complete requested policy",
+        ))
+    }
+}
+
+#[cfg(target_os = "windows")]
 fn spawn_process_container(
     request: &ExecutionRequest,
     logger: &mut Logger,
 ) -> Result<Box<dyn SandboxProcess>, MxcError> {
+    if request.host_filesystem.is_some() {
+        use appcontainer_common::base_container_runner::BaseContainerRunner;
+        use wxc_common::sandbox_process::SandboxBackend;
+        if let Some(snapshot) = &request.prepared_files {
+            snapshot
+                .validate()
+                .map_err(|error| MxcError::policy_validation(error.to_string()))?;
+        }
+        require_windows_psec(request)?;
+        return BaseContainerRunner::new()
+            .spawn(
+                request,
+                logger,
+                wxc_common::sandbox_process::StdioMode::Pipes,
+            )
+            .map_err(map_spawn_error);
+    }
     use appcontainer_common::dispatcher::{
         spawn_with_fallback_and_capture, DispatchError, SpawnDispatchError,
     };

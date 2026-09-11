@@ -9,5 +9,6 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::OpenAiChatCompletions,
         "http://localhost:11434/v1",
     )
+    .with_native_streaming()
     .with_api_key_policy(ApiKeyPolicy::Unsupported)
 }

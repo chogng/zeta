@@ -4,14 +4,26 @@ use std::os::windows::io::AsRawHandle;
 use std::os::windows::io::FromRawHandle;
 use std::os::windows::io::RawHandle;
 use std::sync::Mutex;
+use tokio::process::Child;
+use tokio::process::Command;
+use winapi::shared::ntdef::NT_SUCCESS;
+use winapi::shared::ntdef::NTSTATUS;
 use winapi::um::jobapi2::AssignProcessToJobObject;
 use winapi::um::jobapi2::CreateJobObjectW;
 use winapi::um::jobapi2::SetInformationJobObject;
 use winapi::um::jobapi2::TerminateJobObject;
+use winapi::um::winbase::CREATE_NO_WINDOW;
+use winapi::um::winbase::CREATE_SUSPENDED;
+use winapi::um::winnt::HANDLE;
 use winapi::um::winnt::JOB_OBJECT_LIMIT_BREAKAWAY_OK;
 use winapi::um::winnt::JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
 use winapi::um::winnt::JOBOBJECT_EXTENDED_LIMIT_INFORMATION;
 use winapi::um::winnt::JobObjectExtendedLimitInformation;
+
+#[link(name = "ntdll")]
+unsafe extern "system" {
+    fn NtResumeProcess(process_handle: HANDLE) -> NTSTATUS;
+}
 
 /// Owns a Windows Job Object used to terminate a spawned process tree.
 #[derive(Debug)]
@@ -31,10 +43,7 @@ impl JobObject {
         }
         let handle = unsafe { OwnedHandle::from_raw_handle(handle.cast()) };
 
-        Self::set_limit_flags(
-            &handle,
-            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK,
-        )?;
+        Self::set_limit_flags(&handle, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE)?;
 
         Ok(Self {
             handle,
@@ -72,6 +81,45 @@ impl JobObject {
         } else {
             Ok(())
         }
+    }
+
+    /// Starts a background process only after it belongs to this job.
+    ///
+    /// The child cannot execute user code before assignment. Creation, assignment, or resume
+    /// failure is returned to the caller; an unassigned child is never resumed. Dropping the
+    /// returned child kills its root, while dropping this job also kills its descendants.
+    pub fn spawn_contained(&self, command: &mut Command) -> io::Result<Child> {
+        let preserved = self
+            .preserve_descendants
+            .lock()
+            .map_err(|_| io::Error::other("job state lock poisoned"))?;
+        if *preserved {
+            return Err(io::Error::other("cannot spawn in a released process job"));
+        }
+        command
+            .creation_flags(CREATE_SUSPENDED | CREATE_NO_WINDOW)
+            .kill_on_drop(true);
+        let mut child = command.spawn()?;
+        let result = (|| {
+            let handle = child
+                .raw_handle()
+                .ok_or_else(|| io::Error::other("missing child process handle"))?;
+            self.assign_process(handle)?;
+            // The child owns this handle and remains suspended until the job assignment succeeds.
+            let status = unsafe { NtResumeProcess(handle.cast()) };
+            if !NT_SUCCESS(status) {
+                return Err(io::Error::other(format!(
+                    "failed to resume contained process: NTSTATUS {status:#x}"
+                )));
+            }
+            Ok(())
+        })();
+        if let Err(error) = result {
+            // Do not leave a suspended process alive if setup fails. Tokio reaps it on drop.
+            child.start_kill()?;
+            return Err(error);
+        }
+        Ok(child)
     }
 
     /// Allows contained descendants to keep running after the root exits normally.
@@ -120,3 +168,7 @@ impl AsRawHandle for JobObject {
         self.handle.as_raw_handle()
     }
 }
+
+#[cfg(test)]
+#[path = "job_tests.rs"]
+mod tests;

@@ -14,6 +14,7 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::OpenAiChatCompletions,
         "https://api.z.ai/api/paas/v4",
     )
+    .with_native_streaming()
     .with_input_token_count(
         InputTokenCountDefinition::invocation_base(InputTokenCountProfile::ZaiChatCompletions)
             .with_models([

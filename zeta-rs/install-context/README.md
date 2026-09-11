@@ -6,8 +6,17 @@
 
 `zeta-install-context` 在进程启动边界捕获 current executable、package layout、
 `ZETA_RG_PATH`、`ZETA_BWRAP_PATH` 与 host `PATH`，
-并为消费方提供稳定、有序的资源候选。它不验证或执行 binary，不拥有 Workspace、Tool policy、
+并为消费方提供稳定、有序的资源候选。`SystemExecutables` 另负责系统安装目录内的可执行文件定位。
+它不执行程序，不拥有 Workspace、Tool policy、
 approval、sandbox capability probe、下载、更新或安装 mutation。
+
+## 系统程序定位
+
+- `SystemExecutables::current` 捕获系统与常规包管理器的安装目录；不使用 `PATH`、`PATHEXT` 或当前工作目录查找程序。
+- `find` 只接受 `HostExecutableName`，返回规范化后的绝对路径；目录、越出安装根的链接与不可执行的 Unix 文件返回错误。
+- `search_path` 生成后台自动操作使用的子进程 PATH。Windows 安装根来自启动环境中的 Program Files、LocalAppData/Programs 和 SystemRoot；这些安装根与其内容属于宿主的信任前提。
+- `zeta-git` 的系统入口使用此定位方式，查询还使用对应的子进程 PATH。用户指定的 Git 使用绝对路径入口，由调用方决定其可信来源。
+- 随包资源名称通过 `path-utils::join_descendant` 检查词法范围；资源内容、符号链接和执行权限仍由消费方验证。
 
 ## 布局与优先级
 
@@ -53,6 +62,7 @@ Bubblewrap 候选交由适配器固定路径，再由 SDK 对同一路径验证�
 
 | Symbol | 职责 | 不承担 |
 | --- | --- | --- |
+| `SystemExecutables` | 系统程序定位与受限子进程 PATH | 进程执行、用户工具配置或授权 |
 | `InstallContext::current` | 捕获当前安装与环境 snapshot | 持续观察环境变化 |
 | `PackageLayout` | 描述 metadata 与 package/bin/path/resources 路径 | 创建、解析或修改 package |
 | `executable_candidates` | 生成有来源和优先级的候选 | executable 验证或 capability probe |

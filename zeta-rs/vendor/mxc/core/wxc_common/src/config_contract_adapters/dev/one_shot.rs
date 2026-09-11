@@ -320,5 +320,5 @@ pub(super) fn into_wire(request: contract::OneShotRequest) -> wire::MxcConfig {
 }
 
 #[cfg(test)]
-#[path = "one_shot_tests/mod.rs"]
+#[path = "one_shot_tests.rs"]
 mod tests;

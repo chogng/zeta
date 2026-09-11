@@ -40,7 +40,10 @@ impl PollingLocalListener {
     pub fn poll_accept(&self) -> io::Result<LocalSocketAccept> {
         match self.listener.accept() {
             Ok((stream, _address)) => match stream.set_nonblocking(false) {
-                Ok(()) => Ok(LocalSocketAccept::Accepted(stream)),
+                Ok(()) => match validate_local_peer(&stream) {
+                    Ok(()) => Ok(LocalSocketAccept::Accepted(stream)),
+                    Err(error) => Ok(LocalSocketAccept::Rejected(error)),
+                },
                 Err(error) => Ok(LocalSocketAccept::Rejected(error)),
             },
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
@@ -48,6 +51,23 @@ impl PollingLocalListener {
             }
             Err(error) => Err(error),
         }
+    }
+}
+
+/// Local App Server connections may not cross user or Windows elevation boundaries.
+/// Call before sending initialization data or starting a protocol reader.
+pub fn validate_local_peer(stream: &UnixStream) -> io::Result<()> {
+    validate_local_identity(zeta_uds::peer_identity(stream)?)
+}
+
+fn validate_local_identity(peer: zeta_uds::PeerIdentity) -> io::Result<()> {
+    if peer.same_user && peer.same_elevation {
+        Ok(())
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "local App Server peer has a different user or elevation context",
+        ))
     }
 }
 
@@ -125,3 +145,7 @@ impl Drop for LocalConnectionGuard {
         self.connections.count.fetch_sub(1, Ordering::AcqRel);
     }
 }
+
+#[cfg(test)]
+#[path = "local_socket_tests.rs"]
+mod tests;

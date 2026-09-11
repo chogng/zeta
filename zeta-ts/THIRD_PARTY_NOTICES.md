@@ -6,6 +6,7 @@ texts.
 
 | Component | Version | License used by Zeta | License text |
 | --- | --- | --- | --- |
+| OpenAI Codex socket-security helpers | commit `dafb6781ee` | Apache-2.0 | [`LICENSE-APACHE`](../zeta-rs/uds/LICENSE-APACHE), [`NOTICE`](../zeta-rs/uds/NOTICE) |
 | [DOMPurify](https://github.com/cure53/DOMPurify) | 3.4.12 | Apache-2.0, selected from `MPL-2.0 OR Apache-2.0` | [`licenses/DOMPurify.txt`](licenses/DOMPurify.txt) |
 | [Marked](https://github.com/markedjs/marked) | 18.0.7 | MIT and bundled Markdown notice | [`licenses/Marked.txt`](licenses/Marked.txt) |
 | [markdown-it](https://github.com/markdown-it/markdown-it) | 14.3.0 | MIT | [`licenses/markdown-it.txt`](licenses/markdown-it.txt) |

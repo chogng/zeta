@@ -376,6 +376,26 @@ fn select_backend_with_fallback(
         prefer_base_container,
         supports_deny_paths,
     )?;
+    if let Some(scope) = &request.host_acl_scope {
+        let targets = request.policy.denied_paths.iter().chain(
+            request
+                .policy
+                .readwrite_paths
+                .iter()
+                .chain(&request.policy.readonly_paths)
+                .filter(|_| decision.tier == IsolationTier::AppContainerDacl),
+        );
+        if decision.needs_dacl_augmentation {
+            for path in targets {
+                scope.check(std::path::Path::new(path)).map_err(|error| {
+                    DispatchError::Fallback(FallbackError::WriteDacUnavailable {
+                        path: PathBuf::from(path),
+                        reason: error.to_string(),
+                    })
+                })?;
+            }
+        }
+    }
     let guarded_capture_required = request.policy.capture_denials.is_some()
         && (decision.tier != IsolationTier::BaseContainer || !uses_native_capture);
     if guarded_capture_required && capture_factory.is_none() {

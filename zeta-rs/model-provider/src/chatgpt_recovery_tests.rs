@@ -138,7 +138,7 @@ fn fixture(
 }
 
 #[test]
-fn managed_chatgpt_recovers_one_rejected_unary_or_stream_request() {
+fn managed_chatgpt_recovers_one_rejected_request_for_both_consumers() {
     for streaming in [false, true] {
         let (_home, client, model) = fixture(ResponseCase::Recover);
         let response = if streaming {
@@ -151,10 +151,7 @@ fn managed_chatgpt_recovers_one_rejected_unary_or_stream_request() {
             model.invoke(&request())
         }
         .unwrap();
-        assert_eq!(
-            response.text(),
-            if streaming { "live" } else { "recovered" }
-        );
+        assert_eq!(response.text(), "live");
         assert_eq!(
             *client.calls.lock().unwrap(),
             vec![

@@ -47,9 +47,11 @@ pub(crate) struct TerminalSession {
 impl TerminalSession {
     pub(crate) fn open(mode: ScreenMode) -> io::Result<Self> {
         let host_terminal = detect_host_terminal();
-        let modes = TerminalModeGuard::acquire(CrosstermModeOperations, mode)?;
+        let modes = TerminalModeGuard::acquire(CrosstermModeOperations, mode)
+            .map_err(|source| startup_error(&host_terminal, "set terminal modes", source))?;
         let background_color = super::terminal_probe::query_background(&host_terminal);
-        let terminal = new_terminal(mode, 1)?;
+        let terminal = new_terminal(mode, 1)
+            .map_err(|source| startup_error(&host_terminal, "create terminal", source))?;
         let mut session = Self {
             background_color,
             terminal,
@@ -60,7 +62,10 @@ impl TerminalSession {
             inline_height: 1,
             inline_active: mode == ScreenMode::Inline,
         };
-        session.terminal.clear()?;
+        session
+            .terminal
+            .clear()
+            .map_err(|source| startup_error(&host_terminal, "clear terminal", source))?;
         Ok(session)
     }
 
@@ -454,6 +459,50 @@ fn suspend_process() -> io::Result<()> {
         io::ErrorKind::Unsupported,
         "process suspension is unsupported on this platform",
     ))
+}
+
+#[derive(Debug)]
+struct StartupError {
+    host: zeta_terminal_detection::HostTerminal,
+    operation: &'static str,
+    source: io::Error,
+}
+
+impl std::fmt::Display for StartupError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "cannot {}: {}; terminal={:?}, version={:?}, multiplexer={:?}, TERM={:?}, color={:?}",
+            self.operation,
+            self.source,
+            self.host.kind,
+            self.host.version,
+            self.host.multiplexer,
+            self.host.term,
+            self.host.color_level
+        )
+    }
+}
+
+impl std::error::Error for StartupError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.source)
+    }
+}
+
+fn startup_error(
+    host: &zeta_terminal_detection::HostTerminal,
+    operation: &'static str,
+    source: io::Error,
+) -> io::Error {
+    io::Error::new(
+        source.kind(),
+        StartupError {
+            host: host.clone(),
+            operation,
+            source,
+        },
+    )
 }
 
 #[cfg(test)]

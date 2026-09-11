@@ -82,7 +82,9 @@ fn detect(environment: &impl EnvironmentValues) -> HostTerminal {
     let term = environment.non_empty("TERM");
     let program = environment.non_empty("TERM_PROGRAM");
     let multiplexer = detect_multiplexer(environment);
-    let (kind, version) = if let Some(program) = program.as_deref() {
+    let (kind, version) = if let Some(program) = program.as_deref()
+        && !is_multiplexer_program(program)
+    {
         (
             kind_from_program(program),
             environment.non_empty("TERM_PROGRAM_VERSION"),
@@ -106,18 +108,32 @@ fn detect(environment: &impl EnvironmentValues) -> HostTerminal {
 }
 
 fn detect_multiplexer(environment: &impl EnvironmentValues) -> Option<TerminalMultiplexer> {
-    if environment.non_empty("TMUX").is_some() || environment.non_empty("TMUX_PANE").is_some() {
-        let version = (environment.value("TERM_PROGRAM").as_deref() == Some("tmux"))
+    let program = environment.non_empty("TERM_PROGRAM");
+    let is_program = |name: &str| {
+        program
+            .as_deref()
+            .is_some_and(|value| value.eq_ignore_ascii_case(name))
+    };
+    if is_program("tmux")
+        || environment.non_empty("TMUX").is_some()
+        || environment.non_empty("TMUX_PANE").is_some()
+    {
+        let version = is_program("tmux")
             .then(|| environment.non_empty("TERM_PROGRAM_VERSION"))
             .flatten();
         return Some(TerminalMultiplexer::Tmux { version });
     }
-    if environment.non_empty("ZELLIJ").is_some()
+    if is_program("zellij")
+        || environment.non_empty("ZELLIJ").is_some()
         || environment.non_empty("ZELLIJ_SESSION_NAME").is_some()
         || environment.non_empty("ZELLIJ_VERSION").is_some()
     {
         return Some(TerminalMultiplexer::Zellij {
-            version: environment.non_empty("ZELLIJ_VERSION"),
+            version: if is_program("zellij") {
+                environment.non_empty("TERM_PROGRAM_VERSION")
+            } else {
+                environment.non_empty("ZELLIJ_VERSION")
+            },
         });
     }
     None
@@ -127,6 +143,9 @@ fn detect_from_distinctive_variables(
     environment: &impl EnvironmentValues,
     term: Option<&str>,
 ) -> (TerminalKind, Option<String>) {
+    if environment.non_empty("GHOSTTY_RESOURCES_DIR").is_some() {
+        return (TerminalKind::Ghostty, None);
+    }
     if let Some(version) = environment.value("WEZTERM_VERSION") {
         return (TerminalKind::WezTerm, non_blank(version));
     }
@@ -157,7 +176,14 @@ fn detect_from_distinctive_variables(
     if environment.has("WT_SESSION") {
         return (TerminalKind::WindowsTerminal, None);
     }
+    if term == Some("xterm-ghostty") {
+        return (TerminalKind::Ghostty, None);
+    }
     (TerminalKind::Unknown, None)
+}
+
+fn is_multiplexer_program(program: &str) -> bool {
+    program.eq_ignore_ascii_case("tmux") || program.eq_ignore_ascii_case("zellij")
 }
 
 fn kind_from_program(program: &str) -> TerminalKind {

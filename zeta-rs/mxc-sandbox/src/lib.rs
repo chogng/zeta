@@ -90,6 +90,15 @@ impl SandboxBackend for MxcSandbox {
                 .set_bubblewrap_executable(&path)
                 .map_err(|error| unavailable(error.to_string()))?;
         }
+        request
+            .prepare()
+            .map_err(|error| {
+                if error.code == mxc_sdk::ErrorCode::UnsupportedContainment {
+                    SandboxError::UnsupportedPolicy(error.to_string())
+                } else {
+                    unavailable(error.to_string())
+                }
+            })?;
         Ok(PreparedCommand::sandboxed(
             command,
             process::Launch {

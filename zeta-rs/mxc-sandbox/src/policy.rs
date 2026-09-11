@@ -1,11 +1,10 @@
 use crate::unavailable;
-use mxc_sdk::NetworkAction;
-use mxc_sdk::NetworkEgressSection;
-use mxc_sdk::NetworkIngressSection;
-use mxc_sdk::RuntimeConfigSection;
 use mxc_sdk::policy::FilesystemSection;
 use mxc_sdk::policy::HostFilesystemAccess;
 use mxc_sdk::policy::NetworkSection;
+use mxc_sdk::NetworkAction;
+use mxc_sdk::NetworkEgressSection;
+use mxc_sdk::NetworkIngressSection;
 use std::path::Path;
 use zeta_sandboxing::FileSystemAccess;
 use zeta_sandboxing::HostAclChanges;
@@ -38,9 +37,11 @@ pub(super) fn request(
     network.ingress = Some(ingress);
     match (policy.network(), command.network_proxy()) {
         (NetworkAccess::Managed, Some(proxy)) if proxy.ports()[0] == proxy.ports()[1] => {
-            let mut runtime = RuntimeConfigSection::default();
-            runtime.network_proxy = Some(format!("http://127.0.0.1:{}", proxy.ports()[0]));
-            network.runtime_config = Some(runtime);
+            network = NetworkSection::managed_proxy(
+                proxy.ports()[0]
+                    .try_into()
+                    .map_err(|_| unavailable("proxy port must be nonzero"))?,
+            );
         }
         (NetworkAccess::Allowed | NetworkAccess::Denied, None) => {}
         _ => {
@@ -70,7 +71,20 @@ pub(super) fn request(
             request.forbid_host_acl_changes();
         }
         HostAclChanges::Scoped => {
-            request.permit_scoped_host_acl_changes();
+            let roots = scope
+                .grants()
+                .iter()
+                .map(|grant| grant.dir().canonical_path().to_owned())
+                .chain(
+                    scope
+                        .hidden_dirs()
+                        .iter()
+                        .map(|dir| dir.canonical_path().to_owned()),
+                )
+                .collect::<Vec<_>>();
+            request
+                .permit_host_acl_changes(&roots)
+                .map_err(|error| unavailable(error.to_string()))?;
         }
     }
     #[cfg(target_os = "macos")]

@@ -48,7 +48,7 @@ fn git_commands_remove_inherited_repository_selectors() {
         ["status"],
         FsmonitorOverride::Disabled,
     );
-    let (command, _) = client.configure_command(&invocation);
+    let (command, _) = client.configure_command(&invocation).unwrap();
     let environment = command
         .as_std()
         .get_envs()
@@ -58,3 +58,26 @@ fn git_commands_remove_inherited_repository_selectors() {
         assert_eq!(environment.get(std::ffi::OsStr::new(name)), Some(&None));
     }
 }
+
+#[tokio::test]
+async fn system_git_uses_an_absolute_installation_path_when_workspace_contains_git() {
+    let directory = tempfile::tempdir().unwrap();
+    let impostor = directory
+        .path()
+        .join(if cfg!(windows) { "git.exe" } else { "git" });
+    std::fs::write(impostor, b"not an installed Git executable").unwrap();
+    let client = GitClient::system();
+    let path = client.executable().unwrap();
+    assert!(path.is_absolute());
+    assert!(!path.starts_with(directory.path()));
+    let output = client
+        .run_query(directory.path(), ["--version"])
+        .await
+        .unwrap();
+    assert!(output.stdout.starts_with(b"git version "));
+    assert!(GitClient::with_executable("git".into(), GitExecutionLimits::default()).is_err());
+}
+
+#[cfg(windows)]
+#[path = "process_tests.rs"]
+mod process;

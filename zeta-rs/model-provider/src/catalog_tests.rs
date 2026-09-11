@@ -173,7 +173,8 @@ fn custom_catalog_fetches_models_with_its_own_key_and_invalidates_scope() {
     config.custom = Some(CustomProviderConfig {
         context_window: 272_000,
         order: 0,
-        model: None,
+        // Keep this discovery fixture independent of inherited built-in model rows.
+        model: Some(ModelId::new("catalog-test-model").unwrap()),
         name: "Example".into(),
         protocol: CustomProviderProtocol::Responses,
     });

@@ -397,6 +397,25 @@ impl HttpClientTelemetry for CapturingTelemetry {
 
 struct StaticClient;
 
+#[test]
+fn unary_http_clients_reject_streaming_before_sending() {
+    struct UnaryOnly;
+    impl HttpClient for UnaryOnly {
+        fn execute(&self, _: &HttpRequest) -> Result<HttpResponse, HttpClientError> {
+            panic!("a streaming request must not execute a unary request")
+        }
+    }
+    let request = HttpRequest::post("https://example.test/stream", Vec::new(), Vec::new()).unwrap();
+    let mut sink = CollectedBody::default();
+    assert_eq!(
+        UnaryOnly.execute_streaming(&request, &mut sink),
+        Err(HttpClientError::InvalidRequest(
+            "HTTP client does not support streaming".into()
+        ))
+    );
+    assert!(sink.body.is_empty());
+}
+
 impl HttpClient for StaticClient {
     fn execute(&self, _: &HttpRequest) -> Result<HttpResponse, HttpClientError> {
         Ok(HttpResponse::new(

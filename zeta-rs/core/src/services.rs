@@ -192,35 +192,16 @@ pub trait ModelService: Send + Sync {
         cancellation: &CancellationToken,
     ) -> Result<ModelResponse, CoreError>;
 
-    /// Streams incremental output and returns the terminal canonical response.
-    ///
-    /// The default bridge keeps synchronous adapters compatible by invoking [`Self::invoke`] and
-    /// emitting each final text or reasoning item as one delta. Provider adapters should override
-    /// this method when their wire protocol exposes earlier incremental output.
+    /// Returns the authoritative result and delivers incremental output when the service supports it.
+    /// Synchronous services return only the result. They never synthesize deltas from completed text.
     fn stream(
         &self,
         selection: ModelSelection<'_>,
         request: &ModelRequest,
         cancellation: &CancellationToken,
-        sink: &mut dyn ModelStreamSink,
+        _: &mut dyn ModelStreamSink,
     ) -> Result<ModelResponse, CoreError> {
-        let response = self.invoke(selection, request, cancellation)?;
-        for item in &response.output {
-            let event = match item {
-                zeta_protocol::ResponseItem::Text(text) => {
-                    Some(ModelStreamEvent::TextDelta(text.clone()))
-                }
-                zeta_protocol::ResponseItem::Reasoning(text) => {
-                    Some(ModelStreamEvent::ReasoningDelta(text.clone()))
-                }
-                zeta_protocol::ResponseItem::Refusal(_)
-                | zeta_protocol::ResponseItem::ToolCall(_) => None,
-            };
-            if let Some(event) = event {
-                sink.emit(event)?;
-            }
-        }
-        Ok(response)
+        self.invoke(selection, request, cancellation)
     }
 }
 
