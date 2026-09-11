@@ -3,6 +3,29 @@ use std::fs;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[test]
+fn windows_sandbox_uses_the_product_binary_directory_without_searching_path() {
+    let directory = TestDirectory::new();
+    let binary = directory.path().join("bin/zeta-server.exe");
+    let context = InstallContext::detect(
+        Some(&binary),
+        None,
+        None,
+        Some(OsString::from("untrusted-path")),
+    );
+    assert_eq!(
+        context.executable_candidates(ManagedExecutable::WindowsSandbox),
+        ExecutableCandidates::SearchPaths(vec![
+            directory.path().join("bin/zeta-windows-sandbox.exe")
+        ])
+    );
+    let mut explicit = context;
+    explicit.windows_sandbox_override = Some(OsString::from("missing-helper.exe"));
+    assert!(
+        matches!(explicit.executable_candidates(ManagedExecutable::WindowsSandbox), ExecutableCandidates::ExplicitOverride(candidate) if candidate.path() == Path::new("missing-helper.exe"))
+    );
+}
+
+#[test]
 fn package_layout_precedes_legacy_sibling_and_search_path_candidates() {
     let directory = TestDirectory::new();
     let package = directory.path().join("package");

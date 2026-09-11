@@ -11464,6 +11464,7 @@ dependencies = [
  "zeta-uds",
  "zeta-utils-pty",
  "zeta-web-search-extension",
+ "zeta-windows-sandbox",
 ]
 
 [[package]]
@@ -13371,6 +13372,28 @@ dependencies = [
  "url",
  "zeroize",
  "zeta-http-client",
+]
+
+[[package]]
+name = "zeta-windows-sandbox"
+version = "0.1.0"
+dependencies = [
+ "getrandom 0.2.17",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "socket2",
+ "tempfile",
+ "windows",
+ "windows-sys 0.61.2",
+ "winreg 0.55.0",
+ "wxc_common",
+ "zeta-async-utils",
+ "zeta-file-access",
+ "zeta-install-context",
+ "zeta-network-proxy",
+ "zeta-sandboxing",
+ "zeta-tool-executor",
 ]
 
 [[package]]

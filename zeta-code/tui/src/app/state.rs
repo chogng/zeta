@@ -471,8 +471,17 @@ impl App {
                 }
                 .into(),
             ),
-            CommandPanelOutcome::Rewind(RewindSelectionAction::RestoreMessage { item_id, boundary, checkpoint_label }) => Some(
-                ThreadCommand::RestoreMessage { item_id, boundary, checkpoint_label }.into(),
+            CommandPanelOutcome::Rewind(RewindSelectionAction::RestoreMessage {
+                item_id,
+                boundary,
+                checkpoint_label,
+            }) => Some(
+                ThreadCommand::RestoreMessage {
+                    item_id,
+                    boundary,
+                    checkpoint_label,
+                }
+                .into(),
             ),
             CommandPanelOutcome::Sessions(SessionSelectionAction::Resume { session_id }) => Some(
                 SessionCommand::Resume {

@@ -230,3 +230,14 @@ PowerShell 未完成初始化的根因仍需定位。没有放宽文件、网络
 | 完整相关 Python 套件 | 38 项中 1 项失败、4 项跳过：现有协议主版本断言为 2，当前工作区生成为 3；未修改并行的协议工作 |
 
 这次没有重新安装测试账户或网络规则。候选 Windows 实现仍需要解决安装身份、宿主修改授权与完整策略兼容性，并通过独立验收；本轮接口和构建结果不能替代这项资格。
+
+### 2026-09-11 协议生成同步复核
+
+- 当前 Rust 协议主版本已为 4；提交的 TypeScript fixture 与前端生成产物仍为 3。此前的 Python 打包主版本断言已改为读取生成元数据，因此单独运行 Python 测试没有暴露这次漂移。
+- `just test zeta-app-server-protocol --lib --locked` 实际结果为 42 项通过、1 项失败，失败项为 `tests::schema_fixtures_match_the_generators`。
+- 执行 `just generate-protocol`，同步 fixture、解码器及前端生成产物。除主版本和 schema hash 外，同步了现有源码中的消息检查点及历史类型；没有修改这些领域接口的源码。
+- 仅复跑失败项：`just test zeta-app-server-protocol --lib tests::schema_fixtures_match_the_generators --locked -- --exact` 通过。生成命令也完成了普通构建；本轮编译没有报告 warning。
+- `python -B scripts/test-python.py release`：55 项中 50 项通过、5 项平台条件跳过。打包回归现在比较完整协议元数据，并验证显式生成元数据在装包与签名记录更新后保留。
+- Platform checks 增加上述 Rust fixture 一致性检查，避免 Python 打包测试通过却携带过期协议。
+
+本次 Windows 工作是 Codex 源码核对，具体接入差异见 [Windows 候选评估](sandboxing.md#windows-候选评估)。没有注册第二后端、安装账户或修改宿主 ACL、网络规则；Windows 23H2 的执行兼容问题仍未解决。

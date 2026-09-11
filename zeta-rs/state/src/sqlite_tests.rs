@@ -425,9 +425,18 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
     event.schema_version = zeta_history::MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION;
     let json = serde_json::to_string(&event).unwrap();
     let digest = zeta_protocol::ContentDigest::sha256(json.as_bytes());
-    connection.execute("INSERT INTO history_records (digest, record_json) VALUES (?1, ?2)", rusqlite::params![digest.as_str(), json]).unwrap();
-    connection.execute("UPDATE thread_events SET record_digest = ?1 WHERE thread_id = ?2 AND sequence = 1", rusqlite::params![digest.as_str(), thread_id.as_str()]).unwrap();
-
+    connection
+        .execute(
+            "INSERT INTO history_records (digest, record_json) VALUES (?1, ?2)",
+            rusqlite::params![digest.as_str(), json],
+        )
+        .unwrap();
+    connection
+        .execute(
+            "UPDATE thread_events SET record_digest = ?1 WHERE thread_id = ?2 AND sequence = 1",
+            rusqlite::params![digest.as_str(), thread_id.as_str()],
+        )
+        .unwrap();
 
     assert_eq!(
         SqliteThreadStore::open(&path)

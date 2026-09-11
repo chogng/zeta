@@ -335,8 +335,13 @@ impl DaclManager {
     /// fresh `run_id` is generated and the (empty) state file is *not*
     /// written until the first ACE is applied.
     pub fn new() -> Result<Self, DaclError> {
-        let state_dir = state_dir()?;
-        fs::create_dir_all(&state_dir)?;
+        Self::in_directory(&state_dir()?)
+    }
+
+    /// Use an embedding application's private recovery directory without changing
+    /// process-wide environment or the recovery state of other SDK consumers.
+    pub fn in_directory(state_dir: &Path) -> Result<Self, DaclError> {
+        fs::create_dir_all(state_dir)?;
         let run_id = generate_run_id();
         let state_path = state_dir.join(format!("{run_id}.json"));
         let process_start_filetime = process_creation_filetime()?;
@@ -352,6 +357,27 @@ impl DaclManager {
     /// Warnings accumulated during apply/restore (non-fatal issues).
     pub fn warnings(&self) -> &[String] {
         &self.warnings
+    }
+
+    /// Restore all mutations, retaining the journal and returning an error when
+    /// any entry could not be restored. Callers must retain the execution lease.
+    pub fn restore_strict(&mut self) -> Result<(), DaclError> {
+        self.restore()?;
+        if self.applied.is_empty() {
+            Ok(())
+        } else {
+            Err(DaclError::StateIo(io::Error::other(
+                "filesystem ACL restoration is incomplete",
+            )))
+        }
+    }
+
+    /// Deny mutation without denying read, execute, or synchronization access.
+    pub fn deny_write_access(&mut self, sid: &str, paths: &[PathBuf]) -> Result<(), DaclError> {
+        for path in paths {
+            self.apply_one(sid, path, 0x000d_0156, AceType::Deny)?;
+        }
+        Ok(())
     }
 
     /// T3: grant the AppContainer SID `rw` on `readwrite` paths and `ro` on
@@ -520,12 +546,17 @@ impl Drop for DaclManager {
 /// into [`RecoveryReport::errors`]; the function only returns `Err` on
 /// fundamental state-directory I/O failures.
 pub fn recover_orphaned_state() -> Result<RecoveryReport, DaclError> {
-    let mut report = RecoveryReport::default();
     let dir = match state_dir() {
         Ok(d) => d,
-        Err(_) => return Ok(report),
+        Err(_) => return Ok(RecoveryReport::default()),
     };
-    let entries = match fs::read_dir(&dir) {
+    recover_orphaned_state_in(&dir)
+}
+
+/// Recover only the state owned by the supplied embedding application.
+pub fn recover_orphaned_state_in(dir: &Path) -> Result<RecoveryReport, DaclError> {
+    let mut report = RecoveryReport::default();
+    let entries = match fs::read_dir(dir) {
         Ok(e) => e,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(report),
         Err(e) => return Err(DaclError::StateIo(e)),

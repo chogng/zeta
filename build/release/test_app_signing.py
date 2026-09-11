@@ -55,7 +55,7 @@ class AppSigningTests(unittest.TestCase):
             binary = root / "app.exe"
             binary.write_bytes(b"windows-app-signing-test")
             package = root / "package"
-            build_package(package, binary, "x86_64-pc-windows-msvc", "release")
+            build_package(package, binary, "x86_64-pc-windows-msvc", "release", windows_sandbox_binary=binary)
             commands = []
 
             with patch.dict(
@@ -76,7 +76,7 @@ class AppSigningTests(unittest.TestCase):
             self.assertEqual("sign", commands[0][1])
             self.assertEqual("SHA256", commands[0][commands[0].index("/td") + 1])
             self.assertIn("/tr", commands[0])
-            self.assertEqual("verify", commands[1][1])
+            self.assertEqual("verify", commands[2][1])
 
     def test_sign_rejects_a_tampered_staged_binary(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -100,7 +100,7 @@ class AppSigningTests(unittest.TestCase):
             binary = root / "app.exe"
             binary.write_bytes(b"unsigned-app")
             package = root / "package"
-            build_package(package, binary, "x86_64-pc-windows-msvc", "release")
+            build_package(package, binary, "x86_64-pc-windows-msvc", "release", windows_sandbox_binary=binary)
             staged = package / "bin/app.exe"
             staged.write_bytes(b"managed-signature")
             commands = []

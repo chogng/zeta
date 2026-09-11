@@ -96,7 +96,6 @@ mod git_turn_changes_message;
 mod git_turn_changes_observer;
 mod git_turn_changes_operations;
 mod git_turn_changes_runtime;
-mod message_checkpoints;
 pub(crate) mod goal_tool;
 mod interaction_runtime;
 mod issue_operations;
@@ -120,6 +119,7 @@ mod mcp_operations;
 mod memories_context;
 mod memories_operations;
 mod memory_operations;
+mod message_checkpoints;
 pub(crate) mod multi_agent_tools;
 pub(crate) mod notification_queue;
 mod operations;
@@ -577,7 +577,9 @@ impl AppServer {
         runtime: Arc<git_turn_changes_runtime::GitTurnChangesRuntime>,
     ) -> Result<Self, String> {
         self.thread_worktree_binder = runtime.clone();
-        if let Err(error) = self.threads.collect_message_checkpoints(runtime.as_ref()) { log::warn!("message checkpoint cleanup remains pending: {error}"); }
+        if let Err(error) = self.threads.collect_message_checkpoints(runtime.as_ref()) {
+            log::warn!("message checkpoint cleanup remains pending: {error}");
+        }
         self.multi_agent
             .install_thread_worktree_binder(runtime.clone())
             .map_err(|error| error.to_string())?;

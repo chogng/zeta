@@ -5,6 +5,8 @@ mod attachment;
 mod automation;
 mod config;
 mod error;
+#[path = "thread/history.rs"]
+mod history;
 mod ids;
 mod interaction;
 mod item;
@@ -14,8 +16,6 @@ mod session;
 mod skill;
 mod stream;
 mod thread;
-#[path = "thread/history.rs"]
-mod history;
 
 pub use history::HistoryPrefixRef;
 pub use history::MessageBoundary;

@@ -190,7 +190,15 @@ pub(crate) fn prepare_command(
             Some(ThreadSnapshotHistory::Latest { .. }) | None => CommandPreparation::None,
         },
         Command::OpenRewindPicker => CommandPreparation::Request(CommandRequest::OpenRewindPicker),
-        Command::RestoreMessage { item_id, boundary, checkpoint_label } => CommandPreparation::RestoreMessage { item_id, boundary, checkpoint_label },
+        Command::RestoreMessage {
+            item_id,
+            boundary,
+            checkpoint_label,
+        } => CommandPreparation::RestoreMessage {
+            item_id,
+            boundary,
+            checkpoint_label,
+        },
         Command::RewindToCheckpoint {
             before_turn_id,
             checkpoint_label,

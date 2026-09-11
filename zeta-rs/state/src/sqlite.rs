@@ -4,10 +4,10 @@ mod connection;
 mod git_turn_changes;
 #[path = "sqlite/graph.rs"]
 mod graph;
-#[path = "sqlite/memories.rs"]
-mod memories;
 #[path = "sqlite/history.rs"]
 mod history;
+#[path = "sqlite/memories.rs"]
+mod memories;
 #[path = "sqlite/projects.rs"]
 mod projects;
 #[path = "sqlite/thread.rs"]

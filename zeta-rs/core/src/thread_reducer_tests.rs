@@ -864,7 +864,16 @@ fn reducer_verifies_and_rebuilds_a_context_checkpoint() {
             .iter()
             .map(|item| item.item_id().clone())
             .collect(),
-        source_digest: snapshot.context_items_digest(covered, &snapshot.items.iter().map(|item| item.item_id().clone()).collect::<Vec<_>>()).unwrap(),
+        source_digest: snapshot
+            .context_items_digest(
+                covered,
+                &snapshot
+                    .items
+                    .iter()
+                    .map(|item| item.item_id().clone())
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap(),
         summary: "durable summary".into(),
         schema_revision: "context-checkpoint-v1".into(),
         prompt_revision: "compaction-v2".into(),

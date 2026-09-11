@@ -114,3 +114,6 @@ zeta-uds = { workspace = true }
 
 [lints]
 workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sandbox = { workspace = true }

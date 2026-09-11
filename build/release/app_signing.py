@@ -317,6 +317,23 @@ def _metadata_digest(context: Dict[str, object]) -> str:
     return value
 
 
+def _sandbox(context):
+    entry = context["metadata"].get("windowsSandbox")
+    if not context["target_spec"].is_windows:
+        if entry is not None:
+            raise RuntimeError("non-Windows package contains Windows sandbox metadata")
+        return None
+    if not isinstance(entry, dict) or entry.get("path") != "bin/zeta-windows-sandbox.exe":
+        raise RuntimeError("Windows package is missing its sandbox executable metadata")
+    artifact = context["package_dir"] / entry["path"]
+    if artifact.is_symlink() or not artifact.is_file() or artifact.resolve().parent != context["artifact"].parent:
+        raise RuntimeError("invalid Windows sandbox executable path")
+    digest = entry.get("sha256")
+    if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+        raise RuntimeError("invalid Windows sandbox executable digest")
+    return {**context, "artifact": artifact}, entry
+
+
 def sign_package(
     package_dir: Path,
     runner: Optional[CommandRunner] = None,
@@ -339,6 +356,9 @@ def sign_package(
     actual_digest = sha256(artifact)
     if actual_digest != unsigned_digest:
         raise RuntimeError("staged binary digest does not match app-package.json")
+    sandbox = _sandbox(context)
+    if sandbox is not None and sha256(sandbox[0]["artifact"]) != sandbox[1]["sha256"]:
+        raise RuntimeError("staged Windows sandbox digest does not match app-package.json")
 
     detached_signature = signature_path(context, config)
     if detached_signature is not None and detached_signature.exists():
@@ -363,6 +383,12 @@ def sign_package(
         "signedSha256": signed_digest,
         "status": "signed",
     }
+    if sandbox is not None:
+        helper_context, helper = sandbox
+        helper_unsigned = helper["sha256"]
+        run_command(sign_command(helper_context, config, platform, identity_for(config)), runner)
+        helper["sha256"] = sha256(helper_context["artifact"])
+        record["windowsSandbox"] = {"unsignedSha256": helper_unsigned, "signedSha256": helper["sha256"]}
     remote_runtime_catalog = context["remote_runtime_catalog"]
     if remote_runtime_catalog is not None:
         assert isinstance(remote_runtime_catalog, AuthenticatedRemoteRuntimeCatalog)
@@ -431,6 +457,13 @@ def verify_package(
         raise RuntimeError(f"signature file does not exist: {detached_signature}")
 
     run_command(verify_command(context, config, platform), runner)
+    sandbox = _sandbox(context)
+    if sandbox is not None:
+        helper_context, helper = sandbox
+        helper_record = record.get("windowsSandbox")
+        if not isinstance(helper_record, dict) or helper_record.get("signedSha256") != helper["sha256"] or sha256(helper_context["artifact"]) != helper["sha256"]:
+            raise RuntimeError("Windows sandbox signature record digest does not match the executable")
+        run_command(verify_command(helper_context, config, platform), runner)
     record["status"] = "verified"
     record["verifiedSha256"] = digest
     signing["status"] = "verified"
@@ -472,6 +505,13 @@ def record_verified_package(
         "verifiedSha256": signed_digest,
         "status": "verified",
     }
+    sandbox = _sandbox(context)
+    if sandbox is not None:
+        helper_context, helper = sandbox
+        helper_unsigned = helper["sha256"]
+        run_command(verify_command(helper_context, config, platform), runner)
+        helper["sha256"] = sha256(helper_context["artifact"])
+        record["windowsSandbox"] = {"unsignedSha256": helper_unsigned, "signedSha256": helper["sha256"]}
     remote_runtime_catalog = context["remote_runtime_catalog"]
     if remote_runtime_catalog is not None:
         assert isinstance(remote_runtime_catalog, AuthenticatedRemoteRuntimeCatalog)

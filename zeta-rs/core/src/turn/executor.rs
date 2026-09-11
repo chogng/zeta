@@ -1132,7 +1132,7 @@ impl TurnExecutor {
                 .commit_context_checkpoint(
                     thread_id,
                     CommitContextCheckpointRequest {
-                                referenced_items: request.referenced_items(),
+                        referenced_items: request.referenced_items(),
                         source_thread_sequence,
                         covered: request.covered(),
                         summary: result.summary().into(),
@@ -1172,7 +1172,7 @@ impl TurnExecutor {
                 thread_id,
                 turn_id,
                 CommitContextCheckpointRequest {
-                                referenced_items: request.referenced_items(),
+                    referenced_items: request.referenced_items(),
                     source_thread_sequence,
                     covered: request.covered(),
                     summary: result.summary().into(),

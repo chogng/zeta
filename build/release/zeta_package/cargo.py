@@ -179,6 +179,22 @@ def validate_input_binary(
     return resolved
 
 
+def resolve_windows_sandbox_binary(repository_root, spec, explicit_binary, cargo, cargo_profile):
+    if not spec.is_windows:
+        if explicit_binary is not None:
+            raise RuntimeError("Windows sandbox executable requires a Windows target")
+        return None
+    if explicit_binary is not None:
+        return validate_input_binary(explicit_binary, "Windows sandbox executable", "--windows-sandbox-bin", True)
+    target_directory = resolve_cargo_target_directory(repository_root)
+    subprocess.run([
+        cargo, "build", "--manifest-path", str(repository_root / "Cargo.toml"),
+        "--package", "zeta-windows-sandbox", "--bin", "zeta-windows-sandbox", "--locked",
+        "--profile", cargo_profile, "--target", spec.target, "--target-dir", str(target_directory),
+    ], check=True)
+    return validate_input_binary(target_directory / spec.target / cargo_profile_directory(cargo_profile) / "zeta-windows-sandbox.exe", "built Windows sandbox executable", cargo, True)
+
+
 def is_executable(path: Path) -> bool:
     if os.name == "nt":
         return True

@@ -21,6 +21,7 @@ const PACKAGE_RESOURCES_DIRECTORY: &str = "zeta-resources";
 const PACKAGE_METADATA_FILE: &str = "zeta-package.json";
 const RIPGREP_OVERRIDE: &str = "ZETA_RG_PATH";
 const BUBBLEWRAP_OVERRIDE: &str = "ZETA_BWRAP_PATH";
+const WINDOWS_SANDBOX_OVERRIDE: &str = "ZETA_WINDOWS_SANDBOX_BIN";
 
 /// Installation shape detected for the running Zeta executable.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -68,6 +69,7 @@ impl PackageLayout {
 pub enum ManagedExecutable {
     Ripgrep,
     Bubblewrap,
+    WindowsSandbox,
 }
 
 /// One explicit environment override that must not silently fall back when invalid.
@@ -142,6 +144,7 @@ pub struct InstallContext {
     executable_directory: Option<PathBuf>,
     ripgrep_override: Option<OsString>,
     bubblewrap_override: Option<OsString>,
+    windows_sandbox_override: Option<OsString>,
     search_path: Option<OsString>,
 }
 
@@ -154,12 +157,14 @@ impl InstallContext {
                 let executable = env::current_exe()
                     .ok()
                     .and_then(|path| dunce::canonicalize(path).ok());
-                Self::detect(
+                let mut context = Self::detect(
                     executable.as_deref(),
                     env::var_os(RIPGREP_OVERRIDE),
                     env::var_os(BUBBLEWRAP_OVERRIDE),
                     env::var_os("PATH"),
-                )
+                );
+                context.windows_sandbox_override = env::var_os(WINDOWS_SANDBOX_OVERRIDE);
+                context
             })
             .clone()
     }
@@ -206,6 +211,10 @@ impl InstallContext {
             ManagedExecutable::Bubblewrap => {
                 (BUBBLEWRAP_OVERRIDE, self.bubblewrap_override.as_ref())
             }
+            ManagedExecutable::WindowsSandbox => (
+                WINDOWS_SANDBOX_OVERRIDE,
+                self.windows_sandbox_override.as_ref(),
+            ),
         };
         if let Some(path) = explicit_override {
             return ExecutableCandidates::ExplicitOverride(ExecutableOverride {
@@ -218,15 +227,20 @@ impl InstallContext {
             let directory = match executable {
                 ManagedExecutable::Ripgrep => &layout.path_directory,
                 ManagedExecutable::Bubblewrap => &layout.resources_directory,
+                ManagedExecutable::WindowsSandbox => &layout.binary_directory,
             };
             push_executable_candidates(&mut paths, directory, executable);
         }
-        if matches!(executable, ManagedExecutable::Ripgrep)
-            && let Some(directory) = &self.executable_directory
+        if matches!(
+            executable,
+            ManagedExecutable::Ripgrep | ManagedExecutable::WindowsSandbox
+        ) && let Some(directory) = &self.executable_directory
         {
             push_executable_candidates(&mut paths, directory, executable);
         }
-        if let Some(search_path) = &self.search_path {
+        if !matches!(executable, ManagedExecutable::WindowsSandbox)
+            && let Some(search_path) = &self.search_path
+        {
             for directory in env::split_paths(search_path) {
                 push_executable_candidates(&mut paths, &directory, executable);
             }
@@ -270,6 +284,7 @@ impl InstallContext {
             executable_directory,
             ripgrep_override,
             bubblewrap_override,
+            windows_sandbox_override: None,
             search_path,
         }
     }
@@ -319,6 +334,7 @@ fn executable_names(executable: ManagedExecutable) -> &'static [&'static str] {
         ManagedExecutable::Ripgrep if cfg!(windows) => &["rg.exe", "rg"],
         ManagedExecutable::Ripgrep => &["rg"],
         ManagedExecutable::Bubblewrap => &["bwrap"],
+        ManagedExecutable::WindowsSandbox => &["zeta-windows-sandbox.exe"],
     }
 }
 

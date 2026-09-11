@@ -689,7 +689,11 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::SessionUnsubscribe, params)
     }
 
-    pub fn message_checkpoints(&mut self, params: zeta_app_server_protocol::protocol::session::MessageCheckpointsParams) -> Result<zeta_app_server_protocol::protocol::session::MessageCheckpointsResult, ClientError> {
+    pub fn message_checkpoints(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::session::MessageCheckpointsParams,
+    ) -> Result<zeta_app_server_protocol::protocol::session::MessageCheckpointsResult, ClientError>
+    {
         self.call(ClientMethod::MessageCheckpoints, params)
     }
 

@@ -278,7 +278,17 @@ impl AppDriver {
             command,
         );
         match preparation {
-            ThreadCommandPreparation::RestoreMessage { item_id, boundary, checkpoint_label } => self.execute_message_restore(request_key, item_id, boundary, checkpoint_label, origin),
+            ThreadCommandPreparation::RestoreMessage {
+                item_id,
+                boundary,
+                checkpoint_label,
+            } => self.execute_message_restore(
+                request_key,
+                item_id,
+                boundary,
+                checkpoint_label,
+                origin,
+            ),
             ThreadCommandPreparation::ExecuteProductCommand(invocation) => {
                 self.execute_product_command(request_key, invocation, origin);
             }

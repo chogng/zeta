@@ -107,6 +107,11 @@ jobs:
         shell: bash
         run: ${{ matrix.python }} -B scripts/test-python.py release
 
+      - name: Verify App Server protocol artifacts
+        if: matrix.checks != false
+        shell: bash
+        run: ${{ matrix.python }} -B scripts/cargo.py test -p zeta-app-server-protocol --lib tests::schema_fixtures_match_the_generators --locked --target "${{ matrix.target }}" -- --exact
+
       - name: Test Linux managed network boundary
         if: matrix.checks != false && runner.os == 'Linux'
         shell: bash

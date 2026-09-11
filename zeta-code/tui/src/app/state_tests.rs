@@ -343,7 +343,10 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
         }],
     };
     let mut app = App::new();
-    app.update(ThreadEvent::RewindPickerOpened(rewind_choices(&thread, &[])));
+    app.update(ThreadEvent::RewindPickerOpened(rewind_choices(
+        &thread,
+        &[],
+    )));
 
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
@@ -353,14 +356,25 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
         }))
     );
     let point = zeta_protocol::MessageCheckpoint {
-        item_id: ItemId::new("item-1").unwrap(), turn_id: thread.turns[0].turn_id.clone(), source_thread_id: thread.thread_id.clone(),
-        source_sequence: 3, after_sequence: 3, workspace: zeta_protocol::WorkspaceCheckpoint::NoFiles,
+        item_id: ItemId::new("item-1").unwrap(),
+        turn_id: thread.turns[0].turn_id.clone(),
+        source_thread_id: thread.thread_id.clone(),
+        source_sequence: 3,
+        after_sequence: 3,
+        workspace: zeta_protocol::WorkspaceCheckpoint::NoFiles,
     };
-    app.update(ThreadEvent::RewindPickerOpened(rewind_choices(&thread, &[point])));
-    assert_eq!(app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)), Some(AppCommand::Thread(ThreadCommand::RestoreMessage {
-        item_id: ItemId::new("item-1").unwrap(), boundary: zeta_protocol::MessageBoundary::After, checkpoint_label: "user: restore here".into(),
-    })));
-
+    app.update(ThreadEvent::RewindPickerOpened(rewind_choices(
+        &thread,
+        &[point],
+    )));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Thread(ThreadCommand::RestoreMessage {
+            item_id: ItemId::new("item-1").unwrap(),
+            boundary: zeta_protocol::MessageBoundary::After,
+            checkpoint_label: "user: restore here".into(),
+        }))
+    );
 }
 
 fn theme_catalog() -> ThemePickerCatalog {

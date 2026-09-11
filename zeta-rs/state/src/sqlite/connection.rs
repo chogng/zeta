@@ -178,7 +178,9 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
     }
     if locked_version != Some(STORAGE_SQLITE_SCHEMA_VERSION) {
         super::history::create_schema(&transaction)?;
-        if locked_version.is_some() { super::history::migrate_records(&transaction)?; }
+        if locked_version.is_some() {
+            super::history::migrate_records(&transaction)?;
+        }
     }
     transaction.commit().map_err(sql_error)?;
     Ok(connection)

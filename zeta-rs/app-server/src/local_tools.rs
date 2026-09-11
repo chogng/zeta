@@ -155,10 +155,19 @@ pub(crate) fn compose_local_tools_with_config(
     }
     let install_context = InstallContext::current();
     let sandbox = || {
-        zeta_sandboxing::SandboxBackends::new(vec![(
-            "mxc",
-            Arc::new(mxc_sandbox::MxcSandbox::new(install_context.clone())),
-        )])
+        zeta_sandboxing::SandboxBackends::new(vec![
+            (
+                "mxc",
+                Arc::new(mxc_sandbox::MxcSandbox::new(install_context.clone())),
+            ),
+            #[cfg(windows)]
+            (
+                "windows",
+                Arc::new(windows_sandbox::WindowsSandbox::new(
+                    install_context.clone(),
+                )),
+            ),
+        ])
     };
     let ripgrep = resolve_ripgrep(&install_context).map_err(LocalToolError::ripgrep)?;
     let environment_id = zeta_tools::EnvId::local();

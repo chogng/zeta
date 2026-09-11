@@ -14,6 +14,7 @@ from .cargo import (
     resolve_app_server_daemon_binary,
     resolve_code_mode_host_binary,
     resolve_server_binary,
+    resolve_windows_sandbox_binary,
 )
 from .layout import build_package_directory, load_protocol_metadata
 from .node import resolve_node
@@ -53,7 +54,7 @@ def generate_protocol_metadata(repository_root: Path, cargo: str) -> Dict[str, o
         )
         return load_protocol_metadata(
             repository_root,
-            output_directory / "types.ts",
+            output_directory / "protocol.ts",
         )
 
 
@@ -65,6 +66,7 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    parser.add_argument("--windows-sandbox-bin", type=Path, help="Prebuilt Windows sandbox installation and execution helper.")
     parser.add_argument(
         "--target",
         choices=sorted(TARGETS),
@@ -242,6 +244,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         build_profile=args.cargo_profile,
         cli_binary=cli_binary,
         update_public_key=args.update_public_key,
+        windows_sandbox_binary=resolve_windows_sandbox_binary(REPOSITORY_ROOT, spec, args.windows_sandbox_bin, args.cargo, args.cargo_profile),
     )
     print("Built Zeta {} package at {}".format(target, output))
     return 0

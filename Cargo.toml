@@ -77,6 +77,7 @@ members = [
     "zeta-rs/http-client",
     "zeta-rs/network-proxy",
     "zeta-rs/mxc-sandbox",
+    "zeta-rs/windows-sandbox",
     "zeta-rs/websocket-client",
     "zeta-rs/install-context",
     "zeta-rs/input-classifier",
@@ -184,6 +185,7 @@ features = { package = "zeta-features", path = "zeta-rs/features" }
 process-hardening = { package = "zeta-process-hardening", path = "zeta-rs/process-hardening" }
 build-info = { package = "zeta-build-info", path = "zeta-rs/build-info" }
 mxc-sandbox = { package = "zeta-mxc-sandbox", path = "zeta-rs/mxc-sandbox" }
+windows-sandbox = { package = "zeta-windows-sandbox", path = "zeta-rs/windows-sandbox" }
 mxc-sdk = { git = "https://github.com/microsoft/mxc", rev = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
 network-proxy = { package = "zeta-network-proxy", path = "zeta-rs/network-proxy" }
 bytes = "1"

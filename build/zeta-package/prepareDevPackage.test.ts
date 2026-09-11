@@ -148,6 +148,7 @@ test("assembles and validates the canonical Windows development layout", async (
   const executables = {
     appServerDaemon: join(root, "zeta-app-server-daemon.exe"),
     codeModeHost: join(root, "zeta-code-mode-host.exe"),
+    windowsSandbox: join(root, "zeta-windows-sandbox.exe"),
     serverHost: join(root, "zeta-server.exe"),
   };
   const ripgrepExecutable = join(root, "rg.exe");
@@ -159,6 +160,7 @@ test("assembles and validates the canonical Windows development layout", async (
     await Promise.all([
       writeFile(executables.appServerDaemon, "zeta-app-server-daemon"),
       writeFile(executables.codeModeHost, "zeta-code-mode-host"),
+      writeFile(executables.windowsSandbox, "windows-sandbox"),
       writeFile(executables.serverHost, "zeta-server"),
       writeFile(ripgrepExecutable, "ripgrep"),
       writeFile(nodeExecutable, "node"),
@@ -268,6 +270,7 @@ test("host-provided runtime package omits the standalone Node payload", async ()
   const executables = {
     appServerDaemon: join(root, "zeta-app-server-daemon.exe"),
     codeModeHost: join(root, "zeta-code-mode-host.exe"),
+    windowsSandbox: join(root, "zeta-windows-sandbox.exe"),
     serverHost: join(root, "zeta-server.exe"),
   };
   const ripgrepExecutable = join(root, "rg.exe");
@@ -275,6 +278,7 @@ test("host-provided runtime package omits the standalone Node payload", async ()
     await Promise.all([
       writeFile(executables.appServerDaemon, "zeta-app-server-daemon"),
       writeFile(executables.codeModeHost, "zeta-code-mode-host"),
+      writeFile(executables.windowsSandbox, "windows-sandbox"),
       writeFile(executables.serverHost, "zeta-server"),
       writeFile(ripgrepExecutable, "ripgrep"),
     ]);

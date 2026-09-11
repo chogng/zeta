@@ -23,11 +23,13 @@ from build.lib.zeta_build.targets import target_spec
 from remote_runtime_bundle import RemoteRuntimeBundle
 from remote_runtime_bundle import validate_remote_runtime_bundle
 from zeta_package.cargo import cargo_environment
+from zeta_package.cargo import resolve_windows_sandbox_binary
 from zeta_package.cargo_paths import cargo_artifact_executable
 from zeta_package.cargo_paths import cargo_rendered_diagnostic
 from zeta_package.cargo_paths import parse_cargo_message
 from zeta_package.cargo_paths import resolve_cargo_target_directory
 from zeta_package.layout import copy_uds_notices
+from zeta_package.layout import copy_windows_sandbox_notices
 
 APP_ROOT = REPOSITORY_ROOT / "app"
 
@@ -184,8 +186,11 @@ def build_package(
     profile: str,
     remote_runtime_bundle: Optional[RemoteRuntimeBundle] = None,
     remote_runtime_release: Optional[RemoteRuntimeNetworkRelease] = None,
+    windows_sandbox_binary: Optional[Path] = None,
 ) -> None:
     spec = target_spec(target)
+    if spec.is_windows != (windows_sandbox_binary is not None):
+        raise RuntimeError("Windows app packages require their sandbox executable; other targets must omit it")
     if output.exists():
         raise RuntimeError(f"refusing to replace existing package directory: {output}")
     if (
@@ -230,6 +235,9 @@ def build_package(
         staged_binary = staging / "bin" / spec.app_name
         staged_binary.parent.mkdir(parents=True)
         shutil.copy2(binary, staged_binary)
+        if windows_sandbox_binary is not None:
+            shutil.copy2(windows_sandbox_binary, staging / "bin/zeta-windows-sandbox.exe")
+            copy_windows_sandbox_notices(REPOSITORY_ROOT, staging / "licenses")
         copy_uds_notices(REPOSITORY_ROOT, staging / "licenses")
         mxc_license = staging / "licenses" / "mxc"
         mxc_license.mkdir(parents=True)
@@ -276,6 +284,8 @@ def build_package(
                 "sha256": remote_runtime_bundle.catalog_sha256,
                 "trustBinding": "compiledIntoSignedBinary",
             }
+        if windows_sandbox_binary is not None:
+            metadata["windowsSandbox"] = {"path": "bin/zeta-windows-sandbox.exe", "sha256": sha256(staging / "bin/zeta-windows-sandbox.exe")}
         (staging / "app-package.json").write_text(json.dumps(metadata, indent=2) + "\n")
         staging.rename(output)
     except BaseException:
@@ -288,6 +298,7 @@ def main() -> int:
     parser.add_argument("--package-dir", type=Path, required=True)
     parser.add_argument("--target", choices=sorted(TARGETS))
     parser.add_argument("--app-bin", type=Path)
+    parser.add_argument("--windows-sandbox-bin", type=Path)
     parser.add_argument("--cargo", default="cargo")
     parser.add_argument("--cargo-profile", default="release")
     parser.add_argument("--remote-runtime-bundle", type=Path)
@@ -334,6 +345,7 @@ def main() -> int:
         args.cargo_profile,
         remote_runtime_bundle,
         remote_runtime_release,
+        windows_sandbox_binary=resolve_windows_sandbox_binary(REPOSITORY_ROOT, target_spec(target), args.windows_sandbox_bin, args.cargo, args.cargo_profile),
     )
     print(f"Built app {target} package at {output}")
     return 0

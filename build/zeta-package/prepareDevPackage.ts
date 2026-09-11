@@ -118,6 +118,7 @@ interface FirstPartyExecutables {
   readonly packageStore: string;
   readonly serverHost: string;
   readonly codeModeHost: string;
+  readonly windowsSandbox?: string;
 }
 
 interface PackageIdentityMetadata {
@@ -514,6 +515,10 @@ async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<Fi
     "--bin", "zeta-code-mode-host",
   ];
   const expectedTargets = ["zeta-package-store", "zeta-server", "zeta-app-server-daemon", "zeta-code-mode-host"];
+  if (platform === "win32") {
+    binaryArgs.push("--bin", "zeta-windows-sandbox");
+    expectedTargets.push("zeta-windows-sandbox");
+  }
   if (platform === "linux") {
     binaryArgs.push("--bin", "bwrap");
     expectedTargets.push("bwrap");
@@ -525,12 +530,16 @@ async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<Fi
     packageStore: string;
     serverHost: string;
     codeModeHost: string;
+    windowsSandbox?: string;
   } = {
     appServerDaemon: requiredExecutable(artifacts, "zeta-app-server-daemon"),
     codeModeHost: requiredExecutable(artifacts, "zeta-code-mode-host"),
     packageStore: requiredExecutable(artifacts, "zeta-package-store"),
     serverHost: requiredExecutable(artifacts, "zeta-server"),
   };
+  if (platform === "win32") {
+    executables.windowsSandbox = requiredExecutable(artifacts, "zeta-windows-sandbox");
+  }
   if (platform === "linux") {
     const bubblewrap = await resolveVendoredBubblewrapSource();
     executables.bubblewrap = {
@@ -704,6 +713,14 @@ export async function assemblePackage(
   await copyExecutable(executables.serverHost, join(binDirectory, serverHostName), isWindows);
   await copyExecutable(executables.appServerDaemon, join(binDirectory, appServerDaemonName), isWindows);
   await copyExecutable(executables.codeModeHost, join(binDirectory, codeModeHostName), isWindows);
+  if (isWindows) {
+    await copyExecutable(requiredPath(executables.windowsSandbox, "Windows sandbox executable"), join(binDirectory, "zeta-windows-sandbox.exe"), true);
+    const licenses = join(resourcesDirectory, "licenses", "windows-sandbox");
+    await mkdir(licenses, { recursive: true });
+    for (const name of ["LICENSE-APACHE", "NOTICE"]) {
+      await copyFile(join(sharedRustSource, "windows-sandbox", name), join(licenses, name));
+    }
+  }
   await copyExecutable(ripgrep.executable, join(pathDirectory, rgName), isWindows);
   if (node) {
     const nodeDirectory = join(resourcesDirectory, "node", "bin");
@@ -742,6 +759,9 @@ export async function assemblePackage(
       source: "cargo-build",
     },
   };
+  if (isWindows) {
+    components.windowsSandbox = { source: "cargo-build", binarySha256: await sha256(join(binDirectory, "zeta-windows-sandbox.exe")) };
+  }
   if (node) {
     components.node = {
       archive: node.archive,
@@ -836,6 +856,12 @@ async function validatePackage(packageRoot: string, platform: NodeJS.Platform): 
   await requireComponentDigest(metadata, "serverHost", join(packageRoot, "bin", isWindows ? "zeta-server.exe" : "zeta-server"));
   await requireComponentDigest(metadata, "appServerDaemon", join(packageRoot, "bin", isWindows ? "zeta-app-server-daemon.exe" : "zeta-app-server-daemon"));
   await requireComponentDigest(metadata, "codeModeHost", join(packageRoot, "bin", isWindows ? "zeta-code-mode-host.exe" : "zeta-code-mode-host"));
+  if (isWindows) {
+    await requireComponentDigest(metadata, "windowsSandbox", join(packageRoot, "bin", "zeta-windows-sandbox.exe"));
+    for (const name of ["LICENSE-APACHE", "NOTICE"]) {
+      await requireFile(join(packageRoot, "zeta-resources", "licenses", "windows-sandbox", name));
+    }
+  }
   const files = await packageFiles(packageRoot);
   if (JSON.stringify(metadata.files) !== JSON.stringify(files)) {
     throw new Error("Package file manifest does not match its contents");

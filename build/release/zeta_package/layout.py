@@ -29,6 +29,13 @@ def copy_uds_notices(repository_root: Path, licenses: Path) -> None:
         shutil.copyfile(repository_root / "zeta-rs" / "uds" / name, destination / name)
 
 
+def copy_windows_sandbox_notices(repository_root: Path, licenses: Path) -> None:
+    destination = licenses / "windows-sandbox"
+    destination.mkdir(parents=True)
+    for name in ("LICENSE-APACHE", "NOTICE"):
+        shutil.copyfile(repository_root / "zeta-rs/windows-sandbox" / name, destination / name)
+
+
 def build_package_directory(
     output: Path,
     repository_root: Path,
@@ -44,7 +51,10 @@ def build_package_directory(
     build_profile: str = "release",
     cli_binary: Optional[Path] = None,
     update_public_key: Optional[str] = None,
+    windows_sandbox_binary: Optional[Path] = None,
 ) -> None:
+    if spec.is_windows != (windows_sandbox_binary is not None):
+        raise RuntimeError("Windows packages require their sandbox executable; other targets must omit it")
     output = output.expanduser().resolve()
     if output.exists():
         raise RuntimeError(
@@ -63,6 +73,9 @@ def build_package_directory(
         license_directory = staging / "zeta-resources" / "licenses" / "ripgrep"
         vscode_license_directory = staging / "zeta-resources" / "licenses" / "vscode"
         binary_directory.mkdir()
+        if windows_sandbox_binary is not None:
+            copy_executable(windows_sandbox_binary, binary_directory / "zeta-windows-sandbox.exe", is_windows=True)
+            copy_windows_sandbox_notices(repository_root, staging / "zeta-resources" / "licenses")
         path_directory.mkdir()
         license_directory.mkdir(parents=True)
         vscode_license_directory.mkdir()
@@ -211,6 +224,8 @@ def build_package_directory(
             }
         if bubblewrap_metadata is not None:
             components["bubblewrap"] = bubblewrap_metadata
+        if windows_sandbox_binary is not None:
+            components["windowsSandbox"] = {"source": "cargo-build", "binarySha256": file_sha256(binary_directory / "zeta-windows-sandbox.exe")}
         protocol = (
             protocol_metadata
             if protocol_metadata is not None
@@ -288,6 +303,9 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
         "codeModeHost": package / "bin" / spec.code_mode_host_name,
         "serverHost": package / "bin" / spec.server_name,
     }
+    if spec.is_windows:
+        first_party_artifacts["windowsSandbox"] = package / "bin/zeta-windows-sandbox.exe"
+        executables.append(package / "bin/zeta-windows-sandbox.exe")
     if "cli" in components:
         cli = components["cli"]
         if (
@@ -396,6 +414,8 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
         "ripgrep": package / "zeta-path" / spec.ripgrep_name,
         "serverHost": package / "bin" / spec.server_name,
     }
+    if spec.is_windows:
+        artifacts["windowsSandbox"] = package / "bin/zeta-windows-sandbox.exe"
     if "cli" in components:
         artifacts["cli"] = package / "bin" / spec.cli_name
     if metadata.get("javascriptRuntime") == {"kind": "packagedNode"}:
@@ -449,6 +469,7 @@ def record_system_signing(
             "node",
             "ripgrep",
             "serverHost",
+            "windowsSandbox",
         }:
             component = components.get(name)
             if not isinstance(component, dict):
@@ -774,7 +795,7 @@ def load_protocol_metadata(
         / "app-server-protocol"
         / "schema"
         / "typescript"
-        / "types.ts"
+        / "protocol.ts"
     ).read_text(encoding="utf-8")
     major = re.search(
         r"^export const APP_SERVER_PROTOCOL_MAJOR = (\d+) as const;$",

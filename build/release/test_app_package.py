@@ -26,6 +26,7 @@ class AppPackageTests(unittest.TestCase):
             package = root / "package"
             environment = {
                 "APP_BINARY": str(binary),
+                "APP_WINDOWS_SANDBOX_BINARY": str(binary),
                 "APP_PACKAGE_DIR": str(package),
                 "APP_TARGET": "x86_64-pc-windows-msvc",
             }
@@ -124,7 +125,7 @@ class AppPackageTests(unittest.TestCase):
             binary.write_bytes(b"windows-app-test-binary")
             output = root / "package"
 
-            build_package(output, binary, "x86_64-pc-windows-msvc", "release")
+            build_package(output, binary, "x86_64-pc-windows-msvc", "release", windows_sandbox_binary=binary)
 
             metadata = json.loads((output / "app-package.json").read_text())
             self.assertEqual("bin/app.exe", metadata["binary"]["path"])

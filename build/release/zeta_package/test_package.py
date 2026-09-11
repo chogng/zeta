@@ -131,7 +131,7 @@ class PackageTests(unittest.TestCase):
             commands.append((command, cwd, check))
             output_directory = Path(command[command.index("--out") + 1])
             output_directory.mkdir(parents=True, exist_ok=True)
-            (output_directory / "types.ts").write_text(
+            (output_directory / "protocol.ts").write_text(
                 generated_fixture,
                 encoding="utf-8",
             )
@@ -343,11 +343,8 @@ class PackageTests(unittest.TestCase):
             self.assertEqual("local-override", metadata["components"]["node"]["source"])
             self.assertRegex(metadata["buildId"], r"^sha256:[a-f0-9]{64}$")
             self.assertEqual(
-                load_protocol_metadata(REPOSITORY_ROOT)["major"],
-                metadata["protocol"]["major"],
-            )
-            self.assertRegex(
-                metadata["protocol"]["schemaHash"], r"^sha256:[a-f0-9]{64}$"
+                load_protocol_metadata(REPOSITORY_ROOT),
+                metadata["protocol"],
             )
             self.assertEqual(
                 hashlib.sha256(b"zeta-server").hexdigest(),
@@ -402,6 +399,11 @@ class PackageTests(unittest.TestCase):
                 )
 
     def test_host_provided_runtime_package_omits_standalone_node(self) -> None:
+        generated_protocol = {
+            "major": 7,
+            "revision": 11,
+            "schemaHash": "sha256:" + "a" * 64,
+        }
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             spec = TARGETS["aarch64-apple-darwin"]
@@ -421,6 +423,7 @@ class PackageTests(unittest.TestCase):
                     explicit_binary=executable_file(root / "rg-source", b"ripgrep"),
                 ),
                 None,
+                protocol_metadata=generated_protocol,
             )
 
             metadata = json.loads(
@@ -429,6 +432,7 @@ class PackageTests(unittest.TestCase):
             self.assertEqual(
                 {"kind": "hostProvidedNode"}, metadata["javascriptRuntime"]
             )
+            self.assertEqual(generated_protocol, metadata["protocol"])
             self.assertNotIn("node", metadata["components"])
             self.assertFalse((output / "zeta-resources" / "node").exists())
             self.assertFalse((output / "zeta-resources" / "licenses" / "node").exists())
@@ -447,6 +451,7 @@ class PackageTests(unittest.TestCase):
                 (output / "zeta-package.json").read_text(encoding="utf-8")
             )
             self.assertEqual("verified", signed_metadata["systemSigning"]["status"])
+            self.assertEqual(generated_protocol, signed_metadata["protocol"])
             self.assertEqual(
                 file_sha256(output / "bin" / spec.server_name),
                 signed_metadata["components"]["serverHost"]["binarySha256"],
@@ -610,6 +615,7 @@ class PackageTests(unittest.TestCase):
                 code_mode_host_binary,
                 ripgrep,
                 node,
+                windows_sandbox_binary=executable_file(root / "sandbox-source.exe", b"sandbox"),
             )
 
             resources = output / "zeta-resources"
@@ -623,7 +629,7 @@ class PackageTests(unittest.TestCase):
             self.assertNotIn("mxcUserRuntime", artifacts)
             self.assertFalse((output / "bin/mxc-user.exe").exists())
             self.assertEqual(
-                set(),
+                {"windowsSandbox"},
                 {name for name in artifacts if name.startswith("windows")},
             )
             signed = {}

@@ -21,6 +21,8 @@ from build_app_package import (  # noqa: E402
     resolve_binary,
 )
 from remote_runtime_bundle import validate_remote_runtime_bundle  # noqa: E402
+from zeta_package.cargo import resolve_windows_sandbox_binary
+from build.lib.zeta_build.targets import target_spec
 
 
 def env_path(name: str, *, required: bool = False) -> Path | None:
@@ -74,6 +76,7 @@ def main() -> int:
         profile,
         remote_runtime_bundle,
         remote_runtime_release,
+        windows_sandbox_binary=resolve_windows_sandbox_binary(REPO_ROOT, target_spec(target), env_path("APP_WINDOWS_SANDBOX_BINARY"), "cargo", profile),
     )
     sign_package(package_dir)
     verify_package(package_dir)
