@@ -982,11 +982,6 @@ impl AppServer {
         let Some(extension) = extension else {
             return Ok(self);
         };
-        if self.extension_tool_port.is_some() {
-            return Err(EnvRuntimeError::Failed(
-                "extension tools are already installed".into(),
-            ));
-        }
         if let Some(tools) = self
             .local_env_host
             .as_ref()

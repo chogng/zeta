@@ -71,7 +71,7 @@ impl ToolExecutor for ReadOnlyExtensionTool {
 #[test]
 fn read_only_extension_contributors_enter_the_shared_registry_and_policy() {
     let mut builder = ExtensionRegistryBuilder::new();
-    builder.read_only_tool_contributor(Arc::new(Contributor));
+    builder.read_only_tool_contributor("test", Arc::new(Contributor));
     let registry = builder.build();
     let port = compose_extension_tools(&registry).unwrap().unwrap();
     let combined = combine_tool_ports(vec![port]).unwrap().unwrap();

@@ -408,3 +408,50 @@ fn memory_search_handles_contextual_case_and_mixed_chinese_queries() {
     assert_eq!(matches.len(), 1);
     assert_eq!(matches[0].citation.memory_id.as_str(), "chinese");
 }
+
+#[test]
+fn context_citation_checks_consent_before_loading_body_and_observes_other_connections() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("state.sqlite");
+    let service = Memories::new(Arc::new(SqliteMemoryStore::open(&path).unwrap()));
+    let writer = Memories::new(Arc::new(SqliteMemoryStore::open(&path).unwrap()));
+    let scope = MemoryScope::Profile;
+    remember(&service, "private", scope.clone(), "Rust data");
+    let cancellation = async_utils::CancellationSource::new();
+    let citation = memories::MemoryCitation {
+        memory_id: MemoryId::new("private").unwrap(),
+        scope: scope.clone(),
+        revision: 1,
+        start_byte: 0,
+        end_byte: 9,
+    };
+    let read = || {
+        service.read_context_citation(
+            std::slice::from_ref(&scope),
+            citation.clone(),
+            &cancellation.token(),
+        )
+    };
+    assert_eq!(read(), Err(MemoryError::ReadDenied));
+    enable(&writer, scope.clone(), "enable");
+    assert_eq!(read().unwrap().body, "Rust data");
+    writer
+        .update_policy(memories::UpdateMemoryPolicyRequest {
+            command_id: CommandId::new("disable").unwrap(),
+            scope: scope.clone(),
+            expected_revision: 1,
+            automatic_read: memories::MemoryReadMode::Disabled,
+        })
+        .unwrap();
+    // If disabled reads loaded the row before checking policy, corrupt content would yield Storage.
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .execute(
+            "UPDATE memories SET record_json = 'invalid JSON' WHERE memory_id = 'private'",
+            [],
+        )
+        .unwrap();
+    assert_eq!(read(), Err(MemoryError::ReadDenied));
+    cancellation.cancel();
+    assert!(matches!(read(), Err(MemoryError::Cancelled(_))));
+}

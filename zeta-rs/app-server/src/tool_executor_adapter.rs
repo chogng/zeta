@@ -171,6 +171,7 @@ impl ToolExecutorRuntime {
             authorization,
             cancellation,
             identity.session_id(),
+            identity.thread_id(),
             identity.turn_id(),
             None,
             sink,
@@ -196,6 +197,7 @@ impl ToolExecutorRuntime {
             authorization,
             cancellation,
             identity.session_id(),
+            identity.thread_id(),
             identity.turn_id(),
             Some(interactions),
             sink,
@@ -209,6 +211,7 @@ impl ToolExecutorRuntime {
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
         session_id: &zeta_protocol::SessionId,
+        thread_id: &zeta_protocol::ThreadId,
         turn_id: &TurnId,
         interactions: Option<Arc<dyn zeta_core::ToolInteractionService>>,
         sink: &mut dyn ToolOutputSink,
@@ -284,7 +287,8 @@ impl ToolExecutorRuntime {
         }
         let mut context =
             ToolExecutionContext::new(self.environment_id.clone(), cancellation.clone(), authority)
-                .with_session_id(session_id.clone());
+                .with_session_id(session_id.clone())
+                .with_thread_id(thread_id.clone());
         if managed {
             let interactions = interactions.ok_or_else(|| {
                 self.prepared

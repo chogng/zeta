@@ -64,6 +64,12 @@ pub trait MemoryStore: Send + Sync {
     fn add(&self, commit: &MemoryAddCommit) -> Result<MemoryMutationResult, MemoryStoreError>;
     fn delete(&self, commit: &MemoryDeleteCommit) -> Result<MemoryDeleteResult, MemoryStoreError>;
     fn read(&self, scope: &MemoryScope, memory_id: &MemoryId) -> Result<Memory, MemoryStoreError>;
+    /// Reads an opted-in Memory and its policy in one snapshot, before loading any body.
+    fn read_for_context(
+        &self,
+        scope: &MemoryScope,
+        memory_id: &MemoryId,
+    ) -> Result<Memory, MemoryStoreError>;
     fn list(&self, request: &MemoryStoreListRequest) -> Result<MemoryStorePage, MemoryStoreError>;
     fn search(
         &self,
@@ -73,6 +79,7 @@ pub trait MemoryStore: Send + Sync {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum MemoryStoreError {
+    ReadDenied,
     NotFound,
     AlreadyExists,
     CommandConflict,
@@ -84,6 +91,9 @@ pub enum MemoryStoreError {
 impl fmt::Display for MemoryStoreError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::ReadDenied => {
+                formatter.write_str("Memory scope is not enabled for model reading")
+            }
             Self::NotFound => formatter.write_str("Memory was not found"),
             Self::AlreadyExists => formatter.write_str("Memory ID already exists or was deleted"),
             Self::CommandConflict => {

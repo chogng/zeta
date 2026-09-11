@@ -65,6 +65,21 @@ impl SqliteMemoryStore {
 }
 
 impl MemoryStore for SqliteMemoryStore {
+    fn read_for_context(
+        &self,
+        scope: &MemoryScope,
+        memory_id: &MemoryId,
+    ) -> Result<Memory, MemoryStoreError> {
+        let mut connection = self.connection()?;
+        let transaction = connection.transaction().map_err(storage_error)?;
+        if read_policy(&transaction, scope)?.automatic_read != MemoryReadMode::FirstInvocation {
+            return Err(MemoryStoreError::ReadDenied);
+        }
+        let memory = load_memory(&transaction, scope, memory_id)?;
+        transaction.commit().map_err(storage_error)?;
+        Ok(memory)
+    }
+
     fn policy(&self, scope: &MemoryScope) -> Result<MemoryPolicy, MemoryStoreError> {
         let connection = self.connection()?;
         read_policy(&connection, scope)

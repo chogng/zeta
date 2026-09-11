@@ -215,6 +215,7 @@ impl AppServer {
 
 fn memory_error(error: MemoryError) -> RpcError {
     match error {
+        MemoryError::ReadDenied => RpcError::new(-32135, AppServerErrorName::MemoryOperationFailed),
         MemoryError::InvalidInput(_) => RpcError::new(-32602, AppServerErrorName::InvalidParams),
         MemoryError::NotFound => RpcError::new(-32131, AppServerErrorName::MemoryNotFound),
         MemoryError::AlreadyExists => {

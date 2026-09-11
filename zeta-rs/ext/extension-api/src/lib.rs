@@ -1,5 +1,6 @@
 //! Shared lifecycle contracts for agent runtime extensions.
 
+mod context;
 mod contributors;
 mod fragment;
 mod lifecycle;
@@ -10,6 +11,9 @@ pub use lifecycle::LifecycleObserver;
 pub use lifecycle::ThreadContext;
 pub use lifecycle::ThreadLifecycle;
 
+pub use context::ContextContributor;
+pub use context::ContextEvidence;
+pub use context::ContextSourceRequest;
 pub use contributors::CapabilityToolContribution;
 pub use contributors::CapabilityToolContributor;
 pub use contributors::ExtensionToolAuthority;

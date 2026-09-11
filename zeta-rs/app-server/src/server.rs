@@ -653,8 +653,7 @@ impl AppServer {
                 .map_err(|error| error.to_string())?,
         );
         self.projects = Some(Arc::new(zeta_projects::ProjectCoordinator::new(store)));
-        self.install_memory_context();
-        Ok(self)
+        self.with_memory_extension()
     }
 
     pub(crate) fn with_local_memories(
@@ -666,8 +665,7 @@ impl AppServer {
                 .map_err(|error| error.to_string())?,
         );
         self.memories = Some(Arc::new(memories::Memories::new(store)));
-        self.install_memory_context();
-        Ok(self)
+        self.with_memory_extension()
     }
 
     pub fn connection(&self) -> ConnectionState {

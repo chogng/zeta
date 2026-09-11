@@ -796,6 +796,11 @@ impl TurnExecutor {
                     turn_id,
                     query: &query,
                 };
+                let contributed = self.extensions.collect_context(&request, cancellation);
+                check_cancellation(cancellation)?;
+                evidence.extend(contributed.map_err(|error| {
+                    ExecutionFailure::model(CoreError::Context(error.to_string()))
+                })?);
                 // Recollect at each preparation attempt so compaction or token measurement cannot
                 // retain evidence after its source was deleted or its read permission revoked.
                 for source in self.context_sources.values() {

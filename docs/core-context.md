@@ -557,8 +557,10 @@ zeta-rs/
 `ContextSource` 是 Core 的通用可选 evidence port：host 可在 Turn 第一次 model invocation 前返回带
 provenance 的 bounded evidence。Core 对已知窗口最多分配 input budget 的 1/8，并把内容作为 user-level
 `trust="untrusted-data"` 数据插在当前用户输入之前，不能提升为 system/directory instructions。
-`TurnExecutor` 按来源名称保存多个独立 port；替换或移除 Codebase 不影响 Memory。来源名称决定稳定顺序，
-各条 evidence 保留独立来源、引用和 revision。来源失败会结束本次 Turn，取消继续传播，不能使用已经收集的
+Memory 由 `ext/memories` 通过 `ContextContributor` 注册；`ContextEvidence` 与请求身份由 `extension-api`
+定义。Core 先按注册顺序收集扩展材料，再按来源名称收集 host port，两者共用同一预算与低信任入口。
+替换或移除 Codebase 不影响 Memory，各条材料保留独立来源、引用和 revision。
+来源失败会结束本次 Turn，取消继续传播，不能使用已经收集的
 部分内容继续调用模型。压缩或 token 计量导致准备重试时重新读取，避免保留已删除或撤销授权的材料。
 Codebase 自动召回由产品设置显式开启；Memory 自动读取由 [Memory API](zeta-app-server-api.md#memory)
 按作用域独立授权，默认关闭。

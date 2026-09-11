@@ -12,6 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 memories = { workspace = true }
+memories-extension = { workspace = true }
 extension-items = { workspace = true }
 queue = { workspace = true }
 zeta-otel = { workspace = true }

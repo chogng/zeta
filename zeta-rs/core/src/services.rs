@@ -24,8 +24,6 @@ use zeta_protocol::ModelStreamEvent;
 use zeta_protocol::RequestId;
 use zeta_protocol::RequestUserInput;
 use zeta_protocol::RequestUserInputResponse;
-use zeta_protocol::SessionId;
-use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadUpdateEnvelope;
 use zeta_protocol::ToolCall;
 use zeta_protocol::ToolCallBinding;
@@ -35,7 +33,6 @@ use zeta_protocol::ToolDefinition;
 use zeta_protocol::ToolExecutionOutput;
 use zeta_protocol::ToolOutputStream;
 use zeta_protocol::ToolSourceProvenance;
-use zeta_protocol::TurnId;
 use zeta_sandboxing::SandboxPolicy;
 
 /// Pixel and patch ceilings applied to one ephemeral provider-bound image clone.
@@ -213,22 +210,8 @@ pub trait ThreadUpdateSink: Send + Sync {
     fn publish(&self, update: ThreadUpdateEnvelope);
 }
 
-/// One bounded, revision-bound piece of untrusted evidence supplied to model context.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ContextEvidence {
-    pub source: String,
-    pub reference: String,
-    pub revision: String,
-    pub body: String,
-}
-
-/// Stable identities and user query for one optional context-source lookup.
-pub struct ContextSourceRequest<'a> {
-    pub session_id: &'a SessionId,
-    pub thread_id: &'a ThreadId,
-    pub turn_id: &'a TurnId,
-    pub query: &'a str,
-}
+pub use zeta_extension_api::ContextEvidence;
+pub use zeta_extension_api::ContextSourceRequest;
 
 /// Supplies optional, low-trust evidence without owning context ordering or budget policy.
 ///

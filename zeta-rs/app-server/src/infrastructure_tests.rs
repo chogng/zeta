@@ -511,3 +511,157 @@ fn memory_policy_rpc_controls_actual_turn_context_and_citation_access() {
         .unwrap();
     assert!(!format!("{:?}", snapshot.items).contains("Rust memory evidence"));
 }
+
+struct MemoryToolModel {
+    reference: String,
+    requests: std::sync::Mutex<Vec<zeta_protocol::ModelRequest>>,
+}
+
+impl zeta_core::ModelService for MemoryToolModel {
+    fn invoke(
+        &self,
+        _: zeta_core::ModelSelection<'_>,
+        request: &zeta_protocol::ModelRequest,
+        _: &zeta_async_utils::CancellationToken,
+    ) -> Result<zeta_protocol::ModelResponse, zeta_core::CoreError> {
+        let mut requests = self.requests.lock().unwrap();
+        let step = requests.len();
+        requests.push(request.clone());
+        let output = match step {
+            0 => zeta_protocol::ResponseItem::ToolCall(zeta_protocol::ToolCall {
+                id: zeta_protocol::ToolCallId::new("search-memory").unwrap(),
+                name: zeta_protocol::ToolName::new("memories-search").unwrap(),
+                arguments: json!({"query":"Rust"}),
+            }),
+            1 => zeta_protocol::ResponseItem::ToolCall(zeta_protocol::ToolCall {
+                id: zeta_protocol::ToolCallId::new("read-memory").unwrap(),
+                name: zeta_protocol::ToolName::new("memories-read").unwrap(),
+                arguments: json!({"reference":self.reference}),
+            }),
+            _ => zeta_protocol::ResponseItem::Text("done".into()),
+        };
+        Ok(zeta_protocol::ModelResponse {
+            output: vec![output],
+            usage: None,
+            billing: None,
+            stop_reason: if step < 2 {
+                zeta_protocol::StopReason::ToolUse
+            } else {
+                zeta_protocol::StopReason::Completed
+            },
+        })
+    }
+}
+
+#[test]
+fn memory_extension_tools_execute_in_turns_and_survive_host_composition_order() {
+    for memories_first in [true, false] {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("state.sqlite");
+        let skills = root.path().join("skills");
+        std::fs::create_dir(&skills).unwrap();
+        let body = "Rust persisted decision";
+        let citation = memories::MemoryCitation {
+            memory_id: memories::MemoryId::new("decision").unwrap(),
+            scope: memories::MemoryScope::Profile,
+            revision: 1,
+            start_byte: 0,
+            end_byte: body.len() as u32,
+        };
+        let model = Arc::new(MemoryToolModel {
+            reference: citation.reference().unwrap(),
+            requests: std::sync::Mutex::new(Vec::new()),
+        });
+        let mut server = super::server_with_model(model.clone());
+        if memories_first {
+            server = server.with_local_memories(&path).unwrap();
+        }
+        server = server
+            .with_skill_runtime(
+                zeta_skills_extension::BuiltInSkillSource::Root(skills),
+                Arc::new(super::EmptySkillConfig),
+                None,
+            )
+            .unwrap();
+        if !memories_first {
+            server = server.with_local_memories(&path).unwrap();
+        }
+        // Installing Projects after Memories must replace both the context contributor and tools.
+        let server = server.with_local_projects(&path).unwrap();
+        let mut host = server.product_host_connection();
+        let (session, thread) = create(&server, &mut host);
+        let added = call(
+            &server,
+            &mut host,
+            json!({"jsonrpc":"2.0","id":10,"method":"memory/add","params":{
+                "commandId":"add","memoryId":"decision","scope":{"type":"profile"},"title":"Rust","body":body
+            }}),
+        );
+        assert!(added.get("error").is_none(), "{added}");
+        let enabled = call(
+            &server,
+            &mut host,
+            json!({"jsonrpc":"2.0","id":11,"method":"memory/policy/update","params":{
+                "commandId":"enable","scope":{"type":"profile"},"expectedRevision":0,"automaticRead":"firstInvocation"
+            }}),
+        );
+        assert!(enabled.get("error").is_none(), "{enabled}");
+        let sequence = server
+            .threads()
+            .read_thread(&zeta_protocol::ThreadId::new(&thread).unwrap())
+            .unwrap()
+            .sequence;
+        let started = call(
+            &server,
+            &mut host,
+            json!({"jsonrpc":"2.0","id":12,"method":"session/request","params":{
+                "commandId":"turn","sessionId":session,"request":{"type":"startTurn","threadId":thread,
+                "expectedSequence":sequence,"input":[{"type":"text","text":"Rust"}],"toolMode":"direct"}
+            }}),
+        );
+        assert!(started.get("error").is_none(), "{started}");
+        super::wait_for_latest_turn(&server, &thread, zeta_protocol::TurnStatus::Completed);
+        let requests = model.requests.lock().unwrap();
+        assert_eq!(requests.len(), 3);
+        let first = serde_json::to_string(&requests[0]).unwrap();
+        for name in ["memories-search", "memories-read", "skills-read"] {
+            assert!(first.contains(name), "missing {name}");
+        }
+        assert!(first.contains("context_evidence"));
+        assert!(
+            !requests[0]
+                .instructions
+                .as_deref()
+                .unwrap_or_default()
+                .contains(body)
+        );
+        let second = serde_json::to_string(&requests[1]).unwrap();
+        let third = serde_json::to_string(&requests[2]).unwrap();
+        assert!(!second.contains("context_evidence"));
+        assert!(
+            second.contains(&citation.reference().unwrap()),
+            "search did not return its reference: {second}"
+        );
+        assert!(third.contains(body));
+        let snapshot = server
+            .threads()
+            .read_thread(&zeta_protocol::ThreadId::new(&thread).unwrap())
+            .unwrap();
+        let completed = snapshot
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                zeta_protocol::ThreadItem::ToolResult { text, is_error, .. } => {
+                    Some((text, is_error))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(completed.len(), 2);
+        assert!(
+            completed
+                .iter()
+                .all(|(text, is_error)| !**is_error && text.contains(body))
+        );
+    }
+}

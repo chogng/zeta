@@ -39,6 +39,10 @@ impl MemoryStore for RecordingStore {
         Err(MemoryStoreError::NotFound)
     }
 
+    fn read_for_context(&self, _: &MemoryScope, _: &MemoryId) -> Result<Memory, MemoryStoreError> {
+        Err(MemoryStoreError::ReadDenied)
+    }
+
     fn list(&self, _: &MemoryStoreListRequest) -> Result<MemoryStorePage, MemoryStoreError> {
         Ok(MemoryStorePage {
             catalog_revision: 0,

@@ -86,29 +86,31 @@ impl Memories {
     ) -> Result<MemoryCitationResult, MemoryError> {
         citation.validate()?;
         let memory = self.store.read(&citation.scope, &citation.memory_id)?;
-        if memory.revision != citation.revision {
-            return Err(MemoryError::RevisionConflict {
-                expected: citation.revision,
-                actual: memory.revision,
-            });
+        citation_result(memory, citation)
+    }
+
+    /// Reads an exact citation only within current host authority and current scope consent.
+    pub fn read_context_citation(
+        &self,
+        scopes: &[MemoryScope],
+        citation: MemoryCitation,
+        cancellation: &CancellationToken,
+    ) -> Result<MemoryCitationResult, MemoryError> {
+        check_cancellation(cancellation)?;
+        citation.validate()?;
+        if !scopes.contains(&citation.scope) {
+            return Err(MemoryError::ReadDenied);
         }
-        let body = memory
-            .body
-            .get(citation.start_byte as usize..citation.end_byte as usize)
-            .ok_or_else(|| {
-                MemoryError::InvalidInput("Memory citation is outside UTF-8 content".into())
-            })?
-            .to_owned();
-        Ok(MemoryCitationResult {
-            citation,
-            title: memory.title,
-            source: memory.source,
-            body,
-        })
+        let memory = self
+            .store
+            .read_for_context(&citation.scope, &citation.memory_id)?;
+        check_cancellation(cancellation)?;
+        citation_result(memory, citation)
     }
 
     /// Retrieves only explicitly opted-in scopes selected by the host's current task authority.
-    /// Content is ephemeral evidence: never an instruction, a transcript item, or a cached copy.
+    /// Returns reference data, never instructions. Automatic injection stays ephemeral; explicit
+    /// model reads may return the excerpts through ordinary Tool Results.
     pub fn collect_context(
         &self,
         scopes: Vec<MemoryScope>,
@@ -161,6 +163,31 @@ impl Memories {
         }
         Ok(evidence)
     }
+}
+
+fn citation_result(
+    memory: Memory,
+    citation: MemoryCitation,
+) -> Result<MemoryCitationResult, MemoryError> {
+    if memory.revision != citation.revision {
+        return Err(MemoryError::RevisionConflict {
+            expected: citation.revision,
+            actual: memory.revision,
+        });
+    }
+    let body = memory
+        .body
+        .get(citation.start_byte as usize..citation.end_byte as usize)
+        .ok_or_else(|| {
+            MemoryError::InvalidInput("Memory citation is outside UTF-8 content".into())
+        })?
+        .to_owned();
+    Ok(MemoryCitationResult {
+        citation,
+        title: memory.title,
+        source: memory.source,
+        body,
+    })
 }
 
 pub(crate) fn excerpt(

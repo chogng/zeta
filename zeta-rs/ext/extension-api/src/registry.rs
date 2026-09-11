@@ -1,5 +1,8 @@
 use crate::CapabilityToolContribution;
 use crate::CapabilityToolContributor;
+use crate::ContextContributor;
+use crate::ContextEvidence;
+use crate::ContextSourceRequest;
 use crate::IdleContributor;
 use crate::ItemContributor;
 use crate::LifecycleObserver;
@@ -11,6 +14,7 @@ use crate::ThreadContext;
 use crate::ThreadLifecycle;
 use crate::TurnInputContext;
 use crate::TurnInputContributor;
+use async_utils::CancellationToken;
 use std::collections::BTreeSet;
 use std::fmt;
 use std::sync::Arc;
@@ -40,7 +44,8 @@ pub struct ExtensionRegistryBuilder {
     idle: Vec<Arc<dyn IdleContributor>>,
     items: Vec<Arc<dyn ItemContributor>>,
     capability_tools: Vec<Arc<dyn CapabilityToolContributor>>,
-    read_only_tools: Vec<Arc<dyn ReadOnlyToolContributor>>,
+    read_only_tools: Vec<(&'static str, Arc<dyn ReadOnlyToolContributor>)>,
+    context: Vec<(&'static str, Arc<dyn ContextContributor>)>,
     skill_activation: Vec<Arc<dyn SkillActivationContributor>>,
     turn_input: Vec<Arc<dyn TurnInputContributor>>,
 }
@@ -53,6 +58,7 @@ impl ExtensionRegistryBuilder {
             items: registry.items.clone(),
             capability_tools: registry.capability_tools.clone(),
             read_only_tools: registry.read_only_tools.clone(),
+            context: registry.context.clone(),
             skill_activation: registry.skill_activation.clone(),
             turn_input: registry.turn_input.clone(),
         }
@@ -82,11 +88,31 @@ impl ExtensionRegistryBuilder {
         self
     }
 
+    /// Installs or replaces one extension's read-only tools in its existing registration position.
     pub fn read_only_tool_contributor(
         &mut self,
+        name: &'static str,
         contributor: Arc<dyn ReadOnlyToolContributor>,
     ) -> &mut Self {
-        self.read_only_tools.push(contributor);
+        if let Some((_, current)) = self.read_only_tools.iter_mut().find(|(id, _)| *id == name) {
+            *current = contributor;
+        } else {
+            self.read_only_tools.push((name, contributor));
+        }
+        self
+    }
+
+    /// Installs or replaces one extension's evidence source without changing registration order.
+    pub fn context_contributor(
+        &mut self,
+        name: &'static str,
+        contributor: Arc<dyn ContextContributor>,
+    ) -> &mut Self {
+        if let Some((_, current)) = self.context.iter_mut().find(|(id, _)| *id == name) {
+            *current = contributor;
+        } else {
+            self.context.push((name, contributor));
+        }
         self
     }
 
@@ -113,6 +139,7 @@ impl ExtensionRegistryBuilder {
             items: self.items,
             capability_tools: self.capability_tools,
             read_only_tools: self.read_only_tools,
+            context: self.context,
             skill_activation: self.skill_activation,
             turn_input: self.turn_input,
         }
@@ -125,12 +152,31 @@ pub struct ExtensionRegistry {
     idle: Vec<Arc<dyn IdleContributor>>,
     items: Vec<Arc<dyn ItemContributor>>,
     capability_tools: Vec<Arc<dyn CapabilityToolContributor>>,
-    read_only_tools: Vec<Arc<dyn ReadOnlyToolContributor>>,
+    read_only_tools: Vec<(&'static str, Arc<dyn ReadOnlyToolContributor>)>,
+    context: Vec<(&'static str, Arc<dyn ContextContributor>)>,
     skill_activation: Vec<Arc<dyn SkillActivationContributor>>,
     turn_input: Vec<Arc<dyn TurnInputContributor>>,
 }
 
 impl ExtensionRegistry {
+    pub fn collect_context(
+        &self,
+        request: &ContextSourceRequest<'_>,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<ContextEvidence>, ExtensionError> {
+        let mut evidence = Vec::new();
+        for (_, contributor) in &self.context {
+            cancellation
+                .check()
+                .map_err(|signal| ExtensionError::new(signal.reason().to_string()))?;
+            evidence.extend(contributor.collect(request, cancellation)?);
+        }
+        cancellation
+            .check()
+            .map_err(|signal| ExtensionError::new(signal.reason().to_string()))?;
+        Ok(evidence)
+    }
+
     pub fn thread_changed(&self, context: ThreadContext<'_>, event: &ThreadLifecycle) {
         for observer in &self.lifecycle {
             observer.thread_changed(context, event);
@@ -196,7 +242,7 @@ impl ExtensionRegistry {
     pub fn contribute_read_only_tools(&self) -> Result<Vec<Arc<dyn ToolExecutor>>, ExtensionError> {
         let mut tools = Vec::new();
         let mut names = BTreeSet::new();
-        for contributor in &self.read_only_tools {
+        for (_, contributor) in &self.read_only_tools {
             for executor in contributor.contribute()? {
                 let definition = executor.definition();
                 if !names.insert(definition.name().clone()) {

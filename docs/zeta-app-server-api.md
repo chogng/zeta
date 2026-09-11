@@ -374,6 +374,17 @@ list/search 默认每页 20 条，最大 50 条。cursor 绑定 catalog revision
 
 开启 `firstInvocation` 后，每个 Turn 的首次模型调用按当前任务关联的活跃 Project、Thread 绑定目录、Session 已授权读取的目录及 Profile 检索；每个作用域都必须单独开启。Project 关联本身不授予目录权限。最多处理 32 个作用域、输入前 2048 个字符中的 16 个查询词、64 条候选；最终最多 8 条、单条正文 4 KiB、正文合计 16 KiB，并继续接受 Core 的模型预算限制。
 
+`ext/memories` 同时注册以下只读模型工具。宿主绑定 Session、Thread 身份，模型不能传入作用域或任务身份。
+两种工具均复用对应作用域的 `firstInvocation` 读取授权；`disabled` 同时关闭自动召回与工具读取。
+
+| 模型工具 | 参数 | 结果与边界 |
+| --- | --- | --- |
+| `memories-search` | `query`，1–512 个字符 | 返回 `trust: untrusted-data` 与 `matches`；每条包含可直接读取的 `reference` 和 `memory` 引用摘录；沿用自动检索的条数和正文预算 |
+| `memories-read` | `reference`，完整 `memory:` 引用 | 返回 `trust: untrusted-data` 与 `memory`；重新核对当前范围、授权、revision 和 UTF-8 范围，读取精确摘录 |
+
+工具不修改记忆或读取授权。参数错误和缺少宿主身份会阻止执行；未授权、版本冲突或已删除引用返回明确的工具错误。
+模型主动调用产生的工具结果按普通 Tool Result 保存；撤销读取授权或删除 Memory 不会追溯删除既有任务历史。
+
 自动读取只产生临时的低信任参考材料，不写入系统指令或 Thread 历史。授权与正文在同一 SQLite 读取事务中取快照；该快照前提交的删除或撤销立即生效，已交给模型的请求不会被追溯修改。上下文准备因压缩或计量重试时重新读取。来源失败使本次 Turn 明确失败，取消沿现有 Turn 中断链路传播。上述显式短查询没有单独的取消资源；connection 关闭不删除持久 Memory 或读取授权。
 
 ### Connector 外部账号连接

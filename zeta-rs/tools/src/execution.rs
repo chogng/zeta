@@ -61,6 +61,7 @@ pub struct ToolExecutionContext {
     cancellation: CancellationToken,
     authority: ToolRuntimeAuthority,
     session_id: Option<zeta_protocol::SessionId>,
+    thread_id: Option<zeta_protocol::ThreadId>,
     execution_dir: Option<PathBuf>,
     sandbox_scope: Option<SandboxScope>,
     network_policy: Option<network_proxy::NetworkPolicyHandle>,
@@ -88,6 +89,7 @@ impl ToolExecutionContext {
             cancellation,
             authority,
             session_id: None,
+            thread_id: None,
             execution_dir: None,
             sandbox_scope: None,
             network_policy: None,
@@ -97,6 +99,16 @@ impl ToolExecutionContext {
     pub fn with_session_id(mut self, session_id: zeta_protocol::SessionId) -> Self {
         self.session_id = Some(session_id);
         self
+    }
+
+    /// Binds the durable Thread identity selected by the host, never model arguments.
+    pub fn with_thread_id(mut self, thread_id: zeta_protocol::ThreadId) -> Self {
+        self.thread_id = Some(thread_id);
+        self
+    }
+
+    pub fn thread_id(&self) -> Option<&zeta_protocol::ThreadId> {
+        self.thread_id.as_ref()
     }
 
     /// Binds one host-selected directory to this exact invocation.

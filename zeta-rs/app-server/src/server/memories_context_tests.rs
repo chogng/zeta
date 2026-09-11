@@ -1,8 +1,11 @@
 use super::*;
 use memories::AddMemoryRequest;
+use memories::Memories;
 use memories::MemoryReadMode;
 use memories::UpdateMemoryPolicyRequest;
 use zeta_async_utils::CancellationSource;
+use zeta_extension_api::ContextSourceRequest;
+use zeta_extension_api::ExtensionRegistryBuilder;
 use zeta_file_access::Dir;
 use zeta_file_access::Grant;
 use zeta_file_access::GrantSource;
@@ -86,11 +89,16 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
             })
             .unwrap();
     }
-    let source = MemoriesContextSource {
+    let mut builder = ExtensionRegistryBuilder::new();
+    memories_extension::install(
+        &mut builder,
         memories,
-        projects: Some(projects.clone()),
-        dirs: dirs.clone(),
-    };
+        Arc::new(MemoryScopes {
+            projects: Some(projects.clone()),
+            dirs: dirs.clone(),
+        }),
+    );
+    let source = builder.build();
     let request = ContextSourceRequest {
         session_id: &session,
         thread_id: &thread,
@@ -100,7 +108,7 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
     let cancellation = CancellationSource::new();
     let read_ids = |request: &ContextSourceRequest<'_>| {
         let mut ids = source
-            .collect(request, &cancellation.token())
+            .collect_context(request, &cancellation.token())
             .unwrap()
             .into_iter()
             .map(|entry| {

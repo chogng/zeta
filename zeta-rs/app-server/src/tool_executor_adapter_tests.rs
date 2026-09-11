@@ -64,7 +64,9 @@ impl ToolExecutor for RecordingExecutor {
         self.saw_frozen_binding.store(
             invocation.binding().id().as_str() == "binding-7"
                 && invocation.binding().registry_generation() == ToolRegistryGeneration::new(7)
-                && invocation.context().environment_id().as_str() == "env-7",
+                && invocation.context().environment_id().as_str() == "env-7"
+                && invocation.context().session_id().map(|id| id.as_str()) == Some("session-7")
+                && invocation.context().thread_id().map(|id| id.as_str()) == Some("thread-7"),
             Ordering::SeqCst,
         );
         Box::pin(future::ready(ToolExecutionOutcome::Returned(
@@ -168,6 +170,7 @@ fn executor_runtime_preserves_registry_binding_environment_and_output() {
             },
             &CancellationSource::new().token(),
             &zeta_protocol::SessionId::new("session-7").unwrap(),
+            &zeta_protocol::ThreadId::new("thread-7").unwrap(),
             &TurnId::new("turn-7").unwrap(),
             None,
             &mut sink,
@@ -239,6 +242,7 @@ fn executor_runtime_rechecks_and_retires_a_revoked_dir_authorization() {
         },
         &CancellationSource::new().token(),
         &zeta_protocol::SessionId::new("session-9").unwrap(),
+        &zeta_protocol::ThreadId::new("thread-9").unwrap(),
         &TurnId::new("turn-9").unwrap(),
         None,
         &mut RecordingSink::default(),
@@ -301,6 +305,7 @@ fn executor_runtime_preserves_original_image_detail_until_model_capability_gate(
             },
             &CancellationSource::new().token(),
             &zeta_protocol::SessionId::new("session-8").unwrap(),
+            &zeta_protocol::ThreadId::new("thread-8").unwrap(),
             &TurnId::new("turn-8").unwrap(),
             None,
             &mut RecordingSink::default(),

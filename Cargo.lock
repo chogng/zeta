@@ -11440,6 +11440,7 @@ dependencies = [
  "zeta-mcp",
  "zeta-mcp-extension",
  "zeta-memories",
+ "zeta-memories-extension",
  "zeta-memory-diagnostics",
  "zeta-model-provider",
  "zeta-model-provider-config",
@@ -12062,6 +12063,7 @@ name = "zeta-extension-api"
 version = "0.1.0"
 dependencies = [
  "serde_json",
+ "zeta-async-utils",
  "zeta-extension-items",
  "zeta-protocol",
  "zeta-tools",
@@ -12488,6 +12490,22 @@ dependencies = [
  "zeta-async-utils",
  "zeta-file-access",
  "zeta-protocol",
+]
+
+[[package]]
+name = "zeta-memories-extension"
+version = "0.1.0"
+dependencies = [
+ "pollster 1.0.1",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "zeta-async-utils",
+ "zeta-extension-api",
+ "zeta-memories",
+ "zeta-protocol",
+ "zeta-state",
+ "zeta-tools",
 ]
 
 [[package]]

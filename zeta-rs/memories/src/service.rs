@@ -226,6 +226,8 @@ impl Memories {
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum MemoryError {
+    #[error("Memory scope is not authorized for model reading")]
+    ReadDenied,
     #[error("{0}")]
     InvalidInput(String),
     #[error("Memory was not found")]
@@ -247,6 +249,7 @@ pub enum MemoryError {
 impl From<MemoryStoreError> for MemoryError {
     fn from(error: MemoryStoreError) -> Self {
         match error {
+            MemoryStoreError::ReadDenied => Self::ReadDenied,
             MemoryStoreError::NotFound => Self::NotFound,
             MemoryStoreError::AlreadyExists => Self::AlreadyExists,
             MemoryStoreError::CommandConflict => Self::CommandConflict,

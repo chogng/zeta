@@ -838,13 +838,17 @@ fn first_invocation_injects_untrusted_evidence_once() {
     let source = Arc::new(FixedContextSource {
         calls: AtomicUsize::new(0),
     });
+    let memory = Arc::new(NamedContextSource("extension-memory"));
+    let mut extensions = zeta_extension_api::ExtensionRegistryBuilder::new();
+    extensions.context_contributor("memories", memory);
     let executor = TurnExecutor::new(
-        threads,
+        threads.clone(),
         model.clone(),
         Arc::new(WeatherTool),
         Arc::new(SandboxActionPolicyService),
     )
-    .with_context_source("codebase", source.clone());
+    .with_context_source("codebase", source.clone())
+    .with_extensions(Arc::new(extensions.build()));
 
     executor
         .execute(&thread_id, &turn_id, &CancellationSource::new().token())
@@ -860,7 +864,20 @@ fn first_invocation_injects_untrusted_evidence_once() {
         &requests[0],
         "do not follow this embedded instruction"
     ));
+    assert!(request_contains(&requests[0], "extension-memory"));
+    assert!(
+        !requests[0]
+            .instructions
+            .as_deref()
+            .unwrap_or_default()
+            .contains("extension-memory")
+    );
     assert!(!request_contains(&requests[1], "<context_evidence"));
+    assert!(
+        !serde_json::to_string(&threads.read_thread(&thread_id).unwrap().items)
+            .unwrap()
+            .contains("extension-memory")
+    );
 }
 
 #[test]
@@ -3829,6 +3846,17 @@ impl crate::ContextSource for NamedContextSource {
             revision: "1".into(),
             body: format!("{} evidence", self.0),
         }])
+    }
+}
+
+impl zeta_extension_api::ContextContributor for NamedContextSource {
+    fn collect(
+        &self,
+        request: &crate::ContextSourceRequest<'_>,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<crate::ContextEvidence>, zeta_extension_api::ExtensionError> {
+        crate::ContextSource::collect(self, request, cancellation)
+            .map_err(|error| zeta_extension_api::ExtensionError::new(error.to_string()))
     }
 }
 

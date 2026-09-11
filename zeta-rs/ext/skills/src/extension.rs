@@ -19,7 +19,10 @@ use zeta_protocol::UserInput;
 /// Installs one Skill runtime into the generic agent extension registry.
 pub fn install(builder: &mut ExtensionRegistryBuilder, runtime: Arc<SkillRuntime>) {
     builder.skill_activation_contributor(runtime.clone());
-    builder.read_only_tool_contributor(Arc::new(SkillToolContributor::new(runtime.clone())));
+    builder.read_only_tool_contributor(
+        "skills",
+        Arc::new(SkillToolContributor::new(runtime.clone())),
+    );
     builder.turn_input_contributor(runtime);
 }
 

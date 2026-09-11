@@ -93,8 +93,8 @@ impl ToolExecutor for FixedExecutor {
 #[test]
 fn duplicate_read_only_tool_names_from_extensions_are_rejected() {
     let mut builder = ExtensionRegistryBuilder::new();
-    builder.read_only_tool_contributor(Arc::new(FixedToolContributor));
-    builder.read_only_tool_contributor(Arc::new(FixedToolContributor));
+    builder.read_only_tool_contributor("first", Arc::new(FixedToolContributor));
+    builder.read_only_tool_contributor("second", Arc::new(FixedToolContributor));
 
     let error = match builder.build().contribute_read_only_tools() {
         Ok(_) => panic!("duplicate extension tool names were accepted"),
