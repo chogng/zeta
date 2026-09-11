@@ -9,6 +9,55 @@ use zeta_app_server_protocol::protocol::memory::MemorySearchParams;
 use zeta_app_server_protocol::protocol::registry::ClientMethod;
 
 impl<T: JsonRpcTransport> AppServerClient<T> {
+    pub fn read_memory_citation(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::memory::MemoryCitationReadParams,
+    ) -> Result<memories::MemoryCitationResult, ClientError> {
+        let expected = params.citation.clone();
+        let result: memories::MemoryCitationResult =
+            self.call(ClientMethod::MemoryCitationRead, params)?;
+        if result.citation != expected {
+            return Err(ClientError::Protocol(
+                "Memory citation returned another reference".into(),
+            ));
+        }
+        Ok(result)
+    }
+
+    pub fn read_memory_policy(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::memory::MemoryPolicyReadParams,
+    ) -> Result<memories::MemoryPolicy, ClientError> {
+        let scope = params.scope.clone();
+        let result: memories::MemoryPolicy = self.call(ClientMethod::MemoryPolicyRead, params)?;
+        if result.scope != scope {
+            return Err(ClientError::Protocol(
+                "Memory policy returned another scope".into(),
+            ));
+        }
+        Ok(result)
+    }
+
+    pub fn update_memory_policy(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::memory::MemoryPolicyUpdateParams,
+    ) -> Result<memories::MemoryPolicyMutationResult, ClientError> {
+        let scope = params.scope.clone();
+        let expected_revision = params.expected_revision.checked_add(1);
+        let mode = params.automatic_read;
+        let result: memories::MemoryPolicyMutationResult =
+            self.call(ClientMethod::MemoryPolicyUpdate, params)?;
+        if result.policy.scope != scope
+            || Some(result.policy.revision) != expected_revision
+            || result.policy.automatic_read != mode
+        {
+            return Err(ClientError::Protocol(
+                "Memory policy mutation returned another scope".into(),
+            ));
+        }
+        Ok(result)
+    }
+
     pub fn add_memory(
         &mut self,
         params: MemoryAddParams,
@@ -57,7 +106,12 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
     ) -> Result<memories::MemorySearchPage, ClientError> {
         let scope = params.scope.clone();
         let result: memories::MemorySearchPage = self.call(ClientMethod::MemorySearch, params)?;
-        if result.matches.iter().any(|memory| memory.scope != scope) {
+        if result.matches.iter().any(|memory| {
+            memory.scope != scope
+                || memory.citation.scope != scope
+                || memory.citation.memory_id != memory.memory_id
+                || memory.citation.revision != memory.revision
+        }) {
             return Err(ClientError::Protocol(
                 "Memory search contains another scope".into(),
             ));

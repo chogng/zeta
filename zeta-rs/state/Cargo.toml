@@ -29,6 +29,7 @@ zeta-utils-path = { workspace = true }
 zeta-file-access = { workspace = true }
 
 [dev-dependencies]
+async-utils = { package = "zeta-async-utils", path = "../async-utils" }
 zeta-core = { workspace = true }
 tempfile = { workspace = true }
 zeta-environment = { workspace = true }

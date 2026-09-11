@@ -375,3 +375,139 @@ fn memories_are_profile_owned_retry_safe_searchable_and_deletable() {
     );
     assert_eq!(old_add["error"]["message"], "MemoryNotFound");
 }
+
+#[test]
+fn memory_policy_rpc_controls_actual_turn_context_and_citation_access() {
+    let root = tempfile::tempdir().unwrap();
+    let model = Arc::new(super::RecordingModel::default());
+    let server = super::server_with_model(model.clone())
+        .with_local_memories(&root.path().join("state.sqlite"))
+        .unwrap()
+        .with_tool_service(
+            Arc::new(zeta_core::NoTools),
+            Arc::new(super::ShellTestPolicy),
+        );
+    let mut host = server.product_host_connection();
+    let (session, thread) = create(&server, &mut host);
+    let add = call(
+        &server,
+        &mut host,
+        json!({"jsonrpc":"2.0","id":10,"method":"memory/add","params":{
+            "commandId":"add","memoryId":"preference","scope":{"type":"profile"},"title":"Rust choice","body":"Rust memory evidence: use the checked project conventions."
+        }}),
+    );
+    assert!(add.get("error").is_none(), "{add}");
+    let start = |host: &mut crate::ConnectionState, id: u64| {
+        let sequence = server
+            .threads()
+            .read_thread(&zeta_protocol::ThreadId::new(&thread).unwrap())
+            .unwrap()
+            .sequence;
+        let started = call(
+            &server,
+            host,
+            json!({"jsonrpc":"2.0","id":id,"method":"session/request","params":{
+                "commandId":format!("turn-{id}"),"sessionId":session,"request":{"type":"startTurn","threadId":thread,
+                    "expectedSequence":sequence,"input":[{"type":"text","text":"Work on Rust"}],"toolMode":"direct"}
+            }}),
+        );
+        assert!(started.get("error").is_none(), "{started}");
+        super::wait_for_latest_turn(&server, &thread, zeta_protocol::TurnStatus::Completed);
+    };
+    start(&mut host, 11);
+    let text = |request: &zeta_protocol::ModelRequest| serde_json::to_string(request).unwrap();
+    assert!(!text(&model.requests()[0]).contains("Rust memory evidence"));
+    let policy = call(
+        &server,
+        &mut host,
+        json!({"jsonrpc":"2.0","id":12,"method":"memory/policy/read","params":{"scope":{"type":"profile"}}}),
+    );
+    assert_eq!(policy["result"]["automaticRead"], "disabled");
+    let policy_request_id = std::cell::Cell::new(100_u64);
+    let update = |host: &mut crate::ConnectionState, command: &str, revision: u64, mode: &str| {
+        let id = policy_request_id.get();
+        policy_request_id.set(id + 1);
+        call(
+            &server,
+            host,
+            json!({"jsonrpc":"2.0","id":id,"method":"memory/policy/update","params":{"commandId":command,"scope":{"type":"profile"},"expectedRevision":revision,"automaticRead":mode}}),
+        )
+    };
+    let enabled = update(&mut host, "enable", 0, "firstInvocation");
+    assert_eq!(enabled["result"]["policy"]["revision"], 1, "{enabled}");
+    start(&mut host, 14);
+    let requests = model.requests();
+    assert!(text(&requests[1]).contains("Rust memory evidence"));
+    assert!(
+        !requests[1]
+            .instructions
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Rust memory evidence")
+    );
+    let search = call(
+        &server,
+        &mut host,
+        json!({"jsonrpc":"2.0","id":15,"method":"memory/search","params":{"scope":{"type":"profile"},"query":"Rust"}}),
+    );
+    let citation = search["result"]["matches"][0]["citation"].clone();
+    let read = call(
+        &server,
+        &mut host,
+        json!({"jsonrpc":"2.0","id":16,"method":"memory/citation/read","params":{"citation":citation.clone()}}),
+    );
+    assert_eq!(
+        read["result"]["body"],
+        search["result"]["matches"][0]["excerpt"]
+    );
+    let mut regular = server.connection();
+    initialize(&server, &mut regular);
+    for (index, (method, params)) in [
+        ("memory/citation/read", json!({"citation":citation})),
+        ("memory/policy/read", json!({"scope":{"type":"profile"}})),
+        (
+            "memory/policy/update",
+            json!({"commandId":"unauthorized","scope":{"type":"profile"},"expectedRevision":1,"automaticRead":"disabled"}),
+        ),
+    ].into_iter().enumerate() {
+        let denied = call(
+            &server,
+            &mut regular,
+            json!({"jsonrpc":"2.0","id":17 + index,"method":method,"params":params}),
+        );
+        assert_eq!(denied["error"]["message"], "PermissionRequired", "{denied}");
+    }
+    assert_eq!(
+        update(&mut host, "disable", 1, "disabled")["result"]["policy"]["revision"],
+        2
+    );
+    start(&mut host, 18);
+    assert!(!text(&model.requests()[2]).contains("Rust memory evidence"));
+    assert_eq!(
+        update(&mut host, "enable", 0, "firstInvocation")["result"]["disposition"],
+        "replayed"
+    );
+    start(&mut host, 19);
+    assert!(!text(&model.requests()[3]).contains("Rust memory evidence"));
+    assert_eq!(
+        update(&mut host, "reenable", 2, "firstInvocation")["result"]["policy"]["revision"],
+        3
+    );
+    start(&mut host, 20);
+    assert!(text(&model.requests()[4]).contains("Rust memory evidence"));
+    let deleted = call(
+        &server,
+        &mut host,
+        json!({"jsonrpc":"2.0","id":21,"method":"memory/delete","params":{
+            "commandId":"delete","scope":{"type":"profile"},"memoryId":"preference","expectedRevision":1
+        }}),
+    );
+    assert_eq!(deleted["result"]["disposition"], "committed", "{deleted}");
+    start(&mut host, 22);
+    assert!(!text(&model.requests()[5]).contains("Rust memory evidence"));
+    let snapshot = server
+        .threads()
+        .read_thread(&zeta_protocol::ThreadId::new(&thread).unwrap())
+        .unwrap();
+    assert!(!format!("{:?}", snapshot.items).contains("Rust memory evidence"));
+}

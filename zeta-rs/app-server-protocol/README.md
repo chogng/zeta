@@ -18,6 +18,8 @@
 | `extension/items/list` | Session/Thread → items | 返回扩展自有文本展示项；校验身份和大小 |
 | `memory/add` / `memory/delete` | commandId、作用域、Memory 身份与 revision → mutation result | 用户显式写入或删除；命令可重放，删除立即移除正文 |
 | `memory/list` / `memory/read` / `memory/search` | 精确作用域、分页或 Memory 身份 → 有界结果 | 只允许产品 host；cursor 绑定 catalog revision 和查询 |
+| `memory/citation/read` | Memory ID、作用域、revision、UTF-8 范围 → 引用正文 | 引用不授予权限；已删除或版本不符明确报错 |
+| `memory/policy/read` / `memory/policy/update` | 作用域、commandId、policy revision、automaticRead → 读取授权 | 默认关闭；修改与重放沿用 Memory 通知和冲突契约 |
 | `memoryDiagnostics/start` / `read` / `submit` / `stop` / `export` | 诊断 Session → report/resource | 进程内存诊断，不读取长期 Memory |
 
 `memory/changed` 只向产品 host 发布作用域和新 catalog revision；客户端随后重新读取。`queue/changed` 是无内容的失效通知。Config 的 Feature 来源由 `zeta-features` 解释。反馈待审阅包在 connection 关闭时释放，持久队列由 profile 后台调度器恢复。

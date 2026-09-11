@@ -164,6 +164,7 @@ pub struct MemoryListPage {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct MemorySearchMatch {
+    pub citation: crate::MemoryCitation,
     pub memory_id: MemoryId,
     pub scope: MemoryScope,
     #[ts(type = "number")]

@@ -273,7 +273,8 @@ Desktop 当前实现和 Playwright 后续边界见
 | `project/root/add` / `project/root/update` / `project/root/remove` | Project + Session directory access | `add` 只接受 Session 已有的精确 `DirId`，Environment 和路径由 host 重建；操作不创建 Grant |
 | `project/session/link` / `project/session/unlink` | Project | 只建立或删除组织关系；目标 Session 必须真实存在 |
 | `memory/add` / `memory/delete` | Memory | 产品 host 使用 commandId、精确作用域和 record revision 显式修改；删除后的 live row、命令回执和 tombstone 不保留正文 |
-| `memory/list` / `memory/read` / `memory/search` | Memory | 读取有界摘要、精确正文或有界摘录；分页 cursor 绑定 catalog revision、作用域和查询 |
+| `memory/list` / `memory/read` / `memory/search` / `memory/citation/read` | Memory | 有界摘要、正文、命中摘录与版本引用；cursor 绑定 catalog revision、作用域和查询 |
+| `memory/policy/read` / `memory/policy/update` | Memory | 按作用域读取或修改自动读取授权；默认关闭，使用独立 policy revision |
 | `codebase/configure` | config + Directory | 配置可选设备内模型与自动上下文行为；不保存索引数据 |
 | `languageServer/configure` / `languageServer/remove` | config | revision-safe 修改或恢复 language-server mode/path preference |
 | `provider/configure` / `provider/remove` | config | 新增自定义项分配并持久保存顺序，编辑保持顺序；删除拒绝内置项和仍被配置引用的项，并清理该连接密钥。自定义 API 类型支持 Responses、Chat Completions、Anthropic Messages；`contextWindow` 保存 Provider 的 272000／1000000 档位，`model` 留空时目录使用对应 API 类型的内置模型，填写时使用该 ID。 |
@@ -357,9 +358,23 @@ Connector account 是 GitHub、Slack 等外部产品账号，不是第 11 节的
 
 `initialize.capabilities.memories` 表示当前 App Server 安装了 Memory 后端。所有 `memory/*` 方法只接受服务端授予的产品 host 连接；协议对端不能通过 initialize 参数提升权限。
 
-首版只支持用户显式 add、list、read、search 和 delete，不自动读取历史、不调用模型抽取，也不把 Memory 注入模型上下文。add/delete 使用稳定 `commandId`；相同输入重放不会重复发布 `memory/changed`。删除后 live row、命令回执和 tombstone 都不保留 title/body，tombstone 只阻止 Memory ID 被重新使用。旧 add command 在删除后返回 `MemoryNotFound`，不会恢复正文。SQLite page、WAL 和外部备份的物理清理由存储维护策略负责，当前接口不把逻辑删除描述为介质擦除。
+支持用户显式 add、list、read、search、delete、精确引用读取，以及独立授权的自动读取；不调用模型抽取或自动写入。add/delete 使用稳定 `commandId`；相同输入重放不会重复发布 `memory/changed`。删除后 live row、命令回执和 tombstone 都不保留 title/body，tombstone 只阻止 Memory ID 被重新使用。旧 add command 在删除后返回 `MemoryNotFound`，不会恢复正文。SQLite page、WAL 和外部备份的物理清理由存储维护策略负责，当前接口不把逻辑删除描述为介质擦除。
 
-list/search 默认每页 20 条，最大 50 条。cursor 绑定 catalog revision、精确作用域和搜索 query；任一 Memory 变化后继续使用旧 cursor 返回 `MemoryCursorStale`。list 不返回正文，search 只返回最多 1024 字符的摘录，read 才返回完整的最多 16 KiB 正文。
+list/search 默认每页 20 条，最大 50 条。cursor 绑定 catalog revision、精确作用域和搜索 query；任一 Memory 变化后继续使用旧 cursor 返回 `MemoryCursorStale`。list 不返回正文，search 返回命中位置附近最多 1024 UTF-8 字节的摘录及 citation，read 返回完整的最多 16 KiB 正文。
+
+| Method | 输入 | 结果与行为 |
+| --- | --- | --- |
+| `memory/citation/read` | `citation` | 返回相同引用、title、source、body；引用包含 `memoryId`、`scope`、`revision`、`startByte`、`endByte` |
+| `memory/policy/read` | `scope` | 返回 `scope`、`revision`、`automaticRead`；未配置时 revision 为 0，读取关闭 |
+| `memory/policy/update` | `commandId`、`scope`、`expectedRevision`、`automaticRead` | 返回 disposition、catalogRevision、policy；mode 为 `disabled` 或 `firstInvocation` |
+
+引用范围是半开 UTF-8 字节区间，不能切开字符；`memory:` 引用文本是相同 citation JSON 的 URL-safe Base64 编码。引用不授予读取权限。已删除引用返回 `MemoryNotFound`，版本不符返回 `MemoryConflict`，无效范围返回 `InvalidParams`。
+
+自动读取授权由 Memory 领域独立持久化。每次成功修改增加该作用域 policy revision 与 catalog revision，并发布不含正文的 `memory/changed`；并发旧版本返回 `MemoryConflict`。重放返回原命令结果且不重复应用，关闭读取后重放旧开启命令不会重新启用；客户端重连后重新读取 policy。
+
+开启 `firstInvocation` 后，每个 Turn 的首次模型调用按当前任务关联的活跃 Project、Thread 绑定目录、Session 已授权读取的目录及 Profile 检索；每个作用域都必须单独开启。Project 关联本身不授予目录权限。最多处理 32 个作用域、输入前 2048 个字符中的 16 个查询词、64 条候选；最终最多 8 条、单条正文 4 KiB、正文合计 16 KiB，并继续接受 Core 的模型预算限制。
+
+自动读取只产生临时的低信任参考材料，不写入系统指令或 Thread 历史。授权与正文在同一 SQLite 读取事务中取快照；该快照前提交的删除或撤销立即生效，已交给模型的请求不会被追溯修改。上下文准备因压缩或计量重试时重新读取。来源失败使本次 Turn 明确失败，取消沿现有 Turn 中断链路传播。上述显式短查询没有单独的取消资源；connection 关闭不删除持久 Memory 或读取授权。
 
 ### Connector 外部账号连接
 

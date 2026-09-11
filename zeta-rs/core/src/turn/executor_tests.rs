@@ -844,7 +844,7 @@ fn first_invocation_injects_untrusted_evidence_once() {
         Arc::new(WeatherTool),
         Arc::new(SandboxActionPolicyService),
     )
-    .with_context_source(source.clone());
+    .with_context_source("codebase", source.clone());
 
     executor
         .execute(&thread_id, &turn_id, &CancellationSource::new().token())
@@ -3795,6 +3795,86 @@ fn model_failure_details_survive_retry_exhaustion() {
         assert_eq!(
             snapshot.turns.last().unwrap().failure.as_ref(),
             Some(&stable)
+        );
+    }
+}
+
+struct NamedContextSource(&'static str);
+
+impl crate::ContextSource for NamedContextSource {
+    fn collect(
+        &self,
+        _: &crate::ContextSourceRequest<'_>,
+        _: &CancellationToken,
+    ) -> Result<Vec<crate::ContextEvidence>, CoreError> {
+        if self.0 == "cancel" {
+            return Err(CoreError::Cancelled("context stopped".into()));
+        }
+        if self.0 == "fail" {
+            return Err(CoreError::Context("context unavailable".into()));
+        }
+        Ok(vec![crate::ContextEvidence {
+            source: self.0.into(),
+            reference: format!("{}:ref", self.0),
+            revision: "1".into(),
+            body: format!("{} evidence", self.0),
+        }])
+    }
+}
+
+#[test]
+fn independent_context_sources_survive_rebinding_and_removal() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let model = Arc::new(ScriptedModel::new([Ok(text_response("done"))]));
+    let executor = TurnExecutor::without_tools(threads, model.clone())
+        .with_context_source("codebase", Arc::new(NamedContextSource("old")))
+        .with_context_source("memories", Arc::new(NamedContextSource("memory")))
+        .with_context_source("retired", Arc::new(NamedContextSource("retired")))
+        .with_context_source("codebase", Arc::new(NamedContextSource("new")))
+        .without_context_source("retired")
+        .with_tool_service(Arc::new(WeatherTool), Arc::new(SandboxActionPolicyService));
+    executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+    let request = &model.requests()[0];
+    assert!(request_contains(request, "new evidence"));
+    assert!(request_contains(request, "memory evidence"));
+    assert!(!request_contains(request, "old evidence"));
+    assert!(!request_contains(request, "retired evidence"));
+    assert!(
+        !request
+            .instructions
+            .as_deref()
+            .unwrap_or_default()
+            .contains("memory evidence")
+    );
+    for item in &request.input {
+        if let zeta_protocol::InputItem::Message(message) = item
+            && message.content.iter().any(|part| matches!(part, zeta_protocol::ContentPart::Text(text) if text.contains("memory evidence"))) {
+            assert_eq!(message.role, zeta_protocol::MessageRole::User);
+        }
+    }
+}
+
+#[test]
+fn context_cancellation_and_failure_never_invoke_the_model_with_partial_evidence() {
+    for name in ["cancel", "fail"] {
+        let (threads, thread_id, turn_id) = started_turn();
+        let model = Arc::new(ScriptedModel::new([Ok(text_response("unexpected"))]));
+        let executor = TurnExecutor::without_tools(threads.clone(), model.clone())
+            .with_context_source("a", Arc::new(NamedContextSource("first")))
+            .with_context_source("b", Arc::new(NamedContextSource(name)));
+        let result = executor.execute(&thread_id, &turn_id, &CancellationSource::new().token());
+        assert!(result.is_err());
+        assert!(model.requests().is_empty());
+        let snapshot = threads.read_thread(&thread_id).unwrap();
+        assert_eq!(
+            snapshot.turns[0].status,
+            if name == "cancel" {
+                zeta_protocol::TurnStatus::Interrupted
+            } else {
+                zeta_protocol::TurnStatus::Failed
+            }
         );
     }
 }

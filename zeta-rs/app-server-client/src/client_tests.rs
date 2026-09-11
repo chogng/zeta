@@ -894,3 +894,72 @@ fn write_skill(path: &std::path::Path, name: &str, description: &str) {
     )
     .unwrap();
 }
+
+#[test]
+fn memory_client_checks_citations_and_policy_mutation_identity() {
+    use zeta_app_server_protocol::protocol::memory::MemoryCitationReadParams;
+    use zeta_app_server_protocol::protocol::memory::MemoryPolicyUpdateParams;
+    let citation = ::memories::MemoryCitation {
+        memory_id: ::memories::MemoryId::new("memory-1").unwrap(),
+        scope: ::memories::MemoryScope::Profile,
+        revision: 1,
+        start_byte: 0,
+        end_byte: 4,
+    };
+    let response = |result| serde_json::json!({"jsonrpc":"2.0","id":1,"result":result}).to_string();
+    let result = ::memories::MemoryCitationResult {
+        citation: citation.clone(),
+        title: "title".into(),
+        source: ::memories::MemorySource::User,
+        body: "body".into(),
+    };
+    let mut client = AppServerClient::new(MockTransport(VecDeque::from([response(
+        serde_json::to_value(&result).unwrap(),
+    )])));
+    assert_eq!(
+        client
+            .read_memory_citation(MemoryCitationReadParams {
+                citation: citation.clone()
+            })
+            .unwrap(),
+        result
+    );
+    let mut wrong = result.clone();
+    wrong.citation.revision = 2;
+    let mut client = AppServerClient::new(MockTransport(VecDeque::from([response(
+        serde_json::to_value(wrong).unwrap(),
+    )])));
+    assert!(matches!(
+        client.read_memory_citation(MemoryCitationReadParams { citation }),
+        Err(ClientError::Protocol(_))
+    ));
+    for (revision, mode, valid) in [
+        (1, ::memories::MemoryReadMode::FirstInvocation, true),
+        (2, ::memories::MemoryReadMode::FirstInvocation, false),
+        (1, ::memories::MemoryReadMode::Disabled, false),
+    ] {
+        let result = ::memories::MemoryPolicyMutationResult {
+            disposition: ::memories::MemoryMutationDisposition::Committed,
+            catalog_revision: 1,
+            policy: ::memories::MemoryPolicy {
+                scope: ::memories::MemoryScope::Profile,
+                revision,
+                automatic_read: mode,
+            },
+        };
+        let mut client = AppServerClient::new(MockTransport(VecDeque::from([response(
+            serde_json::to_value(&result).unwrap(),
+        )])));
+        let actual = client.update_memory_policy(MemoryPolicyUpdateParams {
+            command_id: CommandId::new("set-policy").unwrap(),
+            scope: ::memories::MemoryScope::Profile,
+            expected_revision: 0,
+            automatic_read: ::memories::MemoryReadMode::FirstInvocation,
+        });
+        if valid {
+            assert_eq!(actual.unwrap(), result);
+        } else {
+            assert!(matches!(actual, Err(ClientError::Protocol(_))));
+        }
+    }
+}

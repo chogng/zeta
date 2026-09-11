@@ -1,9 +1,15 @@
 # Memories
 
-- 拥有长期 Memory 的身份、作用域、用户来源、revision、分页、搜索、引用读取和删除语义。
-- 首版只接受用户显式 add、list、read、search 和 delete；不自动读取、写入或调用模型。
-- `MemoryStore` 是持久化 port；SQLite 实现由 `zeta-state` 提供，App Server 只做权限与协议转换。
-- Profile、Project 和 Dir 是互不替代的作用域；Dir 使用稳定 `DirId`，不持久化路径。
-- 删除后正文不再进入 live record、command receipt 或 tombstone，旧 add command 不会恢复已经删除的 Memory；SQLite page、WAL 和外部备份的物理清理由存储维护策略负责。
-- 分页 cursor 绑定 catalog revision、作用域和查询；目录变化后旧 cursor 明确失效。
-- 验证：`just test zeta-memories`、`just test zeta-state memory_store` 和 App Server Memory 集成测试。
+- 拥有长期 Memory 的身份、作用域、用户来源、revision、分页、搜索、精确引用与删除语义。
+- 提供用户显式 add、list、read、search 和 delete；不调用模型抽取或自动写入。
+- 自动读取按 Profile、Project、Dir 独立授权，默认关闭；显式写入不授予自动读取权限。
+- `MemoryStore` 是持久化 port；SQLite 实现由 `zeta-state` 提供，App Server 负责协议、任务身份和目录授权转换。
+- Dir 使用稳定 `DirId`，不持久化路径；Project 关联不授予目录访问权。
+- 引用绑定 Memory ID、作用域、revision 和 UTF-8 字节范围；版本冲突、越界、非字符边界和已删除引用明确报错。
+- 自动检索只读当前任务关联的活跃 Project、Thread 绑定目录与 Session 已授权目录，以及 Profile；SQLite 在同一读取事务中核对授权与正文。
+- 自动检索最多接受 32 个作用域、16 个查询词、64 条候选；最多返回 8 条、每条正文 4 KiB、正文合计 16 KiB 的参考材料，Core 继续施加模型预算。
+- 参考材料只进入 Turn 首次模型调用的用户级低信任上下文；不写入指令或 Thread 历史。重试准备上下文时重新读取，删除或撤销授权在后续读取中生效。
+- 删除后正文不再进入 live record、command receipt 或 tombstone；旧 add 命令不能恢复内容，旧授权命令重放不能重新开启读取。SQLite page、WAL 和外部备份的物理清理由存储维护策略负责。
+- 分页 cursor 绑定 catalog revision、作用域和查询；内容或授权变化后旧 cursor 明确失效。
+- 线上参数与错误见 [App Server Memory API](../../docs/zeta-app-server-api.md#memory)。
+- 验证：`just test zeta-memories`、`just test zeta-state memory_store`、`just test zeta-app-server memor`。

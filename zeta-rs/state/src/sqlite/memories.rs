@@ -9,8 +9,13 @@ use memories::MemoryDeleteResult;
 use memories::MemoryId;
 use memories::MemoryMutationDisposition;
 use memories::MemoryMutationResult;
+use memories::MemoryPolicy;
+use memories::MemoryPolicyCommit;
+use memories::MemoryPolicyMutationResult;
+use memories::MemoryReadMode;
 use memories::MemoryScope;
 use memories::MemoryStore;
+use memories::MemoryStoreContextRequest;
 use memories::MemoryStoreError;
 use memories::MemoryStoreListRequest;
 use memories::MemoryStorePage;
@@ -25,7 +30,7 @@ use std::sync::Mutex;
 use zeta_protocol::CommandId;
 
 const MEMORIES_COMPONENT: &str = "memories";
-const MEMORIES_SCHEMA_VERSION: u32 = 1;
+const MEMORIES_SCHEMA_VERSION: u32 = 2;
 
 /// SQLite implementation of Memory records, tombstones, catalog revisions, and command receipts.
 pub struct SqliteMemoryStore {
@@ -60,11 +65,146 @@ impl SqliteMemoryStore {
 }
 
 impl MemoryStore for SqliteMemoryStore {
+    fn policy(&self, scope: &MemoryScope) -> Result<MemoryPolicy, MemoryStoreError> {
+        let connection = self.connection()?;
+        read_policy(&connection, scope)
+    }
+
+    fn update_policy(
+        &self,
+        commit: &MemoryPolicyCommit,
+    ) -> Result<MemoryPolicyMutationResult, MemoryStoreError> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(storage_error)?;
+        let request = &commit.request;
+        if load_command(&transaction, &request.command_id)?.is_some() {
+            return Err(MemoryStoreError::CommandConflict);
+        }
+        let previous: Option<(String, String)> = transaction
+            .query_row(
+                "SELECT fingerprint, result_json FROM memory_policy_commands WHERE command_id = ?1",
+                [request.command_id.as_str()],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(storage_error)?;
+        if let Some((fingerprint, json)) = previous {
+            if fingerprint != commit.fingerprint {
+                return Err(MemoryStoreError::CommandConflict);
+            }
+            let mut result: MemoryPolicyMutationResult =
+                serde_json::from_str(&json).map_err(storage_error)?;
+            result.disposition = MemoryMutationDisposition::Replayed;
+            return Ok(result);
+        }
+        let current = read_policy(&transaction, &request.scope)?;
+        if current.revision != request.expected_revision {
+            return Err(MemoryStoreError::RevisionConflict {
+                expected: request.expected_revision,
+                actual: current.revision,
+            });
+        }
+        let revision = current
+            .revision
+            .checked_add(1)
+            .ok_or_else(|| MemoryStoreError::Storage("Memory policy revision overflow".into()))?;
+        let policy = MemoryPolicy {
+            scope: request.scope.clone(),
+            revision,
+            automatic_read: request.automatic_read,
+        };
+        let result = MemoryPolicyMutationResult {
+            disposition: MemoryMutationDisposition::Committed,
+            catalog_revision: next_catalog_revision(&transaction)?,
+            policy,
+        };
+        transaction
+            .execute(
+                "INSERT INTO memory_policies (scope_key, policy_json) VALUES (?1, ?2)
+             ON CONFLICT(scope_key) DO UPDATE SET policy_json = excluded.policy_json",
+                params![request.scope.storage_key(), serialize(&result.policy)?],
+            )
+            .map_err(storage_error)?;
+        transaction.execute(
+            "INSERT INTO memory_policy_commands (command_id, fingerprint, result_json) VALUES (?1, ?2, ?3)",
+            params![request.command_id.as_str(), commit.fingerprint, serialize(&result)?],
+        ).map_err(storage_error)?;
+        transaction.commit().map_err(storage_error)?;
+        Ok(result)
+    }
+
+    fn context(
+        &self,
+        request: &MemoryStoreContextRequest,
+    ) -> Result<Vec<Memory>, MemoryStoreError> {
+        if request.normalized_terms.is_empty() || request.limit == 0 {
+            return Ok(Vec::new());
+        }
+        let mut connection = self.connection()?;
+        let transaction = connection.transaction().map_err(storage_error)?;
+        let mut enabled = Vec::new();
+        for scope in &request.scopes {
+            if read_policy(&transaction, scope)?.automatic_read == MemoryReadMode::FirstInvocation {
+                enabled.push(scope.storage_key());
+            }
+        }
+        if enabled.is_empty() {
+            return Ok(Vec::new());
+        }
+        let scope_slots = (1..=enabled.len())
+            .map(|index| format!("?{index}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let matches = (0..request.normalized_terms.len())
+            .map(|index| {
+                format!(
+                    "(instr(normalized_search, ?{}) > 0)",
+                    enabled.len() + index + 1
+                )
+            })
+            .collect::<Vec<_>>();
+        let predicates = matches.join(" OR ");
+        let score = matches.join(" + ");
+        let sql = format!(
+            "SELECT memory_id, scope_key, record_revision, record_json FROM memories
+            WHERE scope_key IN ({scope_slots}) AND ({predicates})
+            ORDER BY ({score}) DESC, memory_id LIMIT ?{}",
+            enabled.len() + request.normalized_terms.len() + 1
+        );
+        let mut values = enabled
+            .into_iter()
+            .map(rusqlite::types::Value::Text)
+            .collect::<Vec<_>>();
+        values.extend(
+            request
+                .normalized_terms
+                .iter()
+                .cloned()
+                .map(rusqlite::types::Value::Text),
+        );
+        values.push(rusqlite::types::Value::Integer(
+            i64::try_from(request.limit).map_err(storage_error)?,
+        ));
+        let memories = {
+            let mut statement = transaction.prepare(&sql).map_err(storage_error)?;
+            let rows = statement
+                .query_map(rusqlite::params_from_iter(values), row_tuple)
+                .map_err(storage_error)?;
+            rows.map(|row| decode_row(row.map_err(storage_error)?))
+                .collect::<Result<Vec<_>, _>>()?
+        };
+        transaction.commit().map_err(storage_error)?;
+        Ok(memories)
+    }
+
     fn add(&self, commit: &MemoryAddCommit) -> Result<MemoryMutationResult, MemoryStoreError> {
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(storage_error)?;
+        reject_policy_command(&transaction, &commit.command_id)?;
         if let Some(command) = load_command(&transaction, &commit.command_id)? {
             command.matches(
                 "add",
@@ -121,6 +261,7 @@ impl MemoryStore for SqliteMemoryStore {
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(storage_error)?;
+        reject_policy_command(&transaction, &commit.command_id)?;
         if let Some(command) = load_command(&transaction, &commit.command_id)? {
             command.matches(
                 "delete",
@@ -276,12 +417,24 @@ fn initialize(connection: &mut Connection) -> Result<(), MemoryStoreError> {
                 )
                 .map_err(storage_error)?;
         }
-        Some(MEMORIES_SCHEMA_VERSION) => {}
+        Some(1 | MEMORIES_SCHEMA_VERSION) => {}
         Some(version) => {
             return Err(MemoryStoreError::Storage(format!(
                 "unsupported Memories SQLite schema version {version}"
             )));
         }
+    }
+    if matches!(version, None | Some(1)) {
+        transaction.execute_batch(
+            "CREATE TABLE memory_policies (scope_key TEXT PRIMARY KEY, policy_json TEXT NOT NULL);
+             CREATE TABLE memory_policy_commands (command_id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, result_json TEXT NOT NULL);"
+        ).map_err(storage_error)?;
+        transaction
+            .execute(
+                "UPDATE zeta_schema_migrations SET version = ?1 WHERE component = ?2",
+                params![MEMORIES_SCHEMA_VERSION, MEMORIES_COMPONENT],
+            )
+            .map_err(storage_error)?;
     }
     transaction.commit().map_err(storage_error)
 }
@@ -525,4 +678,45 @@ fn serialize(value: &impl serde::Serialize) -> Result<String, MemoryStoreError> 
 
 fn storage_error(error: impl std::fmt::Display) -> MemoryStoreError {
     MemoryStoreError::Storage(format!("Memory SQLite error: {error}"))
+}
+
+fn read_policy(
+    connection: &Connection,
+    scope: &MemoryScope,
+) -> Result<MemoryPolicy, MemoryStoreError> {
+    let json: Option<String> = connection
+        .query_row(
+            "SELECT policy_json FROM memory_policies WHERE scope_key = ?1",
+            [scope.storage_key()],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(storage_error)?;
+    let Some(json) = json else {
+        return Ok(MemoryPolicy::disabled(scope.clone()));
+    };
+    let policy: MemoryPolicy = serde_json::from_str(&json).map_err(storage_error)?;
+    if &policy.scope != scope || policy.revision == 0 {
+        return Err(MemoryStoreError::Storage(
+            "Memory policy metadata disagrees with its record".into(),
+        ));
+    }
+    Ok(policy)
+}
+
+fn reject_policy_command(
+    connection: &Connection,
+    command_id: &CommandId,
+) -> Result<(), MemoryStoreError> {
+    let exists: bool = connection
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM memory_policy_commands WHERE command_id = ?1)",
+            [command_id.as_str()],
+            |row| row.get(0),
+        )
+        .map_err(storage_error)?;
+    if exists {
+        return Err(MemoryStoreError::CommandConflict);
+    }
+    Ok(())
 }

@@ -117,6 +117,7 @@ mod marketplace_projection;
 pub(crate) mod marketplace_runtime;
 mod marketplace_skill_sources;
 mod mcp_operations;
+mod memories_context;
 mod memories_operations;
 mod memory_operations;
 pub(crate) mod multi_agent_tools;
@@ -650,6 +651,7 @@ impl AppServer {
                 .map_err(|error| error.to_string())?,
         );
         self.projects = Some(Arc::new(zeta_projects::ProjectCoordinator::new(store)));
+        self.install_memory_context();
         Ok(self)
     }
 
@@ -662,6 +664,7 @@ impl AppServer {
                 .map_err(|error| error.to_string())?,
         );
         self.memories = Some(Arc::new(memories::Memories::new(store)));
+        self.install_memory_context();
         Ok(self)
     }
 
@@ -1370,12 +1373,15 @@ impl AppServer {
             policy,
             self.approval_review_model.clone(),
         ));
-        let mut executor =
-            TurnExecutor::new(self.threads.clone(), self.model.clone(), tools, policy)
-                .with_thread_updates(Arc::new(AppServerThreadUpdates {
-                    threads: Arc::clone(&self.threads),
-                    updates: self.updates.clone(),
-                }));
+        let mut executor = self
+            .env_runtime_mut()
+            .turn_executor
+            .clone()
+            .with_tool_service(tools, policy)
+            .with_thread_updates(Arc::new(AppServerThreadUpdates {
+                threads: Arc::clone(&self.threads),
+                updates: self.updates.clone(),
+            }));
         executor = executor.with_extensions(Arc::clone(&self.agent_extensions));
         self.turn_backend.install_executor(executor.clone());
         self.env_runtime_mut().turn_executor = executor;
@@ -1965,6 +1971,15 @@ impl AppServer {
             }
             Some(ClientMethod::MemoryDiagnosticsExport) => {
                 self.memory_diagnostics_export(connection, &request.params)
+            }
+            Some(ClientMethod::MemoryCitationRead) => {
+                self.memory_citation_read(connection, &request.params)
+            }
+            Some(ClientMethod::MemoryPolicyRead) => {
+                self.memory_policy_read(connection, &request.params)
+            }
+            Some(ClientMethod::MemoryPolicyUpdate) => {
+                self.memory_policy_update(connection, &request.params)
             }
             Some(ClientMethod::MemoryAdd) => self.memory_add(connection, &request.params),
             Some(ClientMethod::MemoryList) => self.memory_list(connection, &request.params),

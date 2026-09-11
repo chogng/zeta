@@ -1,6 +1,8 @@
 //! Durable, user-controlled memories without model or product-host dependencies.
 
 mod model;
+mod policy;
+mod read;
 mod service;
 mod store;
 
@@ -29,6 +31,15 @@ pub use store::MemoryStoreError;
 pub use store::MemoryStoreListRequest;
 pub use store::MemoryStorePage;
 pub use store::MemoryStoreSearchRequest;
+
+pub use policy::MemoryPolicy;
+pub use policy::MemoryPolicyMutationResult;
+pub use policy::MemoryReadMode;
+pub use policy::UpdateMemoryPolicyRequest;
+pub use read::MemoryCitation;
+pub use read::MemoryCitationResult;
+pub use store::MemoryPolicyCommit;
+pub use store::MemoryStoreContextRequest;
 
 #[cfg(test)]
 #[path = "memories_tests.rs"]

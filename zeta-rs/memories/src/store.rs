@@ -52,6 +52,15 @@ pub struct MemoryStorePage {
 /// Implementations atomically update the catalog revision with each mutation, reject reuse of a
 /// deleted Memory ID, and retain no title/body in live rows, receipts, or tombstones after delete.
 pub trait MemoryStore: Send + Sync {
+    fn policy(&self, scope: &MemoryScope) -> Result<crate::MemoryPolicy, MemoryStoreError>;
+    fn update_policy(
+        &self,
+        commit: &MemoryPolicyCommit,
+    ) -> Result<crate::MemoryPolicyMutationResult, MemoryStoreError>;
+    /// Reads policy and matching content in one storage snapshot. Disabled scopes must not load
+    /// bodies; deletion and consent changes committed before this snapshot are immediately visible.
+    fn context(&self, request: &MemoryStoreContextRequest)
+    -> Result<Vec<Memory>, MemoryStoreError>;
     fn add(&self, commit: &MemoryAddCommit) -> Result<MemoryMutationResult, MemoryStoreError>;
     fn delete(&self, commit: &MemoryDeleteCommit) -> Result<MemoryDeleteResult, MemoryStoreError>;
     fn read(&self, scope: &MemoryScope, memory_id: &MemoryId) -> Result<Memory, MemoryStoreError>;
@@ -98,3 +107,16 @@ impl fmt::Display for MemoryStoreError {
 }
 
 impl std::error::Error for MemoryStoreError {}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MemoryPolicyCommit {
+    pub request: crate::UpdateMemoryPolicyRequest,
+    pub fingerprint: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MemoryStoreContextRequest {
+    pub scopes: Vec<MemoryScope>,
+    pub normalized_terms: Vec<String>,
+    pub limit: usize,
+}

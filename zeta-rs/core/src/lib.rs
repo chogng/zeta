@@ -75,7 +75,6 @@ pub use services::ModelSelection;
 pub use services::ModelService;
 pub use services::ModelStreamSink;
 pub use services::ModelToolCatalogSnapshot;
-pub use services::NoContextSource;
 pub use services::NoThreadUpdates;
 pub use services::NoTools;
 pub use services::OneTimeToolGrant;

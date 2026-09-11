@@ -62,3 +62,25 @@ pub struct MemoryChanged {
     #[ts(type = "number")]
     pub catalog_revision: u64,
 }
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MemoryCitationReadParams {
+    pub citation: memories::MemoryCitation,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MemoryPolicyReadParams {
+    pub scope: memories::MemoryScope,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MemoryPolicyUpdateParams {
+    pub command_id: CommandId,
+    pub scope: memories::MemoryScope,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub automatic_read: memories::MemoryReadMode,
+}

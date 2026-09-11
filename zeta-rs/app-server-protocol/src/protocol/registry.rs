@@ -496,8 +496,11 @@ use crate::protocol::mcp::McpServerStatusDto;
 use crate::protocol::mcp::McpServerStatusResult;
 use crate::protocol::memory::MemoryAddParams;
 use crate::protocol::memory::MemoryChanged;
+use crate::protocol::memory::MemoryCitationReadParams;
 use crate::protocol::memory::MemoryDeleteParams;
 use crate::protocol::memory::MemoryListParams;
+use crate::protocol::memory::MemoryPolicyReadParams;
+use crate::protocol::memory::MemoryPolicyUpdateParams;
 use crate::protocol::memory::MemoryReadParams;
 use crate::protocol::memory::MemorySearchParams;
 use crate::protocol::memory_diagnostics::MemoryDiagnosticsSessionParams;
@@ -1213,6 +1216,15 @@ client_methods! {
     },
     MemoryDiagnosticsExport => "memoryDiagnostics/export" {
         params: MemoryDiagnosticsSessionParams, response: ResourceMetadataResult, serialization: ConnectionExclusive("memory"),
+    },
+    MemoryCitationRead => "memory/citation/read" {
+        params: MemoryCitationReadParams, response: memories::MemoryCitationResult, serialization: None,
+    },
+    MemoryPolicyRead => "memory/policy/read" {
+        params: MemoryPolicyReadParams, response: memories::MemoryPolicy, serialization: None,
+    },
+    MemoryPolicyUpdate => "memory/policy/update" {
+        params: MemoryPolicyUpdateParams, response: memories::MemoryPolicyMutationResult, serialization: GlobalExclusive,
     },
     MemoryAdd => "memory/add" {
         params: MemoryAddParams, response: memories::MemoryMutationResult, serialization: GlobalExclusive,
@@ -3257,6 +3269,14 @@ typescript_bindings! {
     FeatureSource,
     MemoryDiagnosticsSessionParams,
     MemoryAddParams,
+    MemoryCitationReadParams,
+    MemoryPolicyReadParams,
+    MemoryPolicyUpdateParams,
+    memories::MemoryCitation,
+    memories::MemoryCitationResult,
+    memories::MemoryReadMode,
+    memories::MemoryPolicy,
+    memories::MemoryPolicyMutationResult,
     MemoryListParams,
     MemoryReadParams,
     MemorySearchParams,

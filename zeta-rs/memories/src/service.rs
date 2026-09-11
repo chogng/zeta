@@ -27,7 +27,7 @@ const MAX_TITLE_CHARS: usize = 256;
 const MAX_BODY_BYTES: usize = 16 * 1024;
 const MAX_QUERY_CHARS: usize = 512;
 const MAX_PAGE_SIZE: u32 = 50;
-const MAX_EXCERPT_CHARS: usize = 1_024;
+const MAX_EXCERPT_BYTES: usize = 1_024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AddMemoryRequest {
@@ -68,12 +68,29 @@ pub struct SearchMemoriesRequest {
 }
 
 pub struct Memories {
-    store: Arc<dyn MemoryStore>,
+    pub(crate) store: Arc<dyn MemoryStore>,
 }
 
 impl Memories {
     pub fn new(store: Arc<dyn MemoryStore>) -> Self {
         Self { store }
+    }
+
+    pub fn policy(&self, scope: &MemoryScope) -> Result<crate::MemoryPolicy, MemoryError> {
+        self.store.policy(scope).map_err(MemoryError::from)
+    }
+
+    pub fn update_policy(
+        &self,
+        request: crate::UpdateMemoryPolicyRequest,
+    ) -> Result<crate::MemoryPolicyMutationResult, MemoryError> {
+        let fingerprint = fingerprint(&request)?;
+        self.store
+            .update_policy(&crate::MemoryPolicyCommit {
+                request,
+                fingerprint,
+            })
+            .map_err(MemoryError::from)
     }
 
     pub fn add_user_memory(
@@ -188,13 +205,18 @@ impl Memories {
             matches: page
                 .memories
                 .iter()
-                .map(|memory| MemorySearchMatch {
-                    memory_id: memory.memory_id.clone(),
-                    scope: memory.scope.clone(),
-                    revision: memory.revision,
-                    title: memory.title.clone(),
-                    excerpt: excerpt(&memory.body, query),
-                    updated_at_unix_ms: memory.updated_at_unix_ms,
+                .map(|memory| {
+                    let (citation, excerpt) =
+                        crate::read::excerpt(memory, &[normalize_search(query)], MAX_EXCERPT_BYTES);
+                    MemorySearchMatch {
+                        citation,
+                        memory_id: memory.memory_id.clone(),
+                        scope: memory.scope.clone(),
+                        revision: memory.revision,
+                        title: memory.title.clone(),
+                        excerpt,
+                        updated_at_unix_ms: memory.updated_at_unix_ms,
+                    }
                 })
                 .collect(),
             next_cursor,
@@ -216,6 +238,8 @@ pub enum MemoryError {
     RevisionConflict { expected: u64, actual: u64 },
     #[error("Memory cursor is stale: expected catalog {expected}, actual {actual}")]
     StaleCursor { expected: u64, actual: u64 },
+    #[error("Memory lookup cancelled: {0}")]
+    Cancelled(String),
     #[error("Memory storage failed: {0}")]
     Storage(String),
 }
@@ -319,10 +343,6 @@ fn validate_limit(limit: u32) -> Result<(), MemoryError> {
 
 pub(crate) fn normalize_search(value: &str) -> String {
     value.to_lowercase()
-}
-
-fn excerpt(body: &str, _query: &str) -> String {
-    body.chars().take(MAX_EXCERPT_CHARS).collect()
 }
 
 fn now_unix_ms() -> Result<u64, MemoryError> {

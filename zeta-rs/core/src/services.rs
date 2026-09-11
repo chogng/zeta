@@ -243,22 +243,6 @@ pub trait ContextSource: Send + Sync {
     ) -> Result<Vec<ContextEvidence>, CoreError>;
 }
 
-/// Empty source used when a host has not enabled automatic context enrichment.
-pub struct NoContextSource;
-
-impl ContextSource for NoContextSource {
-    fn collect(
-        &self,
-        _: &ContextSourceRequest<'_>,
-        cancellation: &CancellationToken,
-    ) -> Result<Vec<ContextEvidence>, CoreError> {
-        cancellation
-            .check()
-            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
-        Ok(Vec::new())
-    }
-}
-
 /// Receives transient, typed output from one running Tool Call.
 ///
 /// Implementations publish best-effort output only. The durable Tool Result remains the

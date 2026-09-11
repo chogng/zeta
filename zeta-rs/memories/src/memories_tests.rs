@@ -9,6 +9,19 @@ struct RecordingStore {
 }
 
 impl MemoryStore for RecordingStore {
+    fn policy(&self, scope: &MemoryScope) -> Result<MemoryPolicy, MemoryStoreError> {
+        Ok(MemoryPolicy::disabled(scope.clone()))
+    }
+    fn update_policy(
+        &self,
+        _: &MemoryPolicyCommit,
+    ) -> Result<MemoryPolicyMutationResult, MemoryStoreError> {
+        Err(MemoryStoreError::NotFound)
+    }
+    fn context(&self, _: &MemoryStoreContextRequest) -> Result<Vec<Memory>, MemoryStoreError> {
+        Ok(Vec::new())
+    }
+
     fn add(&self, commit: &MemoryAddCommit) -> Result<MemoryMutationResult, MemoryStoreError> {
         *self.add.lock().unwrap() = Some(commit.clone());
         Ok(MemoryMutationResult {
@@ -95,4 +108,32 @@ fn identifiers_and_page_limits_are_strict() {
             })
             .is_err()
     );
+}
+
+#[test]
+fn citation_round_trip_rejects_malformed_references() {
+    let citation = MemoryCitation {
+        memory_id: MemoryId::new("memory-1").unwrap(),
+        scope: MemoryScope::Profile,
+        revision: 3,
+        start_byte: 2,
+        end_byte: 15,
+    };
+    assert_eq!(
+        MemoryCitation::parse(&citation.reference().unwrap()).unwrap(),
+        citation
+    );
+    for reference in [
+        "file:abc",
+        "memory:***",
+        "memory:",
+        &format!("memory:{}", "x".repeat(4096)),
+    ] {
+        assert!(MemoryCitation::parse(reference).is_err());
+    }
+    let empty = MemoryCitation {
+        end_byte: 2,
+        ..citation
+    };
+    assert!(MemoryCitation::parse(&empty.reference().unwrap()).is_err());
 }

@@ -498,7 +498,7 @@ impl EnvRuntimeControl {
         runtime.turn_executor = runtime
             .turn_executor
             .clone()
-            .with_context_source(context_source);
+            .with_context_source("codebase", context_source);
         Ok(())
     }
 
@@ -1129,17 +1129,16 @@ impl AppServer {
             hook_config,
             tools.reloadable.policy(),
         ));
-        let mut executor = TurnExecutor::new(
-            self.threads.clone(),
-            Arc::clone(&self.model),
-            tools.reloadable.tools(),
-            policy,
-        )
-        .with_hooks(hooks.clone())
-        .with_thread_updates(Arc::new(AppServerThreadUpdates {
-            threads: Arc::clone(&self.threads),
-            updates: Arc::clone(&self.updates),
-        }));
+        let mut executor = self
+            .env_runtime_mut()
+            .turn_executor
+            .clone()
+            .with_tool_service(tools.reloadable.tools(), policy)
+            .with_hooks(hooks.clone())
+            .with_thread_updates(Arc::new(AppServerThreadUpdates {
+                threads: Arc::clone(&self.threads),
+                updates: Arc::clone(&self.updates),
+            }));
         executor = executor.with_extensions(Arc::clone(&self.agent_extensions));
         self.turn_backend.install_executor(executor.clone());
         self.env_runtime
@@ -1315,7 +1314,7 @@ impl AppServer {
                     .turn_executor
                     .clone()
                     .with_instructions(Arc::new(zeta_core::HarnessInstructions::default()))
-                    .with_context_source(Arc::new(zeta_core::NoContextSource)),
+                    .without_context_source("codebase"),
             );
             next.cwd = current.cwd.clone();
             next.dir_grants = Arc::clone(&current.dir_grants);
@@ -1902,7 +1901,7 @@ impl AppServer {
                 .turn_executor
                 .clone()
                 .with_harness_context_provider(customizations)
-                .with_context_source(Arc::new(zeta_core::NoContextSource)),
+                .without_context_source("codebase"),
         };
         let previous = std::mem::replace(&mut *current, next);
         drop(current);
@@ -2096,7 +2095,7 @@ impl AppServer {
                 .turn_executor
                 .clone()
                 .with_harness_context_provider(customizations)
-                .with_context_source(context_source),
+                .with_context_source("codebase", context_source),
         };
         let previous = std::mem::replace(&mut *current, next);
         drop(current);

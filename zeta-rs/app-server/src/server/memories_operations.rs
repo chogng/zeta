@@ -17,6 +17,64 @@ use zeta_app_server_protocol::protocol::memory::MemorySearchParams;
 const DEFAULT_PAGE_LIMIT: u32 = 20;
 
 impl AppServer {
+    pub(super) fn memory_citation_read(
+        &self,
+        connection: &ConnectionState,
+        value: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: zeta_app_server_protocol::protocol::memory::MemoryCitationReadParams =
+            decode(value)?;
+        self.authorize_memory_scope(connection, &params.citation.scope)?;
+        result(
+            &self
+                .memories(connection)?
+                .read_citation(params.citation)
+                .map_err(memory_error)?,
+        )
+    }
+
+    pub(super) fn memory_policy_read(
+        &self,
+        connection: &ConnectionState,
+        value: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: zeta_app_server_protocol::protocol::memory::MemoryPolicyReadParams =
+            decode(value)?;
+        self.authorize_memory_scope(connection, &params.scope)?;
+        result(
+            &self
+                .memories(connection)?
+                .policy(&params.scope)
+                .map_err(memory_error)?,
+        )
+    }
+
+    pub(super) fn memory_policy_update(
+        &self,
+        connection: &ConnectionState,
+        value: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: zeta_app_server_protocol::protocol::memory::MemoryPolicyUpdateParams =
+            decode(value)?;
+        self.authorize_memory_scope(connection, &params.scope)?;
+        let mutation = self
+            .memories(connection)?
+            .update_policy(memories::UpdateMemoryPolicyRequest {
+                command_id: params.command_id,
+                scope: params.scope,
+                expected_revision: params.expected_revision,
+                automatic_read: params.automatic_read,
+            })
+            .map_err(memory_error)?;
+        if mutation.disposition == MemoryMutationDisposition::Committed {
+            self.updates.publish_memory_changed(MemoryChanged {
+                scope: mutation.policy.scope.clone(),
+                catalog_revision: mutation.catalog_revision,
+            });
+        }
+        result(&mutation)
+    }
+
     pub(super) fn memory_add(
         &self,
         connection: &ConnectionState,
@@ -169,6 +227,8 @@ fn memory_error(error: MemoryError) -> RpcError {
         MemoryError::StaleCursor { .. } => {
             RpcError::new(-32134, AppServerErrorName::MemoryCursorStale)
         }
-        MemoryError::Storage(_) => RpcError::new(-32135, AppServerErrorName::MemoryOperationFailed),
+        MemoryError::Cancelled(_) | MemoryError::Storage(_) => {
+            RpcError::new(-32135, AppServerErrorName::MemoryOperationFailed)
+        }
     }
 }

@@ -90,7 +90,7 @@ pub struct TurnExecutor {
     compaction: Arc<dyn ContextCompactionService>,
     updates: Arc<dyn ThreadUpdateSink>,
     harness_context: Arc<dyn HarnessContextProvider>,
-    context_source: Arc<dyn crate::ContextSource>,
+    context_sources: std::collections::BTreeMap<&'static str, Arc<dyn crate::ContextSource>>,
     hooks: Arc<dyn HookService>,
     execution_observer: Arc<dyn TurnExecutionObserver>,
     extensions: Arc<zeta_extension_api::ExtensionRegistry>,
@@ -235,7 +235,7 @@ impl TurnExecutor {
             harness_context: Arc::new(FixedHarnessContext {
                 snapshot: Arc::new(HarnessContext::default()),
             }),
-            context_source: Arc::new(crate::NoContextSource),
+            context_sources: std::collections::BTreeMap::new(),
             hooks: Arc::new(NoHooks),
             execution_observer: Arc::new(crate::NoTurnExecutionObserver),
             extensions: Arc::new(zeta_extension_api::ExtensionRegistry::default()),
@@ -275,9 +275,31 @@ impl TurnExecutor {
         self
     }
 
-    /// Installs an optional low-trust evidence source evaluated at the first model invocation.
-    pub fn with_context_source(mut self, context_source: Arc<dyn crate::ContextSource>) -> Self {
-        self.context_source = context_source;
+    /// Rebinds execution capabilities while preserving installed context and lifecycle services.
+    pub fn with_tool_service(
+        mut self,
+        tools: Arc<dyn ToolService>,
+        policy: Arc<dyn ActionPolicyService>,
+    ) -> Self {
+        self.tools = tools;
+        self.policy = policy;
+        self
+    }
+
+    /// Installs one named evidence source without replacing other domains. Rebinding the same
+    /// name replaces only that source; names define deterministic collection order.
+    pub fn with_context_source(
+        mut self,
+        name: &'static str,
+        source: Arc<dyn crate::ContextSource>,
+    ) -> Self {
+        self.context_sources.insert(name, source);
+        self
+    }
+
+    /// Removes the named domain when its host authority or runtime is retired.
+    pub fn without_context_source(mut self, name: &'static str) -> Self {
+        self.context_sources.remove(name);
         self
     }
 
@@ -697,7 +719,6 @@ impl TurnExecutor {
             }
         }
         let mut measurement_policy = ContextMeasurementPolicy::default();
-        let mut first_invocation_evidence = None;
         'model_steps: loop {
             check_cancellation(cancellation)?;
             let snapshot = self
@@ -765,34 +786,28 @@ impl TurnExecutor {
                     turn_id,
                 })
                 .map_err(ExecutionFailure::model)?;
-            let evidence = if is_first_model_invocation(&snapshot, turn_id) {
-                if first_invocation_evidence.is_none() {
-                    let query = current_turn_query(&snapshot, turn_id);
-                    first_invocation_evidence = Some(match query {
-                        Some(query) => match self.context_source.collect(
-                            &crate::ContextSourceRequest {
-                                session_id: &snapshot.session_id,
-                                thread_id,
-                                turn_id,
-                                query: &query,
-                            },
-                            cancellation,
-                        ) {
-                            Ok(evidence) => evidence,
-                            Err(CoreError::Cancelled(message)) => {
-                                return Err(ExecutionFailure::Cancelled(CoreError::Cancelled(
-                                    message,
-                                )));
-                            }
-                            Err(_) => Vec::new(),
-                        },
-                        None => Vec::new(),
-                    });
+            let mut evidence = Vec::new();
+            if is_first_model_invocation(&snapshot, turn_id)
+                && let Some(query) = current_turn_query(&snapshot, turn_id)
+            {
+                let request = crate::ContextSourceRequest {
+                    session_id: &snapshot.session_id,
+                    thread_id,
+                    turn_id,
+                    query: &query,
+                };
+                // Recollect at each preparation attempt so compaction or token measurement cannot
+                // retain evidence after its source was deleted or its read permission revoked.
+                for source in self.context_sources.values() {
+                    check_cancellation(cancellation)?;
+                    evidence.extend(source.collect(&request, cancellation).map_err(|error| {
+                        match error {
+                            CoreError::Cancelled(_) => ExecutionFailure::Cancelled(error),
+                            error => ExecutionFailure::model(error),
+                        }
+                    })?);
                 }
-                first_invocation_evidence.clone().unwrap_or_default()
-            } else {
-                Vec::new()
-            };
+            }
             let extension_fragments = self
                 .extensions
                 .contribute_turn_input(zeta_extension_api::TurnInputContext::for_session(

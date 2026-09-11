@@ -556,8 +556,12 @@ zeta-rs/
 选择和组装算法；`context_manager` 保存 per-loaded-Thread 协调逻辑。Core 两个模块默认 private。
 `ContextSource` 是 Core 的通用可选 evidence port：host 可在 Turn 第一次 model invocation 前返回带
 provenance 的 bounded evidence。Core 对已知窗口最多分配 input budget 的 1/8，并把内容作为 user-level
-`trust="untrusted-data"` 数据插在当前用户输入之前，不能提升为 system/directory instructions。普通来源
-失败降级为空；Turn cancellation 继续传播。Codebase 自动召回默认关闭，由产品设置显式开启。
+`trust="untrusted-data"` 数据插在当前用户输入之前，不能提升为 system/directory instructions。
+`TurnExecutor` 按来源名称保存多个独立 port；替换或移除 Codebase 不影响 Memory。来源名称决定稳定顺序，
+各条 evidence 保留独立来源、引用和 revision。来源失败会结束本次 Turn，取消继续传播，不能使用已经收集的
+部分内容继续调用模型。压缩或 token 计量导致准备重试时重新读取，避免保留已删除或撤销授权的材料。
+Codebase 自动召回由产品设置显式开启；Memory 自动读取由 [Memory API](zeta-app-server-api.md#memory)
+按作用域独立授权，默认关闭。
 只有确有外部消费者时才从 `lib.rs` 导出窄 value/port，不能公开 cache、baseline、window mutable
 state 或 ContextManager 自身。
 

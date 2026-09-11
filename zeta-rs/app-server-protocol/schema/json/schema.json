@@ -3049,6 +3049,54 @@
         {
           "properties": {
             "method": {
+              "const": "memory/citation/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/MemoryCitationReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/policy/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/MemoryPolicyReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/policy/update",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/MemoryPolicyUpdateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "memory/add",
               "type": "string"
             },
@@ -7042,6 +7090,54 @@
             },
             "result": {
               "$ref": "#/$defs/ResourceMetadataResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/citation/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/MemoryCitationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/policy/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/MemoryPolicy"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/policy/update",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/MemoryPolicyMutationResult"
             }
           },
           "required": [
@@ -22417,6 +22513,76 @@
       ],
       "type": "object"
     },
+    "MemoryCitation": {
+      "additionalProperties": false,
+      "description": "An exact UTF-8 byte range in one immutable Memory revision; it grants no read authority.",
+      "properties": {
+        "endByte": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "memoryId": {
+          "$ref": "#/$defs/MemoryId"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scope": {
+          "$ref": "#/$defs/MemoryScope"
+        },
+        "startByte": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "memoryId",
+        "scope",
+        "revision",
+        "startByte",
+        "endByte"
+      ],
+      "type": "object"
+    },
+    "MemoryCitationReadParams": {
+      "additionalProperties": false,
+      "properties": {
+        "citation": {
+          "$ref": "#/$defs/MemoryCitation"
+        }
+      },
+      "required": [
+        "citation"
+      ],
+      "type": "object"
+    },
+    "MemoryCitationResult": {
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "citation": {
+          "$ref": "#/$defs/MemoryCitation"
+        },
+        "source": {
+          "$ref": "#/$defs/MemorySource"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "citation",
+        "title",
+        "source",
+        "body"
+      ],
+      "type": "object"
+    },
     "MemoryDeleteParams": {
       "additionalProperties": false,
       "properties": {
@@ -22712,12 +22878,101 @@
       ],
       "type": "string"
     },
+    "MemoryPolicy": {
+      "additionalProperties": false,
+      "description": "Scope-specific consent for automatic reading. Explicit management does not grant this consent.",
+      "properties": {
+        "automaticRead": {
+          "$ref": "#/$defs/MemoryReadMode"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scope": {
+          "$ref": "#/$defs/MemoryScope"
+        }
+      },
+      "required": [
+        "scope",
+        "revision",
+        "automaticRead"
+      ],
+      "type": "object"
+    },
+    "MemoryPolicyMutationResult": {
+      "properties": {
+        "catalogRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "disposition": {
+          "$ref": "#/$defs/MemoryMutationDisposition"
+        },
+        "policy": {
+          "$ref": "#/$defs/MemoryPolicy"
+        }
+      },
+      "required": [
+        "disposition",
+        "catalogRevision",
+        "policy"
+      ],
+      "type": "object"
+    },
+    "MemoryPolicyReadParams": {
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/MemoryScope"
+        }
+      },
+      "required": [
+        "scope"
+      ],
+      "type": "object"
+    },
+    "MemoryPolicyUpdateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "automaticRead": {
+          "$ref": "#/$defs/MemoryReadMode"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scope": {
+          "$ref": "#/$defs/MemoryScope"
+        }
+      },
+      "required": [
+        "commandId",
+        "scope",
+        "expectedRevision",
+        "automaticRead"
+      ],
+      "type": "object"
+    },
     "MemoryProduct": {
       "enum": [
         "tui",
         "rustGui",
         "electron",
         "browser"
+      ],
+      "type": "string"
+    },
+    "MemoryReadMode": {
+      "enum": [
+        "disabled",
+        "firstInvocation"
       ],
       "type": "string"
     },
@@ -22884,6 +23139,9 @@
     },
     "MemorySearchMatch": {
       "properties": {
+        "citation": {
+          "$ref": "#/$defs/MemoryCitation"
+        },
         "excerpt": {
           "type": "string"
         },
@@ -22908,6 +23166,7 @@
         }
       },
       "required": [
+        "citation",
         "memoryId",
         "scope",
         "revision",

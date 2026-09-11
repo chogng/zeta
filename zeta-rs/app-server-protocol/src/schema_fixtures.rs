@@ -112,6 +112,9 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("memory/read"));
     assert!(methods.contains("memory/search"));
     assert!(methods.contains("memory/delete"));
+    assert!(methods.contains("memory/citation/read"));
+    assert!(methods.contains("memory/policy/read"));
+    assert!(methods.contains("memory/policy/update"));
     assert!(methods.contains("memoryDiagnostics/start"));
     assert!(!methods.contains("memory/start"));
     assert!(notifications.contains("session/changed"));

@@ -102,6 +102,18 @@ impl DirGrants {
         threads.remove(thread_id);
     }
 
+    /// Identifies the current Thread directory without granting filesystem access. Domain-specific
+    /// consumers such as Memories must separately authorize their own scoped content.
+    pub(crate) fn thread_dir_id(&self, thread_id: &ThreadId) -> Option<zeta_file_access::DirId> {
+        self.threads
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(thread_id)
+            .and_then(|dirs| dirs.default.as_ref())
+            .filter(|grant| grant.is_active())
+            .map(|grant| grant.dir().id())
+    }
+
     pub(crate) fn thread_scope(
         &self,
         thread_id: &ThreadId,
