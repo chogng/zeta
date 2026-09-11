@@ -51,6 +51,7 @@ pub(crate) fn post_json(
     client: &dyn OperationClient,
     target: &ResolvedApiTarget,
     endpoint: ApiEndpoint,
+    request: &ModelRequest,
     body: Value,
     cancellation: &CancellationToken,
 ) -> Result<Value, ApiError> {
@@ -58,7 +59,7 @@ pub(crate) fn post_json(
         client,
         target,
         endpoint.relative_path(),
-        endpoint.headers(target),
+        endpoint.headers(target, request)?,
         body,
         cancellation,
     )
@@ -77,7 +78,7 @@ pub(crate) fn post_json_to_path(
     let request = ClientRequest::new(
         zeta_http_client::HttpMethod::Post,
         target.endpoint(relative_path)?,
-        headers,
+        crate::headers::build(headers, crate::headers::ResponseFormat::Json)?,
         body,
         target.retry_policy,
     )?;
@@ -230,10 +231,7 @@ fn is_invalid_request(detail: &str) -> bool {
     detail.contains("invalid_request_error") || detail.contains("invalid_argument")
 }
 
-pub(crate) mod anthropic_messages;
 pub(crate) mod google_count_tokens;
 pub(crate) mod kimi_estimate_tokens;
-pub(crate) mod openai_chat_completions;
-pub(crate) mod openai_responses;
-mod openai_tools;
+pub(crate) mod openai_tools;
 pub(crate) mod zai_tokenizer;

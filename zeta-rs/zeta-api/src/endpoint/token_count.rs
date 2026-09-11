@@ -2,6 +2,7 @@ use crate::ApiEndpoint;
 use crate::ApiError;
 use crate::InputTokenCount;
 use crate::ModelRequest;
+use crate::endpoint;
 use crate::endpoint::validate_request;
 use crate::requests;
 use zeta_async_utils::CancellationSource;
@@ -57,7 +58,7 @@ impl InputTokenCountEndpoint {
     ) -> Result<InputTokenCount, ApiError> {
         validate_request(model, request)?;
         match self {
-            Self::OpenAiResponses => requests::openai_responses::count_input_tokens(
+            Self::OpenAiResponses => endpoint::responses::count_input_tokens(
                 ApiEndpoint::OpenAiResponses,
                 target,
                 model,
@@ -65,7 +66,7 @@ impl InputTokenCountEndpoint {
                 client,
                 cancellation,
             ),
-            Self::AnthropicMessages => requests::anthropic_messages::count_input_tokens(
+            Self::AnthropicMessages => endpoint::anthropic::count_input_tokens(
                 ApiEndpoint::AnthropicMessages,
                 target,
                 model,

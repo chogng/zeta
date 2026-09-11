@@ -1,23 +1,23 @@
-//! Endpoint-family dispatch for normalized model requests.
-//!
-//! This module deliberately names wire-protocol endpoint families, not model
-//! vendors. Provider selection, credentials, base URLs, and vendor-specific
-//! headers belong to `zeta-model-provider`; this crate only selects a codec
-//! after the runtime has resolved those concerns.
+//! Endpoint dispatch; each endpoint module owns its path, protocol headers, and fields.
+
+pub(crate) mod anthropic;
+pub(crate) mod chat_completions;
+pub(crate) mod realtime;
+pub(crate) mod responses;
+pub(crate) mod responses_websocket;
+pub(crate) mod semantic;
+pub(crate) mod token_count;
 
 use crate::ApiError;
 use crate::InputTokenCount;
 use crate::ModelRequest;
 use crate::ModelResponse;
 use crate::ModelStreamEvent;
-use crate::requests;
 use zeta_async_utils::CancellationSource;
 use zeta_async_utils::CancellationToken;
 use zeta_client::OperationClient;
 use zeta_client::ResolvedApiTarget;
 use zeta_http_client::HttpHeader;
-
-const ANTHROPIC_MESSAGES_API_VERSION: &str = "2023-06-01";
 
 /// The normalized protocol spoken by an API endpoint family.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -39,10 +39,14 @@ pub enum ApiProtocol {
 pub enum ApiEndpoint {
     /// An endpoint implementing the OpenAI Responses API.
     OpenAiResponses,
+    /// ChatGPT subscription Responses, with Session routing and automatic caching.
+    ChatGptResponses,
     /// An endpoint implementing the OpenAI Chat Completions-compatible API.
     OpenAiChatCompletions,
     /// DeepSeek's Chat Completions endpoint and usage schema.
     DeepSeekChatCompletions,
+    /// xAI Chat Completions with conversation cache routing.
+    XaiChatCompletions,
     /// An endpoint implementing Anthropic's Messages API.
     AnthropicMessages,
     /// Messages appended to a caller-supplied API base, including any version path.
@@ -61,9 +65,11 @@ impl ApiEndpoint {
     /// Returns the wire protocol implemented by this endpoint family.
     pub fn protocol(self) -> ApiProtocol {
         match self {
-            Self::OpenAiResponses => ApiProtocol::OpenAiResponses,
+            Self::OpenAiResponses | Self::ChatGptResponses => ApiProtocol::OpenAiResponses,
             Self::OpenAiChatCompletions => ApiProtocol::OpenAiCompletions,
-            Self::DeepSeekChatCompletions => ApiProtocol::OpenAiCompletions,
+            Self::DeepSeekChatCompletions | Self::XaiChatCompletions => {
+                ApiProtocol::OpenAiCompletions
+            }
             Self::AnthropicMessages | Self::AnthropicMessagesAtBase => {
                 ApiProtocol::AnthropicMessages
             }
@@ -71,30 +77,30 @@ impl ApiEndpoint {
     }
 
     pub(crate) fn relative_path(self) -> &'static str {
-        match self {
-            Self::OpenAiResponses => "responses",
-            Self::OpenAiChatCompletions => "chat/completions",
-            Self::DeepSeekChatCompletions => "chat/completions",
-            Self::AnthropicMessages => "v1/messages",
-            Self::AnthropicMessagesAtBase => "messages",
+        match self.protocol() {
+            ApiProtocol::OpenAiResponses => responses::path(),
+            ApiProtocol::OpenAiCompletions => chat_completions::path(),
+            ApiProtocol::AnthropicMessages => anthropic::path(self),
         }
     }
 
-    pub(crate) fn headers(self, target: &ResolvedApiTarget) -> Vec<HttpHeader> {
-        let mut headers = target.headers.clone();
-        if matches!(
-            self,
-            Self::AnthropicMessages | Self::AnthropicMessagesAtBase
-        ) && !headers
-            .iter()
-            .any(|header| header.name().eq_ignore_ascii_case("anthropic-version"))
-        {
-            headers.push(HttpHeader::new(
-                "anthropic-version",
-                ANTHROPIC_MESSAGES_API_VERSION,
-            ));
+    pub(crate) fn headers(
+        self,
+        target: &ResolvedApiTarget,
+        request: &ModelRequest,
+    ) -> Result<Vec<HttpHeader>, ApiError> {
+        let mut headers = Vec::new();
+        for header in &target.headers {
+            crate::headers::insert(&mut headers, header.name(), header.value())?;
         }
-        headers
+        match self.protocol() {
+            ApiProtocol::OpenAiResponses => responses::headers(self, request, &mut headers)?,
+            ApiProtocol::OpenAiCompletions => {
+                chat_completions::headers(self, request, &mut headers)?
+            }
+            ApiProtocol::AnthropicMessages => anthropic::headers(&mut headers)?,
+        }
+        Ok(headers)
     }
 
     /// Completes a normalized request through a supplied operation client.
@@ -128,33 +134,16 @@ impl ApiEndpoint {
     ) -> Result<ModelResponse, ApiError> {
         validate_request(model, request)?;
         match self {
-            Self::OpenAiResponses => requests::openai_responses::complete(
-                self,
-                target,
-                model,
-                request,
-                client,
-                cancellation,
-            ),
-            Self::OpenAiChatCompletions | Self::DeepSeekChatCompletions => {
-                requests::openai_chat_completions::complete(
-                    self,
-                    target,
-                    model,
-                    request,
-                    client,
-                    cancellation,
-                )
+            Self::OpenAiResponses | Self::ChatGptResponses => {
+                responses::complete(self, target, model, request, client, cancellation)
+            }
+            Self::OpenAiChatCompletions
+            | Self::DeepSeekChatCompletions
+            | Self::XaiChatCompletions => {
+                chat_completions::complete(self, target, model, request, client, cancellation)
             }
             Self::AnthropicMessages | Self::AnthropicMessagesAtBase => {
-                requests::anthropic_messages::complete(
-                    self,
-                    target,
-                    model,
-                    request,
-                    client,
-                    cancellation,
-                )
+                anthropic::complete(self, target, model, request, client, cancellation)
             }
         }
     }
@@ -175,36 +164,16 @@ impl ApiEndpoint {
     ) -> Result<ModelResponse, ApiError> {
         validate_request(model, request)?;
         match self {
-            Self::OpenAiResponses => requests::openai_responses::stream(
-                self,
-                target,
-                model,
-                request,
-                client,
-                cancellation,
-                sink,
-            ),
-            Self::OpenAiChatCompletions | Self::DeepSeekChatCompletions => {
-                requests::openai_chat_completions::stream(
-                    self,
-                    target,
-                    model,
-                    request,
-                    client,
-                    cancellation,
-                    sink,
-                )
+            Self::OpenAiResponses | Self::ChatGptResponses => {
+                responses::stream(self, target, model, request, client, cancellation, sink)
+            }
+            Self::OpenAiChatCompletions
+            | Self::DeepSeekChatCompletions
+            | Self::XaiChatCompletions => {
+                chat_completions::stream(self, target, model, request, client, cancellation, sink)
             }
             Self::AnthropicMessages | Self::AnthropicMessagesAtBase => {
-                requests::anthropic_messages::stream(
-                    self,
-                    target,
-                    model,
-                    request,
-                    client,
-                    cancellation,
-                    sink,
-                )
+                anthropic::stream(self, target, model, request, client, cancellation, sink)
             }
         }
     }
@@ -238,40 +207,36 @@ impl ApiEndpoint {
     ) -> Result<InputTokenCount, ApiError> {
         validate_request(model, request)?;
         match self {
-            Self::OpenAiResponses => requests::openai_responses::count_input_tokens(
-                self,
-                target,
-                model,
-                request,
-                client,
-                cancellation,
-            ),
+            Self::ChatGptResponses => Err(ApiError::InvalidRequest(
+                "ChatGPT subscription Responses does not expose input-token preflight".into(),
+            )),
+            Self::OpenAiResponses => {
+                responses::count_input_tokens(self, target, model, request, client, cancellation)
+            }
             Self::AnthropicMessages | Self::AnthropicMessagesAtBase => {
-                requests::anthropic_messages::count_input_tokens(
-                    self,
-                    target,
-                    model,
-                    request,
-                    client,
-                    cancellation,
-                )
+                anthropic::count_input_tokens(self, target, model, request, client, cancellation)
             }
-            Self::OpenAiChatCompletions | Self::DeepSeekChatCompletions => {
-                Err(ApiError::InvalidRequest(
-                    "OpenAI Chat Completions does not expose a standard input-token count endpoint"
-                        .into(),
-                ))
-            }
+            Self::OpenAiChatCompletions
+            | Self::DeepSeekChatCompletions
+            | Self::XaiChatCompletions => Err(ApiError::InvalidRequest(
+                "OpenAI Chat Completions does not expose a standard input-token count endpoint"
+                    .into(),
+            )),
         }
     }
 }
 
 pub(crate) fn validate_request(model: &str, request: &ModelRequest) -> Result<(), ApiError> {
-    if model.trim().is_empty() {
-        return Err(ApiError::InvalidRequest("model must not be empty".into()));
-    }
+    validate_options(model, request)?;
     if request.input.is_empty() {
         return Err(ApiError::InvalidRequest("input must not be empty".into()));
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_options(model: &str, request: &ModelRequest) -> Result<(), ApiError> {
+    if model.trim().is_empty() {
+        return Err(ApiError::InvalidRequest("model must not be empty".into()));
     }
     if request.max_output_tokens == Some(0) {
         return Err(ApiError::InvalidRequest(

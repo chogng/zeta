@@ -9,19 +9,19 @@ use zeta_protocol::ModelStreamEvent;
 /// This decoder owns event-schema validation and terminal lifecycle checks. It
 /// intentionally does not own connection state, SSE framing, retry, or stream
 /// resumption; those remain client/runtime concerns.
-pub struct OpenAiResponsesSseDecoder {
+pub struct ResponsesEventDecoder {
     terminal: bool,
     response: Option<Value>,
     output: BTreeMap<u64, Value>,
 }
 
-impl Default for OpenAiResponsesSseDecoder {
+impl Default for ResponsesEventDecoder {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl OpenAiResponsesSseDecoder {
+impl ResponsesEventDecoder {
     pub fn new() -> Self {
         Self {
             terminal: false,
@@ -108,6 +108,31 @@ impl OpenAiResponsesSseDecoder {
                 ApiError::InvalidResponse("OpenAI response stream event is missing its type".into())
             })?;
 
+        self.apply(&payload, event_type)
+    }
+
+    /// Decodes one JSON event shared by Responses HTTP and WebSocket transports.
+    pub fn decode_json(&mut self, payload: &Value) -> Result<Vec<ModelStreamEvent>, ApiError> {
+        if self.terminal {
+            return Err(ApiError::InvalidResponse(
+                "Responses event followed a terminal event".into(),
+            ));
+        }
+        let event_type = payload.get("type").and_then(Value::as_str).ok_or_else(|| {
+            ApiError::InvalidResponse("Responses event is missing its type".into())
+        })?;
+        self.apply(payload, event_type)
+    }
+
+    pub(crate) fn is_terminal(&self) -> bool {
+        self.terminal
+    }
+
+    fn apply(
+        &mut self,
+        payload: &Value,
+        event_type: &str,
+    ) -> Result<Vec<ModelStreamEvent>, ApiError> {
         match event_type {
             "response.output_item.done" => {
                 let index = payload
@@ -144,8 +169,8 @@ impl OpenAiResponsesSseDecoder {
                 self.response = payload.get("response").cloned();
                 Ok(Vec::new())
             }
-            "response.failed" | "response.incomplete" => {
-                Err(crate::requests::stream_error(&event.data))
+            "response.failed" | "response.incomplete" | "error" => {
+                Err(crate::requests::stream_error(&payload.to_string()))
             }
             _ => Ok(Vec::new()),
         }
@@ -159,3 +184,7 @@ fn required_delta<'a>(payload: &'a Value, event_type: &str) -> Result<&'a str, A
         ))
     })
 }
+
+#[cfg(test)]
+#[path = "events_tests.rs"]
+mod tests;

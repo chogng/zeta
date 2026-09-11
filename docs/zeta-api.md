@@ -5,7 +5,7 @@
 > - 层次：模型 API 协议层
 > - 当前状态：OpenAI Responses、OpenAI-compatible Chat Completions 与 Anthropic Messages 已具备
 >   unary codec、原生 HTTP/SSE invocation、canonical delta 与 terminal response assembly；独立
->   WebSocket transport 已存在，Responses WebSocket codec 尚未实现
+>   Responses WebSocket 与公共 Realtime GA 已有协议会话和显式 runtime 入口
 > - Crate codec 与 decoder 实现：[`zeta-rs/zeta-api/README.md`](../zeta-rs/zeta-api/README.md)
 > - Canonical contract：[`protocol.md`](protocol.md#6-provider-independent-model-contract)
 > - Provider runtime：[`model-provider.md`](model-provider.md)
@@ -17,7 +17,7 @@
 > - Model catalog control plane：[`models-manager.md`](models-manager.md)
 > - Subscription runtime adapter：[`chatgpt-subscription.md`](chatgpt-subscription.md)
 
-> Provider 官方资料核对日期：2026-09-04。请求字段、事件类型、缓存语义和错误结构会持续变化；
+> Provider 官方资料核对日期：2026-09-10。请求字段、事件类型、缓存语义和错误结构会持续变化；
 > 实现必须以官方文档和脱敏 contract fixture 为准，不能仅凭 OpenAI-compatible 标签推断。
 
 ## 快速理解
@@ -121,21 +121,20 @@ zeta-client      zeta-protocol
 - OpenAI-compatible Chat Completions 原生 HTTP/SSE decoder（indexed Tool Call 重组、usage-only chunk、`[DONE]`）；
 - 基础 text/tool/reasoning/usage/stop reason 映射；
 - API endpoint fixtures；
-- 对当前 `zeta-client::HttpClient` unary byte port 的临时依赖；raw port 后续迁入
-  `zeta-http-client`。
+- Responses WebSocket 顺序会话与 Realtime GA 文本／音频会话；
+- HTTP 通过 `zeta-client::OperationClient` 调用，WebSocket 通过 `zeta-websocket-client` 建连。
 
 需要修正：
 
 | 当前设计 | 目标 |
 | --- | --- |
-| legacy provider-named codec source files | 已删除；三份 unary codec 已物理移动到 `requests/` |
+| 分散的生成端点路径、头和请求实现 | 三套生成 codec 已合并归属到 `endpoint/` 对应模块 |
 | `JsonHttpTransport` / `UreqJsonHttpTransport` | 已替换为 `ClientRequest`/`ClientResponse` 与 `HttpClient` |
 | `ResolvedApiTarget` 同时承担 runtime 和协议职责 | 仍需将其演进为 typed client request；API 只追加协议 path/header |
 | transport 直接返回 `serde_json::Value` | client 已返回 status/headers/body bytes，API 负责 JSON |
 | provider facade 与 wire codec 两套目录 | Provider facade 已只留在 model-provider；API dispatch 只按 endpoint/profile |
 
-三种已支持 endpoint 的 streaming 与 unary 都是当前实现。WebSocket transport 已独立实现，但本
-crate 尚无 Responses WebSocket codec；NDJSON codec 和更多 provider-specific stream profile 也未完成，
+HTTP 调用、Responses WebSocket 与公共 Realtime GA 会话已有实现；NDJSON codec 和更多服务协议仍未完成，
 不能把 transport 可用描述成模型协议已接通。
 
 ## 4. `endpoint / requests / sse`
@@ -162,9 +161,9 @@ query schema
 protocol-required headers
 request media type
 expected response media type
-request codec identity
-unary response codec identity
-stream codec identity
+request encode/response decode
+protocol-specific field validation
+stream event codec
 operation retry evidence
 ```
 
@@ -174,7 +173,6 @@ Endpoint 不拥有：
 - credential headers；
 - proxy、redirect 或 connection pool；
 - retry attempt loop；
-- JSON DTO implementation；
 - SSE byte framing。
 
 Endpoint path 必须相对。它不能替换 resolved target 的 scheme/host，也不能通过字符串修剪猜测另一
@@ -182,15 +180,9 @@ API 的地址。
 
 ### 4.2 `requests/`
 
-`requests/` 负责 JSON/body 层：
+生成端点的请求与响应实现已经和端点放在一起：`endpoint/responses.rs`、`chat_completions.rs` 与 `anthropic.rs`。字段能力、缓存映射和用量解释都由对应端点维护。
 
-- canonical `ModelRequest` → wire request；
-- typed invocation option → wire field/header intent；
-- unary body → canonical `ModelResponse`；
-- HTTP error body → typed API error evidence；
-- usage、tool、content、reasoning 和 stop reason；
-- prompt/context cache 参数和 usage；
-- catalog request/response/pagination DTO。
+`requests.rs` 保留共同的 JSON HTTP 调用、错误分类和附件校验；`requests/` 保留工具 schema 校验及 Google／Kimi／Z.AI 的独立计数 codec。没有独立职责的请求文件无需从端点再拆一份。
 
 每个 request codec 必须对 canonical intent 做三选一：
 
@@ -202,8 +194,7 @@ API 的地址。
 
 ### 4.3 `sse/`
 
-`sse/` 不处理 TCP chunk、换行或 `data:` 拼接。它消费 `zeta-client` 已完成 framing 的
-`SseFrame`：
+`sse/` 保留 Anthropic 与 Chat Completions 的 SSE 事件实现。Responses 事件已归入 `endpoint/responses/events.rs`，供 SSE 和 WebSocket 共用。事件解码不处理 TCP chunk、换行或 `data:` 拼接；SSE 入口消费 `zeta-client` 已完成分帧的 `SseFrame`：
 
 ```rust
 /// Decodes already-framed SSE values for one concrete API profile.
@@ -244,22 +235,84 @@ pub trait SseDecoder {
 
 ### 4.4 非 SSE 流
 
-Ollama native API 使用 NDJSON，不能塞进名为 `sse/` 的模块。主架构仍以用户确定的三条同级主轴
-为中心，但遇到已验证的非 SSE 协议时增加同级模块：
+协议会话跟随端点归属：Responses WebSocket 在 `endpoint/responses_websocket.rs`，Realtime GA 在 `endpoint/realtime.rs`。`websocket.rs` 只处理有界 JSON 消息收发和取消／超时，真实握手与帧传输由独立的 `websocket-client` crate 提供。
 
-```text
-endpoint/    requests/    sse/    websocket/    ndjson/
-```
-
-`ndjson/` 只解释由 `zeta-client::NdjsonRecord` 完成 framing 的 API object。WebSocket transport 已在
-独立 crate 中存在；本 crate 只有在验证真实 client/server event contract 后才增加同级
-`websocket/` codec。gRPC 等其他协议也不能伪装成 SSE。
+Ollama 的 NDJSON 不能交给 SSE decoder。后续实现应消费 `zeta-client::NdjsonRecord`，把事件解释放在对应端点；无需为目录齐全预建另一套分派。
 
 ### 4.5 OpenAI Platform 与 ChatGPT 订阅服务端点清单
 
-OpenAI Platform 与 ChatGPT subscription 使用不同 base URL、credential、entitlement 和 operation allow-list，但当前模型调用共享 Responses request/SSE codec。`zeta-api` 只编解码 typed Responses contract；`zeta-model-provider` 选择 service target，`zeta-chatgpt` 持有 subscription OAuth 与 account routing headers。
+OpenAI Platform 与 ChatGPT subscription 分别选择 `OpenAiResponses` 和 `ChatGptResponses`，共用消息／SSE codec。API 层按端点组装路由头和支持的缓存字段；runtime 只选择通道，`zeta-chatgpt` 持有 OAuth 与账户凭据。订阅端点不发送显式缓存断点、不提供 token preflight，并保留模型支持的结构化工具结果。
 
 Platform API key 不能访问 subscription target，ChatGPT OAuth token 也不能用于 Platform target。任意 custom OpenAI-compatible URL 不得冒充 subscription service。新增 compact、images、memories、search 或 realtime 能力时，仍需独立验证其公开 contract；Responses codec 的复用不能推导其他 endpoint 兼容。
+
+
+对照本地 Codex 源码 `818f1cca8c` 的 `codex-rs/codex-api/src/endpoint`，差距不能仅按文件数判断：
+
+| Codex 操作 | Zeta 当前状态 | 处理结论 |
+| --- | --- | --- |
+| responses + responses_websocket | HTTP／SSE 已有；本轮补齐顺序 WebSocket 会话 | 共用请求和事件解码，先验证主推理链 |
+| realtime_websocket | 本轮补齐公共 Realtime GA JSON 会话 | Codex 的 v1／v2／frameless 协议分别对待，未宣称兼容 |
+| realtime_call | 未实现 WebRTC calls 和 sideband | 需要 SDP、call ID 及产品音频生命周期；不属于本轮 WebSocket 文本连接 |
+| models | 已有 model-provider catalog discovery，路径与 JSON 尚在 catalog adapter | 后续将线上的模型列表协议归入 API；刷新、合并和缓存仍在 models-manager |
+| images | API crate 未实现独立生成／编辑操作 | 需要图片请求／结果契约及对应模型验证；图片输入支持不能代替生成 |
+| memories/trace_summarize | 未实现 Codex 对应服务操作 | 本地记忆和 checkpoint 不代表拥有该云端接口 |
+| alpha/search | 未实现 Codex 对应搜索操作 | 需明确服务授权与结果契约，不能等同普通模型工具调用 |
+| session | Zeta 已有 OperationClient、认证解析及显式会话组合 | 沿现有职责复用，不再复制一套 Provider／认证／重试框架 |
+
+这次实现优先补足两条 WebSocket 协议调用链。其余服务差距在表中保留，新增时仍需完整的请求、响应、错误和实际调用者，不能用空端点声明“已支持”。
+
+### 4.6 端点归属与 WebSocket 实现
+
+端点的路径、协议头、字段支持和调用代码已移到同一模块。公共入口仍是 `ApiEndpoint`；不按 provider 复制通用请求头，也不新增 crate。
+
+| 原路径（zeta-api/src 下） | 当前归属 |
+| --- | --- |
+| requests/openai_responses.rs | endpoint/responses.rs |
+| requests/openai_chat_completions.rs | endpoint/chat_completions.rs |
+| requests/anthropic_messages.rs | endpoint/anthropic.rs |
+| input_token_count_endpoint.rs | endpoint/token_count.rs |
+| semantic.rs | endpoint/semantic.rs |
+| sse/openai_responses.rs | endpoint/responses/events.rs |
+| sse/mod.rs | sse.rs |
+
+对应测试随 owner 移动。公开的 `OpenAiResponsesSseDecoder` 更名为 `ResponsesEventDecoder`，同时解码已分帧的 SSE 和 WebSocket JSON；现有调用方已更新。`headers.rs` 保留协议合并与媒体类型规则，通用 Header 语法校验由 HTTP 请求构造边界保证，WebSocket 请求复用该校验并禁止覆盖传输层握手头。
+
+| 能力 | 本轮实现与证据 | 明确边界 |
+| --- | --- | --- |
+| Responses WebSocket | 建连、response.create、文本／工具／用量事件、显式预热、增量续接；本地集成及 Luna／low 实连通过 | 每个对象顺序处理一个响应；未实现 stream_id 多路复用 |
+| Realtime GA WebSocket | session.created/update、文本、PCM16 24kHz 音频、VAD 配置、工具结果、取消、音频截断、状态与用量 | 本地服务验证；未实连 Realtime 模型，不包含采集和播放 |
+| 底层连接 | 复用代理、TLS、帧限制；取消、截止时间、Ping/Pong、关闭、握手 HTTP 状态和脱敏 | 不重放模型请求，不切换另一种传输 |
+| Codex 私有语音／GPT-Live | 已对照其协议差异 | 未把 frameless、session.start 或私有 handoff 当成 Realtime GA |
+| WebRTC calls／client secrets、音频产品入口 | 本轮未实现 | 需要独立服务操作和具体产品 owner |
+
+`ResponsesWebSocketSession` 接收完整 `ModelRequest`。只有模型设置、工具、指令和先前输入／输出前缀一致时，才发送 `previous_response_id` 与新增输入。已知的服务端 reasoning 留在该响应链内，不从摘要重建；回滚、压缩、不同设置或不能准确比较的输出会开始完整请求，不引用旧 response ID。引用只是该连接的派生状态，不写成 Thread 历史或 Agent 身份。
+
+`warm_up` 明确发送 `generate:false`，返回服务端 response ID 和可用的用量，不伪造助手输出；后续相同请求可以发送空增量。`ResponsesConnectionStats` 记录实际发出的请求与输入条目，用于观察传输，不代替计费。
+
+空闲超时按连接消息计算，Ping／Pong 也会刷新期限；模型暂时没有文本输出不等于连接失活。取消、无终态断线、格式错误、消费者错误或放弃进行中的 invoke 都使 Responses 连接退场；没有自动 HTTP 重试或推理重放。重新创建连接后从完整历史开始。Realtime 的 receive 可以与音频输入队列轮流轮询；明确取消会关闭连接。生成完成与播放完成分别处理，response.done 必须查看 completed/cancelled/failed/incomplete 状态。
+
+运行时提供 `connect_responses` 和 `connect_realtime`，由调用者拥有返回的会话。Responses 会在每次调用前核对认证，凭据变动时丢弃旧连接和增量基线。`WebSocketApiProfile` 与 `RealtimeApiProfile` 分别授权两个协议，旧配置缺字段不会自动启用 Realtime；ChatGPT 的 Luna 订阅不能授权公共 Realtime 服务。
+
+普通 Agent 模型调用仍使用现有 HTTP 路径。这里提供的是明确可调用的 API／runtime 会话，未把一个共享 Provider 变成全局连接池，也未新增桌面或 TUI 语音入口。
+
+官方依据：[Responses WebSocket](https://developers.openai.com/api/docs/guides/websocket-mode)、[Realtime GA](https://developers.openai.com/api/docs/guides/realtime)、[语音 WebSocket](https://developers.openai.com/api/docs/guides/voice-websockets?api=realtime)、[Realtime client events](https://developers.openai.com/api/reference/resources/realtime/client-events)。Realtime GA 不发送旧 realtime=v1 beta 头。GPT-Live 是另一套 session.start／音频生命周期，不能混用这两套事件。
+
+验证命令：
+
+```text
+just test zeta-api --test websocket
+just test zeta-api --test provider_adapters
+just test zeta-model-provider --lib
+just test zeta-websocket-client
+just test zeta-http-client
+just test zeta-model-provider-config --lib
+just generate-protocol
+just test zeta-app-server-protocol --lib
+just check zeta-app-server -p zeta-model-provider -p zeta-api
+just test zeta-model-provider --lib live_luna_websocket_uses_two_responses_on_one_caller_owned_session -- --ignored --nocapture
+```
+
+Luna 实连使用只读 Codex 凭据、固定 low、合成文本。同一连接两轮请求成功，发送统计为 2 次请求、1 次增量、合计 2 个输入条目。样本仅 28／44 个输入 token，不能作为大前缀缓存命中测试。Realtime 的真实认证、音频和延迟需要对应模型及 API 凭据；本地 PCM／事件测试不能替代实连。
 
 ## 5. 供应商运行时联动
 
@@ -329,10 +382,11 @@ Header ownership：
 | --- | --- |
 | Authorization、API key、tenant/deployment | model-provider/credential runtime |
 | Content-Type、Accept | zeta-api endpoint |
-| Anthropic version/beta feature | zeta-api endpoint/typed request |
-| traceparent、tracestate、user-agent | zeta-http-client |
+| Anthropic version/beta feature, session-id, x-grok-conv-id | zeta-api endpoint/typed request |
+| traceparent、tracestate | client/HTTP telemetry |
+| User-Agent、x-goog-api-client、OAuth 设备标识 | product/provider/login runtime |
 
-Header merge 必须有冲突规则，禁止简单拼接后让后写值静默覆盖 secret 或协议 header。
+`headers::build` 按实际调用设置 JSON/SSE 媒体类型。大小写无关的同名同值头合并；冲突值、非法名称和控制字符在发送前报错，错误不回显值。每次调用及认证重试均重走该入口，不修改共享 target。
 
 ### 6.2 Unary 响应
 
@@ -536,106 +590,38 @@ Provider error message 默认不是稳定公共 API，不能未经清洗直接�
 
 ## 12. 目标目录
 
-`endpoint / requests / sse` 是同级主目录；当已验证的 API 使用另一种 wire protocol 时，才增加
-`websocket/` 或 `ndjson/` 这样的同级 codec 目录：
+端点拥有完整协议操作，共用代码按职责复用。当前主要归属如下，省略测试和不影响分层的小文件：
 
 ```text
-zeta-rs/zeta-api/
-├── BUILD.bazel
-├── Cargo.toml
-├── README.md
-├── src/
-│   ├── lib.rs
-│   ├── endpoint/
-│   │   ├── mod.rs
-│   │   ├── openai_platform/
-│   │   │   ├── mod.rs
-│   │   │   ├── responses.rs
-│   │   │   ├── compact.rs
-│   │   │   ├── responses_websocket.rs
-│   │   │   ├── realtime_websocket.rs
-│   │   │   ├── models.rs
-│   │   │   ├── images.rs
-│   │   │   ├── conversations.rs
-│   │   │   ├── vector_store_search.rs
-│   │   │   └── realtime/{mod,calls,session}.rs
-│   │   ├── anthropic/{messages,models}.rs
-│   │   ├── gemini/{interactions,generate_content,models}.rs
-│   │   ├── ollama/{chat,tags}.rs
-│   │   └── endpoint_tests.rs
-│   │
-│   ├── requests/
-│   │   ├── mod.rs
-│   │   ├── openai_platform/
-│   │   │   ├── responses/
-│   │   │   │   ├── mod.rs
-│   │   │   │   ├── request.rs
-│   │   │   │   ├── response.rs
-│   │   │   │   ├── error.rs
-│   │   │   │   ├── usage.rs
-│   │   │   │   ├── cache.rs
-│   │   │   │   ├── tools.rs
-│   │   │   │   └── request_tests.rs
-│   │   │   ├── compact.rs
-│   │   │   ├── images/{mod,generation,edit,variation}.rs
-│   │   │   └── realtime/calls.rs
-│   │   ├── anthropic/messages/
-│   │   ├── gemini/{interactions,generate_content}/
-│   │   ├── ollama/chat/
-│   │   └── catalog/
-│   │       ├── anthropic.rs
-│   │       ├── gemini.rs
-│   │       ├── openai.rs
-│   │       ├── deepseek.rs
-│   │       └── ollama.rs
-│   │
-│   ├── sse/
-│   │   ├── mod.rs
-│   │   ├── assembler.rs
-│   │   ├── openai_platform/{responses,chat}.rs
-│   │   ├── anthropic/messages.rs
-│   │   ├── gemini/{interactions,generate_content}.rs
-│   │   └── sse_tests.rs
-│   │
-│   ├── websocket/
-│   │   ├── mod.rs
-│   │   ├── openai_platform/responses.rs
-│   │   └── websocket_tests.rs
-│   │
-│   ├── ndjson/
-│   │   ├── mod.rs
-│   │   ├── ollama/chat.rs
-│   │   └── ndjson_tests.rs
-│   │
-│   ├── options/
-│   │   ├── mod.rs
-│   │   ├── profile.rs
-│   │   ├── cache.rs
-│   │   └── options_tests.rs
-│   └── error/
-│       ├── mod.rs
-│       ├── invalid_request.rs
-│       ├── unsupported_feature.rs
-│       ├── provider.rs
-│       ├── invalid_response.rs
-│       ├── invalid_stream.rs
-│       └── error_tests.rs
-└── tests/
-    ├── endpoint_contracts.rs
-    ├── final_response_parity.rs
-    └── fixtures/
-        ├── openai/
-        ├── anthropic/
-        ├── google/
-        ├── deepseek/
-        └── ollama/
+zeta-rs/zeta-api/src/
+├── lib.rs
+├── endpoint.rs
+├── endpoint/
+│   ├── responses.rs
+│   ├── responses/events.rs
+│   ├── responses_websocket.rs
+│   ├── realtime.rs
+│   ├── chat_completions.rs
+│   ├── anthropic.rs
+│   ├── token_count.rs
+│   └── semantic.rs
+├── requests.rs
+├── requests/
+│   ├── openai_tools.rs
+│   ├── google_count_tokens.rs
+│   ├── kimi_estimate_tokens.rs
+│   └── zai_tokenizer.rs
+├── sse.rs
+├── sse/
+│   ├── anthropic_messages.rs
+│   └── openai_chat_completions.rs
+├── headers.rs
+├── websocket.rs
+├── token_count.rs
+└── error.rs
 ```
 
-`endpoint/`、`requests/`、`sse/` 按职责横向分离，但相同 API profile 的命名必须一致，测试通过
-fixture 把三者重新绑定。目录不是创建空文件的要求；只有实现 vertical slice 时才新增模块。
-
-任何 Rust module 接近 500 LoC 时按 request/response/error/usage/cache 拆分，超过约 800 LoC
-不继续堆功能。新 test module 使用 sibling `*_tests.rs`。
+新的在线操作有明确调用者和协议证据时，添加对应端点；不要同时创建仅用于转发的 endpoint、request、response 三套空文件。模块入口使用同名 `.rs`，不用 `mod.rs`。当一份实现出现独立的事件生命周期、请求构造或响应组装职责时再拆子模块；对应测试随实现归属移动。
 
 ## 13. 公共接口
 
@@ -663,23 +649,47 @@ fixture 把三者重新绑定。目录不是创建空文件的要求；只有实
 
 ## 14. 供应商/配置档案验证矩阵
 
-| Provider runtime | API profile | Streaming | 已确认的协议差异 |
-| --- | --- | --- | --- |
-| OpenAI | Responses | typed Responses SSE | terminal event、prompt cache usage |
-| ChatGPT 订阅 | Responses + native OAuth target | typed Responses SSE | codec 与 Platform 共用；target、credential 和 entitlement 独立 |
-| Anthropic | Messages | named Messages SSE | `ping`、content-block lifecycle、cache creation/read |
-| OpenAI-compatible | Chat Completions | data SSE + `[DONE]` baseline | 只保证最小 configured contract |
-| Google | Interactions / GenerateContent / compatible Chat | typed SSE / GenerateContent SSE | profile 不得静默互换 |
-| xAI | Responses / Chat | 对应 typed SSE | cache routing 在两个 profile 中不同 |
-| Qwen | compatible Chat / DashScope native | 对应 stream contract | compatible 与 `X-DashScope-SSE` 不混用 |
-| DeepSeek | Chat | Chat SSE + comment heartbeat | keep-alive、hit/miss usage、unary whitespace |
-| Ollama | native Chat / compatible Chat | NDJSON / Chat SSE | `keep_alive` 是 residency |
-| Hugging Face | routed Chat | Chat SSE baseline | router/downstream error 需独立验证 |
-| Z.AI | Chat | compatible SSE | HTTP/business code、stream finish reason |
-| MiniMax | Anthropic Messages / Chat | 两种 SSE | `base_resp`、profile 显式选择 |
+以下是当前 Rust 调用路径，不将厂商提供但 Zeta 尚未实现的接口列为已支持。统一契约测试覆盖全部 13 个内置 provider，真实服务验证单独记录。
 
-`Unknown` 不等于“不支持”，也不等于“与 OpenAI 相同”。未取得官方文档或 fixture 的高级行为不向
-上声明。
+| 通道 | 当前生成协议／认证 | 特有头或边界 | 本轮验证 |
+| --- | --- | --- | --- |
+| OpenAI API | Responses / Bearer | 按模型支持显式缓存断点 | 契约、传输 |
+| ChatGPT 订阅 | ChatGptResponses / OAuth | session-id；省略显式断点，拒绝计数 | Luna／low 实连、契约 |
+| Anthropic API key | Messages / x-api-key | anthropic-version=2023-06-01；不自动添加 beta | 官方契约、传输 |
+| Google | 兼容 Chat / Bearer | x-goog-api-client；countTokens 独立使用 x-goog-api-key | 官方契约、传输 |
+| xAI | XaiChatCompletions / Bearer | x-grok-conv-id；Responses 则使用 body cache key | 官方契约、传输 |
+| Qwen | 兼容 Chat / Bearer | 不混入 DashScope 专用 SSE 头 | 官方示例、传输 |
+| DeepSeek | Chat / Bearer | hit/miss 用量与通用 Chat 分开解析 | 官方示例、传输 |
+| Kimi Open Platform | Chat / Bearer | 与 Kimi Code OAuth 分开 | 官方示例、传输 |
+| Kimi Code | Chat / OAuth | 设备和客户端标识由登录能力提供 | 本地登录／传输契约，未实连 |
+| Ollama | 本地兼容 Chat / 无认证 | 不继承保存的远端 API key | 本地契约、传输 |
+| Hugging Face | 路由 Chat / Bearer | router 契约不代表所有下游已验证 | 官方示例、传输 |
+| Z.AI | 兼容 Chat / Bearer | 保留语言偏好；tokenizer 为独立操作 | 既有契约、传输，未新增实连 |
+| MiniMax | 兼容 Chat / Bearer | 不由兼容标签启用 Anthropic 接口 | 官方示例、传输 |
+| MiMo | 兼容 Chat / Bearer（官方 SDK 示例） | 官方 curl 也展示 api-key；不据此判定 Bearer 无效 | 官方示例、传输 |
+| 自定义兼容端点 | 按配置选择协议／凭据 | 不根据 URL 或模型名继承订阅能力 | 契约、真实本地 HTTP |
+
+本轮修正了共享 JSON/SSE 请求头缺失、Google 生成与计数认证混用、xAI Chat 未映射缓存分组的问题。API 不读取密钥存储；credential service 从同一次密钥读取分别生成两个操作的认证头，计数不再搬用完整的生成 target。
+
+### 14.1 来源与外部实现
+
+- OpenAI 公开缓存参数依据 [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)；订阅端点另以 Codex 的 `codex-api/src/requests/headers.rs`、`endpoint/responses.rs` 和 Luna 实测核对。
+- Anthropic：[API overview](https://platform.claude.com/docs/en/api/overview)。现有 x-api-key 仍受支持；多 workspace key 需要额外 workspace 选择，当前配置没有该能力，不能宣称此类账户已覆盖。
+- Google：[OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai)、[API keys](https://ai.google.dev/gemini-api/docs/api-key)、[countTokens](https://ai.google.dev/api/tokens)。生成兼容接口与标准计数接口分别验证。
+- xAI：[Maximizing Cache Hits](https://docs.x.ai/developers/advanced-api-usage/prompt-caching/maximizing-cache-hits)。Chat 请求头和 Responses body 参数明确区分。
+- [DeepSeek](https://api-docs.deepseek.com/)、[Kimi](https://platform.kimi.ai/docs/api/overview)、[Qwen](https://docs.modelstudio.console.alibabacloud.com/en/model-studio/qwen-api-reference)、[Hugging Face](https://huggingface.co/docs/inference-providers/en/index)、[MiniMax](https://platform.minimax.io/docs/api-reference/text-chat-openai)、[MiMo](https://mimo.mi.com/docs/en-US/quick-start/summary/first-api-call)提供各自认证和端点示例。
+- Zed 本地检出 `dfec59fb1c8e`：`crates/open_ai/src/open_ai.rs`、`crates/anthropic/src/anthropic.rs` 在 API 模块组装头；`open_ai/src/chat_completion_transport_tests.rs` 检查 method、URI、认证、自定义头。这种职责和测试方式可复用，具体字段仍以供应商来源为准。
+- [Warp BYOLLM/BYOK](https://docs.warp.dev/enterprise/enterprise-features/bring-your-own-llm)区分直连 key 和企业 IAM。工作区没有 Warp 源码，公开产品说明不足以验证具体请求头实现，不能替代供应商契约。
+
+### 14.2 如何测试
+
+1. 记录实际服务通道、认证、endpoint、媒体类型、路由／版本／beta 头，以及官方来源和核对日期。
+2. 只有真实协议差异才新增 `ApiEndpoint`，不靠 URL、模型前缀或失败后改另一种 header 猜通道。
+3. 假凭据配合 `OperationClient` 捕获真实构造请求，检查必需和禁止字段、大小写冲突、取消、认证重试、任务隔离及 target 不变。
+4. 真实本地 HTTP 服务检查最终请求头与请求体，覆盖 JSON、SSE 和计数路径；不能仅测拼接辅助函数。
+5. 使用对应供应商测试账户和低成本模型实连，验证认证、完成事件、工具往返和用量。缓存测试固定模型／参数／前缀，比较首轮、重复、fork、恢复，并核对原始服务端计数。
+
+Luna 能验证 OpenAI 订阅通道和共享执行链，不能证明 Gemini、Claude、Grok 等服务接受请求。官方文档决定契约，本地测试防止回归，对应服务实连确认可用性；三者用途不同。未实连的 provider 不以 mock 成功冒充实连通过。
 
 ## 15. 测试
 
@@ -767,19 +777,19 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `zeta-http
 ## 17. 固定决策
 
 1. `zeta-api` 是协议层，不是 Provider registry。
-2. `endpoint/`、`requests/`、`sse/` 是同级主目录；已验证的 WebSocket/NDJSON protocol 才新增同级 codec。
-3. 非 SSE 协议使用真实模块，例如 `websocket/`、`ndjson/`。
+2. 路径、协议头、字段能力和请求实现跟随端点归属；共享助手按实际职责保留。
+3. 协议会话使用各自的事件模型；Responses 的 SSE／WebSocket 共用一份事件解码。
 4. Raw transport 与 network policy 属于 `zeta-http-client`；retry、SSE framing 和 operation
    telemetry 属于 `zeta-client`。
 5. `zeta-api::sse` 只解释已经 framed 的 API event。
 6. Provider/profile 选择属于 `zeta-model-provider`。
 7. Config 只声明 profile，不持有 runtime API object。
 8. Canonical values 属于 `zeta-protocol`。
-9. Prompt cache wire mapping 属于 `requests/`，catalog cache 属于 models manager。
+9. Prompt cache 字段映射属于对应端点，catalog cache 属于 models manager。
 10. Inference retry safety 由 runtime policy 显式选择，client 执行。
 11. Provider error 不以 raw JSON/String 穿透产品 API。
 12. OpenAI Responses、OpenAI-compatible Chat Completions 与 Anthropic Messages 已接通 live HTTP/SSE
-    execution；WebSocket transport 已实现，但 Responses codec/session 尚未实现；NDJSON 和未验证
+    execution；Responses WebSocket 与 Realtime GA 会话已有实现；NDJSON 和未验证
     provider profile 仍须按真实协议另行实现。
 13. ChatGPT subscription 不共享 Platform base URL、credential 或 custom endpoint override；只复用经过验证的 Responses codec。
 14. ChatGPT subscription OAuth wire、token/header value 与固定 backend target 属于 `zeta-chatgpt`，不进入本 crate 的公共 value。
@@ -790,7 +800,7 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `zeta-http
 
 - [Responses usage](https://developers.openai.com/api/reference/cli/resources/responses/methods/create)
 - [Responses streaming](https://developers.openai.com/api/docs/guides/streaming-responses)
-- [Responses WebSocket client/server events](https://developers.openai.com/api/reference/cli/resources/beta/subresources/responses)
+- [Responses WebSocket](https://developers.openai.com/api/docs/guides/websocket-mode)
 - [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)
 - [Models](https://developers.openai.com/api/docs/models)
 - [Codex Memories](https://developers.openai.com/codex/memories)

@@ -73,3 +73,5 @@ pub use auth::ProviderCredentialError;
 pub use auth::ProviderCredentialService;
 pub use auth::ProviderCredentialStatus;
 pub use auth::provider_api_key_secret_key;
+
+pub use provider::ResponsesModelSession;

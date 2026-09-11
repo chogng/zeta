@@ -42,6 +42,7 @@ pub(crate) fn complete(
         client,
         target,
         endpoint,
+        request,
         build_request(model, request)?,
         cancellation,
     )?;
@@ -67,7 +68,10 @@ pub(crate) fn stream(
     let operation = ClientRequest::new(
         zeta_http_client::HttpMethod::Post,
         target.endpoint(endpoint.relative_path())?,
-        endpoint.headers(target),
+        crate::headers::build(
+            endpoint.headers(target, request)?,
+            crate::headers::ResponseFormat::EventStream,
+        )?,
         body,
         target.retry_policy,
     )?;
@@ -127,7 +131,7 @@ impl OpenAiChatCompletionsBodySink<'_> {
 }
 
 pub(crate) fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError> {
-    super::openai_tools::validate_tools(&request.tools)?;
+    crate::requests::openai_tools::validate_tools(&request.tools)?;
     crate::requests::require_materialized_images(request)?;
     let mut messages = Vec::new();
     if let Some(instructions) = &request.instructions {
@@ -344,7 +348,7 @@ fn parse_response(endpoint: ApiEndpoint, response: Value) -> Result<ModelRespons
     Ok(ModelResponse {
         output,
         usage: parse_usage(endpoint, response.get("usage")),
-        billing: super::parse_response_billing(&response)?,
+        billing: crate::requests::parse_response_billing(&response)?,
         stop_reason,
     })
 }
@@ -355,10 +359,11 @@ fn parse_usage(endpoint: ApiEndpoint, usage: Option<&Value>) -> Option<ModelUsag
         ApiEndpoint::DeepSeekChatCompletions => {
             usage.get("prompt_cache_hit_tokens").and_then(Value::as_u64)
         }
-        ApiEndpoint::OpenAiChatCompletions => usage
+        ApiEndpoint::OpenAiChatCompletions | ApiEndpoint::XaiChatCompletions => usage
             .pointer("/prompt_tokens_details/cached_tokens")
             .and_then(Value::as_u64),
         ApiEndpoint::OpenAiResponses
+        | ApiEndpoint::ChatGptResponses
         | ApiEndpoint::AnthropicMessages
         | ApiEndpoint::AnthropicMessagesAtBase => {
             unreachable!("Chat Completions parser requires a Chat Completions endpoint")
@@ -431,4 +436,20 @@ fn reasoning_effort(effort: ReasoningEffort) -> &'static str {
         ReasoningEffort::ExtraHigh => "xhigh",
         ReasoningEffort::Max => "max",
     }
+}
+
+pub(super) fn path() -> &'static str {
+    "chat/completions"
+}
+pub(super) fn headers(
+    endpoint: ApiEndpoint,
+    request: &ModelRequest,
+    headers: &mut Vec<zeta_http_client::HttpHeader>,
+) -> Result<(), ApiError> {
+    if endpoint == ApiEndpoint::XaiChatCompletions
+        && let Some(scope) = &request.prompt_cache_key
+    {
+        crate::headers::insert(headers, "x-grok-conv-id", scope)?;
+    }
+    Ok(())
 }

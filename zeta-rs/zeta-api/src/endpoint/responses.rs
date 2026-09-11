@@ -1,3 +1,6 @@
+mod events;
+pub use events::ResponsesEventDecoder;
+
 use crate::ApiEndpoint;
 use crate::ApiError;
 use crate::ApiStreamSink;
@@ -69,7 +72,8 @@ pub(crate) fn complete(
         client,
         target,
         endpoint,
-        build_request(model, request)?,
+        request,
+        build_request(endpoint, model, request)?,
         cancellation,
     )?;
     parse_response(response)
@@ -84,7 +88,7 @@ pub(crate) fn stream(
     cancellation: &CancellationToken,
     sink: &mut dyn ApiStreamSink,
 ) -> Result<ModelResponse, ApiError> {
-    let Value::Object(mut body) = build_request(model, request)? else {
+    let Value::Object(mut body) = build_request(endpoint, model, request)? else {
         unreachable!("Responses request builders always return an object");
     };
     body.insert("stream".into(), Value::Bool(true));
@@ -93,13 +97,16 @@ pub(crate) fn stream(
     let operation = ClientRequest::new(
         zeta_http_client::HttpMethod::Post,
         target.endpoint(endpoint.relative_path())?,
-        endpoint.headers(target),
+        crate::headers::build(
+            endpoint.headers(target, request)?,
+            crate::headers::ResponseFormat::EventStream,
+        )?,
         body,
         target.retry_policy,
     )?;
     let mut body_sink = OpenAiResponseBodySink {
         framing: SseDecoder::new(MAX_STREAM_EVENT_BYTES)?,
-        events: crate::OpenAiResponsesSseDecoder::new(),
+        events: crate::ResponsesEventDecoder::new(),
         sink,
         failure: None,
     };
@@ -124,7 +131,7 @@ pub(crate) fn stream(
 
 struct OpenAiResponseBodySink<'a> {
     framing: SseDecoder,
-    events: crate::OpenAiResponsesSseDecoder,
+    events: crate::ResponsesEventDecoder,
     sink: &'a mut dyn ApiStreamSink,
     failure: Option<ApiError>,
 }
@@ -162,7 +169,7 @@ pub(crate) fn count_input_tokens(
         client,
         target,
         "responses/input_tokens",
-        endpoint.headers(target),
+        endpoint.headers(target, request)?,
         build_count_request(model, request)?,
         cancellation,
     )?;
@@ -176,7 +183,8 @@ pub(crate) fn count_input_tokens(
 }
 
 fn build_count_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError> {
-    let Value::Object(mut body) = build_request(model, request)? else {
+    let Value::Object(mut body) = build_request(ApiEndpoint::OpenAiResponses, model, request)?
+    else {
         unreachable!("Responses request builders always return an object");
     };
     for field in [
@@ -205,8 +213,12 @@ fn build_count_request(model: &str, request: &ModelRequest) -> Result<Value, Api
     Ok(Value::Object(body))
 }
 
-fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError> {
-    super::openai_tools::validate_tools(&request.tools)?;
+pub(super) fn build_request(
+    endpoint: ApiEndpoint,
+    model: &str,
+    request: &ModelRequest,
+) -> Result<Value, ApiError> {
+    crate::requests::openai_tools::validate_tools(&request.tools)?;
     crate::requests::require_materialized_images(request)?;
     let mut body = Map::from_iter([
         ("model".into(), Value::String(model.into())),
@@ -215,7 +227,11 @@ fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError>
             Value::Array(convert_input(
                 &request.input,
                 cache_support(model),
-                request.prompt_cache_prefix_end,
+                if endpoint == ApiEndpoint::ChatGptResponses {
+                    None
+                } else {
+                    request.prompt_cache_prefix_end
+                },
             )?),
         ),
         ("stream".into(), Value::Bool(false)),
@@ -331,7 +347,7 @@ fn convert_input(
             }
         }
     }
-    if converted.is_empty() {
+    if converted.is_empty() && !input.is_empty() {
         return Err(ApiError::InvalidRequest(
             "input contains no encodable items".into(),
         ));
@@ -352,7 +368,7 @@ fn convert_input(
 }
 
 #[cfg(test)]
-#[path = "openai_responses_tests.rs"]
+#[path = "responses_tests.rs"]
 mod tests;
 
 fn convert_content(role: MessageRole, part: &ContentPart) -> Value {
@@ -476,12 +492,12 @@ pub(crate) fn parse_response(response: Value) -> Result<ModelResponse, ApiError>
     Ok(ModelResponse {
         output,
         usage: parse_usage(response.get("usage")),
-        billing: super::parse_response_billing(&response)?,
+        billing: crate::requests::parse_response_billing(&response)?,
         stop_reason,
     })
 }
 
-fn parse_usage(usage: Option<&Value>) -> Option<ModelUsage> {
+pub(super) fn parse_usage(usage: Option<&Value>) -> Option<ModelUsage> {
     let usage = usage?;
     Some(ModelUsage {
         input_tokens: usage.get("input_tokens").and_then(Value::as_u64),
@@ -566,4 +582,20 @@ fn reasoning_effort(effort: ReasoningEffort) -> &'static str {
         ReasoningEffort::ExtraHigh => "xhigh",
         ReasoningEffort::Max => "max",
     }
+}
+
+pub(super) fn path() -> &'static str {
+    "responses"
+}
+pub(super) fn headers(
+    endpoint: ApiEndpoint,
+    request: &ModelRequest,
+    headers: &mut Vec<zeta_http_client::HttpHeader>,
+) -> Result<(), ApiError> {
+    if endpoint == ApiEndpoint::ChatGptResponses
+        && let Some(scope) = &request.prompt_cache_key
+    {
+        crate::headers::insert(headers, "session-id", scope)?;
+    }
+    Ok(())
 }

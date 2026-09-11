@@ -15,7 +15,7 @@ fn event(event: &str, data: &str) -> SseFrame {
 
 #[test]
 fn responses_decoder_emits_text_and_reasoning_deltas() {
-    let mut decoder = OpenAiResponsesSseDecoder::new();
+    let mut decoder = ResponsesEventDecoder::new();
 
     assert_eq!(
         decoder
@@ -46,7 +46,7 @@ fn responses_decoder_emits_text_and_reasoning_deltas() {
 
 #[test]
 fn responses_decoder_ignores_comments_and_unknown_optional_events() {
-    let mut decoder = OpenAiResponsesSseDecoder::new();
+    let mut decoder = ResponsesEventDecoder::new();
     assert!(decoder.decode(&SseFrame::Comment).unwrap().is_empty());
     assert!(
         decoder
@@ -58,7 +58,7 @@ fn responses_decoder_ignores_comments_and_unknown_optional_events() {
 
 #[test]
 fn responses_decoder_rejects_eof_before_a_terminal_event() {
-    let decoder = OpenAiResponsesSseDecoder::new();
+    let decoder = ResponsesEventDecoder::new();
     assert!(matches!(
         decoder.finish(),
         Err(ApiError::InvalidResponse(_))
@@ -67,7 +67,7 @@ fn responses_decoder_rejects_eof_before_a_terminal_event() {
 
 #[test]
 fn responses_decoder_rejects_malformed_delta_events() {
-    let mut decoder = OpenAiResponsesSseDecoder::new();
+    let mut decoder = ResponsesEventDecoder::new();
     assert!(matches!(
         decoder.decode(&event(
             "response.output_text.delta",
@@ -79,7 +79,7 @@ fn responses_decoder_rejects_malformed_delta_events() {
 
 #[test]
 fn responses_decoder_classifies_terminal_provider_failures() {
-    let mut decoder = OpenAiResponsesSseDecoder::new();
+    let mut decoder = ResponsesEventDecoder::new();
     assert!(matches!(
         decoder.decode(&event(
             "response.failed",
@@ -96,7 +96,7 @@ fn responses_decoder_orders_completed_items_and_deduplicates_terminal_snapshots(
         {"type": "function_call", "call_id": "call_1", "name": "weather", "arguments": "{}"}
     ]);
     for snapshot in [json!([]), items.clone()] {
-        let mut decoder = OpenAiResponsesSseDecoder::new();
+        let mut decoder = ResponsesEventDecoder::new();
         for index in [1, 0] {
             decoder
                 .decode(&event(
@@ -133,13 +133,13 @@ fn responses_decoder_rejects_malformed_or_repeated_completed_items() {
         json!({"output_index": -1, "item": {"type": "message"}}),
         json!({"output_index": 0, "item": null}),
     ] {
-        let mut decoder = OpenAiResponsesSseDecoder::new();
+        let mut decoder = ResponsesEventDecoder::new();
         assert!(matches!(
             decoder.decode(&event("response.output_item.done", &payload.to_string())),
             Err(ApiError::InvalidResponse(_))
         ));
     }
-    let mut decoder = OpenAiResponsesSseDecoder::new();
+    let mut decoder = ResponsesEventDecoder::new();
     let item = event(
         "response.output_item.done",
         r#"{"output_index":0,"item":{"type":"message"}}"#,
@@ -155,7 +155,7 @@ fn responses_decoder_rejects_malformed_or_repeated_completed_items() {
 fn responses_decoder_requires_complete_consistent_output_and_a_terminal_event() {
     let completed = event("response.completed", r#"{"response":{"output":[]}}"#);
     for index in [0, 1] {
-        let mut decoder = OpenAiResponsesSseDecoder::new();
+        let mut decoder = ResponsesEventDecoder::new();
         decoder
             .decode(&event(
                 "response.output_item.done",
@@ -173,7 +173,7 @@ fn responses_decoder_requires_complete_consistent_output_and_a_terminal_event() 
             Err(ApiError::InvalidResponse(_))
         ));
     }
-    let mut decoder = OpenAiResponsesSseDecoder::new();
+    let mut decoder = ResponsesEventDecoder::new();
     decoder
         .decode(&event(
             "response.output_item.done",

@@ -11355,11 +11355,17 @@ dependencies = [
 name = "zeta-api"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
+ "futures",
  "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "url",
  "zeta-async-utils",
  "zeta-client",
  "zeta-http-client",
  "zeta-protocol",
+ "zeta-websocket-client",
 ]
 
 [[package]]
@@ -12535,6 +12541,7 @@ dependencies = [
  "zeta-ollama",
  "zeta-protocol",
  "zeta-secrets",
+ "zeta-websocket-client",
 ]
 
 [[package]]

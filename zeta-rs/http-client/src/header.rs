@@ -16,6 +16,24 @@ impl HttpHeader {
         }
     }
 
+    /// Checks HTTP header syntax without exposing its value in diagnostics.
+    pub fn validate(&self) -> Result<(), crate::HttpClientError> {
+        if self.name.is_empty()
+            || !self
+                .name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&byte))
+            || self.value.bytes().any(|byte| {
+                byte == b'\r' || byte == b'\n' || byte == 127 || byte < 32 && byte != b'\t'
+            })
+        {
+            return Err(crate::HttpClientError::InvalidRequest(
+                "invalid HTTP header".into(),
+            ));
+        }
+        Ok(())
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }

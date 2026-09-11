@@ -47,7 +47,7 @@ fn stored_keys_resolve_through_each_declared_header_shape() {
     for (provider, header, value) in [
         ("openai", "Authorization", "Bearer openai-key"),
         ("anthropic", "x-api-key", "anthropic-key"),
-        ("google", "x-goog-api-key", "google-key"),
+        ("google", "Authorization", "Bearer google-key"),
     ] {
         service
             .set_api_key(

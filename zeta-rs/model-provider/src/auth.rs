@@ -27,6 +27,12 @@ pub struct ProviderCredentialStatus {
     pub api_key_configured: bool,
 }
 
+/// One credential read materialized separately for generation and preflight protocols.
+pub(crate) struct ModelHeaders {
+    pub(crate) invocation: Vec<HttpHeader>,
+    pub(crate) measurement: Vec<HttpHeader>,
+}
+
 /// Owns provider-scoped API-key persistence and direct-request authentication.
 ///
 /// App Server adapters use this service to mutate credentials, while model runtimes use the same
@@ -103,27 +109,54 @@ impl ProviderCredentialService {
         provider: &ProviderId,
     ) -> Result<Vec<HttpHeader>, ProviderCredentialError> {
         let definition = self.definition(provider)?;
+        let secret = self.api_key(definition)?;
+        encode_key(provider, definition.api_key_header, secret.as_ref())
+    }
+
+    pub(crate) fn request_model_headers(
+        &self,
+        config: &zeta_model_provider_config::NormalizedModelProviderConfig,
+    ) -> Result<ModelHeaders, ProviderCredentialError> {
+        let definition = self.definition(&config.provider)?;
+        let secret = self.api_key(definition)?;
+        let count_header = match config.input_token_count.as_ref().map(|count| count.profile) {
+            Some(zeta_model_provider_config::InputTokenCountProfile::GoogleGenerateContent) => {
+                ApiKeyHeader::XGoogApiKey
+            }
+            Some(zeta_model_provider_config::InputTokenCountProfile::AnthropicMessages) => {
+                ApiKeyHeader::XApiKey
+            }
+            Some(
+                zeta_model_provider_config::InputTokenCountProfile::OpenAiResponses
+                | zeta_model_provider_config::InputTokenCountProfile::KimiChatCompletions
+                | zeta_model_provider_config::InputTokenCountProfile::ZaiChatCompletions,
+            ) => ApiKeyHeader::Bearer,
+            None => definition.api_key_header,
+        };
+        Ok(ModelHeaders {
+            invocation: encode_key(&config.provider, definition.api_key_header, secret.as_ref())?,
+            measurement: encode_key(&config.provider, count_header, secret.as_ref())?,
+        })
+    }
+
+    fn api_key(
+        &self,
+        definition: &ProviderDefinition,
+    ) -> Result<Option<SecretValue>, ProviderCredentialError> {
         if definition.api_key_policy == ApiKeyPolicy::Unsupported {
-            return Ok(Vec::new());
+            return Ok(None);
         }
-        let Some(secret) = self.secrets.load(&provider_api_key_secret_key(provider))? else {
-            return match definition.api_key_policy {
-                ApiKeyPolicy::Optional => Ok(Vec::new()),
-                ApiKeyPolicy::Required => {
-                    Err(ProviderCredentialError::ApiKeyMissing(provider.clone()))
-                }
-                ApiKeyPolicy::Unsupported => unreachable!("handled above"),
-            };
-        };
-        validate_api_key(secret.expose())?;
-        let value = std::str::from_utf8(secret.expose())
-            .map_err(|_| ProviderCredentialError::InvalidStoredApiKey(provider.clone()))?;
-        let header = match definition.api_key_header {
-            ApiKeyHeader::Bearer => HttpHeader::new("Authorization", format!("Bearer {value}")),
-            ApiKeyHeader::XApiKey => HttpHeader::new("x-api-key", value),
-            ApiKeyHeader::XGoogApiKey => HttpHeader::new("x-goog-api-key", value),
-        };
-        Ok(vec![header])
+        let secret = self
+            .secrets
+            .load(&provider_api_key_secret_key(&definition.id))?;
+        if let Some(secret) = &secret {
+            validate_api_key(secret.expose())?;
+        } else if definition.api_key_policy == ApiKeyPolicy::Required {
+            return Err(ProviderCredentialError::ApiKeyMissing(
+                definition.id.clone(),
+            ));
+        }
+        Ok(secret)
     }
 
     fn definition(
@@ -134,6 +167,23 @@ impl ProviderCredentialService {
             .get(provider)
             .ok_or(ProviderCredentialError::UnknownProvider)
     }
+}
+
+fn encode_key(
+    provider: &ProviderId,
+    format: ApiKeyHeader,
+    secret: Option<&SecretValue>,
+) -> Result<Vec<HttpHeader>, ProviderCredentialError> {
+    let Some(secret) = secret else {
+        return Ok(Vec::new());
+    };
+    let value = std::str::from_utf8(secret.expose())
+        .map_err(|_| ProviderCredentialError::InvalidStoredApiKey(provider.clone()))?;
+    Ok(vec![match format {
+        ApiKeyHeader::Bearer => HttpHeader::new("Authorization", format!("Bearer {value}")),
+        ApiKeyHeader::XApiKey => HttpHeader::new("x-api-key", value),
+        ApiKeyHeader::XGoogApiKey => HttpHeader::new("x-goog-api-key", value),
+    }])
 }
 
 #[derive(Debug)]

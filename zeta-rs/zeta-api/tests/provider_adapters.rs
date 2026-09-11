@@ -607,7 +607,7 @@ fn astra_preserves_supported_reasoning_and_round_trips_tool_results() {
             json!({
                 "type": "function_call_output",
                 "call_id": "call_astra",
-                "output": "Sunny"
+                "output": [{"type":"input_text","text":"Sunny"}]
             })
         );
     }

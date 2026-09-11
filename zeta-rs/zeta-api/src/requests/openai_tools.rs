@@ -3,7 +3,7 @@ use crate::ToolDefinition;
 use serde_json::Value;
 
 /// Checks the object constraints required by OpenAI strict function calling before transport.
-pub(super) fn validate_tools(tools: &[ToolDefinition]) -> Result<(), ApiError> {
+pub(crate) fn validate_tools(tools: &[ToolDefinition]) -> Result<(), ApiError> {
     for tool in tools.iter().filter(|tool| tool.strict) {
         if tool.parameters.get("type").and_then(Value::as_str) != Some("object") {
             return Err(invalid(tool, "parameters", "root type must be object"));

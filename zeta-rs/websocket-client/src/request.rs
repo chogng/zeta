@@ -14,6 +14,24 @@ impl WebSocketRequest {
         url: impl Into<String>,
         headers: Vec<HttpHeader>,
     ) -> Result<Self, WebSocketClientError> {
+        for header in &headers {
+            header.validate()?;
+            if [
+                "host",
+                "connection",
+                "upgrade",
+                "sec-websocket-key",
+                "sec-websocket-version",
+                "sec-websocket-extensions",
+            ]
+            .iter()
+            .any(|name| header.name().eq_ignore_ascii_case(name))
+            {
+                return Err(WebSocketClientError::InvalidRequest(
+                    "caller cannot replace transport-owned handshake headers".into(),
+                ));
+            }
+        }
         let url = url.into();
         let parsed = url::Url::parse(&url)
             .map_err(|_| WebSocketClientError::InvalidRequest("URL is invalid".into()))?;

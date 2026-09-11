@@ -8,8 +8,8 @@
 `zeta-model-provider` 把 validated declarative config 与 `ModelRef(provider, model)` 解析成
 `Arc<dyn ModelInvoker>`。它选择 provider runtime 和 API profile；wire codec 属于 `zeta-api`，
 operation retry/framing 属于 `zeta-client`，HTTP transport 与共享 network policy 属于
-`zeta-http-client`。WebSocket handshake/message transport 已独立位于 `zeta-websocket-client`；本 crate 尚未组合
-Responses WebSocket codec 或 `ModelClientSession`。
+`zeta-http-client`。WebSocket 连接属于 `zeta-websocket-client`；本 crate 已通过
+`connect_responses` 和 `connect_realtime` 组合协议会话、明确的服务能力与凭据。
 
 当前 `EmbeddingInvoker` / `RerankInvoker` 除 canonical、有序、provider-neutral 调用契约外，已接入
 OpenAI-compatible embedding/rerank wire codec、OpenAI/Ollama embedding runtime 和 exact provider
@@ -155,11 +155,10 @@ invoker、request/response validation、OpenAI-compatible/Ollama runtime resolve
 每个 immutable provider definition 显式发布输出方式；catalog/Desktop 只消费该声明，
 不从 provider 名称或 `ApiProfile` 猜测。
 WebSocket eligibility 由独立的 `WebSocketApiProfile` fail closed 声明，不能从
-`ModelOutputTransport` 或 HTTP compatibility 推断。底层 connector 已实现，但 protocol codec、session
-reuse、sticky turn state、prewarm、`previous_response_id` 和 HTTP fallback 尚未进入本 runtime。
-`ProviderCredentialService` 是供应商 API Key 的唯一所有者：App Server 通过它校验并写入 host 注入的 `SecretStore`，direct 和 semantic runtime 通过它解析 `ApiKeyPolicy` 与 `ApiKeyHeader`。`Provider` 合并 adapter 声明的固定 Header 与认证 Header，并唯一持有最终 `ResolvedApiTarget`；各 provider adapter 只负责 endpoint、模型名映射、固定 Header 和专属计数。Anthropic 使用 `x-api-key`、Google 使用 `x-goog-api-key`，其余远端 adapter 使用 Bearer Header；Ollama 不读取 Key，OpenAI-compatible 允许无 Key endpoint。
+`ModelOutputTransport` 或 HTTP compatibility 推断。`connect_responses` 返回调用者拥有的 `ResponsesModelSession`，支持完整请求、准确增量、预热、认证变更失效及关闭；不自动切换 HTTP 或重放。`connect_realtime` 由独立的 `RealtimeApiProfile` 授权，返回公共 Realtime GA 会话。默认 Agent 调用仍走 HTTP，未增加语音 UI。
+`ProviderCredentialService` 是供应商 API Key 的唯一所有者：App Server 通过它校验并写入 host 注入的 `SecretStore`，direct 和 semantic runtime 通过它解析 `ApiKeyPolicy` 与 `ApiKeyHeader`。`Provider` 合并 adapter 声明的固定 Header 与认证 Header，并唯一持有最终 `ResolvedApiTarget`；各 provider adapter 只负责 endpoint、模型名映射、固定 Header 和专属计数。Anthropic 的现有 API key 通道使用 `x-api-key`；Google OpenAI 兼容生成接口及其余远端 adapter 使用 Bearer Header；Ollama 不读取 Key，OpenAI-compatible 允许无 Key endpoint。
 更多 stream profile 与动态 catalog 的长期设计仍在系统文档中演进。完整
-ChatGPT subscription 通过 `zeta-chatgpt` 提供的 fresh authenticated target 进入 OpenAI Responses adapter；Agent loop 仍由 Zeta Core `TurnExecutor` 持有。
+ChatGPT subscription 通过 `zeta-chatgpt` 提供的 fresh authenticated target 进入 OpenAI Responses adapter；Agent loop 仍由 Zeta Core `TurnExecutor` 持有。该订阅接口拒绝公开 API 的 `prompt_cache_breakpoint` 字段；runtime 选择明确的 `ApiEndpoint::ChatGptResponses`，不改写缓存字段或组装路由头。`zeta-api` 统一处理这些协议规则，完整结果、流式调用和认证重试共用同一 API 入口。
 新增能力应保持 invoker immutable、profile explicit、
 provider adapter private，以及 config/catalog/codec/operation/network 分层。
 
@@ -186,3 +185,7 @@ Call/Result 历史的请求返回 unavailable。DeepSeek/Hugging Face 的本地 
 流式回归测试覆盖所有 Chat Completions 供应商的响应结束前交付、两种消费方式的结果一致性、
 分块工具参数、DeepSeek 缓存用量、取消、截断、接收方错误与禁止重放；Responses 和 Messages
 复用已有协议测试。模型准备、下载进度和产品界面仍由各自 owner 负责。
+
+`ProviderCredentialService` 从一次密钥读取分别生成调用和计数凭据。Google `countTokens` 使用 `x-goog-api-key`，不能复制生成接口的 Bearer 头；计数地址仍由明确配置决定。品牌和 OAuth 设备标识由所属 provider／登录能力提供，协议头统一由 `zeta-api` 校验合并。
+
+WebSocket 工厂要求调用者传入共享网络策略的 connector，不另建代理/TLS 规则。语音采集、播放及把工具交给授权执行器属于 host；API 只提供配置、收发与状态。协议和验证边界见[端点实现](../../docs/zeta-api.md#46-端点归属与-websocket-实现)。

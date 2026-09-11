@@ -2,22 +2,33 @@
 
 mod endpoint;
 mod error;
-mod input_token_count_endpoint;
+mod headers;
 mod requests;
-mod semantic;
 mod sse;
 mod token_count;
+mod websocket;
 
 pub use endpoint::ApiEndpoint;
 pub use endpoint::ApiProtocol;
 pub use endpoint::ApiStreamSink;
+pub use endpoint::realtime::RealtimeCommand;
+pub use endpoint::realtime::RealtimeConfig;
+pub use endpoint::realtime::RealtimeEvent;
+pub use endpoint::realtime::RealtimeOutput;
+pub use endpoint::realtime::RealtimeResponseStatus;
+pub use endpoint::realtime::RealtimeSession;
+pub use endpoint::realtime::RealtimeTurnDetection;
+pub use endpoint::responses::ResponsesEventDecoder;
+pub use endpoint::responses_websocket::ResponsesConnectionStats;
+pub use endpoint::responses_websocket::ResponsesWarmup;
+pub use endpoint::responses_websocket::ResponsesWebSocketSession;
+pub use endpoint::semantic::SemanticApiEndpoint;
+pub use endpoint::token_count::InputTokenCountEndpoint;
 pub use error::ApiError;
-pub use input_token_count_endpoint::InputTokenCountEndpoint;
-pub use semantic::SemanticApiEndpoint;
 pub use sse::AnthropicMessagesSseDecoder;
 pub use sse::OpenAiChatCompletionsSseDecoder;
-pub use sse::OpenAiResponsesSseDecoder;
 pub use token_count::InputTokenCount;
+pub use websocket::WebSocketSessionConfig;
 pub use zeta_protocol::ContentPart;
 pub use zeta_protocol::ImageDetail;
 pub use zeta_protocol::InputItem;

@@ -15,7 +15,7 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::OpenAiChatCompletions,
         "https://generativelanguage.googleapis.com/v1beta/openai",
     )
-    .with_api_key_header(ApiKeyHeader::XGoogApiKey)
+    .with_api_key_header(ApiKeyHeader::Bearer)
     .with_native_streaming()
     .with_input_token_count(
         InputTokenCountDefinition::provider_default(

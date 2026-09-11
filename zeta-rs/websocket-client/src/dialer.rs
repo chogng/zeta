@@ -63,7 +63,12 @@ pub(crate) async fn connect(
     };
     client_async_with_config(request, stream, Some(config))
         .await
-        .map_err(|_| WebSocketClientError::ConnectionFailed)
+        .map_err(|error| match error {
+            tokio_tungstenite::tungstenite::Error::Http(response) => {
+                WebSocketClientError::HandshakeRejected(response.status().as_u16())
+            }
+            _ => WebSocketClientError::ConnectionFailed,
+        })
 }
 
 struct ProxyEndpoint {

@@ -377,7 +377,7 @@ fn builtin_provider_api_key_policies_are_explicit() {
     );
     assert_eq!(
         registry.get(&provider_id("google")).unwrap().api_key_header,
-        ApiKeyHeader::XGoogApiKey
+        ApiKeyHeader::Bearer
     );
     assert_eq!(
         registry.get(&provider_id("openai")).unwrap().api_key_header,
@@ -662,5 +662,27 @@ fn custom_provider_inherits_compatible_models_or_uses_its_exact_override() {
     assert_eq!(
         registry.get(&config.provider).unwrap().model_catalog_policy,
         ModelCatalogPolicy::AllowUnlisted
+    );
+}
+
+#[test]
+fn realtime_service_requires_an_independent_explicit_capability() {
+    let registry = ProviderConfigRegistry::builtin();
+    for definition in registry.providers() {
+        assert_eq!(
+            definition.realtime_api_profile,
+            if definition.id.as_str() == "openai" {
+                crate::RealtimeApiProfile::OpenAiRealtime
+            } else {
+                crate::RealtimeApiProfile::Unavailable
+            }
+        );
+    }
+    let mut old = serde_json::to_value(registry.get(&provider_id("openai")).unwrap()).unwrap();
+    old.as_object_mut().unwrap().remove("realtimeApiProfile");
+    let restored: crate::ProviderDefinition = serde_json::from_value(old).unwrap();
+    assert_eq!(
+        restored.realtime_api_profile,
+        crate::RealtimeApiProfile::Unavailable
     );
 }

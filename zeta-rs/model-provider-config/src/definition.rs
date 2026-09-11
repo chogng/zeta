@@ -58,6 +58,15 @@ pub enum WebSocketApiProfile {
     OpenAiResponses,
 }
 
+/// A voice-session protocol authorized independently from text Responses support.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RealtimeApiProfile {
+    #[default]
+    Unavailable,
+    OpenAiRealtime,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum EndpointPolicy {
@@ -139,6 +148,8 @@ pub struct ProviderDefinition {
     #[serde(default)]
     pub websocket_api_profile: WebSocketApiProfile,
     #[serde(default)]
+    pub realtime_api_profile: RealtimeApiProfile,
+    #[serde(default)]
     pub models: Vec<Model>,
     #[serde(default)]
     pub defaults: ProviderDefaults,
@@ -168,6 +179,7 @@ impl ProviderDefinition {
             api_key_header: ApiKeyHeader::Bearer,
             output_transport: ModelOutputTransport::Unary,
             websocket_api_profile: WebSocketApiProfile::Unavailable,
+            realtime_api_profile: RealtimeApiProfile::Unavailable,
             models: Vec::new(),
             defaults: ProviderDefaults::default(),
             input_token_count: None,
@@ -197,6 +209,11 @@ impl ProviderDefinition {
 
     pub fn with_websocket_api_profile(mut self, profile: WebSocketApiProfile) -> Self {
         self.websocket_api_profile = profile;
+        self
+    }
+
+    pub fn with_realtime_api_profile(mut self, profile: RealtimeApiProfile) -> Self {
+        self.realtime_api_profile = profile;
         self
     }
 

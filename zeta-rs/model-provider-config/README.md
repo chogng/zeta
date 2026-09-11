@@ -19,7 +19,8 @@ credential、secret、connection pool 或 process-local adapter。
 | `STATIC_MODEL_CATALOG` / `StaticModelSpec` | 唯一 built-in model 目录 | model/provider ID、access、context、capabilities、reasoning、defaults |
 | `ProviderAdapter` | serializable adapter identity | 不是 runtime trait/object |
 | `ApiProfile` | declarative wire profile | runtime 显式解析为 `zeta-api::ApiEndpoint` |
-| `WebSocketApiProfile` | exact WebSocket wire capability | 默认 `Unavailable`；不得从 HTTP compatibility 推断 |
+| `WebSocketApiProfile` | Responses WebSocket 能力 | 默认 `Unavailable`；不得从 HTTP compatibility 推断 |
+| `RealtimeApiProfile` | 独立语音会话协议能力 | 默认 `Unavailable`；与文本 WebSocket 和订阅身份分开授权 |
 | `InputTokenCountDefinition` | provider-owned preflight declaration | profile、target 与明确 model policy |
 | `NormalizedInputTokenCountConfig` | runtime-ready count snapshot | 已解析 base URL；不包含 client 或准确度策略 |
 | `EndpointPolicy` | provider default 或 configured-only | 不执行 DNS/network validation |

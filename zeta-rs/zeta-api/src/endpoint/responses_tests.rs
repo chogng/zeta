@@ -10,10 +10,10 @@ fn stable_prefix_breakpoint_precedes_the_changing_environment_suffix() {
         "branch environment",
     )));
     let original = request.clone();
-    let first = build_request("gpt-5.6-sol", &request).unwrap();
+    let first = build_request(ApiEndpoint::OpenAiResponses, "gpt-5.6-sol", &request).unwrap();
     request.input[1] =
         InputItem::Message(Message::text(MessageRole::User, "different environment"));
-    let second = build_request("gpt-5.6-sol", &request).unwrap();
+    let second = build_request(ApiEndpoint::OpenAiResponses, "gpt-5.6-sol", &request).unwrap();
     assert_eq!(first["input"][0], second["input"][0]);
     assert_eq!(
         first["input"][0]["content"][0]["prompt_cache_breakpoint"],
@@ -36,7 +36,12 @@ fn stable_prefix_breakpoint_precedes_the_changing_environment_suffix() {
 #[test]
 fn older_and_unrecognized_model_families_keep_automatic_caching() {
     for model in ["gpt-5.5", "gpt-4.1", "other-model", "gpt-invalid"] {
-        let request = build_request(model, &ModelRequest::text("history")).unwrap();
+        let request = build_request(
+            ApiEndpoint::OpenAiResponses,
+            model,
+            &ModelRequest::text("history"),
+        )
+        .unwrap();
         assert!(
             request["input"][0]["content"][0]
                 .get("prompt_cache_breakpoint")

@@ -6,6 +6,7 @@ pub enum WebSocketClientError {
     InvalidRequest(String),
     InvalidConfiguration(String),
     ConnectionFailed,
+    HandshakeRejected(u16),
     ProtocolFailed,
     ConnectionClosed,
 }
@@ -21,6 +22,9 @@ impl fmt::Display for WebSocketClientError {
                     formatter,
                     "invalid WebSocket client configuration: {message}"
                 )
+            }
+            Self::HandshakeRejected(status) => {
+                write!(formatter, "WebSocket handshake rejected with HTTP {status}")
             }
             Self::ConnectionFailed => formatter.write_str("WebSocket connection failed"),
             Self::ProtocolFailed => formatter.write_str("WebSocket protocol failed"),

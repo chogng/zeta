@@ -1,7 +1,7 @@
 use crate::ApiError;
 use crate::InputTokenCount;
 use crate::ModelRequest;
-use crate::requests::openai_chat_completions;
+use crate::endpoint::chat_completions as openai_chat_completions;
 use serde_json::Value;
 use zeta_async_utils::CancellationToken;
 use zeta_client::OperationClient;

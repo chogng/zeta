@@ -1,49 +1,16 @@
 # `zeta-websocket-client`
 
-## 快速理解
+- 提供 WebSocket 握手、受限 text/binary 消息、Ping/Pong 和关闭。
+- 复用 `zeta-http-client::OutboundNetworkSnapshot` 的代理、TLS/mTLS、超时与网络目标策略。
+- 使用传输层消息类型，不向上暴露 Tungstenite。
+- 拒绝非法请求头、URL 凭据及覆盖 Host/Upgrade 等传输层字段；诊断不输出凭据、URL 或服务端错误体。
+- 握手拒绝保留 HTTP 状态，便于上层区分认证失败与其他连接失败。
+- 不解释模型事件、不保存会话历史、不决定推理重试。
 
-`zeta-websocket-client` 是 provider-neutral 的 WebSocket transport。它复用
-`zeta-http-client::OutboundNetworkSnapshot` 的 proxy、TLS/mTLS、connect timeout 与网络目标策略，只负责
-upgrade、bounded frame/message、ping/pong/close 和原始 text/binary message。
-
-Provider 的 JSON event、`previous_response_id`、turn state、prewarm、session 复用、HTTP fallback 与
-operation retry 不属于本 crate；这些状态由后续 `zeta-api` codec 和 `zeta-model-provider` 的
-`ModelClientSession` 拥有。
-
-当前实现提供 `WebSocketConnector`、`WebSocketConnection`、`WebSocketRequest` 与
-`WebSocketMessage`。Public API 不暴露 Tungstenite stream、sink、frame 或 error；request URL、header
-value 与 proxy credential 不进入 `Debug` 和 transport error。
-
-Provider 是否可以使用本 transport，不能根据 OpenAI-compatible HTTP API 猜测。
-`ProviderDefinition.websocket_api_profile` 是 exact wire protocol 的第一道 fail-closed authority；真实
-调用还必须由 runtime service target 单独允许。上游支持矩阵见
-[`docs/model-provider.md`](../../docs/model-provider.md)。
-
-## 边界
+当前上层调用链为 `model-provider → zeta-api 的 Responses/Realtime 会话 → websocket-client`。协议 JSON、终态、会话复用与取消语义属于 API/运行时；网络连接由本 crate 提供。
 
 ```text
-zeta-model-provider ModelClientSession   [尚未接入]
-                  │
-        zeta-api WebSocket codec         [尚未接入]
-                  │ raw owned messages
-                  ▼
-        zeta-websocket-client            [当前已实现]
-        ├─ handshake + connection
-        ├─ bounded message/frame
-        ├─ direct/proxy TCP route
-        └─ WS/WSS + TLS/mTLS
-                  │
-     zeta-http-client outbound policy
+just test zeta-websocket-client
 ```
 
-本 crate 不维护 Agent loop、conversation、tool execution 或 provider authentication。OAuth/API key
-由上层组装为 handshake header；transport 仅转发并保证 debug redaction。
-
-## 测试
-
-```text
-cargo test -p zeta-websocket-client
-bazel test //zeta-rs/websocket-client:websocket-client-unit-tests
-```
-
-单元测试只使用本地 echo server，不访问真实 provider。
+测试使用本地 WebSocket 和 HTTP CONNECT 代理，覆盖消息往返、握手拒绝、请求头校验与脱敏。协议和 Luna 实连测试见[模型 API 协议](../../docs/zeta-api.md#46-端点归属与-websocket-实现)。

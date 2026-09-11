@@ -510,3 +510,15 @@ fn public_internet_policy_requires_direct_manual_redirect_handling() {
         .with_network_target_policy(NetworkTargetPolicy::PublicInternetOnly);
     assert!(UreqHttpClient::with_config(direct).is_ok());
 }
+
+#[test]
+fn requests_reject_invalid_header_syntax_before_transport() {
+    for header in [
+        HttpHeader::new("Bad Header", "secret"),
+        HttpHeader::new("X-Test", "secret\r\nInjected: yes"),
+        HttpHeader::new("", "secret"),
+    ] {
+        let error = HttpRequest::post("https://example.test", vec![header], vec![]).unwrap_err();
+        assert!(!error.to_string().contains("secret"));
+    }
+}

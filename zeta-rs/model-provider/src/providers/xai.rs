@@ -10,7 +10,12 @@ pub(crate) struct XaiAdapter {
 impl XaiAdapter {
     pub(crate) fn new(config: &NormalizedModelProviderConfig) -> Self {
         Self {
-            endpoint: api_endpoint(config.api_profile),
+            endpoint: match config.api_profile {
+                zeta_model_provider_config::ApiProfile::OpenAiChatCompletions => {
+                    ApiEndpoint::XaiChatCompletions
+                }
+                _ => api_endpoint(config.api_profile),
+            },
         }
     }
 }

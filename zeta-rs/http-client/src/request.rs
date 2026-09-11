@@ -40,6 +40,9 @@ impl HttpRequest {
         headers: Vec<HttpHeader>,
         body: Vec<u8>,
     ) -> Result<Self, HttpClientError> {
+        for header in &headers {
+            header.validate()?;
+        }
         let url = url.into();
         if !is_http_url(&url) {
             return Err(HttpClientError::InvalidRequest(

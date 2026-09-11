@@ -45,6 +45,7 @@ pub(crate) fn complete(
         client,
         target,
         endpoint,
+        request,
         build_request(model, request)?,
         cancellation,
     )?;
@@ -74,7 +75,10 @@ pub(crate) fn stream(
     let operation = ClientRequest::new(
         zeta_http_client::HttpMethod::Post,
         target.endpoint(endpoint.relative_path())?,
-        endpoint.headers(target),
+        crate::headers::build(
+            endpoint.headers(target, request)?,
+            crate::headers::ResponseFormat::EventStream,
+        )?,
         body,
         target.retry_policy,
     )?;
@@ -150,7 +154,7 @@ pub(crate) fn count_input_tokens(
         client,
         target,
         &format!("{}/count_tokens", endpoint.relative_path()),
-        endpoint.headers(target),
+        endpoint.headers(target, request)?,
         build_count_request(model, request)?,
         cancellation,
     )?;
@@ -417,7 +421,7 @@ fn parse_response(response: Value) -> Result<ModelResponse, ApiError> {
     Ok(ModelResponse {
         output,
         usage: parse_usage(response.get("usage"))?,
-        billing: super::parse_response_billing(&response)?,
+        billing: crate::requests::parse_response_billing(&response)?,
         stop_reason,
     })
 }
@@ -476,5 +480,16 @@ fn content_text(content: &[ContentPart]) -> String {
 }
 
 #[cfg(test)]
-#[path = "anthropic_messages_tests.rs"]
+#[path = "anthropic_tests.rs"]
 mod tests;
+
+pub(super) fn path(endpoint: ApiEndpoint) -> &'static str {
+    if endpoint == ApiEndpoint::AnthropicMessagesAtBase {
+        "messages"
+    } else {
+        "v1/messages"
+    }
+}
+pub(super) fn headers(headers: &mut Vec<zeta_http_client::HttpHeader>) -> Result<(), ApiError> {
+    crate::headers::insert(headers, "anthropic-version", "2023-06-01")
+}

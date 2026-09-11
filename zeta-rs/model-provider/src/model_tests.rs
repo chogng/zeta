@@ -1,4 +1,7 @@
 use super::*;
+
+#[path = "websocket_session_tests.rs"]
+mod websocket_sessions;
 use serde_json::{Value, json};
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -31,6 +34,9 @@ use zeta_secrets::SecretValue;
 
 #[path = "streaming_tests.rs"]
 mod streaming;
+
+#[path = "cache_probe_tests.rs"]
+mod cache_probe;
 
 #[path = "chatgpt_recovery_tests.rs"]
 mod chatgpt_recovery;
@@ -355,7 +361,11 @@ fn custom_provider_uses_selected_protocol_and_isolated_credentials() {
         assert_eq!(url, &format!("https://custom.test/v1/{path}"));
         assert_eq!(
             headers,
-            &vec![HttpHeader::new("Authorization", "Bearer custom-key")]
+            &vec![
+                HttpHeader::new("Authorization", "Bearer custom-key"),
+                HttpHeader::new("Content-Type", "application/json"),
+                HttpHeader::new("Accept", "text/event-stream")
+            ]
         );
     }
 }
@@ -629,7 +639,9 @@ fn openai_runtime_uses_the_responses_adapter_and_dynamic_endpoint() {
         )
         .unwrap();
 
-    assert_eq!(invoke_text(model.as_ref(), "hello"), "Hello from OpenAI");
+    let mut input = ModelRequest::text("hello");
+    input.prompt_cache_key = Some("public-api-scope".into());
+    assert_eq!(model.invoke(&input).unwrap().text(), "Hello from OpenAI");
     let (endpoint, headers, request) = transport.request.lock().unwrap().clone().unwrap();
     assert_eq!(endpoint, "https://example.test/v1/responses");
     assert!(
@@ -638,6 +650,16 @@ fn openai_runtime_uses_the_responses_adapter_and_dynamic_endpoint() {
             .all(|header| header.name() != "Authorization")
     );
     assert_eq!(request["model"], "gpt-6-astra");
+    assert_eq!(request["prompt_cache_key"], "public-api-scope");
+    assert!(
+        headers
+            .iter()
+            .all(|header| !header.name().eq_ignore_ascii_case("session-id"))
+    );
+    assert_eq!(
+        request["input"][0]["content"][0]["prompt_cache_breakpoint"],
+        json!({"mode":"explicit"})
+    );
     assert!(request.get("temperature").is_none());
     assert!(request.get("prompt_cache_retention").is_none());
     assert_eq!(request["input"][0]["role"], "user");
@@ -735,6 +757,7 @@ fn chatgpt_subscription_runtime_uses_local_oauth_and_zeta_agent_loop() {
 
     // All ChatGPT model validation is restricted to Luna / low, including this wire fixture.
     let mut input = ModelRequest::text("hello");
+    input.prompt_cache_key = Some("shared-session".into());
     input.reasoning = Some(zeta_protocol::ReasoningConfig {
         effort: zeta_protocol::ReasoningEffort::Low,
         summary: false,
@@ -757,6 +780,19 @@ fn chatgpt_subscription_runtime_uses_local_oauth_and_zeta_agent_loop() {
     );
     assert_eq!(request["model"], "gpt-5.6-luna");
     assert_eq!(request["reasoning"]["effort"], "low");
+    assert_eq!(request["prompt_cache_key"], "shared-session");
+    let scopes = headers
+        .iter()
+        .filter(|header| header.name().eq_ignore_ascii_case("session-id"))
+        .map(|header| header.value())
+        .collect::<Vec<_>>();
+    assert_eq!(scopes, vec!["shared-session"]);
+    assert!(
+        request["input"][0]["content"][0]
+            .get("prompt_cache_breakpoint")
+            .is_none()
+    );
+    assert_eq!(input.prompt_cache_prefix_end, Some(0));
 
     // Reuse this exact model instance after Codex changes the access token.
     let auth_path = home.path().join("auth.json");
@@ -779,6 +815,32 @@ fn chatgpt_subscription_runtime_uses_local_oauth_and_zeta_agent_loop() {
     );
     assert_eq!(request["model"], "gpt-5.6-luna");
     assert_eq!(request["reasoning"]["effort"], "low");
+    assert_eq!(request["prompt_cache_key"], "shared-session");
+    let scopes = headers
+        .iter()
+        .filter(|header| header.name().eq_ignore_ascii_case("session-id"))
+        .map(|header| header.value())
+        .collect::<Vec<_>>();
+    assert_eq!(scopes, vec!["shared-session"]);
+    assert!(
+        request["input"][0]["content"][0]
+            .get("prompt_cache_breakpoint")
+            .is_none()
+    );
+    assert_eq!(input.prompt_cache_prefix_end, Some(0));
+
+    for scope in [Some("another-session"), None] {
+        let mut other = input.clone();
+        other.prompt_cache_key = scope.map(ToOwned::to_owned);
+        model.invoke(&other).unwrap();
+        let (_, headers, _) = transport.0.request.lock().unwrap().clone().unwrap();
+        let scopes = headers
+            .iter()
+            .filter(|header| header.name().eq_ignore_ascii_case("session-id"))
+            .map(|header| header.value())
+            .collect::<Vec<_>>();
+        assert_eq!(scopes, scope.into_iter().collect::<Vec<_>>());
+    }
 
     *transport.0.request.lock().unwrap() = None;
     let disconnected = SecretKey::new("provider/openai-chatgpt/disconnected").unwrap();
@@ -1280,7 +1342,18 @@ fn anthropic_runtime_exposes_conservative_remote_input_measurement() {
 #[test]
 fn google_runtime_uses_native_count_tokens_as_a_conservative_measurement() {
     let transport = Arc::new(CapturingTransport::new(json!({"totalTokens": 100})));
-    let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
+    let secrets = Arc::new(MemorySecretStore::default());
+    secrets
+        .store(
+            &provider_api_key_secret_key(&provider_id("google")),
+            &SecretValue::new(b"google-fixture-key".to_vec()),
+        )
+        .unwrap();
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        transport.clone(),
+        secrets,
+    );
     let model = runtime
         .build_model(
             &provider_config("google"),
@@ -1303,10 +1376,21 @@ fn google_runtime_uses_native_count_tokens_as_a_conservative_measurement() {
         measurement.accuracy(),
         ContextTokenMeasurementAccuracy::Estimated
     );
-    let (endpoint, _, body) = transport.request.lock().unwrap().clone().unwrap();
+    let (endpoint, headers, body) = transport.request.lock().unwrap().clone().unwrap();
     assert_eq!(
         endpoint,
         "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:countTokens"
+    );
+    assert!(
+        headers
+            .iter()
+            .any(|header| header.name() == "x-goog-api-key"
+                && header.value() == "google-fixture-key")
+    );
+    assert!(
+        headers
+            .iter()
+            .all(|header| !header.name().eq_ignore_ascii_case("Authorization"))
     );
     assert_eq!(
         body["generateContentRequest"]["model"],
@@ -1656,7 +1740,13 @@ fn ollama_runtime_uses_its_local_default_endpoint() {
     assert_eq!(invoke_text(model.as_ref(), "hello"), "Ollama reply");
     let (endpoint, headers, _) = transport.request.lock().unwrap().clone().unwrap();
     assert_eq!(endpoint, "http://localhost:11434/v1/chat/completions");
-    assert!(headers.is_empty());
+    assert_eq!(
+        headers,
+        vec![
+            HttpHeader::new("Content-Type", "application/json"),
+            HttpHeader::new("Accept", "text/event-stream")
+        ]
+    );
 }
 
 #[test]
@@ -1689,6 +1779,18 @@ fn default_transport_posts_to_the_normalized_endpoint() {
     server.join().unwrap();
     let request = received.lock().unwrap();
     assert!(request.starts_with("POST /v1/chat/completions HTTP/1.1"));
+    let header_block = request
+        .split("\r\n\r\n")
+        .next()
+        .unwrap()
+        .to_ascii_lowercase();
+    assert_eq!(
+        header_block
+            .matches("content-type: application/json")
+            .count(),
+        1
+    );
+    assert_eq!(header_block.matches("accept: text/event-stream").count(), 1);
     assert!(!request.contains("Authorization:"));
     assert!(request.contains(r#""model":"test-model""#));
     assert!(request.contains(r#""content":"hello""#));
@@ -1790,5 +1892,126 @@ fn unsaved_provider_probe_uses_exact_ids_and_draft_keys_without_persisting() {
                     && header.value() == "Bearer draft-key")
             );
         }
+    }
+}
+
+#[test]
+fn every_builtin_provider_applies_its_authentication_without_subscription_headers() {
+    struct Capture(Mutex<Option<ClientRequest>>);
+    impl OperationClient for Capture {
+        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            *self.0.lock().unwrap() = Some(request.clone());
+            Err(ClientError::Transport("captured".into()))
+        }
+        fn execute_streaming(
+            &self,
+            request: &ClientRequest,
+            _: &mut dyn OperationStreamSink,
+        ) -> Result<ClientResponse, ClientError> {
+            self.execute(request)
+        }
+    }
+    let providers = [
+        "openai",
+        "openai-compatible",
+        "google",
+        "xai",
+        "qwen",
+        "kimi",
+        "deepseek",
+        "ollama",
+        "huggingface",
+        "zai",
+        "minimax",
+        "mimo",
+        "anthropic",
+    ];
+    assert_eq!(
+        providers.len(),
+        ProviderConfigRegistry::builtin().providers().count()
+    );
+    for provider in providers {
+        let capture = Arc::new(Capture(Mutex::new(None)));
+        let secrets = Arc::new(MemorySecretStore::default());
+        let key = format!("{provider}-fixture-key");
+        secrets
+            .store(
+                &provider_api_key_secret_key(&provider_id(provider)),
+                &SecretValue::new(key.clone().into_bytes()),
+            )
+            .unwrap();
+        let runtime = ModelProviderRuntime::with_client_and_secrets(
+            ProviderConfigRegistry::builtin(),
+            capture.clone(),
+            secrets,
+        );
+        let model = runtime
+            .build_model(
+                &provider_config_with_endpoint(provider, "https://example.test/v1"),
+                &model_ref(provider, "fixture-model"),
+            )
+            .unwrap();
+        let mut request = ModelRequest::text("input");
+        request.prompt_cache_key = Some("cache-scope".into());
+        assert!(model.invoke(&request).is_err());
+        let captured = capture
+            .0
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("provider must reach its transport");
+        let headers = captured.headers();
+        let values = |name: &str| {
+            headers
+                .iter()
+                .filter(|header| header.name().eq_ignore_ascii_case(name))
+                .map(|header| header.value())
+                .collect::<Vec<_>>()
+        };
+        let bearer = format!("Bearer {key}");
+        assert_eq!(
+            values("Authorization"),
+            if matches!(provider, "ollama" | "anthropic") {
+                vec![]
+            } else {
+                vec![bearer.as_str()]
+            },
+            "{provider}"
+        );
+        assert_eq!(
+            values("x-api-key"),
+            if provider == "anthropic" {
+                vec![key.as_str()]
+            } else {
+                vec![]
+            },
+            "{provider}"
+        );
+        assert!(
+            values("x-goog-api-key").is_empty(),
+            "generation must not inherit Google countTokens authentication"
+        );
+        assert!(
+            values("session-id").is_empty(),
+            "subscription context leaked into {provider}"
+        );
+        assert_eq!(
+            values("x-grok-conv-id"),
+            if provider == "xai" {
+                vec!["cache-scope"]
+            } else {
+                vec![]
+            }
+        );
+        assert_eq!(values("Content-Type"), vec!["application/json"]);
+        assert_eq!(values("Accept"), vec!["text/event-stream"]);
+        assert_eq!(
+            values("anthropic-version"),
+            if provider == "anthropic" {
+                vec!["2023-06-01"]
+            } else {
+                vec![]
+            }
+        );
     }
 }

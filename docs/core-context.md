@@ -497,7 +497,7 @@ wait for safe point
 
 Core 为普通 Turn 请求写入 Session 级 prompt cache key，并在 `ContextPlan` 组装时标出当前 Turn 之前的可复用输入前缀。同一 Session 内的 fork 保留原消息与 key；委托说明追加在前缀之后。模型、工具集、权限指令或模型可见环境变化仍可能改变请求，不能由 AgentId 相同推断缓存命中。
 
-OpenAI Responses 对 GPT-5.6 及以后模型将 Core 前缀终点映射到合法输入内容块的显式缓存断点；旧模型保持自动缓存。计量请求不带缓存断点。该适配不改变原始消息。供应商行为以 [OpenAI Prompt caching 文档](https://developers.openai.com/api/docs/guides/prompt-caching) 为准；本地请求一致性验证不能代替实际 `cachedInputTokens` 测量。
+OpenAI 公开 Responses API 对支持模型将 Core 前缀终点映射为显式缓存断点；旧模型保持自动缓存。model-provider 按登录通道选择 `ApiEndpoint::ChatGptResponses`，由 zeta-api 省略订阅接口不支持的断点，并将同一缓存 key 写入 `session-id` 请求头。续写、fork、消息恢复和认证重试共用这个协议入口，调用者请求和认证 target 不被改写。结构化工具结果和图片能力与断点支持分别处理。供应商行为见 [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)，跨 provider 的请求头规则与验证见[模型 API 协议](zeta-api.md#14-供应商配置档案验证矩阵)。
 
 Provider response ID、缓存命中和连接状态都不是恢复正确性的前提。
 
@@ -615,6 +615,24 @@ TurnExecutor
 - compaction crash before/after durable commit；
 - provider overflow 的 commit-before-retry、二次溢出、取消与 restart no-replay；
 - current input 永不被静默删除。
+
+手动运行真实缓存验证：
+
+```bash
+just test zeta-app-server --lib luna_cache_survives_fork_and_message_restore_after_restart -- --ignored --nocapture
+```
+
+该测试仅使用 Luna／low 和合成文本，读取已有 Codex 登录状态，不刷新或改写凭据。它经过 SQLite 历史、Core 执行循环和真实模型通道，比较原分支、fork、重新打开数据库后的消息前后恢复，并输出各次调用的输入、缓存读取、缓存写入、输出 token 和耗时。默认测试不发送这些真实模型请求；缓存未命中时保留测量结果并明确失败，不能把本地前缀相等当作服务端命中。
+
+2026-09-10 的 Luna／low 订阅通道实测定位了此前全为 0 的原因：Zeta 只发送了 body 中的 `prompt_cache_key`，缺少 Codex 同时发送的 `session-id` 请求头。固定输入的对照显示，仅补 `session-id` 即可命中；单独补 `thread-id`、`x-client-request-id` 或 `client_metadata` 不能替代它。Responses Lite、verbosity 和 turn-state 不属于这次修复的必要条件。原始 SSE 与 Zeta 解析后的缓存计数一致。
+
+正式通道补齐请求头后，约 14.3k 输入的原分支续写、fork、重新打开数据库后的消息前后恢复，以及完全相同请求对照都报告 14,080 个缓存读取 token；首轮为 0。历史、身份和请求前缀断言通过，登录凭据未改写。该通道本次仍报告 `cache_write_tokens = 0`，不能据此推断没有写缓存。模型服务的路由和缓存状态仍可能使后续运行出现未命中。
+
+针对路由头的独立对照与原始 SSE 用量核对：
+
+```bash
+just test zeta-model-provider --lib live_luna_cache_requires_session_routing_header -- --ignored --nocapture
+```
 
 ## 14. 固定决策
 

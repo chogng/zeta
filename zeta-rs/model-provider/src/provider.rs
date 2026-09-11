@@ -1,3 +1,7 @@
+#[path = "websocket_session.rs"]
+mod websocket_session;
+pub use websocket_session::ResponsesModelSession;
+
 use crate::ModelCatalogBinding;
 use crate::ModelProviderError;
 use crate::ProviderCredentialService;
@@ -53,15 +57,9 @@ use zeta_protocol::ModelRef;
 use zeta_secrets::SecretStore;
 
 enum ProviderConnection {
-    ChatGpt {
-        auth: Arc<ChatGptOAuth>,
-    },
-    Direct {
-        credential_headers: Vec<zeta_http_client::HttpHeader>,
-    },
-    Subscription {
-        target: ResolvedApiTarget,
-    },
+    ChatGpt { auth: Arc<ChatGptOAuth> },
+    Direct { headers: crate::auth::ModelHeaders },
+    Subscription { target: ResolvedApiTarget },
 }
 
 #[derive(Clone)]
@@ -71,6 +69,13 @@ enum ProviderTarget {
 }
 
 impl ProviderTarget {
+    fn endpoint(&self, direct: ApiEndpoint) -> ApiEndpoint {
+        match self {
+            Self::ChatGpt(_) => ApiEndpoint::ChatGptResponses,
+            Self::Fixed(_) => direct,
+        }
+    }
+
     fn resolve(&self) -> Result<Cow<'_, ResolvedApiTarget>, ModelProviderError> {
         match self {
             Self::Fixed(target) => Ok(Cow::Borrowed(target)),
@@ -177,9 +182,9 @@ impl ModelEventSink for AttemptEvents<'_> {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone)]
 enum RemoteMeasurement {
-    Enabled,
+    Enabled(Vec<zeta_http_client::HttpHeader>),
     Disabled,
 }
 
@@ -214,13 +219,15 @@ impl Provider {
         let adapter = providers::instantiate(definition.adapter, &config);
         let (target, remote_measurement) = match connection {
             ProviderConnection::Direct {
-                mut credential_headers,
+                headers: credentials,
             } => {
                 let mut headers = adapter.fixed_headers();
-                headers.append(&mut credential_headers);
+                headers.extend(credentials.invocation);
+                let mut count_headers = adapter.fixed_headers();
+                count_headers.extend(credentials.measurement);
                 (
                     ProviderTarget::Fixed(ResolvedApiTarget::new(config.base_url.clone(), headers)),
-                    RemoteMeasurement::Enabled,
+                    RemoteMeasurement::Enabled(count_headers),
                 )
             }
             ProviderConnection::Subscription { target } => {
@@ -246,6 +253,15 @@ impl Provider {
         })
     }
 
+    fn prepare_request(&self, model: &Model, request: &ModelRequest) -> ModelRequest {
+        let mut request = request.clone();
+        request.max_output_tokens = request.max_output_tokens.or(self.config.max_output_tokens);
+        let _ = request.sanitize_image_details(
+            model.capabilities.image_detail_original == CapabilitySupport::Supported,
+        );
+        request
+    }
+
     pub fn id(&self) -> &ProviderId {
         &self.definition.id
     }
@@ -259,7 +275,7 @@ impl Provider {
     }
 
     pub fn protocol(&self) -> ApiProtocol {
-        self.adapter.endpoint().protocol()
+        self.target.endpoint(self.adapter.endpoint()).protocol()
     }
 
     pub fn build_model(
@@ -314,10 +330,7 @@ impl Provider {
         sink: &mut dyn ModelEventSink,
     ) -> Result<ModelResponse, ModelProviderError> {
         let model = self.resolve_model(model_id)?;
-        let mut request = request.clone();
-        let supports_original =
-            model.capabilities.image_detail_original == CapabilitySupport::Supported;
-        let _image_detail_decisions = request.sanitize_image_details(supports_original);
+        let request = self.prepare_request(&model, request);
         check_cancellation(cancellation)?;
         let target = self.target.resolve()?;
         let attempt_client = AttemptClient::new(self.client.as_ref());
@@ -377,14 +390,26 @@ impl Provider {
         cancellation: &CancellationToken,
         sink: &mut dyn ModelEventSink,
     ) -> Result<ModelResponse, ModelProviderError> {
-        let endpoint = self.adapter.endpoint();
+        let endpoint = self.target.endpoint(self.adapter.endpoint());
         let model = self.adapter.model_id(model);
         match self.definition.output_transport {
-            ModelOutputTransport::NativeStreaming => {
-                stream_endpoint(endpoint, target, model, request, client, cancellation, sink)
-            }
+            ModelOutputTransport::NativeStreaming => stream_endpoint(
+                endpoint,
+                &target,
+                model,
+                request,
+                client,
+                cancellation,
+                sink,
+            ),
             ModelOutputTransport::Unary => endpoint
-                .complete_with_client_and_cancellation(target, model, request, client, cancellation)
+                .complete_with_client_and_cancellation(
+                    &target,
+                    model,
+                    request,
+                    client,
+                    cancellation,
+                )
                 .map_err(Into::into),
         }
     }
@@ -394,7 +419,7 @@ impl Provider {
         model_id: &ModelId,
     ) -> Result<ContextTokenMeasurementCapability, ModelProviderError> {
         let model = self.resolve_model(model_id)?;
-        let provider = if self.remote_measurement == RemoteMeasurement::Enabled {
+        let provider = if matches!(self.remote_measurement, RemoteMeasurement::Enabled(_)) {
             self.adapter
                 .input_token_measurement_capability(model.id.as_str())
         } else {
@@ -416,8 +441,8 @@ impl Provider {
         cancellation: &CancellationToken,
     ) -> Result<ContextTokenMeasurementOutcome, ModelProviderError> {
         let model = self.resolve_model(model_id)?;
-        let provider = if self.remote_measurement == RemoteMeasurement::Enabled {
-            let target = self.target.resolve()?;
+        let provider = if let RemoteMeasurement::Enabled(headers) = &self.remote_measurement {
+            let target = ResolvedApiTarget::new(self.config.base_url.clone(), headers.clone());
             self.adapter.measure_input(
                 &target,
                 model.id.as_str(),
@@ -735,7 +760,7 @@ impl ModelProviderRuntime {
     ) -> Result<Arc<dyn ModelInvoker>, ModelProviderError> {
         let runtime = self.with_configs([config])?;
         let normalized = runtime.configs.normalize_for(config, &model_ref.provider)?;
-        let connection = runtime.connection(model_ref)?;
+        let connection = runtime.connection(model_ref, &normalized)?;
         runtime
             .instantiate_normalized_with_connection(normalized, connection)?
             .build_model(&model_ref.model)
@@ -749,7 +774,7 @@ impl ModelProviderRuntime {
     ) -> Result<ModelResponse, ModelProviderError> {
         let runtime = self.with_configs([config])?;
         let normalized = runtime.configs.normalize_for(config, &model_ref.provider)?;
-        let connection = runtime.connection(model_ref)?;
+        let connection = runtime.connection(model_ref, &normalized)?;
         runtime
             .instantiate_normalized_with_connection(normalized, connection)?
             .complete(&model_ref.model, request)
@@ -759,7 +784,7 @@ impl ModelProviderRuntime {
         &self,
         normalized: NormalizedModelProviderConfig,
     ) -> Result<Provider, ModelProviderError> {
-        let connection = self.direct_connection(&normalized.provider)?;
+        let connection = self.direct_connection(&normalized)?;
         self.instantiate_normalized_with_connection(normalized, connection)
     }
 
@@ -783,7 +808,11 @@ impl ModelProviderRuntime {
         )
     }
 
-    fn connection(&self, model: &ModelRef) -> Result<ProviderConnection, ModelProviderError> {
+    fn connection(
+        &self,
+        model: &ModelRef,
+        normalized: &NormalizedModelProviderConfig,
+    ) -> Result<ProviderConnection, ModelProviderError> {
         match find_static_model(model).map(|spec| spec.runtime) {
             Some(StaticModelRuntime::KimiCode) => self
                 .kimi_oauth
@@ -806,22 +835,25 @@ impl ModelProviderRuntime {
                     auth: Arc::clone(auth),
                 })
             }
-            Some(StaticModelRuntime::ProviderApi) | None => self.direct_connection(&model.provider),
+            Some(StaticModelRuntime::ProviderApi) | None => self.direct_connection(normalized),
         }
     }
 
     fn direct_connection(
         &self,
-        provider: &ProviderId,
+        normalized: &NormalizedModelProviderConfig,
     ) -> Result<ProviderConnection, ModelProviderError> {
-        let credential_headers = self
+        let headers = self
             .credentials
             .as_ref()
-            .map(|credentials| credentials.request_headers(provider))
+            .map(|credentials| credentials.request_model_headers(normalized))
             .transpose()
             .map_err(|error| ModelProviderError::Credential(error.to_string()))?
-            .unwrap_or_default();
-        Ok(ProviderConnection::Direct { credential_headers })
+            .unwrap_or(crate::auth::ModelHeaders {
+                invocation: Vec::new(),
+                measurement: Vec::new(),
+            });
+        Ok(ProviderConnection::Direct { headers })
     }
 }
 
@@ -1063,11 +1095,7 @@ impl ModelInvoker for RegisteredModelInvoker {
 
 impl RegisteredModelInvoker {
     fn prepare_request(&self, request: &ModelRequest) -> ModelRequest {
-        let mut request = request.clone();
-        request.max_output_tokens = request
-            .max_output_tokens
-            .or(self.provider.config.max_output_tokens);
-        request
+        self.provider.prepare_request(&self.model, request)
     }
 }
 

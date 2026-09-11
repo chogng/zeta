@@ -91,14 +91,13 @@ impl ProviderInputTokenCounter {
 
     pub(crate) fn count(
         &self,
-        invocation_target: &ResolvedApiTarget,
+        target: &ResolvedApiTarget,
         model: &str,
         request: &ModelRequest,
         client: &dyn OperationClient,
         cancellation: &CancellationToken,
     ) -> Result<InputTokenCount, ModelProviderError> {
-        let target =
-            ResolvedApiTarget::new(self.base_url.clone(), invocation_target.headers.clone());
+        let target = ResolvedApiTarget::new(self.base_url.clone(), target.headers.clone());
         self.endpoint
             .count_with_client_and_cancellation(&target, model, request, client, cancellation)
             .map_err(Into::into)

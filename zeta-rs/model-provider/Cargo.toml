@@ -29,6 +29,7 @@ zeta-model-tokenizer = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-ollama = { workspace = true }
 zeta-secrets = { workspace = true }
+zeta-websocket-client = { workspace = true }
 
 [dev-dependencies]
 base64 = { workspace = true }

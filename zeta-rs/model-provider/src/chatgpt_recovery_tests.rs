@@ -79,10 +79,18 @@ fn assert_luna_low(request: &ClientRequest) {
     let body: Value = serde_json::from_slice(request.body()).unwrap();
     assert_eq!(body["model"], "gpt-5.6-luna");
     assert_eq!(body["reasoning"]["effort"], "low");
+    assert_eq!(body["prompt_cache_key"], "recovery-session");
+    assert!(
+        request
+            .headers()
+            .iter()
+            .any(|header| header.name() == "session-id" && header.value() == "recovery-session")
+    );
 }
 
 fn request() -> ModelRequest {
     let mut request = ModelRequest::text("hello");
+    request.prompt_cache_key = Some("recovery-session".into());
     request.reasoning = Some(zeta_protocol::ReasoningConfig {
         effort: zeta_protocol::ReasoningEffort::Low,
         summary: false,

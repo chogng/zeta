@@ -85,7 +85,8 @@ zeta-http-client      负责底层网络传输
 - `NormalizedModelProviderConfig`；
 - `ProviderDefinition`；
 - `ApiProfile`（definition 的显式默认 API profile）；
-- `WebSocketApiProfile`（与 HTTP compatibility 分离的 exact WebSocket wire profile）；
+- `WebSocketApiProfile`（与 HTTP compatibility 分离的 Responses WebSocket 协议）；
+- `RealtimeApiProfile`（与文本调用分开声明的 Realtime GA 协议）；
 - `InputTokenCountDefinition` 与 normalized count target/model policy；
 - `ProviderConfigRegistry`；
 - `ProviderAdapter`；
@@ -103,7 +104,7 @@ zeta-http-client      负责底层网络传输
 | `EndpointPolicy` 只描述 base URL | 名称容易被理解为 `/messages` 等协议 endpoint | 改称或文档化为 `BaseUrlPolicy` 语义 |
 | definition 目前只有一个 `api_profile` | 无法表达 Google、xAI、Ollama 等多个正式 API profile | 扩展为 typed default/allowed API profile policy |
 | count binding 已独立声明 profile/target/models | invocation 与 count 可能不共享 base path | 保持 definition 显式，禁止 runtime 剥 URL 或猜 model 前缀 |
-| WebSocket profile 已独立声明 | compatible HTTP schema 不足以证明 WebSocket lifecycle | 保持 fail closed；runtime target、codec 与 session client 还要分别验证 |
+| Responses WebSocket 与 Realtime profile 分别声明 | HTTP 或文本订阅支持不代表语音服务可用 | runtime 分别校验能力与凭据；实连证据按服务记录 |
 | 静态 models 同时参与运行时可用性判断 | 容易与 models manager catalog 重复 | 仅作为 seed metadata 和 fallback evidence |
 
 迁移期间可以保留现有类型名，但新代码不能继续扩大这些歧义。
@@ -120,6 +121,7 @@ pub struct ProviderDefinition {
     pub base_url: BaseUrlPolicy,
     pub api_profiles: ApiProfilePolicy,
     pub websocket_api_profile: WebSocketApiProfile,
+    pub realtime_api_profile: RealtimeApiProfile,
     pub input_token_count: Option<InputTokenCountDefinition>,
     pub model_catalog_policy: ModelCatalogPolicy,
     pub seed_models: Vec<Model>,
@@ -149,6 +151,8 @@ pub enum ApiProfileConfig {
 definition 声明 `OpenAiResponses`；xAI 虽然上游另有 Responses WebSocket，但当前 definition 仍绑定
 Chat Completions，因此保持 `Unavailable`。Generic OpenAI-compatible 也始终默认 unavailable，不能从
 HTTP compatibility 推导 WebSocket。
+
+`RealtimeApiProfile::{Unavailable, OpenAiRealtime}` 独立声明公共 Realtime GA 协议。OpenAI 内置定义启用它，其他定义默认不可用；反序列化旧定义时缺少 `realtimeApiProfile` 也保持不可用。该声明表示协议可用性，不代表账户已经获得服务权限。运行时还需使用对应凭据与模型；Luna 等 ChatGPT 文本订阅不能用于公共 Realtime。实现及验证范围见[端点实现](zeta-api.md#46-端点归属与-websocket-实现)。
 
 ChatGPT subscription rows 复用 typed `OpenAiResponses` codec，但不复用 Platform target 或 API key。`runtime = chatgpt_subscription` 使 `zeta-model-provider` 从 `zeta-chatgpt` 获取固定 target 与 fresh OAuth headers；用户配置不得覆盖为任意 URL。
 

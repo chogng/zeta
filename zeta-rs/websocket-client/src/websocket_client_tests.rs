@@ -111,3 +111,40 @@ async fn start_echo_server() -> (std::net::SocketAddr, tokio::task::JoinHandle<(
     });
     (address, server)
 }
+
+#[test]
+fn handshake_rejects_header_injection_and_transport_owned_overrides() {
+    for header in [
+        HttpHeader::new("X-Test", "private\r\nInjected: private"),
+        HttpHeader::new("Sec-WebSocket-Key", "private"),
+        HttpHeader::new("Host", "private"),
+    ] {
+        let error = WebSocketRequest::new("wss://example.test", vec![header]).unwrap_err();
+        assert!(!error.to_string().contains("private"));
+    }
+}
+
+#[tokio::test]
+async fn rejected_handshake_preserves_status_without_response_body() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let mut bytes = vec![0; 4096];
+        let _ = stream.read(&mut bytes).await.unwrap();
+        stream.write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 14\r\nConnection: close\r\n\r\nprivate-secret").await.unwrap();
+    });
+    let network = OutboundNetworkSnapshot::new(
+        HttpClientConfig::new().with_proxy_policy(ProxyPolicy::Direct),
+    )
+    .unwrap();
+    let result = WebSocketConnector::new(network)
+        .connect(WebSocketRequest::new(format!("ws://{address}"), vec![]).unwrap())
+        .await;
+    let Err(error) = result else {
+        panic!("handshake must fail");
+    };
+    assert_eq!(error, WebSocketClientError::HandshakeRejected(401));
+    assert!(!error.to_string().contains("private"));
+    server.await.unwrap();
+}
