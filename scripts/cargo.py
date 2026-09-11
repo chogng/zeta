@@ -38,6 +38,7 @@ def main(arguments: list[str] | None = None) -> int:
     parser.add_argument("--v8-target", choices=sorted(TARGETS))
     parser.add_argument("--v8-lock", type=Path, default=DEFAULT_LOCK)
     parser.add_argument("--v8-cache-root", type=Path, default=DEFAULT_CACHE)
+    parser.add_argument("--deny-warnings", action="store_true")
     parser.add_argument("cargo_arguments", nargs=argparse.REMAINDER)
     args = parser.parse_args(arguments)
     cargo_arguments = list(args.cargo_arguments)
@@ -50,6 +51,10 @@ def main(arguments: list[str] | None = None) -> int:
     if target not in TARGETS:
         parser.error(f"unsupported V8 target: {target}")
     environment = os.environ.copy()
+    if args.deny_warnings:
+        environment["RUSTFLAGS"] = " ".join(
+            filter(None, [environment.get("RUSTFLAGS"), "-D warnings"])
+        )
     if cargo_command_uses_v8(args.cargo, cargo_arguments, REPOSITORY_ROOT):
         environment.update(
             resolve_v8_cargo_env(

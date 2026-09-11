@@ -505,7 +505,7 @@ struct LocalShellToolService<B> {
 }
 
 impl<B: SandboxBackend> LocalShellToolService<B> {
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     fn new(
         authorization: Authorization,
         ripgrep: RipgrepExecutable,

@@ -1,4 +1,4 @@
-import { type DebugAdapterCloseParams, type DebugAdapterReadResult, type DebugAdapterSendParams, type DebugAdapterStartParams, type DebugAdapterStartResult } from "../../../../../generated/app-server/types.js";
+import { type DebugAdapterCloseParams, type DebugAdapterReadResult, type DebugAdapterSendParams, type DebugAdapterStartParams, type DebugAdapterStartResult } from "../../../../../generated/app-server/index.js";
 import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { type IAppServerApi } from "../../app-server/common/appServerApi.js";
 import { invoke } from "../../ipc/electron-browser/rendererIpc.js";

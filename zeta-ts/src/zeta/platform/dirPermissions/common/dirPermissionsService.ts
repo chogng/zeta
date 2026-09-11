@@ -1,4 +1,4 @@
-import type { PermissionDto } from "../../../../../generated/app-server/types.js";
+import type { PermissionDto } from "../../../../../generated/app-server/index.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
 export interface DirPermissionsEntry {

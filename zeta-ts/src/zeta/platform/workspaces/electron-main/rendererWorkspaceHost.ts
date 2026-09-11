@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { WebContents } from 'electron/main';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
-import type { DirGrantDto, PermissionDto } from '../../../../../generated/app-server/types.js';
+import type { DirGrantDto, PermissionDto } from '../../../../../generated/app-server/index.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 
 /** Routes window-owned workspace operations to the renderer that owns the backend connection. */

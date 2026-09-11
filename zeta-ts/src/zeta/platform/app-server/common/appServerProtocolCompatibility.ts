@@ -1,4 +1,4 @@
-import { APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerCapabilities } from '../../../../../generated/app-server/types.js';
+import { APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerCapabilities } from '../../../../../generated/app-server/index.js';
 import { decodeAppServerResult } from '../../../../../generated/app-server/AppServerProtocolDecoder.js';
 
 const serverCapabilityFields = [

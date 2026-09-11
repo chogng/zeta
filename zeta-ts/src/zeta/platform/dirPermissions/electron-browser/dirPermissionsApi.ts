@@ -1,4 +1,4 @@
-import type { ConfigCommandResult, DirPermissionsForgetParams, DirPermissionsListResult, DirPermissionsReadParams, DirPermissionsReadResult, DirPermissionsSetParams } from "../../../../../generated/app-server/types.js";
+import type { ConfigCommandResult, DirPermissionsForgetParams, DirPermissionsListResult, DirPermissionsReadParams, DirPermissionsReadResult, DirPermissionsSetParams } from "../../../../../generated/app-server/index.js";
 import { invoke } from "../../ipc/electron-browser/rendererIpc.js";
 import type { IDirPermissionsApi } from "../common/dirPermissionsApi.js";
 

@@ -44,6 +44,10 @@ test-tui *args:
 check *args:
     {{ python }} -B scripts/cargo.py check -p {args}
 
+# Compile every target in one Rust package and reject compiler warnings.
+rust-warnings *args:
+    {{ python }} -B scripts/cargo.py --deny-warnings check -p {args} --all-targets
+
 # Fail once the configuration support window makes a compatibility migration removable.
 check-config-migrations:
     {{ python }} -B scripts/cargo.py test -p zeta-config tests::config_migration_support_window_has_no_expired_compatibility -- --exact

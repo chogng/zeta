@@ -11,7 +11,7 @@ import { LanguageCompletionTriggerKind, type LanguageCompletionProvider, type La
 import { type LanguageHoverProvider, type LanguageHoverRequest } from "../../../../editor/contrib/hover/common/hover.js";
 import { type LanguageDeclarationProvider, type LanguageDefinitionProvider, type LanguageImplementationProvider, type LanguageLocation, type LanguageLocationRequest, type LanguageReferenceProvider, type LanguageReferenceRequest, type LanguageTypeDefinitionProvider } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageCallHierarchyEntry, type LanguageCallHierarchyProvider, type LanguageHierarchyFollowupRequest, type LanguageHierarchyItem, type LanguageHierarchyRequest, type LanguageTypeHierarchyProvider } from "../../../../editor/contrib/callHierarchy/common/languageHierarchy.js";
-import { type LanguageCompletionItemKindDto, type LanguageHierarchyItemDto } from "../../../../../../generated/app-server/types.js";
+import { type LanguageCompletionItemKindDto, type LanguageHierarchyItemDto } from "../../../../../../generated/app-server/index.js";
 import { type LanguageWorkspaceSymbol, type LanguageWorkspaceSymbolProvider } from "../../../../editor/common/languages/workspaceSymbols.js";
 import { type LanguageRenameProvider, type LanguageRenameRequest } from "../../../../editor/contrib/rename/common/languageRename.js";
 import { type LanguageCodeAction, type LanguageCodeActionProvider, type LanguageCodeActionRequest } from "../../../../editor/contrib/codeAction/common/languageCodeActions.js";
@@ -24,7 +24,7 @@ import { type LanguageLink, type LanguageLinkProvider, type LanguageLinkRequest 
 import { type LanguageColorProvider, type LanguageColorPresentationRequest, type LanguageColorRequest } from "../../../../editor/contrib/colorPicker/common/languageColors.js";
 import { type LanguageFoldingRangeProvider, type LanguageFoldingRangeRequest } from "../../../../editor/contrib/folding/common/languageFoldingRanges.js";
 import { LanguageDiagnosticSeverity } from "../../../../editor/common/languages/languageResults.js";
-import { type LanguageCodeActionDto, type LanguageCodeLensDto, type LanguageDirectoryEditDto, type LanguageDocumentLinkDto, type LanguageDocumentSymbolDto } from "../../../../../../generated/app-server/types.js";
+import { type LanguageCodeActionDto, type LanguageCodeLensDto, type LanguageDirectoryEditDto, type LanguageDocumentLinkDto, type LanguageDocumentSymbolDto } from "../../../../../../generated/app-server/index.js";
 import { type ILanguageApi } from "../../../../platform/language/common/languageApi.js";
 import { workspaceRelativePath, workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";

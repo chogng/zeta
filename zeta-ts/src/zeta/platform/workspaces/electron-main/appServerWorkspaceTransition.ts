@@ -1,5 +1,5 @@
 import type { RendererWorkspaceHost } from './rendererWorkspaceHost.js';
-import { type PermissionDto, type DirGrantDto, type EnvDirSetEntry } from "../../../../../generated/app-server/types.js";
+import { type PermissionDto, type DirGrantDto, type EnvDirSetEntry } from "../../../../../generated/app-server/index.js";
 import type { IDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";
 import { AppServerRemoteError } from "../../app-server/common/appServerError.js";

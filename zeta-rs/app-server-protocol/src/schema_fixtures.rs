@@ -19,6 +19,8 @@ use crate::rpc::JsonRpcNotification;
 use crate::rpc::JsonRpcRequest;
 use crate::rpc::JsonRpcSuccess;
 use std::collections::BTreeSet;
+use std::path::Path;
+use std::path::PathBuf;
 use zeta_protocol::ContentDigest;
 use zeta_protocol::Patch;
 use zeta_protocol::SkillId;
@@ -26,6 +28,31 @@ use zeta_protocol::SkillName;
 use zeta_protocol::SkillRef;
 use zeta_protocol::SkillSourceId;
 use zeta_protocol::ThreadEvent;
+
+fn generated_typescript() -> String {
+    typescript_files()
+        .into_iter()
+        .map(|(_, contents)| contents)
+        .collect::<String>()
+}
+
+fn generated_fixture_paths(root: &Path) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    let mut pending_directories = vec![root.to_path_buf()];
+    while let Some(directory) = pending_directories.pop() {
+        for entry in std::fs::read_dir(directory).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if entry.file_type().unwrap().is_dir() {
+                pending_directories.push(path);
+            } else {
+                paths.push(path.strip_prefix(root).unwrap().to_path_buf());
+            }
+        }
+    }
+    paths.sort();
+    paths
+}
 
 #[test]
 fn registry_method_and_notification_names_are_unique() {
@@ -137,7 +164,7 @@ fn registry_method_and_notification_names_are_unique() {
 
 #[test]
 fn issue_browser_and_agent_session_types_are_declared_without_workflow_methods() {
-    let output = typescript();
+    let output = generated_typescript();
     for name in [
         "IssueConfigDto",
         "IssueConfigureParams",
@@ -325,7 +352,7 @@ fn rpc_envelopes_preserve_json_rpc_2_shape() {
 
 #[test]
 fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
-    let typescript = typescript();
+    let typescript = generated_typescript();
 
     assert!(typescript.contains("export type ModelRef = { provider: string, model: string, };"));
     assert!(typescript.contains(
@@ -729,7 +756,7 @@ fn language_server_mode_rejects_automatic() {
 
 #[test]
 fn generated_method_maps_match_the_protocol_registries() {
-    let output = typescript();
+    let output = generated_typescript();
 
     assert!(output.contains("export interface AppServerRequestMap {"));
     assert!(output.contains("export interface AppServerNotificationMap {"));
@@ -762,6 +789,26 @@ fn generated_method_maps_match_the_protocol_registries() {
 }
 
 #[test]
+fn generated_typescript_separates_types_from_protocol_entrypoints() {
+    let files = typescript_files()
+        .into_iter()
+        .collect::<std::collections::BTreeMap<_, _>>();
+
+    assert!(!files.contains_key(Path::new("types.ts")));
+    assert!(files.contains_key(Path::new("protocol.ts")));
+    assert!(files.contains_key(Path::new("types/index.ts")));
+    let model_catalog = files.get(Path::new("types/ModelCatalogEntry.ts")).unwrap();
+    assert!(model_catalog.contains("import type { ModelRef } from './ModelRef.js';"));
+    assert!(model_catalog.contains("export type ModelCatalogEntry ="));
+    let request_map = files.get(Path::new("AppServerRequestMap.ts")).unwrap();
+    assert!(request_map.contains("export interface AppServerRequestMap {"));
+    assert!(request_map.contains("from './types/InitializeParams.js';"));
+    assert!(!request_map.contains("from './types.js'"));
+    let index = files.get(Path::new("index.ts")).unwrap();
+    assert!(index.contains("export type * from './types/index.js';"));
+}
+
+#[test]
 fn schema_fixtures_match_the_generators() {
     let schema = include_str!("../schema/json/schema.json");
 
@@ -769,20 +816,16 @@ fn schema_fixtures_match_the_generators() {
     let fixture_directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("schema")
         .join("typescript");
-    let mut fixture_names = std::fs::read_dir(&fixture_directory)
-        .unwrap()
-        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
-        .collect::<Vec<_>>();
-    fixture_names.sort();
-    let mut expected_names = TYPESCRIPT_FILES
+    let fixture_names = generated_fixture_paths(&fixture_directory);
+    let mut expected_names = typescript_files()
         .iter()
-        .map(|name| (*name).to_string())
+        .map(|(path, _)| path.clone())
         .collect::<Vec<_>>();
     expected_names.sort();
     assert_eq!(fixture_names, expected_names);
-    for (file_name, expected) in typescript_files() {
-        let actual = std::fs::read_to_string(fixture_directory.join(file_name)).unwrap();
-        assert_eq!(actual.replace("\r\n", "\n"), expected, "{file_name}");
+    for (path, expected) in typescript_files() {
+        let actual = std::fs::read_to_string(fixture_directory.join(&path)).unwrap();
+        assert_eq!(actual.replace("\r\n", "\n"), expected, "{}", path.display());
     }
 }
 

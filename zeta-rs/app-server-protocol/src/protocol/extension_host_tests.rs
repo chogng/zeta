@@ -69,7 +69,10 @@ fn registration_descriptor_matches_host_rpc_v1_shape() {
 
 #[test]
 fn generated_typescript_uses_camel_case_registration_fields() {
-    let typescript = crate::typescript();
+    let typescript = crate::typescript_files()
+        .into_iter()
+        .map(|(_, contents)| contents)
+        .collect::<String>();
 
     assert!(typescript.contains("languageIds: Array<string>"));
     assert!(typescript.contains("debuggerType: string"));

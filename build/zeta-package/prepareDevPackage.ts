@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { cargoArtifactExecutable, cargoRenderedDiagnostic, cargoTargetDirectory, parseCargoMessage } from "../lib/cargo.ts";
 import { developmentHostTarget, zetaPackageBuildPath } from "../lib/paths.ts";
 import { validateProductServices } from "./productServices.ts";
-import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../zeta-ts/generated/app-server/types.ts";
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../zeta-ts/generated/app-server/protocol.ts";
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..");
 const cargoWorkspace = repositoryRoot;

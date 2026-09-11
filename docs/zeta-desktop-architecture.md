@@ -760,7 +760,7 @@ TypeScript 生成。进程内 CLI client 与 Desktop stdio client 必须经过�
 - `zeta-server app-server connect`（共享 local authority）与 `--listen stdio://`（direct compatibility）；
 - 独立的 `zeta-app-server-daemon` binary（profile authority、process-generation record、真实
   initialize readiness、协作停止、socket 与 idle lifecycle）；
-- `zeta-rs/app-server-protocol/schema/typescript/types.ts`；
+- `zeta-rs/app-server-protocol/schema/typescript/index.ts` 与 `types/` 类型目录；
 - `zeta-rs/app-server-protocol/schema/json/schema.json`；
 - schema hash；
 - 当前 schema fixtures；

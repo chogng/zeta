@@ -4,7 +4,7 @@ import { BrowserAutomationHost } from "../../platform/browser/electron-main/brow
 import { rendererSystemHostRoutes } from "../../platform/native/electron-main/rendererSystemHostRoutes.js";
 import { shell } from "electron";
 import { app, BrowserWindow, dialog, ipcMain, Menu, screen, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
-import type { DirGrantDto } from "../../../../generated/app-server/types.js";
+import type { DirGrantDto } from "../../../../generated/app-server/index.js";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { isCancellationError } from "../../base/common/errors.js";

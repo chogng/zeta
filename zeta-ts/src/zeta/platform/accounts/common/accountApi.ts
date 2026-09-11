@@ -1,4 +1,4 @@
-import type { AccountLoginCancelParams, AccountLoginCancelResult, AccountLoginStartParams, AccountLoginStartResult, AccountLogoutParams, AccountLogoutResult, AccountReadResult } from '../../../../../generated/app-server/types.js';
+import type { AccountLoginCancelParams, AccountLoginCancelResult, AccountLoginStartParams, AccountLoginStartResult, AccountLogoutParams, AccountLogoutResult, AccountReadResult } from '../../../../../generated/app-server/index.js';
 
 /** Transport-only account authentication operations. */
 export interface IAccountApi {

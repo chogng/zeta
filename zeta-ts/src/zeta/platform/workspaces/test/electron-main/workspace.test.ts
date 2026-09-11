@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import test from "node:test";
-import type { DirGrantDto } from "../../../../../../generated/app-server/types.js";
+import type { DirGrantDto } from "../../../../../../generated/app-server/index.js";
 import { URI } from "../../../../base/common/uri.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import {

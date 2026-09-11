@@ -4,7 +4,7 @@ import { Emitter } from "../../../../base/common/event.js";
 import { URI } from "../../../../base/common/uri.js";
 import { BrowserFileService, workspaceRelativePath, workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
 import { FileKind, FileRevisionConflictError } from "../../../../platform/files/common/files.js";
-import type { FsChanged } from "../../../../../../generated/app-server/types.js";
+import type { FsChanged } from "../../../../../../generated/app-server/index.js";
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { WorkspaceContextService } from "../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";

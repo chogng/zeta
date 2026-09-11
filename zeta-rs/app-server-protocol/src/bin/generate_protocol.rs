@@ -1,5 +1,7 @@
+use std::collections::BTreeSet;
 use std::path::Path;
 use std::path::PathBuf;
+use zeta_app_server_protocol::GENERATED_TYPESCRIPT_HEADER;
 use zeta_app_server_protocol::JSON_SCHEMA_FIXTURE;
 use zeta_app_server_protocol::TYPESCRIPT_FIXTURE_DIRECTORY;
 use zeta_app_server_protocol::json_schema;
@@ -92,9 +94,16 @@ fn main() {
     }
 }
 
-fn write_artifact(directory: &Path, file_name: &str, contents: String) -> std::io::Result<()> {
-    std::fs::create_dir_all(directory)?;
-    std::fs::write(directory.join(file_name), contents)
+fn write_artifact(
+    directory: &Path,
+    file_name: impl AsRef<Path>,
+    contents: String,
+) -> std::io::Result<()> {
+    let path = directory.join(file_name);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, contents)
 }
 
 fn write_fixtures() -> std::io::Result<()> {
@@ -104,10 +113,51 @@ fn write_fixtures() -> std::io::Result<()> {
 }
 
 fn write_typescript_files(directory: &Path) -> std::io::Result<()> {
-    for (file_name, contents) in typescript_files() {
+    let files = typescript_files();
+    let expected_paths = files
+        .iter()
+        .map(|(path, _)| path.clone())
+        .collect::<BTreeSet<_>>();
+    for relative_path in generated_typescript_paths(directory)? {
+        if !expected_paths.contains(&relative_path) {
+            std::fs::remove_file(directory.join(relative_path))?;
+        }
+    }
+    for (file_name, contents) in files {
         write_artifact(directory, file_name, contents)?;
     }
     Ok(())
+}
+
+fn generated_typescript_paths(directory: &Path) -> std::io::Result<Vec<PathBuf>> {
+    if !directory.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut generated = Vec::new();
+    let mut pending_directories = vec![directory.to_path_buf()];
+    while let Some(current_directory) = pending_directories.pop() {
+        for entry in std::fs::read_dir(current_directory)? {
+            let entry = entry?;
+            let path = entry.path();
+            if entry.file_type()?.is_dir() {
+                pending_directories.push(path);
+                continue;
+            }
+            if path.extension().is_none_or(|extension| extension != "ts") {
+                continue;
+            }
+            let contents = std::fs::read_to_string(&path)?;
+            if contents.starts_with(GENERATED_TYPESCRIPT_HEADER) {
+                generated.push(
+                    path.strip_prefix(directory)
+                        .expect("generated file must be below its output directory")
+                        .to_path_buf(),
+                );
+            }
+        }
+    }
+    Ok(generated)
 }
 
 fn write_fixture(path: PathBuf, contents: String) -> std::io::Result<()> {
@@ -121,7 +171,10 @@ fn write_fixture(path: PathBuf, contents: String) -> std::io::Result<()> {
 mod tests {
     use super::Artifact;
     use super::Command;
+    use super::write_typescript_files;
     use std::path::PathBuf;
+    use std::time::SystemTime;
+    use zeta_app_server_protocol::GENERATED_TYPESCRIPT_HEADER;
 
     #[test]
     fn parses_a_typescript_output_directory() {
@@ -164,5 +217,35 @@ mod tests {
             .is_err()
         );
         assert!(Command::parse(["fixtures".to_owned(), "unexpected".to_owned()]).is_err());
+    }
+
+    #[test]
+    fn generation_removes_only_stale_generated_typescript() {
+        let unique = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "zeta-app-server-protocol-{}-{unique}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            directory.join("stale.ts"),
+            format!("{GENERATED_TYPESCRIPT_HEADER}export type Stale = never;\n"),
+        )
+        .unwrap();
+        std::fs::write(
+            directory.join("handwritten.ts"),
+            "export const keep = true;\n",
+        )
+        .unwrap();
+
+        write_typescript_files(&directory).unwrap();
+
+        assert!(!directory.join("stale.ts").exists());
+        assert!(directory.join("handwritten.ts").exists());
+        assert!(directory.join("types/ModelRef.ts").exists());
+        std::fs::remove_dir_all(directory).unwrap();
     }
 }

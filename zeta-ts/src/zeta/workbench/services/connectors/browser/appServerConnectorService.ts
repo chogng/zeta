@@ -1,4 +1,4 @@
-import type { ConnectorConnectionStateDto, ConnectorDto } from "../../../../../../generated/app-server/types.js";
+import type { ConnectorConnectionStateDto, ConnectorDto } from "../../../../../../generated/app-server/index.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";

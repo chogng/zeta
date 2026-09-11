@@ -1,4 +1,4 @@
-import type { CodebaseStatusResult, ConfigCommandResult, ConfigReadResult, ProviderConfigureParams, CodebaseConfigureParams } from "../../../../../generated/app-server/types.js";
+import type { CodebaseStatusResult, ConfigCommandResult, ConfigReadResult, ProviderConfigureParams, CodebaseConfigureParams } from "../../../../../generated/app-server/index.js";
 
 /** Transport-only semantic codebase operations. Product consumers use ICodebaseService. */
 export interface ICodebaseApi {

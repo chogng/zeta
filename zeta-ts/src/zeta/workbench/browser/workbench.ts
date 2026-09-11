@@ -2,7 +2,7 @@ import { IMemoryDiagnosticsService } from '../../platform/memory/common/memoryDi
 import "./style.js";
 import { IAutomationService } from '../../platform/automation/common/automationService.js';
 import { IChatSessionNavigationService } from '../services/chat/common/chatSessionNavigationService.js';
-import type { FsChanged } from "../../../../generated/app-server/types.js";
+import type { FsChanged } from "../../../../generated/app-server/index.js";
 import { bindResizableLayout } from "../../base/browser/ui/resizable/resizable.js";
 import { disposableWindowTimeout } from "../../base/browser/scheduler.js";
 import { mainWindow } from "../../base/browser/window.js";

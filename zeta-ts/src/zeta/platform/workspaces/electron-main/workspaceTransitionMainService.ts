@@ -1,7 +1,7 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
 import type { IAnyWorkspaceIdentifier, ISingleFolderWorkspaceIdentifier } from "../../workspace/common/workspace.js";
-import type { DirGrantDto } from "../../../../../generated/app-server/types.js";
+import type { DirGrantDto } from "../../../../../generated/app-server/index.js";
 import type { WorkspaceContextMainService, WorkspacesMainService } from "./workspacesMainService.js";
 
 export enum WorkspaceTransitionPhase {

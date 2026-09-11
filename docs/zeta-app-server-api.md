@@ -1037,8 +1037,8 @@ Kimi 订阅登录使用 device-code flow，没有本地 callback listener：App 
 
 - Rust DTO 与 registry：`zeta-rs/app-server-protocol/src/protocol/`
 - JSON Schema：`zeta-rs/app-server-protocol/schema/json/schema.json`
-- TypeScript：`zeta-rs/app-server-protocol/schema/typescript/types.ts`
-- Desktop 生成产物：`zeta-ts/generated/app-server/types.ts`
+- TypeScript 入口：`zeta-rs/app-server-protocol/schema/typescript/index.ts`
+- Desktop 生成入口：`zeta-ts/generated/app-server/index.ts`
 
 修改契约后执行：
 

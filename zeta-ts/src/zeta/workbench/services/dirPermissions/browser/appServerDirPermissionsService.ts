@@ -1,4 +1,4 @@
-import type { PermissionDto } from "../../../../../../generated/app-server/types.js";
+import type { PermissionDto } from "../../../../../../generated/app-server/index.js";
 import type { IDirPermissionsApi } from "../../../../platform/dirPermissions/common/dirPermissionsApi.js";
 import type { DirPermissionsCommandResult, DirPermissionsSnapshot, IDirPermissionsService } from "../../../../platform/dirPermissions/common/dirPermissionsService.js";
 

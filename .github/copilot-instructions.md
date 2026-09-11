@@ -9,9 +9,10 @@ Before changing a file, identify its owner and read every matching scoped instru
 | TypeScript frontend | [`coding-guidelines.instructions.md`](instructions/coding-guidelines.instructions.md) and [`frontend-architecture.instructions.md`](instructions/frontend-architecture.instructions.md) |
 | Editor implementation | [`editor.instructions.md`](instructions/editor.instructions.md) |
 | Browser UI or CSS | [`browser-ui.instructions.md`](instructions/browser-ui.instructions.md) |
-| Rust | [`rust.instructions.md`](instructions/rust.instructions.md) |
+| Any implementation or test | [`testing.instructions.md`](instructions/testing.instructions.md) |
+| Rust | [`rust.instructions.md`](instructions/rust.instructions.md) and [`rust-testing.instructions.md`](instructions/rust-testing.instructions.md) |
+| TypeScript tests and validation | [`typescript-testing.instructions.md`](instructions/typescript-testing.instructions.md) |
 | `zeta-rs/native` or `app` | [`native.instructions.md`](instructions/native.instructions.md) |
-| Tests | [`testing.instructions.md`](instructions/testing.instructions.md) |
 | Markdown documentation | [`documentation.instructions.md`](instructions/documentation.instructions.md) |
 | `zeta-code` CLI/TUI | [`tui.instructions.md`](instructions/tui.instructions.md) |
 
@@ -69,7 +70,7 @@ Generic Marketplace infrastructure and templates must not hardcode a repository 
 - For ordinary tasks, implement the requested behavior, run the relevant tests, and report results directly. Update existing documentation only where behavior or responsibilities changed. The staged artifact workflow in [`docs/development-workflow.md`](../docs/development-workflow.md) applies only when the user explicitly invokes `/develop`.
 - Modify the exact repository or worktree the user named. Do not substitute a temporary clone, another worktree, or only a remote branch without explicit agreement.
 - In an owner-led pre-release repository, a PR is not the default integration requirement. Use PR review for external contributions, security-sensitive work, or real multi-person review needs.
-- Use the smallest typecheck, test, build, or documentation check that covers the changed surface. Rust package checks and tests use `just check <crate> [args]` and `just test <crate> [args]`; ask the user before any complete workspace Rust validation, and see [`testing.instructions.md`](instructions/testing.instructions.md) for the escalation rule. Do not report a command as passing unless it completed successfully.
+- Use the smallest typecheck, test, build, or documentation check that covers the changed surface. Rust package commands and workspace escalation are defined by [`rust-testing.instructions.md`](instructions/rust-testing.instructions.md); TypeScript validation is defined by [`typescript-testing.instructions.md`](instructions/typescript-testing.instructions.md). Do not report a command as passing unless it completed successfully.
 - Preserve unrelated working-tree changes. A historical violation is migration debt, not precedent for new code.
 
 ## Learnings
