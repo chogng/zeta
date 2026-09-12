@@ -67,7 +67,7 @@ fn snapshot(manager: &Manager, name: &str, width: u16, height: u16) -> ratatui::
         })
         .collect::<Vec<_>>()
         .join("\n");
-    insta::assert_snapshot!(name, text);
+    crate::tui_assert_snapshot!(name, text);
     buffer.clone()
 }
 

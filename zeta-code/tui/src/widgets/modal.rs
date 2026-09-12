@@ -1,6 +1,8 @@
 //! Bounded modal chrome. The host owns focus and the feature owns its content.
 
+use crate::render::InteractionState;
 use crate::render::RenderContext;
+use crate::render::interaction_style;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
@@ -77,6 +79,7 @@ pub(crate) fn draw(
     layout: ModalLayout,
     title: &str,
     hints: &crate::widgets::key_hint::KeyHints,
+    close: InteractionState,
     hint_style: crate::config::KeyHintStyle,
     context: RenderContext<'_>,
 ) {
@@ -100,10 +103,10 @@ pub(crate) fn draw(
         ),
         layout.title,
     );
-    frame.render_widget(
-        Paragraph::new("[X]").style(Style::default().fg(context.muted())),
-        layout.close,
-    );
+    let close_style = Style::default()
+        .fg(context.muted())
+        .patch(interaction_style(context, close));
+    frame.render_widget(Paragraph::new("[✗]").style(close_style), layout.close);
     crate::widgets::key_hint::draw_content(frame, layout.footer, hints, hint_style, context);
 }
 

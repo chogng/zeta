@@ -168,7 +168,7 @@ fn setup_aligns_items_descriptions_and_checkboxes_in_three_columns() {
     assert_eq!(column_of(memory, "[   ]"), checkbox_column);
     assert_eq!(column_of(cpu, "[   ]"), checkbox_column);
     assert_eq!(column_of(git_changes, "[   ]"), checkbox_column);
-    insta::assert_snapshot!("status_line_settings_with_accounting", rows.join("\n"));
+    crate::tui_assert_snapshot!("status_line_settings_with_accounting", rows.join("\n"));
 }
 
 fn column_of(row: &str, text: &str) -> usize {

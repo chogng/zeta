@@ -36,7 +36,7 @@ fn rewind_picker_lists_user_message_checkpoints_and_selects_the_latest() {
             checkpoint_label: "second checkpoint".into(),
         })
     );
-    insta::assert_snapshot!("turn_checkpoints", render(&state));
+    crate::tui_assert_snapshot!("turn_checkpoints", render(&state));
 }
 
 fn thread(messages: &[&str]) -> Thread {
@@ -147,7 +147,7 @@ fn message_checkpoints_offer_before_and_after_and_keep_unavailable_rows_read_onl
         selection.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         ListSelectionOutcome::Consumed
     ));
-    insta::assert_snapshot!("message_checkpoints", render(&state));
+    crate::tui_assert_snapshot!("message_checkpoints", render(&state));
 }
 
 fn render(state: &ListSelectionState) -> String {

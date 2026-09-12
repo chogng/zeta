@@ -5,7 +5,7 @@ expression: loading
   ≡ .
 
   Idle (1)
-> ○ Snapshot┌── Session details ──────────────────────────────────────────────────[X]─┐
+> ○ Snapshot┌── Session details ──────────────────────────────────────────────────[✗]─┐
   Archived (│                                                                         │
             │  Session:     Snapshot session                                          │
             │  Session ID:  current                                                   │

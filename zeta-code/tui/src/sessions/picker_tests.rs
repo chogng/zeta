@@ -214,7 +214,7 @@ fn resume_picker_renders_only_session_title_time_and_tokens() {
         })
         .collect::<Vec<_>>()
         .join("\n");
-    insta::assert_snapshot!("resume_sessions_compact_metadata", text);
+    crate::tui_assert_snapshot!("resume_sessions_compact_metadata", text);
 }
 
 #[test]

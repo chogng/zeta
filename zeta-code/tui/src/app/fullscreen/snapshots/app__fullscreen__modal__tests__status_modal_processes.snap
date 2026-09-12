@@ -5,14 +5,19 @@ expression: frame_text(&app)
   ≡ .                                                                                               
                                                                                                     
                                                                                                     
-            ┌── Config ───────────────────────────────────────────────────────────[X]─┐             
+            ┌── Status ───────────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │   General    Providers    Language servers    Issues                    │             
+            │   Thread    Processes                                                   │             
             │                                                                         │             
-            │  ╭────────────────────────────────────────────────────────────────────╮ │             
-            │  │ Screen mode                                                        │ │             
-            │  ╰────────────────────────────────────────────────────────────────────╯ │             
-            │  Screen mode    Use a full screen or keep terminal histor    fullscreen │             
+            │  Memory diagnostics:          Disabled                                  │             
+            │  Local total resident memory: collecting                                │             
+            │  Local observed peak:         collecting                                │             
+            │  Local total CPU:             collecting                                │             
+            │  1 minute memory change:      collecting                                │             
+            │  5 minute memory change:      collecting                                │             
+            │  TUI resident memory:         collecting                                │             
+            │  TUI CPU:                     collecting                                │             
+            │  App Server:                  included in the TUI process               │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
@@ -20,13 +25,8 @@ expression: frame_text(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-┌Question  (│                                                                         │────────────┐
-│Choose an o│                                                                         │            │
-│> Continue │                                                                         │            │
-│  自 己 输 入  │                                                                         │            │
-│           │                                                                         │            │
-└───────────│                                                                         │────────────┘
             │                                                                         │             
-  ╭─────────│  Enter/Esc/Ctrl+C to return  ·  Tab/Shift+Tab to switch                 │──────────╮  
+            │                                                                         │             
+  ╭─────────│  Tab to switch · Esc to close                                           │──────────╮  
   │ > Build └─────────────────────────────────────────────────────────────────────────┘          │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

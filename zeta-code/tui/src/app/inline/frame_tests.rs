@@ -63,7 +63,7 @@ fn input_keeps_terminal_selection_and_uses_a_bounded_area() {
     assert!(buffer.area.height < 32);
     assert!(text(&buffer).contains("继续检查终端历史"));
     assert!(!text(&buffer).contains("Zeta Code v"));
-    insta::assert_snapshot!("input", text(&buffer));
+    crate::tui_assert_snapshot!("input", text(&buffer));
     let layout = super::layout(&app, buffer.area);
     assert!(layout.input.height > 0);
     assert!(layout.input.bottom() <= buffer.area.bottom());
@@ -92,10 +92,10 @@ fn config_opens_and_closes_without_reprinting_history() {
     let buffer = render(&app, 100, 32);
     assert!(text(&buffer).contains("Screen mode"));
     assert!(text(&buffer).contains("inline"));
-    insta::assert_snapshot!("config", text(&buffer));
+    crate::tui_assert_snapshot!("config", text(&buffer));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
-    insta::assert_snapshot!("config_closed", text(&render(&app, 100, 32)));
+    crate::tui_assert_snapshot!("config_closed", text(&render(&app, 100, 32)));
 }
 
 #[test]

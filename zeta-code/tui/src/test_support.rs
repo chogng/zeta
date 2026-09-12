@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fmt::Display;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
 use zeta_app_server_protocol::protocol::config::AgentGrepBackendDto;
@@ -12,6 +13,21 @@ use zeta_app_server_protocol::protocol::config::ToolSearchEmbeddingStatusDto;
 use zeta_app_server_protocol::protocol::config::ToolSearchModeDto;
 
 static IN_PROCESS_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+pub(crate) fn snapshot_name(name: impl Display, module_path: &str) -> String {
+    let module_path = module_path
+        .split_once("::")
+        .map_or(module_path, |(_, module_path)| module_path)
+        .replace("::", "__");
+    let name = name.to_string().replace(['/', '\\'], "__");
+    format!("{module_path}__{name}")
+}
+
+pub(crate) fn snapshot_name_for_function(function_path: &str, module_path: &str) -> String {
+    let function_name = function_path.rsplit("::").next().unwrap_or(function_path);
+    let function_name = function_name.strip_prefix("test_").unwrap_or(function_name);
+    snapshot_name(function_name, module_path)
+}
 
 pub(crate) fn in_process_test_guard() -> MutexGuard<'static, ()> {
     IN_PROCESS_TEST_LOCK

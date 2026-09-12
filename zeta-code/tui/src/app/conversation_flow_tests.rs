@@ -12,7 +12,6 @@ use crate::thread::submit_prompt;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
-use insta::assert_snapshot;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use std::sync::Arc;
@@ -99,7 +98,7 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     let mut app = app_for_conversation(&mut client, &conversation);
 
     let first = submit_from_input(&mut app, FIRST_PROMPT);
-    assert_snapshot!("conversation_submitted", render(&app));
+    crate::tui_assert_snapshot!("conversation_submitted", render(&app));
     let started = submit_prompt(
         &mut client,
         request_scope(&conversation),
@@ -127,7 +126,7 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
             .any(|message| message.text().contains(FIRST_PARTIAL))
     );
     assert_eq!(app.status(), &Status::Working);
-    assert_snapshot!("conversation_streaming", render(&app));
+    crate::tui_assert_snapshot!("conversation_streaming", render(&app));
 
     model.release_first_response();
     let completed = wait_for_completed_thread(&mut client, &conversation, 1);
@@ -140,7 +139,7 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     assert!(completed_frame.contains("fn main()"));
     assert_eq!(app.latest_agent_response(), Some(FIRST_RESPONSE));
     assert_eq!(app.status(), &Status::Ready);
-    assert_snapshot!("conversation_completed", render(&app));
+    crate::tui_assert_snapshot!("conversation_completed", render(&app));
 
     let second = submit_from_input(&mut app, SECOND_PROMPT);
     let started = submit_prompt(
@@ -172,7 +171,7 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     assert!(json_contains_text(&second_request, FIRST_RESPONSE));
     assert!(json_contains_text(&second_request, SECOND_PROMPT));
     drop(requests);
-    assert_snapshot!("conversation_second_turn", render(&app));
+    crate::tui_assert_snapshot!("conversation_second_turn", render(&app));
 }
 
 fn app_for_conversation(

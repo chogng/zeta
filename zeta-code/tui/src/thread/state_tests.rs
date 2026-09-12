@@ -354,7 +354,7 @@ fn markdown_updates_render_links_and_tables_without_changing_canonical_messages(
             assert!(!terminal.backend().to_string().contains("alpha"));
         }
         if index == 1 {
-            insta::assert_snapshot!(
+            crate::tui_assert_snapshot!(
                 "markdown_transcript_completed",
                 terminal.backend().to_string()
             );
@@ -418,7 +418,7 @@ fn streaming_deadlines_change_the_visible_panel_without_changing_message_text() 
     }
     assert!(state.stream_deadline().is_none());
     assert_eq!(cache.entry_count(), 1);
-    insta::assert_snapshot!("streaming_commit_phases", phases.join("\n"));
+    crate::tui_assert_snapshot!("streaming_commit_phases", phases.join("\n"));
 }
 
 #[test]

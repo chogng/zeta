@@ -1,4 +1,5 @@
 use super::ModalLayout;
+use crate::render::InteractionState;
 use crate::render::test_context;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -33,6 +34,7 @@ fn border_uses_the_modal_theme_color() {
                 layout,
                 "Config",
                 &crate::widgets::key_hint::KeyHints::new().with_action("Esc", "close"),
+                InteractionState::default(),
                 crate::config::KeyHintStyle::Contrast,
                 test_context(),
             )
@@ -43,4 +45,56 @@ fn border_uses_the_modal_theme_color() {
         terminal.backend().buffer()[(layout.surface.x, layout.surface.y)].fg,
         test_context().modal_border()
     );
+}
+
+#[test]
+fn close_uses_shared_hover_and_pressed_theme_states() {
+    let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
+    let layout = ModalLayout::new(Rect::new(0, 0, 40, 12), 32, 10);
+    let context = test_context();
+    let states = [
+        (
+            InteractionState {
+                hovered: true,
+                ..InteractionState::default()
+            },
+            context.hover_foreground(),
+            context.hover_background(),
+        ),
+        (
+            InteractionState {
+                hovered: true,
+                pressed: true,
+                ..InteractionState::default()
+            },
+            context.pressed_foreground(),
+            context.pressed_background(),
+        ),
+    ];
+
+    for (state, foreground, background) in states {
+        terminal
+            .draw(|frame| {
+                super::draw(
+                    frame,
+                    layout,
+                    "Config",
+                    &crate::widgets::key_hint::KeyHints::new().with_action("Esc", "close"),
+                    state,
+                    crate::config::KeyHintStyle::Contrast,
+                    context,
+                )
+            })
+            .unwrap();
+
+        let buffer = terminal.backend().buffer();
+        let symbols = (layout.close.x..layout.close.right())
+            .map(|column| buffer[(column, layout.close.y)].symbol())
+            .collect::<String>();
+        assert_eq!(symbols, "[✗]");
+        for column in layout.close.x..layout.close.right() {
+            assert_eq!(buffer[(column, layout.close.y)].fg, foreground);
+            assert_eq!(buffer[(column, layout.close.y)].bg, background);
+        }
+    }
 }

@@ -5,9 +5,9 @@ expression: frame_text(&app)
   ≡ .                                                                                               
                                                                                                     
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
-  │         ┌── Memory content ───────────────────────────────────────────────────[X]─┐          │  
+  │         ┌── Memory content ───────────────────────────────────────────────────[✗]─┐          │  
   │    ▄  ▄ │                                                                         │          │  
-  │  ▗█▛██▜█│  Ctrl+S save · Ctrl+A clear · Esc cancel                                │          │  
+  │  ▗█▛██▜█│  The memory changed in another window. Refresh before saving.           │          │  
   │  ▝▜████▛│  Use Rust                                                               │          │  
   │    ▝  ▘ │  保 留   两 个 空 格                                                          │          │  
   │         │                                                                         │          │  

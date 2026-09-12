@@ -48,7 +48,7 @@ fn status_indicator_renders_waiting_and_deterministic_activity() {
         })
         .collect::<Vec<_>>()
         .join("\n");
-    insta::assert_snapshot!("status_indicator_phases", text);
+    crate::tui_assert_snapshot!("status_indicator_phases", text);
 }
 
 #[test]

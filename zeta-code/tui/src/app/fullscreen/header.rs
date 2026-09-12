@@ -1,6 +1,4 @@
 use crate::app::App;
-use crate::render::InteractionState;
-use crate::render::InteractionTarget;
 use crate::render::RenderContext;
 use crate::render::interaction_style;
 use ratatui::Frame;
@@ -18,12 +16,7 @@ pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, context: Render
     frame.render_widget(
         Paragraph::new("≡").style(interaction_style(
             context,
-            InteractionState {
-                target: InteractionTarget::Rest,
-                selected: false,
-                hovered: app.fullscreen.pointer.hovered() == Some(&home),
-                pressed: app.fullscreen.pointer.pressed() == Some(&home),
-            },
+            app.fullscreen.pointer.interaction_state(&home),
         )),
         menu_area(area),
     );

@@ -104,11 +104,15 @@
 | --- | --- | --- |
 | 弹窗整体与边框 | `ModalLayout.surface` | [widgets/modal.rs](tui/src/widgets/modal.rs) |
 | 弹窗标题 | `ModalLayout.title` | 同上 |
-| 关闭按钮 | `ModalLayout.close` | 右上角 `[×]` |
+| 关闭按钮 | `ModalLayout.close` | 右上角 `[✗]`（U+2717 BALLOT X）；悬停时显示悬停表面反馈 |
 | 弹窗内容区 | `ModalLayout.content` | 包含页签栏与正文 |
 | 弹窗页签栏 | `tabs` / `draw_tabs()` | [fullscreen/modal.rs](tui/src/app/fullscreen/modal.rs) |
 | 弹窗正文 | `body_area()` / `draw_body()` | 页签和间隔行以下；具体内容归各功能负责 |
 | 弹窗快捷键 | `ModalLayout.footer` | 位于弹窗内部，与页面的 `session.bottom` 不同 |
+
+关闭按钮 `[✗]` 的明暗变化统一叫**悬停表面反馈**（`hover surface feedback`），从交互原则上属于**悬停显现**（`reveal on hover`）：静止时保持安静，指针进入命中区域后，通过前景、边框或背景的明暗与对比变化显露可交互性。该反馈复用输入框等控件的悬停视觉，不改变字符、尺寸或位置，也不等同于键盘焦点、选中态和按下态。代码中的通用状态名是 `InteractionState.hovered`，主题颜色入口是 `hoverForeground` 和 `hoverBackground`。
+
+Fullscreen 的 pointer 状态统一由 `PointerInteraction<PointerTarget>` 保存：组件按自己的绘制布局提供 typed hit-test，`pointer::target_at()` 只聚合为一个当前目标，绘制时再转换为共享的 `InteractionState`。新增 hover 目标沿用这条链路，不在组件中另存 hover 状态；hover 只补充鼠标反馈，关闭弹窗仍可使用 `Esc`。
 
 ## 首页与其他页面
 

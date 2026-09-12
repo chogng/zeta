@@ -3,6 +3,7 @@ use super::selection::ScreenSelectionOutcome;
 use crate::app::App;
 use crate::app::AppCommand;
 use crate::host;
+use crate::render::InteractionState;
 use crate::terminal;
 use crate::thread::composer as chat_composer;
 use crate::thread::composer::ChatComposerPointerTarget;
@@ -63,6 +64,16 @@ impl<T> PointerInteraction<T> {
 
     pub(crate) fn pressed(&self) -> Option<&T> {
         self.pressed.as_ref()
+    }
+}
+
+impl<T: PartialEq> PointerInteraction<T> {
+    pub(crate) fn interaction_state(&self, target: &T) -> InteractionState {
+        InteractionState {
+            hovered: self.hovered.as_ref() == Some(target),
+            pressed: self.pressed.as_ref() == Some(target),
+            ..InteractionState::default()
+        }
     }
 }
 

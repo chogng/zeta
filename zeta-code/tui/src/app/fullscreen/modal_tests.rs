@@ -130,6 +130,7 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
                 layout,
                 None,
                 None,
+                crate::render::InteractionState::default(),
                 crate::config::KeyHintStyle::Contrast,
                 test_context(),
             )
@@ -152,7 +153,7 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
     assert!(rendered.contains("Diff preview"));
     assert!(rendered.contains("Syntax palette: Palette 1"));
     assert!(rendered.contains('╌'));
-    insta::assert_snapshot!("theme_modal_preview", rendered);
+    crate::tui_assert_snapshot!("theme_modal_preview", rendered);
     assert!(rendered.contains('┌'));
     assert!(rendered.contains('┘'));
     assert_eq!(title_row, usize::from(layout.surface.y));
@@ -173,6 +174,7 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
                 layout,
                 Some(&hover),
                 None,
+                crate::render::InteractionState::default(),
                 crate::config::KeyHintStyle::Contrast,
                 test_context(),
             )
@@ -274,13 +276,13 @@ fn modal_restores_home_focus_and_survives_background_thread_updates() {
     assert!(app.command_panel().is_some());
     app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
     assert_eq!(app.input(), "preserved draft");
-    insta::assert_snapshot!("settings_on_home", frame_text(&app));
+    crate::tui_assert_snapshot!("settings_on_home", frame_text(&app));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
     assert_eq!(app.fullscreen.home.selected, None);
     assert!(app.chat_input_focused());
     assert_eq!(app.input(), "preserved draft");
-    insta::assert_snapshot!("home_after_modal_closed", frame_text(&app));
+    crate::tui_assert_snapshot!("home_after_modal_closed", frame_text(&app));
 }
 
 #[test]
@@ -371,8 +373,32 @@ fn modal_mouse_activation_uses_the_session_identity_and_close_requires_matching_
     crate::app::fullscreen::pointer::handle_mouse(
         &mut app,
         area,
+        mouse(MouseEventKind::Moved, close),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    for column in super::layout(area).close.x..super::layout(area).close.right() {
+        assert_eq!(
+            terminal.backend().buffer()[(column, close.1)].bg,
+            app.render_context().hover_background()
+        );
+    }
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
         mouse(MouseEventKind::Down(MouseButton::Left), close),
     );
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    for column in super::layout(area).close.x..super::layout(area).close.right() {
+        assert_eq!(
+            terminal.backend().buffer()[(column, close.1)].bg,
+            app.render_context().pressed_background()
+        );
+    }
     app.fullscreen.clear();
     crate::app::fullscreen::pointer::handle_mouse(
         &mut app,
@@ -429,7 +455,7 @@ fn detail_tabs_use_the_same_mouse_routing_as_list_tabs() {
         crate::app::frame::process_resource_demand(&app, area),
         zeta_memory_diagnostics::ProcessResourceDemand::Detailed
     );
-    insta::assert_snapshot!("status_modal_processes", frame_text(&app));
+    crate::tui_assert_snapshot!("status_modal_processes", frame_text(&app));
 }
 
 #[test]
@@ -458,7 +484,7 @@ fn paste_targets_the_modal_and_home_instead_of_a_background_question() {
     assert_eq!(app.list_selection().unwrap().query(), "Screen mode");
     assert_eq!(app.input(), "");
     assert!(app.query_view().unwrap().custom_answer.is_none());
-    insta::assert_snapshot!("modal_search_with_background_question", frame_text(&app));
+    crate::tui_assert_snapshot!("modal_search_with_background_question", frame_text(&app));
     app.open_home();
     app.handle_paste("new task".into());
     assert_eq!(app.input(), "new task");
@@ -479,16 +505,16 @@ fn memories_manager_edits_multiline_text_keeps_failed_drafts_and_restores_home()
         entries: Vec::new(),
         cursor: None,
     }));
-    insta::assert_snapshot!("memories_management", frame_text(&app));
+    crate::tui_assert_snapshot!("memories_management", frame_text(&app));
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.handle_paste("Fixture decision".into());
     app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL));
     app.handle_paste("Use Rust\n保留  两个空格".into());
-    insta::assert_snapshot!("memories_multiline_editor", frame_text(&app));
+    crate::tui_assert_snapshot!("memories_multiline_editor", frame_text(&app));
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
     app.update(crate::config::Event::SettingsReceived(settings.clone()));
-    insta::assert_snapshot!("memories_inline_editor", frame_text(&app));
+    crate::tui_assert_snapshot!("memories_inline_editor", frame_text(&app));
     settings.set_screen_mode(crate::terminal::ScreenMode::Fullscreen);
     app.update(crate::config::Event::SettingsReceived(settings));
     let Some(crate::app::AppCommand::Memories(crate::memories::Command::Add {
@@ -502,7 +528,7 @@ fn memories_manager_edits_multiline_text_keeps_failed_drafts_and_restores_home()
     app.update(Event::Failed(
         "The memory changed in another window. Refresh before saving.".into(),
     ));
-    insta::assert_snapshot!("memories_failed_draft", frame_text(&app));
+    crate::tui_assert_snapshot!("memories_failed_draft", frame_text(&app));
     let Some(crate::app::AppCommand::Memories(crate::memories::Command::Add { body, .. })) =
         app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL))
     else {

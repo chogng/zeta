@@ -21,6 +21,38 @@ mod status;
 mod terminal;
 #[cfg(test)]
 mod test_support;
+#[cfg(test)]
+// Keep the owning Rust module in each filename while omitting the crate name from TUI baselines.
+#[macro_export]
+macro_rules! tui_assert_snapshot {
+    ($value:expr, @$snapshot:literal $(,)?) => {{
+        ::insta::assert_snapshot!($value, @$snapshot)
+    }};
+    ($name:expr, $value:expr, $debug_expr:expr $(,)?) => {{
+        let mut settings = ::insta::Settings::clone_current();
+        settings.set_prepend_module_to_snapshot(false);
+        let snapshot_name = $crate::test_support::snapshot_name($name, module_path!());
+        settings.bind(|| {
+            ::insta::assert_snapshot!(snapshot_name, $value, $debug_expr)
+        });
+    }};
+    ($name:expr, $value:expr $(,)?) => {{
+        let mut settings = ::insta::Settings::clone_current();
+        settings.set_prepend_module_to_snapshot(false);
+        let snapshot_name = $crate::test_support::snapshot_name($name, module_path!());
+        settings.bind(|| ::insta::assert_snapshot!(snapshot_name, $value));
+    }};
+    ($value:expr $(,)?) => {{
+        let mut settings = ::insta::Settings::clone_current();
+        settings.set_prepend_module_to_snapshot(false);
+        let snapshot_name = $crate::test_support::snapshot_name_for_function(
+            ::insta::_function_name!(),
+            module_path!(),
+        );
+        settings.bind(|| ::insta::assert_snapshot!(snapshot_name, $value));
+    }};
+}
+
 mod theme;
 mod thread;
 mod widgets;

@@ -1,4 +1,3 @@
-use insta::assert_snapshot;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
@@ -9,7 +8,7 @@ use zeta_sprite::TerminalSprite;
 
 #[test]
 fn generated_pet_cells_preserve_the_authored_terminal_instructions() {
-    assert_snapshot!("welcome_pet_terminal_cells", pet_cell_map(super::sprite()));
+    crate::tui_assert_snapshot!("welcome_pet_terminal_cells", pet_cell_map(super::sprite()));
 }
 
 #[test]
@@ -51,7 +50,7 @@ fn generated_pet_frames_and_click_timing_match_the_design() {
         .collect::<Vec<_>>();
 
     assert_eq!(timing, ["press 75ms", "rise 100ms", "land 100ms"]);
-    assert_snapshot!("welcome_pet_animation_frames", frames);
+    crate::tui_assert_snapshot!("welcome_pet_animation_frames", frames);
 }
 
 fn pet_cell_map(sprite: TerminalSprite<'_>) -> String {

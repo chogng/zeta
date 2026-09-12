@@ -3,7 +3,7 @@ source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
 expression: text
 ---
 "                    "
-"┌── Panel ─────[X]─┐"
+"┌── Panel ─────[✗]─┐"
 "│                  │"
 "│   First tab      │"
 "│   Second tab     │"

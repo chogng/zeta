@@ -2,7 +2,6 @@ use super::WelcomeModel;
 use super::draw;
 use crate::models::ModelSummary;
 use crate::render::test_context;
-use insta::assert_snapshot;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
@@ -58,7 +57,7 @@ fn wide_header_keeps_pet_and_identity_information_together() {
     assert_eq!(buffer[(4, 2)].bg, Color::Rgb(0, 0, 0));
     assert_eq!(buffer[(13, 1)].symbol(), "Z");
     assert!(buffer[(13, 1)].modifier.contains(Modifier::BOLD));
-    assert_snapshot!("welcome_pet_identity_header", rendered);
+    crate::tui_assert_snapshot!("welcome_pet_identity_header", rendered);
 }
 
 #[test]

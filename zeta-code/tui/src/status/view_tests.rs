@@ -78,7 +78,7 @@ fn expressive_status_line_renders_emoji_bars_and_permission_text() {
                 .to_owned()
         })
         .collect();
-    insta::assert_snapshot!("expressive_status_line", rows.join("\n"));
+    crate::tui_assert_snapshot!("expressive_status_line", rows.join("\n"));
     let progress = model.top_segments_for_width(48, runtime);
     let rendered = top_line(progress, crate::render::test_context());
     assert!(rendered.spans.iter().any(|span| span.content == "███"

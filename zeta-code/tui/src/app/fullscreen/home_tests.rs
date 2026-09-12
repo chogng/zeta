@@ -62,13 +62,13 @@ fn home_keeps_actions_above_the_fixed_composer() {
             .modifier
             .contains(Modifier::BOLD)
     );
-    insta::assert_snapshot!("home_actions", text(&buffer));
+    crate::tui_assert_snapshot!("home_actions", text(&buffer));
     app.handle_key(key(KeyCode::Esc));
     assert_eq!(app.fullscreen.home.selected, None);
     app.insert_text("检查项目结构");
     assert!(app.fullscreen_home_visible());
     assert!(!app.fullscreen_welcome_visible());
-    insta::assert_snapshot!(
+    crate::tui_assert_snapshot!(
         "home_draft",
         text(&render(&app, terminal.width, terminal.height))
     );
@@ -90,7 +90,7 @@ fn first_character_clears_welcome_and_keeps_the_workspace_header() {
     assert!(!rendered.contains("Zeta Code v"));
     assert!(!rendered.contains("Resume session"));
     assert!(rendered.contains("> x"));
-    insta::assert_snapshot!("home_after_first_character", rendered);
+    crate::tui_assert_snapshot!("home_after_first_character", rendered);
 
     app.handle_key(key(KeyCode::Backspace));
 
@@ -125,7 +125,7 @@ fn home_slash_command_starts_a_new_session_from_the_initial_page() {
     assert!(rendered.lines().next().unwrap().contains("≡ ."));
     assert!(rendered.contains("Zeta Code v"));
     assert!(rendered.contains("Resume session"));
-    insta::assert_snapshot!("home_restored_by_slash_command", rendered);
+    crate::tui_assert_snapshot!("home_restored_by_slash_command", rendered);
 
     for character in "start a fresh task".chars() {
         app.handle_key(key(KeyCode::Char(character)));
@@ -178,6 +178,14 @@ fn home_action_hover_and_press_do_not_change_keyboard_selection() {
     );
     assert_eq!(hovered[(actions.x, actions.y + 2)].symbol(), " ");
     assert_eq!(hovered[(actions.x + 2, actions.y + 2)].symbol(), "S");
+    for row in 0..actions.height {
+        assert!(
+            hovered[(actions.x + 2, actions.y + row)]
+                .modifier
+                .contains(Modifier::BOLD),
+            "home action row {row} should be bold"
+        );
+    }
     for x in actions.x..actions.right() {
         assert_eq!(
             hovered[(x, actions.y + 2)].bg,
@@ -229,7 +237,7 @@ fn home_submission_failure_restores_the_complete_draft() {
     assert!(app.accepts_input());
     assert!(app.fullscreen_home_visible());
     assert!(!app.fullscreen_welcome_visible());
-    insta::assert_snapshot!("home_submission_failed", text(&render(&app, 80, 24)));
+    crate::tui_assert_snapshot!("home_submission_failed", text(&render(&app, 80, 24)));
 }
 
 #[test]
@@ -240,7 +248,7 @@ fn home_menu_scrolls_to_every_action_on_short_terminals() {
         app.handle_key(key(KeyCode::Tab));
     }
     assert_eq!(app.fullscreen.home.selected, Some(4));
-    insta::assert_snapshot!("home_narrow", text(&render(&app, 40, 16)));
+    crate::tui_assert_snapshot!("home_narrow", text(&render(&app, 40, 16)));
     assert_eq!(app.handle_key(key(KeyCode::Enter)), Some(AppCommand::Quit));
 }
 
@@ -277,5 +285,5 @@ fn short_home_keeps_the_input_and_selected_action_visible() {
     assert!(text(&buffer).contains("Zeta Code"));
     assert!(!text(&buffer).contains("Quit Code"));
     assert_eq!(buffer[(areas.input.x + 2, areas.input.y)].symbol(), "╭");
-    insta::assert_snapshot!("home_short", text(&buffer));
+    crate::tui_assert_snapshot!("home_short", text(&buffer));
 }

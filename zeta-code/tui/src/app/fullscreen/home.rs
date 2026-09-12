@@ -198,7 +198,8 @@ pub(super) fn draw(
                 hovered: hovered == Some(*action),
                 pressed: pressed == Some(*action),
             },
-        );
+        )
+        .add_modifier(Modifier::BOLD);
         frame.render_widget(
             Paragraph::new(format!("{}{}", selection_marker(selected), label)).style(style),
             Rect::new(areas.actions.x, y, areas.actions.width, 1),

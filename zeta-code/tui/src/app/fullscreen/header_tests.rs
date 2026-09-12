@@ -57,7 +57,7 @@ fn header_places_branch_and_path_beside_the_menu_without_repeating_them_below() 
     assert_eq!(buffer[(4, 0)].fg, app.render_context().foreground());
     assert!(buffer[(4, 0)].modifier.contains(Modifier::BOLD));
     assert_eq!(buffer[(9, 0)].fg, app.render_context().muted());
-    insta::assert_snapshot!("workspace_header_and_hintbar", text);
+    crate::tui_assert_snapshot!("workspace_header_and_hintbar", text);
 
     let area = Rect::new(0, 0, 80, 20);
     let header = super::super::layout(&app, area).header;

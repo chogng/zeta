@@ -101,7 +101,7 @@ fn details_show_nested_agents_forks_waiting_and_lifecycle_separately() {
             )
         })
         .unwrap();
-    insta::assert_snapshot!("session_details_agent_tree", terminal.backend().to_string());
+    crate::tui_assert_snapshot!("session_details_agent_tree", terminal.backend().to_string());
 }
 
 #[test]

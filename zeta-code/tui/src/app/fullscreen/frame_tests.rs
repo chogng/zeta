@@ -38,7 +38,6 @@ use crate::widgets::search_box::SearchBoxModel;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
-use insta::assert_snapshot;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
@@ -125,13 +124,13 @@ fn input_history_search_and_cancel_preserve_the_composer() {
         app.render_context().foreground()
     );
     assert_eq!(buffer[(area.x + 4, area.y + 1)].symbol(), ">");
-    assert_snapshot!("input_history_search", render(&app, 100, 20));
+    crate::tui_assert_snapshot!("input_history_search", render(&app, 100, 20));
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
         None
     );
     assert_eq!(app.input(), "");
-    assert_snapshot!("input_history_search_cancelled", render(&app, 100, 20));
+    crate::tui_assert_snapshot!("input_history_search_cancelled", render(&app, 100, 20));
 }
 
 #[test]
@@ -155,7 +154,7 @@ fn pull_request_command_submits_an_ordinary_agent_task() {
     );
     assert!(submission.display_text.contains("pull request"));
     assert!(app.input().is_empty());
-    assert_snapshot!("pull_request_agent_task", render(&app, 100, 20));
+    crate::tui_assert_snapshot!("pull_request_agent_task", render(&app, 100, 20));
 }
 
 #[test]
@@ -213,7 +212,7 @@ fn completed_update_uses_the_existing_top_tip_notice_row() {
         "Zeta 1.2.3 is ready · restart to use the update".into(),
     ));
 
-    assert_snapshot!("completed_update_notice", render(&app, 80, 20));
+    crate::tui_assert_snapshot!("completed_update_notice", render(&app, 80, 20));
 }
 
 #[test]
@@ -238,7 +237,7 @@ fn clipboard_image_paste_moves_from_top_tip_into_chat_input() {
             .trim_end()
             .ends_with("image in clipboard · ctrl+v to paste")
     );
-    assert_snapshot!("clipboard_image_top_tip", rendered);
+    crate::tui_assert_snapshot!("clipboard_image_top_tip", rendered);
 
     app.update(HostEvent::ClipboardImageRead {
         target: app.draft_target(),
@@ -252,7 +251,7 @@ fn clipboard_image_paste_moves_from_top_tip_into_chat_input() {
     let rendered_after_paste = render(&app, terminal_area.width, terminal_area.height);
     assert!(!rendered_after_paste.contains("image in clipboard"));
     assert!(rendered_after_paste.contains("[Image #1]"));
-    assert_snapshot!(
+    crate::tui_assert_snapshot!(
         "clipboard_image_pasted_into_chat_input",
         rendered_after_paste
     );
@@ -348,7 +347,7 @@ fn status_command_panel_uses_the_shared_title_and_close_hint() {
     assert!(text.contains("Thread"));
     assert!(text.contains("Processes"));
     assert!(text.contains("Esc to close"));
-    assert!(text.contains("[X]"));
+    assert!(text.contains("[✗]"));
 }
 
 #[test]
@@ -372,6 +371,7 @@ fn modal_keeps_wrapped_tabs_between_title_and_body() {
                 modal,
                 None,
                 None,
+                crate::render::InteractionState::default(),
                 crate::config::KeyHintStyle::Contrast,
                 test_context(),
             )
@@ -385,7 +385,7 @@ fn modal_keeps_wrapped_tabs_between_title_and_body() {
     assert!(text.contains("First tab"));
     assert!(text.contains("Second tab"));
     assert!(text.contains("First item"));
-    insta::assert_snapshot!("modal_wrapped_tabs", text);
+    crate::tui_assert_snapshot!("modal_wrapped_tabs", text);
 }
 
 #[test]
@@ -550,7 +550,7 @@ fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_cha
     assert!(rendered.contains("Thread"));
     assert!(rendered.contains("Processes"));
     assert!(rendered.contains("Tab to switch · Esc to close"));
-    assert_snapshot!("status_panel_adaptive_height", rendered);
+    crate::tui_assert_snapshot!("status_panel_adaptive_height", rendered);
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
@@ -935,7 +935,7 @@ fn workspace_header_stays_fixed_while_scrolling_conversation_history() {
     assert!(!scrolled_to_start.contains("Zeta Code v"));
     assert!(scrolled_to_start.contains("/work/zeta"));
     assert!(scrolled_to_start.contains("Conversation started."));
-    assert_snapshot!("transcript_scrolled_to_first_message", scrolled_to_start);
+    crate::tui_assert_snapshot!("transcript_scrolled_to_first_message", scrolled_to_start);
 }
 
 #[test]
@@ -1143,7 +1143,7 @@ fn policy_changes_restart_the_fade_and_keep_current_and_next_modes_visible() {
     let visible = render(&app, 120, 20);
     assert!(visible.contains("current: ask permissions on"));
     assert!(visible.contains("next: auto review on"));
-    assert_snapshot!("policy_top_tip_current_and_next", visible);
+    crate::tui_assert_snapshot!("policy_top_tip_current_and_next", visible);
     assert!(app.handle_tick(started + Duration::from_secs(4)));
     app.cycle_next_approval_mode(started + Duration::from_secs(4));
     assert_eq!(
@@ -1156,7 +1156,7 @@ fn policy_changes_restart_the_fade_and_keep_current_and_next_modes_visible() {
     assert!(render(&app, 120, 20).contains("next: bypass permissions on"));
     assert!(!app.handle_tick(started + Duration::from_secs(7)));
     assert!(app.handle_tick(started + Duration::from_secs(9)));
-    assert_snapshot!("policy_top_tip_expired", render(&app, 120, 20));
+    crate::tui_assert_snapshot!("policy_top_tip_expired", render(&app, 120, 20));
 }
 
 #[test]
@@ -1393,7 +1393,7 @@ fn modal_covers_the_page_and_restores_its_transcript_and_draft() {
     assert!(!rendered.contains("Conversation remains visible."));
     assert_eq!(layout(&app, area).input, composer);
     assert_eq!(app.input(), "draft");
-    assert_snapshot!("help_modal", rendered);
+    crate::tui_assert_snapshot!("help_modal", rendered);
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert_eq!(render(&app, 80, 24), before);
 }
@@ -1427,7 +1427,7 @@ fn startup_panel_renders_the_effective_context() {
     app.insert_text("/startup");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert_snapshot!("startup_panel", render(&app, 80, 20));
+    crate::tui_assert_snapshot!("startup_panel", render(&app, 80, 20));
 }
 
 #[test]
@@ -1537,7 +1537,7 @@ fn scrolled_transcript_shows_jump_control_at_the_bottom_of_the_content_area() {
         Rect::new(0, 0, 50, 16),
     );
 
-    assert_snapshot!("transcript_jump_to_bottom", render(&app, 50, 16));
+    crate::tui_assert_snapshot!("transcript_jump_to_bottom", render(&app, 50, 16));
     assert!(!app.transcript_selection_active());
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
@@ -1659,7 +1659,7 @@ fn slash_popup_clears_covered_transcript_rows_edge_to_edge() {
         assert_eq!(buffer[(0, row)].bg, test_context().background());
         assert_eq!(buffer[(79, row)].bg, test_context().background());
     }
-    assert_snapshot!(
+    crate::tui_assert_snapshot!(
         "slash_popup_clears_covered_transcript_rows_edge_to_edge",
         render(&app, terminal_area.width, terminal_area.height)
     );
@@ -2032,7 +2032,7 @@ fn config_general_tab_uses_localized_label() {
     for _ in 0..6 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
-    assert_snapshot!("config_general_tab", render(&app, 100, 21));
+    crate::tui_assert_snapshot!("config_general_tab", render(&app, 100, 21));
 }
 
 #[test]
@@ -2058,7 +2058,7 @@ fn config_issues_tab_shows_one_auto_refresh_value() {
     let selection = app.list_selection().unwrap();
     assert_eq!(selection.active_tab().label(), "Issues");
     assert_eq!(selection.selected_item().unwrap().label(), "Auto refresh");
-    assert_snapshot!(
+    crate::tui_assert_snapshot!(
         "config_issues_tab_shows_one_auto_refresh_value",
         render(&app, 100, 20)
     );
@@ -2107,12 +2107,12 @@ fn short_provider_modal_scrolls_to_each_focused_field() {
     assert_eq!(buffer[(content.x, base_row + 1)].symbol(), "╭");
     assert_eq!(buffer[(content.x, base_row + 2)].symbol(), "│");
     assert!(output.contains("> Base URL"));
-    assert_snapshot!("short_provider_panel", output);
+    crate::tui_assert_snapshot!("short_provider_panel", output);
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let next = render(&app, 100, 17);
     assert!(next.contains("> API key"));
     assert!(next.contains("API key (optional)"));
-    assert_snapshot!("short_provider_modal_api_key", next);
+    crate::tui_assert_snapshot!("short_provider_modal_api_key", next);
 }
 
 #[test]
@@ -2350,7 +2350,7 @@ fn model_favorites_empty_state_explains_pinning_from_provider_tabs() {
         app.list_selection().unwrap().tabs()[1].label(),
         "My gateway"
     );
-    assert_snapshot!("model_favorites_empty", render(&app, 100, 18));
+    crate::tui_assert_snapshot!("model_favorites_empty", render(&app, 100, 18));
 }
 
 #[test]
@@ -2389,7 +2389,7 @@ fn model_provider_tab_pins_without_changing_the_selected_model() {
             .label(),
         "gateway-model"
     );
-    assert_snapshot!("model_provider_pinned", render(&app, 100, 18));
+    crate::tui_assert_snapshot!("model_provider_pinned", render(&app, 100, 18));
 }
 
 #[test]
@@ -2412,7 +2412,7 @@ fn model_favorites_reopens_with_saved_pins_and_unpin_action() {
             pinned: false
         }))
     );
-    assert_snapshot!("model_favorites_pinned", render(&app, 100, 18));
+    crate::tui_assert_snapshot!("model_favorites_pinned", render(&app, 100, 18));
 }
 
 #[test]
@@ -2445,7 +2445,7 @@ fn model_tab_from_items_moves_the_visible_focus_to_the_tab_bar() {
         buffer[(column, modal.content.y)].fg,
         test_context().selection_foreground()
     );
-    assert_snapshot!("model_tab_bar_focused", render(&app, 100, 18));
+    crate::tui_assert_snapshot!("model_tab_bar_focused", render(&app, 100, 18));
     assert!(app.list_selection().unwrap().search().is_none());
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert!(app.list_selection().unwrap().items_focused());
@@ -2466,7 +2466,7 @@ fn status_indicator_tracks_turn_events_without_hiding_top_tip() {
     assert!(working.contains("Working"));
     assert!(working.contains("ctrl+c to interrupt"));
     assert!(working.contains("Copied 42 chars"));
-    assert_snapshot!("status_indicator_with_notice", working);
+    crate::tui_assert_snapshot!("status_indicator_with_notice", working);
     app.update(ThreadEvent::TurnActivityChanged(
         TurnActivity::WaitingForUserInput,
     ));
@@ -2516,5 +2516,5 @@ fn persistent_queue_snapshot_distinguishes_pending_and_paused_messages() {
         messages,
         restore: None,
     });
-    assert_snapshot!("persistent_queue", render(&app, 80, 20));
+    crate::tui_assert_snapshot!("persistent_queue", render(&app, 80, 20));
 }

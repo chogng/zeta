@@ -47,7 +47,7 @@ fn composer_keeps_its_prompt_wrapped_text_and_cursor_inside_the_border() {
     assert_eq!(buffer[(21, input.y + 1)].symbol(), "│");
     assert_eq!(cursor, Position::new(18, input.y + 2));
     assert_eq!(buffer[(21, input.bottom() - 1)].symbol(), "╯");
-    insta::assert_snapshot!("composer_wrapped_draft", text(&buffer));
+    crate::tui_assert_snapshot!("composer_wrapped_draft", text(&buffer));
 }
 
 #[test]
@@ -90,5 +90,5 @@ fn composer_model_label_preserves_the_bottom_rule_and_right_margin() {
         assert_eq!(buffer[(78, y)].symbol(), " ");
         assert_eq!(buffer[(79, y)].symbol(), " ");
     }
-    insta::assert_snapshot!("composer_focused", text(&buffer));
+    crate::tui_assert_snapshot!("composer_focused", text(&buffer));
 }

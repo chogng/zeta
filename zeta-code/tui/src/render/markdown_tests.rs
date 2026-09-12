@@ -26,7 +26,7 @@ fn markdown_preserves_structure_styles_and_link_targets() {
         .map(|row| row.line.to_string())
         .collect::<Vec<_>>()
         .join("\n");
-    insta::assert_snapshot!("markdown_structure", text);
+    crate::tui_assert_snapshot!("markdown_structure", text);
     assert!(
         rows[0]
             .line
@@ -63,9 +63,9 @@ fn tables_reflow_to_records_and_preserve_links() {
             .collect::<Vec<_>>()
             .join("\n");
         if width == 40 {
-            insta::assert_snapshot!("markdown_table", text);
+            crate::tui_assert_snapshot!("markdown_table", text);
         } else {
-            insta::assert_snapshot!("markdown_table_records", text);
+            crate::tui_assert_snapshot!("markdown_table_records", text);
         }
     }
 }

@@ -45,7 +45,7 @@ fn startup_error_preserves_failure_kind_and_reports_terminal_facts() {
             .to_string(),
         "denied"
     );
-    insta::assert_snapshot!(error.to_string(), @r###"cannot set terminal modes: denied; terminal=WezTerm, version=Some("2026.1"), multiplexer=Some(Tmux { version: Some("3.5") }), TERM=Some("xterm-256color"), color=Ansi256"###);
+    crate::tui_assert_snapshot!(error.to_string(), @r###"cannot set terminal modes: denied; terminal=WezTerm, version=Some("2026.1"), multiplexer=Some(Tmux { version: Some("3.5") }), TERM=Some("xterm-256color"), color=Ansi256"###);
 }
 
 #[test]

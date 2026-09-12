@@ -4,6 +4,7 @@ use crate::app::App;
 use crate::app::AppCommand;
 use crate::app::command_panel::CommandPanel;
 use crate::keymap::bindings;
+use crate::render::InteractionState;
 use crate::render::RenderContext;
 use crate::widgets::modal::ModalLayout;
 use crate::widgets::navigation::Navigation;
@@ -97,6 +98,10 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App, context: RenderContext<'_>)
     }
     let layout = layout(frame.area());
     context.clear_hyperlinks(layout.surface);
+    let close = app
+        .fullscreen
+        .pointer
+        .interaction_state(&super::pointer::PointerTarget::Modal(Target::Close));
     if let Some(detail) = app.overlay() {
         let hints = crate::widgets::key_hint::KeyHints::new()
             .with_compact_action("↑/↓", "scroll")
@@ -106,6 +111,7 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App, context: RenderContext<'_>)
             layout,
             detail.title(),
             &hints,
+            close,
             app.key_hint_style(),
             context,
         );
@@ -125,6 +131,7 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App, context: RenderContext<'_>)
             layout,
             hovered,
             pressed,
+            close,
             app.key_hint_style(),
             context,
         );
@@ -137,6 +144,7 @@ pub(super) fn draw_panel(
     layout: ModalLayout,
     hovered: Option<&Target>,
     pressed: Option<&Target>,
+    close: InteractionState,
     hint_style: crate::config::KeyHintStyle,
     context: RenderContext<'_>,
 ) {
@@ -146,6 +154,7 @@ pub(super) fn draw_panel(
         layout,
         body.title(),
         panel.key_hints(),
+        close,
         hint_style,
         context,
     );

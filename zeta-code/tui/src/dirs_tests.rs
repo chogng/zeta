@@ -246,7 +246,7 @@ fn directory_add_feedback_is_visible_below_the_input() {
     assert!(pending.contains("Adding directory…\nNo directories"));
     assert!(added.contains("Added directory: /dir/new"));
     assert!(!added.contains("No directories"));
-    insta::assert_snapshot!(
+    crate::tui_assert_snapshot!(
         "directory_add_feedback",
         format!("Pending:\n{pending}\n\nAdded:\n{added}")
     );

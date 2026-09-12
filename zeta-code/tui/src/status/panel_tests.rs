@@ -232,7 +232,7 @@ fn process_tab_renders_local_total_and_owned_process_details() {
 
     terminal.draw(|frame| draw_panel(frame, &panel)).unwrap();
 
-    insta::assert_snapshot!("status_processes_tab", terminal.backend().to_string());
+    crate::tui_assert_snapshot!("status_processes_tab", terminal.backend().to_string());
 }
 
 #[test]

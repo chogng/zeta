@@ -282,13 +282,13 @@ fn new_provider_shows_all_fields() {
     assert_eq!(buffer[(2, 2)].symbol(), "│");
     assert_eq!(buffer[(2, 0)].symbol(), "P");
     assert_eq!(buffer[(4, 2)].symbol(), "P");
-    insta::assert_snapshot!(text(&render(&panel, 80, 25, Instant::now())));
+    crate::tui_assert_snapshot!(text(&render(&panel, 80, 25, Instant::now())));
 }
 
 #[test]
 fn narrow_provider_keeps_focused_inputs_visible() {
     let panel = populated();
-    insta::assert_snapshot!(text(&render(&panel, 36, 14, Instant::now())));
+    crate::tui_assert_snapshot!(text(&render(&panel, 36, 14, Instant::now())));
 }
 
 #[test]
@@ -297,7 +297,7 @@ fn narrow_provider_scrolls_to_last_test_action() {
     focus_test(&mut panel);
     let buffer = render(&panel, 36, 14, Instant::now());
     assert_eq!(buffer[(0, 10)].symbol(), "●");
-    insta::assert_snapshot!(text(&buffer));
+    crate::tui_assert_snapshot!(text(&buffer));
 }
 
 #[test]
@@ -311,14 +311,14 @@ fn untested_provider_masks_key_and_keeps_marker_in_leading_column() {
     assert_eq!(buffer[(0, 18)].fg, crate::render::test_context().muted());
     assert!(buffer[(0, 18)].modifier.contains(Modifier::DIM));
     assert_eq!(buffer[(2, 18)].fg, crate::render::test_context().focus());
-    insta::assert_snapshot!(text(&buffer));
+    crate::tui_assert_snapshot!(text(&buffer));
 }
 
 #[test]
 fn running_provider_shows_pending_feedback() {
     let mut panel = populated();
     let (_, start) = begin_test(&mut panel);
-    insta::assert_snapshot!(text(&render(&panel, 80, 25, start)));
+    crate::tui_assert_snapshot!(text(&render(&panel, 80, 25, start)));
 }
 
 #[test]
@@ -335,7 +335,7 @@ fn passed_provider_shows_success_feedback() {
     assert_eq!(buffer[(0, 18)].fg, crate::render::test_context().success());
     assert_eq!(buffer[(0, 18)].modifier, Modifier::empty());
     assert_eq!(buffer[(2, 18)].fg, crate::render::test_context().focus());
-    insta::assert_snapshot!(text(&buffer));
+    crate::tui_assert_snapshot!(text(&buffer));
 }
 
 #[test]
@@ -354,7 +354,7 @@ fn failed_provider_shows_reason_and_warning_feedback() {
     assert_eq!(buffer[(0, 18)].symbol(), "●");
     assert_eq!(buffer[(0, 18)].fg, crate::render::test_context().warning());
     assert_eq!(buffer[(0, 18)].modifier, Modifier::empty());
-    insta::assert_snapshot!(text(&buffer));
+    crate::tui_assert_snapshot!(text(&buffer));
 }
 
 #[test]

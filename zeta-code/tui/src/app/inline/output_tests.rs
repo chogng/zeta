@@ -59,7 +59,7 @@ fn transcript_retains_active_turn_until_completion_and_emits_once() {
     output.record(&pending[0]);
     assert!(output.pending(&app).is_empty());
     assert_eq!(tail(&app).len(), 1);
-    insta::assert_snapshot!("current_reply", text(&render(&app, 60, 24)));
+    crate::tui_assert_snapshot!("current_reply", text(&render(&app, 60, 24)));
     app.clear_active_turn();
     let pending = output.pending(&app);
     assert_eq!(pending.len(), 1);

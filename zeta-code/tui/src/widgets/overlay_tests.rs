@@ -6,7 +6,6 @@ use crate::widgets::detail_list::DetailListRow;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
-use insta::assert_snapshot;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::style::Color;
@@ -87,7 +86,7 @@ fn overlay_fills_each_wide_row_and_aligns_content_with_the_page() {
         Color::Rgb(37, 37, 38)
     );
     assert_eq!(terminal.backend().buffer()[(2, 6)].symbol(), "O");
-    assert_snapshot!("wide_detail_overlay_uses_full_rows", terminal.backend());
+    crate::tui_assert_snapshot!("wide_detail_overlay_uses_full_rows", terminal.backend());
 }
 
 #[test]

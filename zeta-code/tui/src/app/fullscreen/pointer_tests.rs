@@ -93,7 +93,7 @@ fn clearing_fullscreen_cancels_the_drag_before_a_fresh_click_at_the_new_size() {
         .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n");
-    insta::assert_snapshot!("resized_completion_after_cancelled_selection", text);
+    crate::tui_assert_snapshot!("resized_completion_after_cancelled_selection", text);
 
     let row = crate::app::fullscreen::layout(&app, area).input.y - 1;
     assert_ne!(row, old_row);
@@ -201,7 +201,7 @@ fn fullscreen_selection_copies_text_and_reports_the_clipboard_result() {
         } else {
             assert!(text.contains("clipboard unavailable"));
         }
-        insta::assert_snapshot!(name, text);
+        crate::tui_assert_snapshot!(name, text);
     }
 }
 
@@ -413,6 +413,18 @@ fn detail_overlay_captures_only_its_surface_and_releases_mouse_on_close() {
     );
     assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
     let surface = super::super::modal::layout(area).surface;
+    let close = super::super::modal::layout(area).close;
+    update_pointer_hover(&mut app, area, close.x, close.y);
+    let mut terminal =
+        ratatui::Terminal::new(ratatui::backend::TestBackend::new(area.width, area.height))
+            .unwrap();
+    terminal.draw(|frame| frame::draw(frame, &app)).unwrap();
+    for column in close.x..close.right() {
+        assert_eq!(
+            terminal.backend().buffer()[(column, close.y)].bg,
+            app.render_context().hover_background()
+        );
+    }
     for row in 0..area.height {
         for column in 0..area.width {
             let position = ratatui::layout::Position::new(column, row);

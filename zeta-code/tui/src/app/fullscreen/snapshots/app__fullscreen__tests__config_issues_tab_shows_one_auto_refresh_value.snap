@@ -1,20 +1,22 @@
 ---
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
-expression: "render(&app, 100, 18)"
+expression: "render(&app, 100, 20)"
 ---
   ≡ .                                                                                               
                                                                                                     
-            ┌── Model ────────────────────────────────────────────────────────────[X]─┐             
+            ┌── Config ───────────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │   Favorites    My gateway                                               │             
+            │   General    Providers    Language servers    Issues                    │             
             │                                                                         │             
-            │> gateway-model                                                          │             
-            │                                                                         │             
+            │  ╭────────────────────────────────────────────────────────────────────╮ │             
+            │  │ Search configuration                                               │ │             
+            │  ╰────────────────────────────────────────────────────────────────────╯ │             
+            │> Auto refresh                                                     Never │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
   ╭─────────│                                                                         │──────────╮  
-  │ > Build │  Enter to apply · Tab/Shift+Tab to switch · Esc to close                │          │  
+  │ > Build │  Enter/Space to change · Tab/Shift+Tab to switch · Esc to close         │          │  
   ╰─────────└─────────────────────────────────────────────────────────────────────────┘ic model ─╯
