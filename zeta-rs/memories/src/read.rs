@@ -108,6 +108,39 @@ impl Memories {
         citation_result(memory, citation)
     }
 
+    /// Reads the complete current Memory identified by a citation after rechecking host authority,
+    /// scope consent, revision, and the cited UTF-8 range.
+    pub fn read_context_memory(
+        &self,
+        scopes: &[MemoryScope],
+        citation: MemoryCitation,
+        cancellation: &CancellationToken,
+    ) -> Result<MemoryCitationResult, MemoryError> {
+        check_cancellation(cancellation)?;
+        citation.validate()?;
+        if !scopes.contains(&citation.scope) {
+            return Err(MemoryError::ReadDenied);
+        }
+        let memory = self
+            .store
+            .read_for_context(&citation.scope, &citation.memory_id)?;
+        check_cancellation(cancellation)?;
+        validate_memory_citation(&memory, &citation)?;
+        let citation = MemoryCitation {
+            memory_id: memory.memory_id.clone(),
+            scope: memory.scope.clone(),
+            revision: memory.revision,
+            start_byte: 0,
+            end_byte: memory.body.len() as u32,
+        };
+        Ok(MemoryCitationResult {
+            citation,
+            title: memory.title,
+            source: memory.source,
+            body: memory.body,
+        })
+    }
+
     /// Retrieves only explicitly opted-in scopes selected by the host's current task authority.
     /// Returns reference data, never instructions. Automatic injection stays ephemeral; explicit
     /// model reads may return the excerpts through ordinary Tool Results.
@@ -169,25 +202,30 @@ fn citation_result(
     memory: Memory,
     citation: MemoryCitation,
 ) -> Result<MemoryCitationResult, MemoryError> {
-    if memory.revision != citation.revision {
-        return Err(MemoryError::RevisionConflict {
-            expected: citation.revision,
-            actual: memory.revision,
-        });
-    }
-    let body = memory
-        .body
-        .get(citation.start_byte as usize..citation.end_byte as usize)
-        .ok_or_else(|| {
-            MemoryError::InvalidInput("Memory citation is outside UTF-8 content".into())
-        })?
-        .to_owned();
+    validate_memory_citation(&memory, &citation)?;
+    let body = memory.body[citation.start_byte as usize..citation.end_byte as usize].to_owned();
     Ok(MemoryCitationResult {
         citation,
         title: memory.title,
         source: memory.source,
         body,
     })
+}
+
+fn validate_memory_citation(memory: &Memory, citation: &MemoryCitation) -> Result<(), MemoryError> {
+    if memory.revision != citation.revision {
+        return Err(MemoryError::RevisionConflict {
+            expected: citation.revision,
+            actual: memory.revision,
+        });
+    }
+    memory
+        .body
+        .get(citation.start_byte as usize..citation.end_byte as usize)
+        .ok_or_else(|| {
+            MemoryError::InvalidInput("Memory citation is outside UTF-8 content".into())
+        })?;
+    Ok(())
 }
 
 pub(crate) fn excerpt(

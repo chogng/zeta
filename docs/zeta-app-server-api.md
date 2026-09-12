@@ -387,11 +387,15 @@ list/search 默认每页 20 条，最大 50 条。cursor 绑定 catalog revision
 | `memories-scopes` | 无 | 返回当前任务的 scope 标识和 policy，不读取正文 |
 | `memories-save` | `scope`、`title`、`body`、`expected_revision` | 保存或合并模型记忆；scope 必须属于当前任务并开启模型保存；新增用 revision 0，更新用已读取版本 |
 | `memories-search` | `query`，1–512 个字符 | 返回 `trust: untrusted-data` 与 `matches`；每条包含可直接读取的 `reference` 和 `memory` 引用摘录；沿用自动检索的条数和正文预算 |
-| `memories-read` | `reference`，完整 `memory:` 引用 | 返回 `trust: untrusted-data` 与 `memory`；重新核对当前范围、授权、revision 和 UTF-8 范围，读取精确摘录 |
+| `memories-read` | `reference`，完整 `memory:` 引用 | 返回 `trust: untrusted-data` 与 `memory`；重新核对当前范围、授权、revision 和 UTF-8 范围，返回该版本完整正文及覆盖全文的 citation |
 
 模型不能修改授权或删除记忆。保存使用独立状态写入契约；参数错误和缺少宿主身份会阻止执行；未授权、版本冲突或已删除引用返回明确的工具错误。
 
 模型记忆记录来源 Session、Thread、Turn，同一作用域与标题对应稳定 Memory ID；合并需要精确 revision。用户编辑后取得所有权，模型不能覆盖。写入授权在同一 SQLite 事务中检查，撤销后旧调用不能重放正文。仅已提交写入发布 `memory/changed`。
+
+`memory/add`、`memory/update` 传递当前 RPC 的取消令牌，`memories-save` 传递当前 Turn 的取消令牌。存储在等待连接或写锁前检查取消，并在取得写事务后、读取或修改记录前再次检查；第二次检查是取消截止点。该检查观察到取消时，正文、记录与 catalog revision、命令回执都不变，不发布通知。取消不会抢占同步锁等待，仍需等到取得锁或存储返回错误。
+
+通过截止点后的取消不打断事务；Memory 领域返回实际提交结果或存储错误，已提交写入仍发布通知。RPC 请求整体仍遵循请求取消规则，客户端收到 `RequestCancelled` 不代表写入已撤销；可使用相同 `commandId` 与参数重试，按现有回执及版本规则确认结果。模型合并前须用 `memories-read` 取得完整正文并保留已有事实。
 
 Schema v2 升级到 v3 时保留读取授权，模型保存设为 `disabled`，旧授权回执仍可重放但不会重新应用。记录更新后，旧写回执不会恢复旧正文；已有后续版本时返回冲突。
 模型主动调用产生的工具结果按普通 Tool Result 保存；撤销读取授权或删除 Memory 不会追溯删除既有任务历史。

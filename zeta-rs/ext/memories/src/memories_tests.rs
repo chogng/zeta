@@ -94,13 +94,16 @@ impl Fixture {
     fn remember(&self, id: &str, scope: MemoryScope) -> MemoryCitation {
         let body = "Rust 记忆：先验证行为，再提交。";
         self.memories
-            .add_user_memory(AddMemoryRequest {
-                command_id: CommandId::new(format!("add-{id}")).unwrap(),
-                memory_id: MemoryId::new(id).unwrap(),
-                scope: scope.clone(),
-                title: "Rust decision".into(),
-                body: body.into(),
-            })
+            .add_user_memory(
+                AddMemoryRequest {
+                    command_id: CommandId::new(format!("add-{id}")).unwrap(),
+                    memory_id: MemoryId::new(id).unwrap(),
+                    scope: scope.clone(),
+                    title: "Rust decision".into(),
+                    body: body.into(),
+                },
+                &self.cancellation.token(),
+            )
             .unwrap();
         MemoryCitation {
             memory_id: MemoryId::new(id).unwrap(),
@@ -227,6 +230,53 @@ fn tools_search_and_read_only_current_opted_in_scopes() {
     );
     assert!(denied.status() == tools::ToolOutputStatus::Error);
     assert!(!text(&denied).contains("先验证"));
+}
+
+#[test]
+fn memories_read_returns_the_complete_body_needed_for_merging() {
+    let fixture = Fixture::new();
+    let body = "merge ".repeat(900);
+    fixture
+        .memories
+        .update_policy(UpdateMemoryPolicyRequest {
+            command_id: CommandId::new("enable-long-memory").unwrap(),
+            scope: MemoryScope::Profile,
+            expected_revision: 0,
+            automatic_read: MemoryReadMode::FirstInvocation,
+            model_write: memories::MemoryWriteMode::Enabled,
+        })
+        .unwrap();
+    let saved = fixture.call(
+        "memories-save",
+        json!({
+            "scope":"profile",
+            "title":"Long-lived decisions",
+            "body":body.clone(),
+            "expected_revision":0
+        }),
+    );
+    assert_eq!(saved.status(), tools::ToolOutputStatus::Success);
+
+    let searched: Value = serde_json::from_str(text(
+        &fixture.call("memories-search", json!({"query":"merge"})),
+    ))
+    .unwrap();
+    assert_eq!(
+        searched["matches"][0]["memory"]["body"]
+            .as_str()
+            .unwrap()
+            .len(),
+        4096
+    );
+
+    let read: Value = serde_json::from_str(text(&fixture.call(
+        "memories-read",
+        json!({"reference":searched["matches"][0]["reference"]}),
+    )))
+    .unwrap();
+    assert_eq!(read["memory"]["body"], body);
+    assert_eq!(read["memory"]["citation"]["startByte"], 0);
+    assert_eq!(read["memory"]["citation"]["endByte"], body.len() as u64);
 }
 
 #[test]
@@ -430,6 +480,66 @@ fn model_save_uses_host_identity_and_publishes_only_committed_changes() {
         .unwrap();
     assert_eq!(execute().status(), tools::ToolOutputStatus::Error);
     assert_eq!(fixture.scopes.changes.load(Ordering::Relaxed), 1);
+}
+
+#[test]
+fn cancelling_model_save_while_sqlite_is_locked_prevents_the_write() {
+    let fixture = Fixture::new();
+    fixture
+        .memories
+        .update_policy(UpdateMemoryPolicyRequest {
+            command_id: CommandId::new("enable-write").unwrap(),
+            scope: MemoryScope::Profile,
+            expected_revision: 0,
+            automatic_read: MemoryReadMode::Disabled,
+            model_write: memories::MemoryWriteMode::Enabled,
+        })
+        .unwrap();
+    let lock = state::open_sqlite_database(
+        &fixture._root.path().join("state.sqlite"),
+        state::SqliteDurability::Durable,
+    )
+    .unwrap();
+    lock.execute_batch("BEGIN IMMEDIATE").unwrap();
+    let before_scope_resolution = fixture.scopes.calls.load(Ordering::Relaxed);
+    let (executor, invocation) = fixture.invocation(
+        "memories-save",
+        json!({
+            "scope":"profile",
+            "title":"Queued write",
+            "body":"Must not be committed after cancellation",
+            "expected_revision":0
+        }),
+    );
+    let worker = std::thread::spawn(move || pollster::block_on(executor.execute(invocation)));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    while fixture.scopes.calls.load(Ordering::Relaxed) == before_scope_resolution {
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::yield_now();
+    }
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    assert!(!worker.is_finished());
+
+    fixture.cancellation.cancel();
+    lock.execute_batch("COMMIT").unwrap();
+    let ToolExecutionOutcome::Returned(output) = worker.join().unwrap() else {
+        panic!("unexpected tool outcome");
+    };
+    assert_eq!(output.status(), tools::ToolOutputStatus::Error);
+    assert!(text(&output).contains("cancelled"));
+    assert!(
+        fixture
+            .memories
+            .list(memories::ListMemoriesRequest {
+                scope: MemoryScope::Profile,
+                cursor: None,
+                limit: 10,
+            })
+            .unwrap()
+            .memories
+            .is_empty()
+    );
+    assert_eq!(fixture.scopes.changes.load(Ordering::Relaxed), 0);
 }
 
 #[test]

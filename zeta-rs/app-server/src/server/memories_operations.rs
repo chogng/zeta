@@ -13,6 +13,7 @@ use zeta_app_server_protocol::protocol::memory::MemoryDeleteParams;
 use zeta_app_server_protocol::protocol::memory::MemoryListParams;
 use zeta_app_server_protocol::protocol::memory::MemoryReadParams;
 use zeta_app_server_protocol::protocol::memory::MemorySearchParams;
+use zeta_async_utils::CancellationToken;
 
 const DEFAULT_PAGE_LIMIT: u32 = 20;
 
@@ -80,19 +81,23 @@ impl AppServer {
         &self,
         connection: &ConnectionState,
         value: &Value,
+        cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: MemoryAddParams = decode(value)?;
         self.authorize_memory_scope(connection, &params.scope)?;
         self.refresh_analytics()?;
         let mutation = self
             .memories(connection)?
-            .add_user_memory(memories::AddMemoryRequest {
-                command_id: params.command_id,
-                memory_id: params.memory_id,
-                scope: params.scope,
-                title: params.title,
-                body: params.body,
-            })
+            .add_user_memory(
+                memories::AddMemoryRequest {
+                    command_id: params.command_id,
+                    memory_id: params.memory_id,
+                    scope: params.scope,
+                    title: params.title,
+                    body: params.body,
+                },
+                cancellation,
+            )
             .map_err(memory_error)?;
         if mutation.disposition == MemoryMutationDisposition::Committed {
             self.analytics.record(analytics::UsageEvent::MemoryAdded);
@@ -132,19 +137,23 @@ impl AppServer {
         &self,
         connection: &ConnectionState,
         value: &Value,
+        cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: zeta_app_server_protocol::protocol::memory::MemoryUpdateParams = decode(value)?;
         self.authorize_memory_scope(connection, &params.scope)?;
         let mutation = self
             .memories(connection)?
-            .update_user_memory(memories::UpdateMemoryRequest {
-                command_id: params.command_id,
-                memory_id: params.memory_id,
-                scope: params.scope,
-                expected_revision: params.expected_revision,
-                title: params.title,
-                body: params.body,
-            })
+            .update_user_memory(
+                memories::UpdateMemoryRequest {
+                    command_id: params.command_id,
+                    memory_id: params.memory_id,
+                    scope: params.scope,
+                    expected_revision: params.expected_revision,
+                    title: params.title,
+                    body: params.body,
+                },
+                cancellation,
+            )
             .map_err(memory_error)?;
         if mutation.disposition == MemoryMutationDisposition::Committed {
             self.updates.publish_memory_changed(MemoryChanged {
@@ -281,8 +290,11 @@ fn memory_error(error: MemoryError) -> RpcError {
         MemoryError::StaleCursor { .. } => {
             RpcError::new(-32134, AppServerErrorName::MemoryCursorStale)
         }
-        MemoryError::Cancelled(_) | MemoryError::Storage(_) => {
-            RpcError::new(-32135, AppServerErrorName::MemoryOperationFailed)
-        }
+        MemoryError::Cancelled(_) => RpcError::new(-32800, AppServerErrorName::RequestCancelled),
+        MemoryError::Storage(_) => RpcError::new(-32135, AppServerErrorName::MemoryOperationFailed),
     }
 }
+
+#[cfg(test)]
+#[path = "memories_operations_tests.rs"]
+mod tests;

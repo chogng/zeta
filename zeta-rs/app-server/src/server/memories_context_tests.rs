@@ -72,13 +72,16 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
         ("dir", MemoryScope::Dir { dir_id: dir.id() }),
     ] {
         memories
-            .add_user_memory(AddMemoryRequest {
-                command_id: CommandId::new(format!("add-{id}")).unwrap(),
-                memory_id: memories::MemoryId::new(id).unwrap(),
-                scope: scope.clone(),
-                title: id.into(),
-                body: format!("Rust {id} decision"),
-            })
+            .add_user_memory(
+                AddMemoryRequest {
+                    command_id: CommandId::new(format!("add-{id}")).unwrap(),
+                    memory_id: memories::MemoryId::new(id).unwrap(),
+                    scope: scope.clone(),
+                    title: id.into(),
+                    body: format!("Rust {id} decision"),
+                },
+                &CancellationSource::new().token(),
+            )
             .unwrap();
         memories
             .update_policy(UpdateMemoryPolicyRequest {
@@ -248,13 +251,16 @@ fn memories_are_recollected_after_preflight_compaction_and_revocation() {
         zeta_state::SqliteMemoryStore::open(root.path().join("memories.sqlite")).unwrap(),
     )));
     memories
-        .add_user_memory(AddMemoryRequest {
-            command_id: CommandId::new("add").unwrap(),
-            memory_id: memories::MemoryId::new("decision").unwrap(),
-            scope: MemoryScope::Profile,
-            title: "Rust decision".into(),
-            body: "Rust MEMORY_REVOKED_DURING_PREPARATION".into(),
-        })
+        .add_user_memory(
+            AddMemoryRequest {
+                command_id: CommandId::new("add").unwrap(),
+                memory_id: memories::MemoryId::new("decision").unwrap(),
+                scope: MemoryScope::Profile,
+                title: "Rust decision".into(),
+                body: "Rust MEMORY_REVOKED_DURING_PREPARATION".into(),
+            },
+            &CancellationSource::new().token(),
+        )
         .unwrap();
     memories
         .update_policy(UpdateMemoryPolicyRequest {

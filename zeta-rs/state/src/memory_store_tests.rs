@@ -24,10 +24,15 @@ fn sqlite_memories_persist_search_delete_and_retry_receipts() {
         title: "Preferred editor".into(),
         body: "Use Zeta for Rust work.".into(),
     };
-    let committed = service.add_user_memory(add.clone()).unwrap();
+    let committed = service
+        .add_user_memory(add.clone(), &async_utils::CancellationSource::new().token())
+        .unwrap();
     assert_eq!(committed.disposition, MemoryMutationDisposition::Committed);
     assert_eq!(
-        service.add_user_memory(add.clone()).unwrap().disposition,
+        service
+            .add_user_memory(add.clone(), &async_utils::CancellationSource::new().token())
+            .unwrap()
+            .disposition,
         MemoryMutationDisposition::Replayed
     );
 
@@ -73,10 +78,13 @@ fn sqlite_memories_persist_search_delete_and_retry_receipts() {
         Err(MemoryError::NotFound)
     ));
     assert!(matches!(
-        reopened.add_user_memory(AddMemoryRequest {
-            command_id: CommandId::new("memory-add-again").unwrap(),
-            ..add
-        }),
+        reopened.add_user_memory(
+            AddMemoryRequest {
+                command_id: CommandId::new("memory-add-again").unwrap(),
+                ..add
+            },
+            &async_utils::CancellationSource::new().token()
+        ),
         Err(MemoryError::AlreadyExists)
     ));
 }
@@ -89,13 +97,16 @@ fn pagination_cursor_rejects_catalog_changes() {
     ));
     for index in 1..=2 {
         service
-            .add_user_memory(AddMemoryRequest {
-                command_id: CommandId::new(format!("add-{index}")).unwrap(),
-                memory_id: MemoryId::new(format!("memory-{index}")).unwrap(),
-                scope: MemoryScope::Profile,
-                title: format!("title {index}"),
-                body: format!("body {index}"),
-            })
+            .add_user_memory(
+                AddMemoryRequest {
+                    command_id: CommandId::new(format!("add-{index}")).unwrap(),
+                    memory_id: MemoryId::new(format!("memory-{index}")).unwrap(),
+                    scope: MemoryScope::Profile,
+                    title: format!("title {index}"),
+                    body: format!("body {index}"),
+                },
+                &async_utils::CancellationSource::new().token(),
+            )
             .unwrap();
     }
     let first = service
@@ -106,13 +117,16 @@ fn pagination_cursor_rejects_catalog_changes() {
         })
         .unwrap();
     service
-        .add_user_memory(AddMemoryRequest {
-            command_id: CommandId::new("add-3").unwrap(),
-            memory_id: MemoryId::new("memory-3").unwrap(),
-            scope: MemoryScope::Profile,
-            title: "title 3".into(),
-            body: "body 3".into(),
-        })
+        .add_user_memory(
+            AddMemoryRequest {
+                command_id: CommandId::new("add-3").unwrap(),
+                memory_id: MemoryId::new("memory-3").unwrap(),
+                scope: MemoryScope::Profile,
+                title: "title 3".into(),
+                body: "body 3".into(),
+            },
+            &async_utils::CancellationSource::new().token(),
+        )
         .unwrap();
     assert!(matches!(
         service.list(ListMemoriesRequest {
@@ -142,13 +156,16 @@ fn enable(
 
 fn remember(service: &Memories, id: &str, scope: MemoryScope, body: &str) {
     service
-        .add_user_memory(AddMemoryRequest {
-            command_id: CommandId::new(format!("add-{id}")).unwrap(),
-            memory_id: MemoryId::new(id).unwrap(),
-            scope,
-            title: format!("Memory {id}"),
-            body: body.into(),
-        })
+        .add_user_memory(
+            AddMemoryRequest {
+                command_id: CommandId::new(format!("add-{id}")).unwrap(),
+                memory_id: MemoryId::new(id).unwrap(),
+                scope,
+                title: format!("Memory {id}"),
+                body: body.into(),
+            },
+            &async_utils::CancellationSource::new().token(),
+        )
         .unwrap();
 }
 
@@ -237,13 +254,16 @@ fn memory_read_consent_is_scoped_persistent_and_cannot_be_reenabled_by_replay() 
         Err(MemoryError::CommandConflict)
     ));
     assert!(matches!(
-        service.add_user_memory(AddMemoryRequest {
-            command_id: CommandId::new("enable-project").unwrap(),
-            memory_id: MemoryId::new("another").unwrap(),
-            scope: profile,
-            title: "title".into(),
-            body: "body".into(),
-        }),
+        service.add_user_memory(
+            AddMemoryRequest {
+                command_id: CommandId::new("enable-project").unwrap(),
+                memory_id: MemoryId::new("another").unwrap(),
+                scope: profile,
+                title: "title".into(),
+                body: "body".into(),
+            },
+            &async_utils::CancellationSource::new().token()
+        ),
         Err(MemoryError::CommandConflict)
     ));
 }
@@ -492,7 +512,12 @@ fn memory_updates_are_versioned_retry_safe_and_never_restore_deleted_text() {
         title: "Changed decision".into(),
         body: "New Rust decision".into(),
     };
-    let saved = service.update_user_memory(update.clone()).unwrap();
+    let saved = service
+        .update_user_memory(
+            update.clone(),
+            &async_utils::CancellationSource::new().token(),
+        )
+        .unwrap();
     assert_eq!(saved.memory.revision, 2);
     assert_eq!(
         saved.memory.created_at_unix_ms <= saved.memory.updated_at_unix_ms,
@@ -500,7 +525,10 @@ fn memory_updates_are_versioned_retry_safe_and_never_restore_deleted_text() {
     );
     assert_eq!(
         service
-            .update_user_memory(update.clone())
+            .update_user_memory(
+                update.clone(),
+                &async_utils::CancellationSource::new().token()
+            )
             .unwrap()
             .disposition,
         MemoryMutationDisposition::Replayed
@@ -513,17 +541,23 @@ fn memory_updates_are_versioned_retry_safe_and_never_restore_deleted_text() {
         })
     ));
     assert!(matches!(
-        service.update_user_memory(memories::UpdateMemoryRequest {
-            command_id: CommandId::new("stale").unwrap(),
-            ..update.clone()
-        }),
+        service.update_user_memory(
+            memories::UpdateMemoryRequest {
+                command_id: CommandId::new("stale").unwrap(),
+                ..update.clone()
+            },
+            &async_utils::CancellationSource::new().token()
+        ),
         Err(MemoryError::RevisionConflict { .. })
     ));
     assert!(matches!(
-        service.update_user_memory(memories::UpdateMemoryRequest {
-            body: "different payload".into(),
-            ..update.clone()
-        }),
+        service.update_user_memory(
+            memories::UpdateMemoryRequest {
+                body: "different payload".into(),
+                ..update.clone()
+            },
+            &async_utils::CancellationSource::new().token()
+        ),
         Err(MemoryError::CommandConflict)
     ));
     service
@@ -535,7 +569,7 @@ fn memory_updates_are_versioned_retry_safe_and_never_restore_deleted_text() {
         })
         .unwrap();
     assert_eq!(
-        service.update_user_memory(update),
+        service.update_user_memory(update, &async_utils::CancellationSource::new().token()),
         Err(MemoryError::NotFound)
     );
 }
@@ -546,6 +580,7 @@ fn model_writes_require_consent_and_observed_revision_and_user_edits_take_owners
     let service = Memories::new(Arc::new(
         SqliteMemoryStore::open(root.path().join("state.sqlite")).unwrap(),
     ));
+    let cancellation = async_utils::CancellationSource::new();
     let request = memories::SaveModelMemoryRequest {
         command_id: CommandId::new("model-save").unwrap(),
         scope: MemoryScope::Profile,
@@ -557,7 +592,7 @@ fn model_writes_require_consent_and_observed_revision_and_user_edits_take_owners
         turn_id: zeta_protocol::TurnId::new("turn").unwrap(),
     };
     assert_eq!(
-        service.save_model_memory(request.clone()),
+        service.save_model_memory(request.clone(), &cancellation.token()),
         Err(MemoryError::WriteDenied)
     );
     service
@@ -569,48 +604,59 @@ fn model_writes_require_consent_and_observed_revision_and_user_edits_take_owners
             model_write: memories::MemoryWriteMode::Enabled,
         })
         .unwrap();
-    let first = service.save_model_memory(request.clone()).unwrap();
+    let first = service
+        .save_model_memory(request.clone(), &cancellation.token())
+        .unwrap();
     assert!(
         matches!(&first.memory.source, memories::MemorySource::Model { thread_id, .. } if thread_id.as_str() == "thread")
     );
     assert_eq!(
         service
-            .save_model_memory(request.clone())
+            .save_model_memory(request.clone(), &cancellation.token())
             .unwrap()
             .disposition,
         MemoryMutationDisposition::Replayed
     );
     let second = service
-        .save_model_memory(memories::SaveModelMemoryRequest {
-            command_id: CommandId::new("merge").unwrap(),
-            expected_revision: 1,
-            body: "Use Rust and verify changes".into(),
-            ..request.clone()
-        })
+        .save_model_memory(
+            memories::SaveModelMemoryRequest {
+                command_id: CommandId::new("merge").unwrap(),
+                expected_revision: 1,
+                body: "Use Rust and verify changes".into(),
+                ..request.clone()
+            },
+            &cancellation.token(),
+        )
         .unwrap();
     assert_eq!(second.memory.memory_id, first.memory.memory_id);
     assert_eq!(second.memory.revision, 2);
     assert!(matches!(
-        service.save_model_memory(request.clone()),
+        service.save_model_memory(request.clone(), &cancellation.token()),
         Err(MemoryError::RevisionConflict { .. })
     ));
     let user = service
-        .update_user_memory(memories::UpdateMemoryRequest {
-            command_id: CommandId::new("user-edit").unwrap(),
-            memory_id: first.memory.memory_id,
-            scope: MemoryScope::Profile,
-            expected_revision: 2,
-            title: "Build choice".into(),
-            body: "User-approved decision".into(),
-        })
+        .update_user_memory(
+            memories::UpdateMemoryRequest {
+                command_id: CommandId::new("user-edit").unwrap(),
+                memory_id: first.memory.memory_id,
+                scope: MemoryScope::Profile,
+                expected_revision: 2,
+                title: "Build choice".into(),
+                body: "User-approved decision".into(),
+            },
+            &async_utils::CancellationSource::new().token(),
+        )
         .unwrap();
     assert_eq!(user.memory.source, memories::MemorySource::User);
     assert_eq!(
-        service.save_model_memory(memories::SaveModelMemoryRequest {
-            command_id: CommandId::new("overwrite").unwrap(),
-            expected_revision: 3,
-            ..request.clone()
-        }),
+        service.save_model_memory(
+            memories::SaveModelMemoryRequest {
+                command_id: CommandId::new("overwrite").unwrap(),
+                expected_revision: 3,
+                ..request.clone()
+            },
+            &cancellation.token(),
+        ),
         Err(MemoryError::WriteDenied)
     );
     service
@@ -623,7 +669,7 @@ fn model_writes_require_consent_and_observed_revision_and_user_edits_take_owners
         })
         .unwrap();
     assert_eq!(
-        service.save_model_memory(request),
+        service.save_model_memory(request, &cancellation.token()),
         Err(MemoryError::WriteDenied)
     );
 }

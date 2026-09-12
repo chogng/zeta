@@ -3,6 +3,7 @@ use crate::MemoryDeleteResult;
 use crate::MemoryId;
 use crate::MemoryMutationResult;
 use crate::MemoryScope;
+use async_utils::CancellationToken;
 use std::fmt;
 use zeta_protocol::CommandId;
 
@@ -65,6 +66,11 @@ pub struct MemoryStorePage {
 ///
 /// Implementations atomically update the catalog revision with each mutation, reject reuse of a
 /// deleted Memory ID, and retain no title/body in live rows, receipts, or tombstones after delete.
+///
+/// `add` and `update` check cancellation before waiting for storage and again immediately after
+/// acquiring the write transaction, before reading or mutating records. That second check is the
+/// cancellation cutoff: an observed cancellation leaves records, catalog revisions, and receipts
+/// unchanged. Later cancellation does not interrupt the transaction or replace its actual result.
 pub trait MemoryStore: Send + Sync {
     fn policy(&self, scope: &MemoryScope) -> Result<crate::MemoryPolicy, MemoryStoreError>;
     fn update_policy(
@@ -75,10 +81,19 @@ pub trait MemoryStore: Send + Sync {
     /// bodies; deletion and consent changes committed before this snapshot are immediately visible.
     fn context(&self, request: &MemoryStoreContextRequest)
     -> Result<Vec<Memory>, MemoryStoreError>;
-    fn add(&self, commit: &MemoryAddCommit) -> Result<MemoryMutationResult, MemoryStoreError>;
-    /// Updates one exact revision and checks model-write consent and ownership in the same transaction.
-    fn update(&self, commit: &MemoryUpdateCommit)
-    -> Result<MemoryMutationResult, MemoryStoreError>;
+    /// Adds one record using the write cancellation cutoff described on this trait.
+    fn add(
+        &self,
+        commit: &MemoryAddCommit,
+        cancellation: &CancellationToken,
+    ) -> Result<MemoryMutationResult, MemoryStoreError>;
+    /// Updates one exact revision using the write cancellation cutoff described on this trait.
+    /// Checks model-write consent and ownership in the same transaction.
+    fn update(
+        &self,
+        commit: &MemoryUpdateCommit,
+        cancellation: &CancellationToken,
+    ) -> Result<MemoryMutationResult, MemoryStoreError>;
     fn delete(&self, commit: &MemoryDeleteCommit) -> Result<MemoryDeleteResult, MemoryStoreError>;
     fn read(&self, scope: &MemoryScope, memory_id: &MemoryId) -> Result<Memory, MemoryStoreError>;
     /// Reads an opted-in Memory and its policy in one snapshot, before loading any body.
@@ -103,6 +118,7 @@ pub enum MemoryStoreError {
     CommandConflict,
     RevisionConflict { expected: u64, actual: u64 },
     StaleCursor { expected: u64, actual: u64 },
+    Cancelled(String),
     Storage(String),
 }
 
@@ -130,6 +146,7 @@ impl fmt::Display for MemoryStoreError {
                     "Memory cursor is stale: expected catalog {expected}, actual {actual}"
                 )
             }
+            Self::Cancelled(message) => write!(formatter, "Memory mutation cancelled: {message}"),
             Self::Storage(message) => formatter.write_str(message),
         }
     }

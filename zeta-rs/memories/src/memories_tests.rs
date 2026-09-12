@@ -23,7 +23,14 @@ impl MemoryStore for RecordingStore {
         Ok(Vec::new())
     }
 
-    fn add(&self, commit: &MemoryAddCommit) -> Result<MemoryMutationResult, MemoryStoreError> {
+    fn add(
+        &self,
+        commit: &MemoryAddCommit,
+        cancellation: &async_utils::CancellationToken,
+    ) -> Result<MemoryMutationResult, MemoryStoreError> {
+        cancellation
+            .check()
+            .map_err(|signal| MemoryStoreError::Cancelled(signal.reason().to_string()))?;
         *self.add.lock().unwrap() = Some(commit.clone());
         Ok(MemoryMutationResult {
             disposition: MemoryMutationDisposition::Committed,
@@ -32,7 +39,14 @@ impl MemoryStore for RecordingStore {
         })
     }
 
-    fn update(&self, _: &MemoryUpdateCommit) -> Result<MemoryMutationResult, MemoryStoreError> {
+    fn update(
+        &self,
+        _: &MemoryUpdateCommit,
+        cancellation: &async_utils::CancellationToken,
+    ) -> Result<MemoryMutationResult, MemoryStoreError> {
+        cancellation
+            .check()
+            .map_err(|signal| MemoryStoreError::Cancelled(signal.reason().to_string()))?;
         Err(MemoryStoreError::NotFound)
     }
 
@@ -79,13 +93,16 @@ fn user_addition_normalizes_search_and_rejects_unbounded_content() {
     let store = Arc::new(RecordingStore::default());
     let memories = Memories::new(store.clone());
     let result = memories
-        .add_user_memory(AddMemoryRequest {
-            command_id: CommandId::new("add-1").unwrap(),
-            memory_id: MemoryId::new("memory-1").unwrap(),
-            scope: MemoryScope::Profile,
-            title: "Preferred Editor".into(),
-            body: "Use Zeta for Rust work.".into(),
-        })
+        .add_user_memory(
+            AddMemoryRequest {
+                command_id: CommandId::new("add-1").unwrap(),
+                memory_id: MemoryId::new("memory-1").unwrap(),
+                scope: MemoryScope::Profile,
+                title: "Preferred Editor".into(),
+                body: "Use Zeta for Rust work.".into(),
+            },
+            &async_utils::CancellationSource::new().token(),
+        )
         .unwrap();
     assert_eq!(result.memory.source, MemorySource::User);
     assert_eq!(
@@ -101,13 +118,16 @@ fn user_addition_normalizes_search_and_rejects_unbounded_content() {
 
     assert!(
         memories
-            .add_user_memory(AddMemoryRequest {
-                command_id: CommandId::new("add-2").unwrap(),
-                memory_id: MemoryId::new("memory-2").unwrap(),
-                scope: MemoryScope::Profile,
-                title: "title".into(),
-                body: "x".repeat(16 * 1024 + 1),
-            })
+            .add_user_memory(
+                AddMemoryRequest {
+                    command_id: CommandId::new("add-2").unwrap(),
+                    memory_id: MemoryId::new("memory-2").unwrap(),
+                    scope: MemoryScope::Profile,
+                    title: "title".into(),
+                    body: "x".repeat(16 * 1024 + 1),
+                },
+                &async_utils::CancellationSource::new().token()
+            )
             .is_err()
     );
 }
@@ -166,13 +186,16 @@ fn cancellation_during_citation_read_discards_the_loaded_body() {
     });
     let service = Arc::new(Memories::new(store));
     service
-        .add_user_memory(AddMemoryRequest {
-            command_id: CommandId::new("add").unwrap(),
-            memory_id: MemoryId::new("memory").unwrap(),
-            scope: MemoryScope::Profile,
-            title: "Decision".into(),
-            body: "Rust memory".into(),
-        })
+        .add_user_memory(
+            AddMemoryRequest {
+                command_id: CommandId::new("add").unwrap(),
+                memory_id: MemoryId::new("memory").unwrap(),
+                scope: MemoryScope::Profile,
+                title: "Decision".into(),
+                body: "Rust memory".into(),
+            },
+            &async_utils::CancellationSource::new().token(),
+        )
         .unwrap();
     let cancellation = async_utils::CancellationSource::new();
     let token = cancellation.token();

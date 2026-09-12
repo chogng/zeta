@@ -13,6 +13,7 @@ use crate::MemoryStore;
 use crate::MemoryStoreError;
 use crate::MemoryStoreListRequest;
 use crate::MemoryStoreSearchRequest;
+use async_utils::CancellationToken;
 use base64::Engine;
 use serde::Deserialize;
 use serde::Serialize;
@@ -115,39 +116,48 @@ impl Memories {
             .map_err(MemoryError::from)
     }
 
+    /// Adds a user-authored Memory using the caller's cancellation token.
+    /// Cancellation is accepted until the store acquires the write transaction and checks it.
     pub fn add_user_memory(
         &self,
         request: AddMemoryRequest,
+        cancellation: &CancellationToken,
     ) -> Result<MemoryMutationResult, MemoryError> {
         validate_title(&request.title)?;
         validate_body(&request.body)?;
         let now = now_unix_ms()?;
         let fingerprint = fingerprint(&request)?;
         self.store
-            .add(&MemoryAddCommit {
-                command_id: request.command_id,
-                fingerprint,
-                normalized_search_text: normalize_search(&format!(
-                    "{}\n{}",
-                    request.title, request.body
-                )),
-                memory: Memory {
-                    memory_id: request.memory_id,
-                    scope: request.scope,
-                    revision: 1,
-                    title: request.title,
-                    body: request.body,
-                    source: MemorySource::User,
-                    created_at_unix_ms: now,
-                    updated_at_unix_ms: now,
+            .add(
+                &MemoryAddCommit {
+                    command_id: request.command_id,
+                    fingerprint,
+                    normalized_search_text: normalize_search(&format!(
+                        "{}\n{}",
+                        request.title, request.body
+                    )),
+                    memory: Memory {
+                        memory_id: request.memory_id,
+                        scope: request.scope,
+                        revision: 1,
+                        title: request.title,
+                        body: request.body,
+                        source: MemorySource::User,
+                        created_at_unix_ms: now,
+                        updated_at_unix_ms: now,
+                    },
                 },
-            })
+                cancellation,
+            )
             .map_err(MemoryError::from)
     }
 
+    /// Updates a Memory as a user using the caller's cancellation token.
+    /// Cancellation is accepted until the store acquires the write transaction and checks it.
     pub fn update_user_memory(
         &self,
         request: UpdateMemoryRequest,
+        cancellation: &CancellationToken,
     ) -> Result<MemoryMutationResult, MemoryError> {
         validate_title(&request.title)?;
         validate_body(&request.body)?;
@@ -158,29 +168,34 @@ impl Memories {
         }
         let fingerprint = fingerprint(&request)?;
         self.store
-            .update(&crate::MemoryUpdateCommit {
-                command_id: request.command_id,
-                fingerprint,
-                memory_id: request.memory_id,
-                scope: request.scope,
-                expected_revision: request.expected_revision,
-                normalized_search_text: normalize_search(&format!(
-                    "{}\n{}",
-                    request.title, request.body
-                )),
-                title: request.title,
-                body: request.body,
-                source: MemorySource::User,
-                updated_at_unix_ms: now_unix_ms()?,
-            })
+            .update(
+                &crate::MemoryUpdateCommit {
+                    command_id: request.command_id,
+                    fingerprint,
+                    memory_id: request.memory_id,
+                    scope: request.scope,
+                    expected_revision: request.expected_revision,
+                    normalized_search_text: normalize_search(&format!(
+                        "{}\n{}",
+                        request.title, request.body
+                    )),
+                    title: request.title,
+                    body: request.body,
+                    source: MemorySource::User,
+                    updated_at_unix_ms: now_unix_ms()?,
+                },
+                cancellation,
+            )
             .map_err(MemoryError::from)
     }
 
     /// Saves a model-authored fact under a stable scope/title identity, with current write consent.
     /// Updating requires the observed revision and can never overwrite a user-owned Memory.
+    /// Cancellation is accepted until the store acquires the write transaction and checks it.
     pub fn save_model_memory(
         &self,
         request: SaveModelMemoryRequest,
+        cancellation: &CancellationToken,
     ) -> Result<MemoryMutationResult, MemoryError> {
         validate_title(&request.title)?;
         validate_body(&request.body)?;
@@ -203,36 +218,42 @@ impl Memories {
         if request.expected_revision == 0 {
             return self
                 .store
-                .add(&MemoryAddCommit {
-                    command_id: request.command_id,
-                    fingerprint,
-                    normalized_search_text,
-                    memory: Memory {
-                        memory_id,
-                        scope: request.scope,
-                        revision: 1,
-                        title: request.title,
-                        body: request.body,
-                        source,
-                        created_at_unix_ms: now,
-                        updated_at_unix_ms: now,
+                .add(
+                    &MemoryAddCommit {
+                        command_id: request.command_id,
+                        fingerprint,
+                        normalized_search_text,
+                        memory: Memory {
+                            memory_id,
+                            scope: request.scope,
+                            revision: 1,
+                            title: request.title,
+                            body: request.body,
+                            source,
+                            created_at_unix_ms: now,
+                            updated_at_unix_ms: now,
+                        },
                     },
-                })
+                    cancellation,
+                )
                 .map_err(MemoryError::from);
         }
         self.store
-            .update(&crate::MemoryUpdateCommit {
-                command_id: request.command_id,
-                fingerprint,
-                memory_id,
-                scope: request.scope,
-                expected_revision: request.expected_revision,
-                title: request.title,
-                body: request.body,
-                source,
-                normalized_search_text,
-                updated_at_unix_ms: now,
-            })
+            .update(
+                &crate::MemoryUpdateCommit {
+                    command_id: request.command_id,
+                    fingerprint,
+                    memory_id,
+                    scope: request.scope,
+                    expected_revision: request.expected_revision,
+                    title: request.title,
+                    body: request.body,
+                    source,
+                    normalized_search_text,
+                    updated_at_unix_ms: now,
+                },
+                cancellation,
+            )
             .map_err(MemoryError::from)
     }
 
@@ -356,7 +377,7 @@ pub enum MemoryError {
     RevisionConflict { expected: u64, actual: u64 },
     #[error("Memory cursor is stale: expected catalog {expected}, actual {actual}")]
     StaleCursor { expected: u64, actual: u64 },
-    #[error("Memory lookup cancelled: {0}")]
+    #[error("Memory operation cancelled: {0}")]
     Cancelled(String),
     #[error("Memory storage failed: {0}")]
     Storage(String),
@@ -376,6 +397,7 @@ impl From<MemoryStoreError> for MemoryError {
             MemoryStoreError::StaleCursor { expected, actual } => {
                 Self::StaleCursor { expected, actual }
             }
+            MemoryStoreError::Cancelled(message) => Self::Cancelled(message),
             MemoryStoreError::Storage(message) => Self::Storage(message),
         }
     }

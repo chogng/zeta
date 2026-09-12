@@ -2,6 +2,7 @@ use super::connection::from_sql_integer;
 use super::connection::to_sql_integer;
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
+use async_utils::CancellationToken;
 use memories::Memory;
 use memories::MemoryAddCommit;
 use memories::MemoryDeleteCommit;
@@ -218,11 +219,17 @@ impl MemoryStore for SqliteMemoryStore {
         Ok(memories)
     }
 
-    fn add(&self, commit: &MemoryAddCommit) -> Result<MemoryMutationResult, MemoryStoreError> {
+    fn add(
+        &self,
+        commit: &MemoryAddCommit,
+        cancellation: &CancellationToken,
+    ) -> Result<MemoryMutationResult, MemoryStoreError> {
+        check_cancellation(cancellation)?;
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(storage_error)?;
+        check_cancellation(cancellation)?;
         authorize_model_write(&transaction, &commit.memory.scope, &commit.memory.source)?;
         reject_policy_command(&transaction, &commit.command_id)?;
         if let Some(command) = load_command(&transaction, &commit.command_id)? {
@@ -285,11 +292,14 @@ impl MemoryStore for SqliteMemoryStore {
     fn update(
         &self,
         commit: &MemoryUpdateCommit,
+        cancellation: &CancellationToken,
     ) -> Result<MemoryMutationResult, MemoryStoreError> {
+        check_cancellation(cancellation)?;
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(storage_error)?;
+        check_cancellation(cancellation)?;
         authorize_model_write(&transaction, &commit.scope, &commit.source)?;
         reject_policy_command(&transaction, &commit.command_id)?;
         let mut memory = load_memory(&transaction, &commit.scope, &commit.memory_id)?;
@@ -452,6 +462,12 @@ impl MemoryStore for SqliteMemoryStore {
             Some(&request.normalized_query),
         )
     }
+}
+
+fn check_cancellation(cancellation: &CancellationToken) -> Result<(), MemoryStoreError> {
+    cancellation
+        .check()
+        .map_err(|signal| MemoryStoreError::Cancelled(signal.reason().to_string()))
 }
 
 fn initialize(connection: &mut Connection) -> Result<(), MemoryStoreError> {
@@ -843,3 +859,7 @@ fn authorize_model_write(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "memories_tests.rs"]
+mod tests;
