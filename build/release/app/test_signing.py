@@ -12,7 +12,7 @@ from build.release.app.build import build_package
 from build.release.app.build import remote_runtime_network_release
 from build.release.remote.bundle import build_remote_runtime_bundle
 from build.release.remote.test_bundle import create_package
-from build.release.app.signing import record_verified_package, sign_package, verify_package
+from build.release.app.signing import main as signing_main, sign_package, verify_package
 
 
 class AppSigningTests(unittest.TestCase):
@@ -32,11 +32,23 @@ class AppSigningTests(unittest.TestCase):
                     output = Path(command[command.index("--output-signature") + 1])
                     output.write_bytes(b"detached-signature")
 
-            with patch.dict(
-                os.environ, {"APP_COSIGN_IDENTITY": "test-key"}, clear=False
+            with (
+                patch.dict(
+                    os.environ, {"APP_COSIGN_IDENTITY": "test-key"}, clear=False
+                ),
+                patch(
+                    "build.release.app.signing.run_command",
+                    side_effect=lambda command, runner=None: fake_runner(command),
+                ),
             ):
-                signed = sign_package(package, fake_runner)
-                verified = verify_package(package, fake_runner)
+                self.assertEqual(
+                    0, signing_main(["sign", "--package-dir", str(package)])
+                )
+                signed = json.loads((package / "app-signature.json").read_text())
+                self.assertEqual(
+                    0, signing_main(["verify", "--package-dir", str(package)])
+                )
+                verified = json.loads((package / "app-signature.json").read_text())
 
             self.assertEqual("signed", signed["status"])
             self.assertEqual("verified", verified["status"])
@@ -105,9 +117,14 @@ class AppSigningTests(unittest.TestCase):
             staged.write_bytes(b"managed-signature")
             commands = []
 
-            record = record_verified_package(
-                package, lambda command: commands.append(list(command))
-            )
+            with patch(
+                "build.release.app.signing.run_command",
+                side_effect=lambda command, runner=None: commands.append(list(command)),
+            ):
+                self.assertEqual(
+                    0, signing_main(["record", "--package-dir", str(package)])
+                )
+            record = json.loads((package / "app-signature.json").read_text())
 
             self.assertEqual("verified", record["status"])
             self.assertEqual("verify", commands[0][1])

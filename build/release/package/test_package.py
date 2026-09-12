@@ -3,6 +3,7 @@ import io
 import json
 import os
 import stat
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -16,6 +17,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from build.lib.zeta_build.targets import TARGETS
 from build.release.package.build import generate_protocol_metadata
+from build.release.package.build import main as build_main
 from build.release.package.bubblewrap import load_vendored_source, resolve_bubblewrap
 from build.release.package.layout import (
     build_package_directory,
@@ -44,6 +46,65 @@ PRODUCTION_BUBBLEWRAP_SOURCE = REPOSITORY_ROOT / "zeta-rs" / "vendor" / "bubblew
 
 
 class PackageTests(unittest.TestCase):
+    def test_build_command_stages_all_cargo_reported_binaries(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            names = (
+                "zeta-app-server",
+                "zeta-app-server-daemon",
+                "zeta-code-mode-host",
+                "zeta-remote",
+                "zeta-remote-server",
+            )
+            artifacts = [
+                json.dumps(
+                    {
+                        "reason": "compiler-artifact",
+                        "target": {"kind": ["bin"], "name": name},
+                        "executable": str(executable_file(root / name, name.encode())),
+                    }
+                )
+                for name in names
+            ]
+            rg = executable_file(root / "rg", b"ripgrep")
+            output = root / "package"
+            with (
+                patch(
+                    "build.release.package.build.generate_protocol_metadata",
+                    return_value=load_protocol_metadata(REPOSITORY_ROOT),
+                ),
+                patch("build.release.package.cargo.cargo_environment", return_value={}),
+                patch(
+                    "build.release.package.cargo.subprocess.run",
+                    return_value=subprocess.CompletedProcess(
+                        ["cargo"], 0, "\n".join(artifacts)
+                    ),
+                ) as run,
+            ):
+                self.assertEqual(
+                    0,
+                    build_main(
+                        [
+                            "--target",
+                            "aarch64-apple-darwin",
+                            "--package-dir",
+                            str(output),
+                            "--rg-bin",
+                            str(rg),
+                            "--javascript-runtime",
+                            "host-provided-node",
+                        ]
+                    ),
+                )
+            run.assert_called_once()
+            command = run.call_args.args[0]
+            self.assertEqual(
+                set(names),
+                {command[i + 1] for i, value in enumerate(command) if value == "--bin"},
+            )
+            for name in names:
+                self.assertEqual(name.encode(), (output / "bin" / name).read_bytes())
+
     def test_product_services_requires_every_sources_regular_trust_root(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

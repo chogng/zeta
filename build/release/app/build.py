@@ -12,7 +12,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 from urllib.parse import urlsplit
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -293,7 +293,7 @@ def build_package(
         raise
 
 
-def main() -> int:
+def main(arguments: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--package-dir", type=Path, required=True)
     parser.add_argument("--target", choices=sorted(TARGETS))
@@ -304,7 +304,7 @@ def main() -> int:
     parser.add_argument("--remote-runtime-bundle", type=Path)
     parser.add_argument("--remote-runtime-catalog-url")
     parser.add_argument("--remote-runtime-catalog-sha256")
-    args = parser.parse_args()
+    args = parser.parse_args(arguments)
 
     target = args.target or host_target(args.cargo)
     remote_runtime_bundle = (

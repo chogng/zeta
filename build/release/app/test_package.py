@@ -10,33 +10,35 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from build.release.app.build import build_package
+from build.release.app.build import main as build_app_package
 from build.release.app.build import remote_runtime_network_release
 from build.release.app.build import resolve_binary
-from build.release.app.release import main as release_app_package
 from build.release.remote.bundle import build_remote_runtime_bundle
 from build.release.remote.test_bundle import create_package
 
 
 class AppPackageTests(unittest.TestCase):
-    def test_release_entry_point_uses_the_package_target_on_windows(self) -> None:
+    def test_build_entry_point_uses_the_package_target_on_windows(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             binary = root / "source-binary"
             binary.write_bytes(b"windows-app")
             package = root / "package"
-            environment = {
-                "APP_BINARY": str(binary),
-                "APP_WINDOWS_SANDBOX_BINARY": str(binary),
-                "APP_PACKAGE_DIR": str(package),
-                "APP_TARGET": "x86_64-pc-windows-msvc",
-            }
-
-            with (
-                patch.dict(os.environ, environment, clear=True),
-                patch("build.release.app.release.sign_package") as sign_package,
-                patch("build.release.app.release.verify_package") as verify_package,
-            ):
-                self.assertEqual(0, release_app_package())
+            self.assertEqual(
+                0,
+                build_app_package(
+                    [
+                        "--app-bin",
+                        str(binary),
+                        "--windows-sandbox-bin",
+                        str(binary),
+                        "--package-dir",
+                        str(package),
+                        "--target",
+                        "x86_64-pc-windows-msvc",
+                    ]
+                ),
+            )
 
             metadata = json.loads((package / "app-package.json").read_text())
             self.assertEqual("x86_64-pc-windows-msvc", metadata["target"])
@@ -57,8 +59,7 @@ class AppPackageTests(unittest.TestCase):
                 ).read_bytes(),
                 (package / "licenses/mxc/LICENSE.md").read_bytes(),
             )
-            sign_package.assert_called_once_with(package.resolve())
-            verify_package.assert_called_once_with(package.resolve())
+            self.assertEqual("unsigned", metadata["signing"]["status"])
 
     def test_source_build_uses_locked_v8_inputs_for_selected_target(self) -> None:
         executable = "/custom/cargo-output/release/app"

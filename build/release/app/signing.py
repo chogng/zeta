@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import hashlib
+import argparse
 import json
 import os
 import sys
@@ -19,6 +19,7 @@ from build.lib.zeta_build.targets import target_spec
 from build.release.remote.bundle import RemoteRuntimeBundle
 from build.release.remote.bundle import validate_remote_runtime_bundle
 from build.release.system_signing import run_command
+from build.release.system_signing import sha256
 from build.release.system_signing import sign_command as system_sign_command
 from build.release.system_signing import verify_command as system_verify_command
 
@@ -31,14 +32,6 @@ class AuthenticatedRemoteRuntimeCatalog:
     sha256: str
     url: Optional[str]
     bundle: Optional[RemoteRuntimeBundle]
-
-
-def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for block in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def load_json(path: Path) -> Dict[str, object]:
@@ -529,3 +522,28 @@ def record_verified_package(
     write_json(context["record_path"], record)
     write_json(context["metadata_path"], metadata)
     return record
+
+
+def main(arguments: Optional[Sequence[str]] = None) -> int:
+    operations = {
+        "sign": sign_package,
+        "verify": verify_package,
+        "record": record_verified_package,
+    }
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "action",
+        choices=operations,
+        help="Sign a staged package, verify its signature record, or verify and record managed signing.",
+    )
+    parser.add_argument("--package-dir", type=Path, required=True)
+    args = parser.parse_args(arguments)
+    record = operations[args.action](args.package_dir)
+    print(
+        f"App package {record['status']}: {record['platform']} {record['signedSha256']}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

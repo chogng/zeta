@@ -94,12 +94,14 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 | 路径 | 职责与入口 |
 | --- | --- |
 | `build/release/package/` | 共享包的组装、内容校验和签名；入口为 `build.py`、`sign.py` |
-| `build/release/app/` | App 打包、签名和发布契约；入口为 `build.py`、`sign.py`、`verify.py`、`release.py` |
+| `build/release/app/` | App 打包、签名和发布契约；入口为 `build.py`、`signing.py` |
 | `build/release/code/` | Zeta Code 发布压缩包和校验和；入口为 `archive.py` |
 | `build/release/remote/` | Remote 运行时压缩包和 catalog；入口为 `bundle.py` |
 | `build/release/` | 共享 gzip 流、系统签名工具和公证入口；`archive.py`、`system_signing.py`、`notarize.py` |
 
 各入口可用 `python3 -B <脚本路径>` 直接运行；模块导入统一从 `build.release` 开始。测试放在对应职责目录，`just test-python release` 统一发现并运行。
+
+共享发布包先收集未提供预编译文件的第一方程序，再用一次 Cargo 调用构建并读取其报告的可执行文件路径。App 发布直接使用打包参数和 `signing.py sign / verify / record`；签名凭据由环境变量提供。
 
 `scripts/` 根目录只保存仓库级工具和四个代码 owner 依赖的脚本环境：`just-shell.py` 提供 Just 的跨平台 shell，`cargo.py` 为整个 Cargo workspace 准备锁定的构建输入，`format.py` 统一已有格式化器，`test-python.py` 按 `zeta-code`、`build`、`release` 分别运行 Python 测试并在不指定范围时聚合执行。其余操作按代码 owner 分开：`scripts/zeta-ts/` 保存 Electron Desktop 真正的 Node、Electron 和 Playwright 测试运行器与 loader，根 `package.json` 直接调用 `zeta-ts` 中的公开测试命令，不增加只转发一层的脚本；`scripts/zeta-code/` 保存 Code TUI 的源码运行和完整开发包运行入口；`scripts/zeta-rs/` 保存共享 Rust 后端的开发环境操作；`scripts/app/` 只保存 Rust GUI 的独立仓库操作。`app` 当前没有独立脚本，因此不创建空占位文件。`scripts/zeta-code/run.py` 用一次 Cargo 调用构建 Code TUI、本地 daemon 和当前平台沙箱程序，再把这些可执行文件放入按内容区分的 `.build/zeta-development/` 目录后启动；这个小目录避免 Windows 上仍在运行的程序阻塞下一次构建，不是产品包。技能、扩展和产品服务直接读取源码。`scripts/zeta-code/run_package.py` 只服务于显式的完整开发包运行。只有形成真实、可运行的操作契约时才新增入口；当前没有独立的远端 SSH 端到端测试，因此不提供空入口。
 

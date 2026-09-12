@@ -20,8 +20,7 @@ class ReleaseCommandTests(unittest.TestCase):
     def test_commands_load_outside_the_repository_without_pythonpath(self) -> None:
         commands = {
             "app/build.py": "--app-bin",
-            "app/sign.py": "--verify-only",
-            "app/verify.py": "--package-dir",
+            "app/signing.py": "{sign,verify,record}",
             "code/archive.py": "--output",
             "package/build.py": "--javascript-runtime",
             "package/sign.py": "--verify-only",

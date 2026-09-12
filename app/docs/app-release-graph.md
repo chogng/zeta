@@ -23,7 +23,7 @@ backend 不得依赖 app/UI。workspace 是统一构建图，不替代产品架�
 | Package/signing input contract | `app/packaging/*.json` | `//app:app_release_inputs` | ✅ |
 | Unsigned package staging | `build/release/app/build.py` | `just app-package` | ✅ |
 | Workspace boundary CI | Bazel | `bazel test //app:app_ci` | ✅ |
-| 平台签名和验证 | `build/release/app/release.py` | 包内 target 选择对应签名工具 | ✅ 平台不能由调用者另行指定 |
+| 平台签名和验证 | `build/release/app/signing.py` | 包内 target 选择对应签名工具 | ✅ 平台不能由调用者另行指定 |
 | Hermetic Bazel Rust compile graph | `rules_rs` + single `@crates` hub | `//app:app` | ✅ 完整 app binary build 已通过 |
 
 ### 根级 Bazel 基础设施
@@ -122,7 +122,7 @@ just app-package \
 - Linux 使用 `cosign sign-blob`，签名文件和 binary digest 一起进入 provenance artifact；
 - Windows 使用 `signtool` 和 `ZETA_WINDOWS_SIGNING_THUMBPRINT`，签名时加入 RFC 3161
   SHA-256 时间戳，并验证 Authenticode chain；GitHub Release 应使用 Azure Artifact Signing 后执行
-  `build/release/app/sign.py --verify-only`，不把代码签名私钥下载到 runner；
+  `build/release/app/signing.py record`，不把代码签名私钥下载到 runner；
 - 签名 job 只能读取 staging 输出，不能重建 binary；verify job 必须重新计算 digest，并检查与
   `app-package.json`、signature record 一致；
 - 声明本地 Remote bundle 时，sign/verify 必须重新验证 catalog、archive 和 binary 内嵌 digest；
@@ -133,21 +133,27 @@ just app-package \
 密钥、证书和 token 不进入仓库，不由 Bazel rule 参数传递；CI secret store 和平台 signer 是发布
 系统 owner。签名证明来源和完整性，不替代运行时安全审查。
 
-provider-neutral job 入口是：
+发布任务按顺序调用打包、签名和验证：
 
 ```bash
-APP_PACKAGE_DIR=/absolute/path/to/app-package \
-APP_REMOTE_RUNTIME_BUNDLE=/absolute/path/to/remote-runtimes \
+python3 -B build/release/app/build.py \
+  --package-dir /absolute/path/to/app-package \
+  --remote-runtime-bundle /absolute/path/to/remote-runtimes
+
 ZETA_MACOS_SIGNING_IDENTITY="Developer ID Application: ..." \
-python -B build/release/app/release.py
+python3 -B build/release/app/signing.py sign \
+  --package-dir /absolute/path/to/app-package
+
+python3 -B build/release/app/signing.py verify \
+  --package-dir /absolute/path/to/app-package
 ```
 
-网络包改用 `APP_REMOTE_RUNTIME_CATALOG_URL` 与
-`APP_REMOTE_RUNTIME_CATALOG_SHA256`，两者必须同时存在。
+网络包的打包参数改用 `--remote-runtime-catalog-url` 与
+`--remote-runtime-catalog-sha256`，两者必须同时提供。
 
 Linux 使用 `APP_COSIGN_IDENTITY` 指向 cosign key。本地或自管 Windows runner 使用
 `ZETA_WINDOWS_SIGNING_THUMBPRINT` 选择已经安装在用户证书库中的代码签名证书；GitHub-hosted runner
-由 Azure Artifact Signing 修改 binary 后运行 `build/release/app/sign.py --verify-only`，重新验证签名并更新
+由 Azure Artifact Signing 修改 binary 后运行 `build/release/app/signing.py record`，重新验证签名并更新
 metadata 和 signature record。脚本完成后，`app-package.json` 和
 `app-signature.json` 都必须是 `verified` 状态，才允许进入 publish step。
 

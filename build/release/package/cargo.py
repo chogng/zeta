@@ -1,15 +1,28 @@
-"""Build or validate the first-party Zeta package entrypoint."""
+"""Build missing release executables in one Cargo invocation."""
 
 import os
 import stat
 import subprocess
+import sys
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Mapping, Optional
 
-from .cargo_paths import cargo_profile_directory
+from .cargo_paths import cargo_artifact_executable
+from .cargo_paths import cargo_rendered_diagnostic
+from .cargo_paths import parse_cargo_message
 from .cargo_paths import resolve_cargo_target_directory
 from build.lib.zeta_build.targets import TargetSpec
 from build.lib.zeta_build.v8 import resolve_v8_cargo_env
+
+
+_BINARIES = {
+    "zeta-app-server": ("zeta-app-server", "--server-bin"),
+    "zeta-app-server-daemon": ("zeta-app-server-daemon", "--app-server-daemon-bin"),
+    "zeta-code-mode-host": ("zeta-code-mode-host", "--code-mode-host-bin"),
+    "zeta-remote": ("zeta-remote-connections", "--remote-bin"),
+    "zeta-remote-server": ("zeta-remote-server", "--remote-server-bin"),
+    "zeta-windows-sandbox": ("zeta-windows-sandbox", "--windows-sandbox-bin"),
+}
 
 
 def cargo_environment(spec: TargetSpec) -> dict[str, str]:
@@ -18,150 +31,69 @@ def cargo_environment(spec: TargetSpec) -> dict[str, str]:
     return environment
 
 
-def resolve_server_binary(
+def build_binaries(
     repository_root: Path,
     spec: TargetSpec,
-    explicit_binary: Optional[Path],
+    inputs: Mapping[str, Optional[Path]],
+    *,
     cargo: str,
     cargo_profile: str,
-) -> Path:
-    if explicit_binary is not None:
-        return validate_input_binary(
-            explicit_binary, "Zeta server executable", "--server-bin", spec.is_windows
-        )
+) -> Dict[str, Path]:
+    if "zeta-windows-sandbox" in inputs and not spec.is_windows:
+        raise RuntimeError("Windows sandbox executable requires a Windows target")
+    outputs = {
+        name: validate_input_binary(path, name, _BINARIES[name][1], spec.is_windows)
+        for name, path in inputs.items()
+        if path is not None
+    }
+    missing = [name for name in inputs if name not in outputs]
+    if not missing:
+        return outputs
 
-    rust_workspace = repository_root
-    target_directory = resolve_cargo_target_directory(repository_root)
     command = [
         cargo,
         "build",
         "--manifest-path",
         str(repository_root / "Cargo.toml"),
-        "--package",
-        "zeta-app-server",
-        "--bin",
-        "zeta-app-server",
+        "--locked",
         "--profile",
         cargo_profile,
         "--target",
         spec.target,
         "--target-dir",
-        str(target_directory),
+        str(resolve_cargo_target_directory(repository_root)),
+        "--message-format=json-render-diagnostics",
     ]
-    subprocess.run(command, check=True, env=cargo_environment(spec))
-    profile_directory = cargo_profile_directory(cargo_profile)
-    binary = (
-        target_directory
-        / spec.target
-        / profile_directory
-        / ("zeta-app-server" + spec.executable_suffix)
+    for name in missing:
+        command.extend(["--package", _BINARIES[name][0], "--bin", name])
+    result = subprocess.run(
+        command,
+        cwd=repository_root,
+        env=cargo_environment(spec)
+        if any(name != "zeta-windows-sandbox" for name in missing)
+        else None,
+        stdout=subprocess.PIPE,
+        text=True,
+        check=False,
     )
-    return validate_input_binary(
-        binary, "built Zeta server executable", cargo, spec.is_windows
-    )
-
-
-def resolve_cli_binary(
-    spec: TargetSpec,
-    explicit_binary: Optional[Path],
-) -> Optional[Path]:
-    if explicit_binary is None:
-        return None
-    return validate_input_binary(
-        explicit_binary, "Zeta CLI executable", "--cli-bin", spec.is_windows
-    )
-
-
-def resolve_app_server_daemon_binary(
-    repository_root: Path,
-    spec: TargetSpec,
-    explicit_binary: Optional[Path],
-    cargo: str,
-    cargo_profile: str,
-) -> Path:
-    if explicit_binary is not None:
-        return validate_input_binary(
-            explicit_binary,
-            "Zeta App Server daemon executable",
-            "--app-server-daemon-bin",
-            spec.is_windows,
+    executables = {}
+    for line in result.stdout.splitlines():
+        message = parse_cargo_message(line)
+        diagnostic = cargo_rendered_diagnostic(message)
+        if diagnostic is not None:
+            sys.stderr.write(diagnostic)
+        for name in missing:
+            executable = cargo_artifact_executable(message, name)
+            if executable is not None:
+                executables[name] = Path(executable)
+    result.check_returncode()
+    for name in missing:
+        if name not in executables:
+            raise RuntimeError(f"Cargo did not report an executable for {name}")
+        outputs[name] = validate_input_binary(
+            executables[name], name, cargo, spec.is_windows
         )
-
-    target_directory = resolve_cargo_target_directory(repository_root)
-    command = [
-        cargo,
-        "build",
-        "--manifest-path",
-        str(repository_root / "Cargo.toml"),
-        "--package",
-        "zeta-app-server-daemon",
-        "--bin",
-        "zeta-app-server-daemon",
-        "--profile",
-        cargo_profile,
-        "--target",
-        spec.target,
-        "--target-dir",
-        str(target_directory),
-    ]
-    subprocess.run(command, check=True, env=cargo_environment(spec))
-    profile_directory = cargo_profile_directory(cargo_profile)
-    binary = (
-        target_directory / spec.target / profile_directory / spec.app_server_daemon_name
-    )
-    return validate_input_binary(
-        binary,
-        "built Zeta App Server daemon executable",
-        cargo,
-        spec.is_windows,
-    )
-
-
-def resolve_code_mode_host_binary(
-    repository_root: Path,
-    spec: TargetSpec,
-    explicit_binary: Optional[Path],
-    cargo: str,
-    cargo_profile: str,
-) -> Path:
-    if explicit_binary is not None:
-        return validate_input_binary(
-            explicit_binary,
-            "Zeta Code Mode Host executable",
-            "--code-mode-host-bin",
-            spec.is_windows,
-        )
-
-    target_directory = resolve_cargo_target_directory(repository_root)
-    subprocess.run(
-        [
-            cargo,
-            "build",
-            "--manifest-path",
-            str(repository_root / "Cargo.toml"),
-            "--package",
-            "zeta-code-mode-host",
-            "--bin",
-            "zeta-code-mode-host",
-            "--profile",
-            cargo_profile,
-            "--target",
-            spec.target,
-            "--target-dir",
-            str(target_directory),
-        ],
-        check=True,
-        env=cargo_environment(spec),
-    )
-    binary = (
-        target_directory
-        / spec.target
-        / cargo_profile_directory(cargo_profile)
-        / spec.code_mode_host_name
-    )
-    return validate_input_binary(
-        binary, "built Zeta Code Mode Host executable", cargo, spec.is_windows
-    )
+    return outputs
 
 
 def validate_input_binary(
@@ -179,20 +111,22 @@ def validate_input_binary(
     return resolved
 
 
-def resolve_windows_sandbox_binary(repository_root, spec, explicit_binary, cargo, cargo_profile):
-    if not spec.is_windows:
-        if explicit_binary is not None:
-            raise RuntimeError("Windows sandbox executable requires a Windows target")
+def resolve_windows_sandbox_binary(
+    repository_root: Path,
+    spec: TargetSpec,
+    explicit_binary: Optional[Path],
+    cargo: str,
+    cargo_profile: str,
+) -> Optional[Path]:
+    if not spec.is_windows and explicit_binary is None:
         return None
-    if explicit_binary is not None:
-        return validate_input_binary(explicit_binary, "Windows sandbox executable", "--windows-sandbox-bin", True)
-    target_directory = resolve_cargo_target_directory(repository_root)
-    subprocess.run([
-        cargo, "build", "--manifest-path", str(repository_root / "Cargo.toml"),
-        "--package", "zeta-windows-sandbox", "--bin", "zeta-windows-sandbox", "--locked",
-        "--profile", cargo_profile, "--target", spec.target, "--target-dir", str(target_directory),
-    ], check=True)
-    return validate_input_binary(target_directory / spec.target / cargo_profile_directory(cargo_profile) / "zeta-windows-sandbox.exe", "built Windows sandbox executable", cargo, True)
+    return build_binaries(
+        repository_root,
+        spec,
+        {"zeta-windows-sandbox": explicit_binary},
+        cargo=cargo,
+        cargo_profile=cargo_profile,
+    )["zeta-windows-sandbox"]
 
 
 def is_executable(path: Path) -> bool:
@@ -202,16 +136,3 @@ def is_executable(path: Path) -> bool:
     return bool(mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)) and os.access(
         str(path), os.X_OK
     )
-
-
-def resolve_remote_binary(repository_root, spec, explicit_binary, cargo, cargo_profile, *, server):
-    package, name = ("zeta-remote-server", spec.remote_server_name) if server else ("zeta-remote-connections", spec.remote_name)
-    if explicit_binary is not None:
-        return validate_input_binary(explicit_binary, name, "--remote-server-bin" if server else "--remote-bin", spec.is_windows)
-    target_directory = resolve_cargo_target_directory(repository_root)
-    subprocess.run([
-        cargo, "build", "--manifest-path", str(repository_root / "Cargo.toml"),
-        "--package", package, "--bin", "zeta-remote-server" if server else "zeta-remote",
-        "--profile", cargo_profile, "--target", spec.target, "--target-dir", str(target_directory),
-    ], check=True, env=cargo_environment(spec))
-    return validate_input_binary(target_directory / spec.target / cargo_profile_directory(cargo_profile) / name, name, cargo, spec.is_windows)

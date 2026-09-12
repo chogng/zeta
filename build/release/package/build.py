@@ -14,14 +14,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT))
 from build.lib.zeta_build.targets import TARGETS, default_target
 
 from build.release.package.bubblewrap import resolve_bubblewrap
-from build.release.package.cargo import (
-    resolve_remote_binary,
-    resolve_cli_binary,
-    resolve_app_server_daemon_binary,
-    resolve_code_mode_host_binary,
-    resolve_server_binary,
-    resolve_windows_sandbox_binary,
-)
+from build.release.package.cargo import build_binaries, validate_input_binary
 from build.release.package.layout import build_package_directory, load_protocol_metadata
 from build.release.package.node import resolve_node
 from build.release.package.ripgrep import resolve_ripgrep
@@ -181,28 +174,28 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
     target = args.target or default_target()
     spec = TARGETS[target]
     protocol_metadata = generate_protocol_metadata(REPOSITORY_ROOT, args.cargo)
-    cli_binary = resolve_cli_binary(
-        spec,
-        args.cli_bin,
+    cli_binary = (
+        validate_input_binary(
+            args.cli_bin, "Zeta CLI executable", "--cli-bin", spec.is_windows
+        )
+        if args.cli_bin is not None
+        else None
     )
-    server_binary = resolve_server_binary(
+    inputs = {
+        "zeta-app-server": args.server_bin,
+        "zeta-app-server-daemon": args.app_server_daemon_bin,
+        "zeta-code-mode-host": args.code_mode_host_bin,
+        "zeta-remote": args.remote_bin,
+        "zeta-remote-server": args.remote_server_bin,
+    }
+    if spec.is_windows:
+        inputs["zeta-windows-sandbox"] = args.windows_sandbox_bin
+    elif args.windows_sandbox_bin is not None:
+        raise RuntimeError("Windows sandbox executable requires a Windows target")
+    binaries = build_binaries(
         REPOSITORY_ROOT,
         spec,
-        args.server_bin,
-        cargo=args.cargo,
-        cargo_profile=args.cargo_profile,
-    )
-    app_server_daemon_binary = resolve_app_server_daemon_binary(
-        REPOSITORY_ROOT,
-        spec,
-        args.app_server_daemon_bin,
-        cargo=args.cargo,
-        cargo_profile=args.cargo_profile,
-    )
-    code_mode_host_binary = resolve_code_mode_host_binary(
-        REPOSITORY_ROOT,
-        spec,
-        args.code_mode_host_bin,
+        inputs,
         cargo=args.cargo,
         cargo_profile=args.cargo_profile,
     )
@@ -240,11 +233,11 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         REPOSITORY_ROOT,
         version,
         spec,
-        server_binary,
-        resolve_remote_binary(REPOSITORY_ROOT, spec, args.remote_bin, args.cargo, args.cargo_profile, server=False),
-        resolve_remote_binary(REPOSITORY_ROOT, spec, args.remote_server_bin, args.cargo, args.cargo_profile, server=True),
-        app_server_daemon_binary,
-        code_mode_host_binary,
+        binaries["zeta-app-server"],
+        binaries["zeta-remote"],
+        binaries["zeta-remote-server"],
+        binaries["zeta-app-server-daemon"],
+        binaries["zeta-code-mode-host"],
         ripgrep,
         node,
         bubblewrap,
@@ -252,7 +245,9 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         build_profile=args.cargo_profile,
         cli_binary=cli_binary,
         update_public_key=args.update_public_key,
-        windows_sandbox_binary=resolve_windows_sandbox_binary(REPOSITORY_ROOT, spec, args.windows_sandbox_bin, args.cargo, args.cargo_profile),
+        windows_sandbox_binary=binaries["zeta-windows-sandbox"]
+        if spec.is_windows
+        else None,
     )
     print("Built Zeta {} package at {}".format(target, output))
     return 0

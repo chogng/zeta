@@ -45,7 +45,12 @@ formats, and update delivery belong to their respective owners.
 
 The stable entry point is `build/release/package/build.py`. Before resolving product binaries, it runs the App Server protocol generator into a temporary directory and binds the current protocol major, revision, and schema hash into `zeta-package.json`; it does not rewrite checked-in fixtures. `verify:protocol` remains an explicit fixture check, while `generate:protocol` refreshes repository fixtures when they are intentionally being reviewed. If `--server-bin` or
 `--app-server-daemon-bin` is omitted, `cargo.py` builds the corresponding product-neutral
-`zeta-app-server` or profile-scoped `zeta-app-server-daemon` for the selected target. `ripgrep.py`
+`zeta-app-server` or profile-scoped `zeta-app-server-daemon` for the selected target.
+It collects all missing first-party executables into one locked Cargo build, including
+the Code Mode Host, Remote programs, and Windows sandbox when required. Prebuilt inputs
+are validated before the build and are not rebuilt. Executable paths come from Cargo's
+JSON artifact messages; a successful build without a requested artifact is rejected.
+`ripgrep.py`
 maps the package target through `third_party/ripgrep/runtime-lock.json`,
 validates archive size and SHA-256 on every use, extracts only the locked
 member, and rejects non-regular archive members. `node.py` applies the same
