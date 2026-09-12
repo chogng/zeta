@@ -1,6 +1,6 @@
 # 沙箱架构
 
-Zeta 的 `sandboxing` 拥有统一权限契约和执行前的后端选择。`mxc-sandbox` 是 Microsoft MXC 的薄适配器，平台实现可以独立替换。
+Zeta 的 `sandboxing` 拥有统一权限契约和执行前的后端选择。`mxc-sandbox` 是 Microsoft MXC 的薄适配器，平台实现可以独立替换。MXC 主后端与 Windows 回退的具体方案见 [`zeta-rs/docs/mxc-sandbox-windows-fallback.md`](../zeta-rs/docs/mxc-sandbox-windows-fallback.md)。
 
 ## 调用与所有权
 
@@ -17,7 +17,7 @@ flowchart TD
     proxy --> core
 ```
 
-当前产品注册 MXC 一个候选。Codex Windows 后端尚未接入；图中不把候选研究描述为已实现能力。
+非 Windows 构建只注册 MXC；Windows 构建按 `mxc` → `windows` 顺序注册 MXC 与 Zeta Windows 后端。Windows 回退已有接线，但完整平台验收仍未完成。
 
 | Owner | 职责 |
 | --- | --- |
@@ -88,7 +88,7 @@ Codex 的 Windows 实现是候选基线，不能未经核对直接注册：
 
 这里的宿主安装授权与 `HostAclChanges::Scoped` 不同：后者仍只覆盖 Grant 与隐藏目录，不能批准账户创建、持久网络规则、NUL 或其他宿主路径的修改。接入后也必须保留这一区别。
 
-这不是已经注册的第二后端，也没有因此取得 Windows 23H2 支持。兼容实现未完成验收时，能力不足的系统明确拒绝受限执行。
+这不是已经完成验收的第二后端，也没有因此取得 Windows 23H2 支持。兼容实现未完成验收时，能力不足的系统明确拒绝受限执行。
 
 ## 当前验证范围
 
