@@ -29,7 +29,7 @@
 
 ## 文件安装与卸载
 
-Zeta 宿主读取 profile root 的 `themes` 目录中的常规 `*.json` 文件。默认 profile root 在 macOS 为 `/Users/<user>/.zeta`，Linux 为 `/home/<user>/.zeta`，Windows 为 `C:\Users\<user>\.zeta`。`ZETA_PROFILE_ROOT` 可整体覆盖 profile；测试主题加载器时还可用优先级更高的 `ZETA_DEVICE_ROOT` 仅覆盖 device resource root。Desktop 中的实际绝对路径会显示在 Settings → Appearance 底部。
+Zeta 宿主读取 profile root 的 `themes` 目录中的常规 `*.json` 文件。默认 profile root 在 macOS 为 `/Users/<user>/.zeta`，Linux 为 `/home/<user>/.zeta`，Windows 为 `C:\Users\<user>\.zeta`。`ZETA_HOME` 可整体覆盖 profile；测试主题加载器时还可用优先级更高的 `ZETA_DEVICE_ROOT` 仅覆盖 device resource root。Desktop 中的实际绝对路径会显示在 Settings → Appearance 底部。
 
 - 外部安装：把 [`color-theme.template.json`](../resources/design-tokens/color-theme.template.json) 复制到该目录，修改 `id`、`label` 和颜色后保存，完全重启 Zeta。
 - 外部更新：替换同名文件，完全重启 Zeta。

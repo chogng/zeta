@@ -15,7 +15,6 @@ pub(crate) use host::local_app_server_command;
 pub(crate) use zeta_app_server_client::AppServerRequestHandle;
 pub(crate) use zeta_app_server_client::ClientError;
 pub(crate) use zeta_app_server_client::ServerNotification;
-pub(crate) use zeta_install_context::local_profile_root;
 
 #[cfg(test)]
 pub(crate) mod testing {

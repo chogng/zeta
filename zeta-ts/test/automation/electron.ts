@@ -30,6 +30,8 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 		delete environment.ZETA_DESKTOP_UI_ONLY;
 	}
 	environment.ZETA_WORKBENCH_MODE = options.workbenchMode ?? "code";
+	environment.ZETA_HOME = resolve(options.userDataDirectory, "profile");
+	delete environment.ZETA_PROFILE_ROOT;
 	delete environment.ELECTRON_RUN_AS_NODE;
 
 	return {

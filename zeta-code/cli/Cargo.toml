@@ -10,6 +10,7 @@ name = "zeta"
 path = "src/main.rs"
 
 [dependencies]
+zeta-utils-home-dir = { workspace = true }
 zeta-app-server-daemon = { workspace = true }
 zeta-app-server = { workspace = true }
 process-hardening = { workspace = true }

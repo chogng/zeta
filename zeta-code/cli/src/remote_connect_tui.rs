@@ -26,7 +26,7 @@ pub(super) fn run(
         let mut options =
             zeta_tui::TuiOptions::new(format!("Remote SSH: {}", profile.target().host().as_str()))
                 .with_remote_dir(PathBuf::from(profile.target().dir().as_str()))
-                .with_profile_root(zeta_install_context::local_profile_root());
+                .with_profile_root(zeta_utils_home_dir::find_zeta_home().map_err(|error| error.to_string())?);
         if let Some(state) = recovery.take() {
             options = options.with_recovery(state);
         }

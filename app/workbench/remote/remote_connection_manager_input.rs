@@ -31,7 +31,6 @@ use zui::ui::Point;
 use zui::ui::TextInputCommand;
 
 use crate::WorkbenchApplication;
-use crate::app_server::local_profile_root;
 use crate::terminal_input::text_input_command;
 use crate::terminal_selection::read_clipboard_text;
 use crate::terminal_selection::write_clipboard_text;
@@ -48,19 +47,24 @@ impl WorkbenchApplication {
             return true;
         }
         self.dismiss_remote_tunnel_manager();
-        let catalog = RemoteConnectionCatalog::from_profile_root(local_profile_root());
-        let connections = match catalog.connections() {
-            Ok(connections) => connections,
-            Err(error) => {
-                self.remote_connection_manager.open_settings(Vec::new());
-                self.remote_connection_manager.save_failed(format!(
-                    "Could not load Remote connections from `{}`: {error}",
-                    catalog.path().display()
-                ));
-                self.rebuild_and_focus_remote_connection_manager();
-                return true;
-            }
-        };
+        let connections =
+            match zeta_utils_home_dir::find_zeta_home()
+                .map_err(|error| error.to_string())
+                .and_then(|root| {
+                    let catalog = RemoteConnectionCatalog::from_profile_root(root);
+                    catalog
+                        .connections()
+                        .map_err(|error| format!("{}: {error}", catalog.path().display()))
+                }) {
+                Ok(connections) => connections,
+                Err(error) => {
+                    self.remote_connection_manager.open_settings(Vec::new());
+                    self.remote_connection_manager
+                        .save_failed(format!("Could not load Remote connections: {error}"));
+                    self.rebuild_and_focus_remote_connection_manager();
+                    return true;
+                }
+            };
         self.remote_connection_manager.open_settings(connections);
         self.rebuild_and_focus_remote_connection_manager();
         true
@@ -86,17 +90,21 @@ impl WorkbenchApplication {
         selected: Option<&RemoteConnectionName>,
     ) -> bool {
         self.dismiss_remote_tunnel_manager();
-        let catalog = RemoteConnectionCatalog::from_profile_root(local_profile_root());
-        let connections = match catalog.connections() {
-            Ok(connections) => connections,
-            Err(error) => {
-                eprintln!(
-                    "could not load Remote connections from `{}`: {error}",
-                    catalog.path().display()
-                );
-                return false;
-            }
-        };
+        let connections =
+            match zeta_utils_home_dir::find_zeta_home()
+                .map_err(|error| error.to_string())
+                .and_then(|root| {
+                    let catalog = RemoteConnectionCatalog::from_profile_root(root);
+                    catalog
+                        .connections()
+                        .map_err(|error| format!("{}: {error}", catalog.path().display()))
+                }) {
+                Ok(connections) => connections,
+                Err(error) => {
+                    eprintln!("could not load Remote connections: {error}");
+                    return false;
+                }
+            };
         self.remote_connection_manager
             .open(connections, restore_focus);
         if let Some(selected) = selected {
@@ -360,15 +368,20 @@ impl WorkbenchApplication {
             self.remote_connection_manager_changed();
             return;
         };
-        let catalog = RemoteConnectionCatalog::from_profile_root(local_profile_root());
-        let result = match request {
-            RemoteConnectionSaveRequest::Create(entry) => {
-                catalog.save(entry, RemoteConnectionSaveMode::Create)
-            }
-            RemoteConnectionSaveRequest::Update { original, entry } => {
-                catalog.update(&original, entry)
-            }
-        };
+        let result = zeta_utils_home_dir::find_zeta_home()
+            .map_err(|error| error.to_string())
+            .and_then(|root| {
+                let catalog = RemoteConnectionCatalog::from_profile_root(root);
+                match request {
+                    RemoteConnectionSaveRequest::Create(entry) => {
+                        catalog.save(entry, RemoteConnectionSaveMode::Create)
+                    }
+                    RemoteConnectionSaveRequest::Update { original, entry } => {
+                        catalog.update(&original, entry)
+                    }
+                }
+                .map_err(|error| error.to_string())
+            });
         match result {
             Ok(entry) => self.remote_connection_manager.save_succeeded(entry),
             Err(error) => self
@@ -383,8 +396,13 @@ impl WorkbenchApplication {
             self.remote_connection_manager_changed();
             return;
         };
-        let catalog = RemoteConnectionCatalog::from_profile_root(local_profile_root());
-        match catalog.remove(&name) {
+        match zeta_utils_home_dir::find_zeta_home()
+            .map_err(|error| error.to_string())
+            .and_then(|root| {
+                RemoteConnectionCatalog::from_profile_root(root)
+                    .remove(&name)
+                    .map_err(|error| error.to_string())
+            }) {
             Ok(Some(_)) => self.remote_connection_manager.delete_succeeded(&name),
             Ok(None) => self.remote_connection_manager.save_failed(format!(
                 "Remote connection `{}` no longer exists",

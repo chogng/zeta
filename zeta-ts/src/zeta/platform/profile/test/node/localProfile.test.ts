@@ -3,18 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { migrateLegacyLocalProfile, resolveLocalProfileRoot } from "../../node/localProfile.js";
-
-test("local profile root uses one home-relative convention on every platform", () => {
-	assert.equal(resolveLocalProfileRoot({ environment: {}, homeDirectory: "/Users/ada", platform: "darwin" }), "/Users/ada/.zeta");
-	assert.equal(resolveLocalProfileRoot({ environment: {}, homeDirectory: "/home/ada", platform: "linux" }), "/home/ada/.zeta");
-	assert.equal(resolveLocalProfileRoot({ environment: {}, homeDirectory: "C:\\Users\\ada", platform: "win32" }), "C:\\Users\\ada\\.zeta");
-});
-
-test("explicit profile root is authoritative and must be absolute", () => {
-	assert.equal(resolveLocalProfileRoot({ environment: { ZETA_PROFILE_ROOT: "/profiles/ada" }, homeDirectory: "/Users/ada", platform: "darwin" }), "/profiles/ada");
-	assert.throws(() => resolveLocalProfileRoot({ environment: { ZETA_PROFILE_ROOT: "relative" }, homeDirectory: "/Users/ada", platform: "darwin" }), /absolute path/);
-});
+import { migrateLegacyLocalProfile } from "../../node/localProfile.js";
 
 test("legacy Desktop resources migrate without overwriting canonical files", async (context) => {
 	const root = await mkdtemp(join(tmpdir(), "zeta-local-profile-"));

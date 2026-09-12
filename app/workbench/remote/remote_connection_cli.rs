@@ -12,7 +12,6 @@ use zeta_remote_connections::RemoteConnectionName;
 use zeta_remote_connections::RemoteConnectionNameError;
 use zeta_remote_connections::RemoteConnectionSaveMode;
 
-use crate::app_server::local_profile_root;
 use crate::launch::AppLaunch;
 use crate::launch::LaunchParseError;
 use crate::remote_connection_tunnel::RemoteTunnelCommand;
@@ -44,7 +43,9 @@ impl AppInvocation {
 
     /// Executes a management command or returns the launch selected for the desktop application.
     pub(crate) fn resolve(self) -> Result<Option<AppLaunch>, String> {
-        let catalog = RemoteConnectionCatalog::from_profile_root(local_profile_root());
+        let catalog = RemoteConnectionCatalog::from_profile_root(
+            zeta_utils_home_dir::find_zeta_home().map_err(|error| error.to_string())?,
+        );
         let stdout = io::stdout();
         let mut output = stdout.lock();
         self.resolve_with_catalog(&catalog, &mut output)

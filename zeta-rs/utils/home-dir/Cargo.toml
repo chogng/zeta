@@ -13,10 +13,9 @@ path = "src/lib.rs"
 
 [dependencies]
 dirs = { workspace = true }
-zeta-utils-absolute-path = { workspace = true }
+dunce = { workspace = true }
 
 [dev-dependencies]
-pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
 
 [lints]

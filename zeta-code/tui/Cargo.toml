@@ -11,7 +11,7 @@ name = "zeta_tui"
 path = "src/lib.rs"
 
 [dependencies]
-zeta-install-context = { workspace = true }
+zeta-utils-home-dir = { workspace = true }
 zeta-app-server = { workspace = true }
 memories = { workspace = true }
 queue = { workspace = true }

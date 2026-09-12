@@ -8,7 +8,7 @@ test("Electron Main lists and resolves named targets through the shared Rust cat
 	const scheduled: RemoteConnectionDefinition[] = [];
 	const service = new RemoteConnections({
 		remoteExecutable: "/Applications/Zeta.app/Contents/Resources/bin/zeta-remote",
-		environment: { ZETA_PROFILE_ROOT: "/Users/test/Library/Application Support/Zeta/state" },
+		environment: { ZETA_HOME: "/Users/test/Library/Application Support/Zeta/state" },
 		runCommand: async (_executable, args) => {
 			calls.push([...args]);
 			if (args.includes("list")) {

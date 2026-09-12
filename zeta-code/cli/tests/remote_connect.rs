@@ -51,7 +51,7 @@ fn resolves_a_saved_target_and_checks_the_real_broker() {
             "--dir",
             dir.to_str().unwrap(),
         ])
-        .env("ZETA_PROFILE_ROOT", &profile_root)
+        .env("ZETA_HOME", &profile_root)
         .output()
         .unwrap();
     assert!(
@@ -72,7 +72,7 @@ fn resolves_a_saved_target_and_checks_the_real_broker() {
             fake_ssh.to_str().unwrap(),
             "--check",
         ])
-        .env("ZETA_PROFILE_ROOT", &profile_root)
+        .env("ZETA_HOME", &profile_root)
         .env("ZETA_REMOTE_SERVER_IDLE_TIMEOUT_MILLIS", "200")
         .output()
         .unwrap();
@@ -216,7 +216,7 @@ fn run_install_case(
             fake_ssh.to_str().unwrap(),
             "--check",
         ])
-        .env("ZETA_PROFILE_ROOT", &profile_root)
+        .env("ZETA_HOME", &profile_root)
         .env("ZETA_REMOTE_SERVER_IDLE_TIMEOUT_MILLIS", "200")
         .output()
         .unwrap();
@@ -254,7 +254,7 @@ fn connect_with_catalog(
             catalog_sha256,
             "--check",
         ])
-        .env("ZETA_PROFILE_ROOT", profile_root)
+        .env("ZETA_HOME", profile_root)
         .env("ZETA_REMOTE_SERVER_IDLE_TIMEOUT_MILLIS", "200")
         .output()
         .unwrap()
@@ -290,7 +290,7 @@ fn write_installing_fake_ssh(
     fs::write(
         path,
         format!(
-            "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\ncase \"$command\" in\n  *\"'connect'\"*) if [ -f '{installed}' ]; then export ZETA_PROFILE_ROOT='{profile}'; exec /bin/sh -c \"$command\"; else IFS= read -r request || exit 65; printf '%s\\n' '{incompatible_response}'; fi ;;\n  *__ZETA_REMOTE_PLATFORM__*) printf '%s\\n' '__ZETA_REMOTE_PLATFORM__:linux:x86_64:gnu' ;;\n  *__ZETA_REMOTE_RUNTIME_INSTALLED__*) cat >/dev/null; printf '%s\\n' install >> '{installed}'; printf '%s\\n' '__ZETA_REMOTE_RUNTIME_INSTALLED__:{artifact_sha256}:{receipt_runtime}' ;;\n  *__ZETA_REMOTE_RUNTIME_FOUND__*) if [ -f '{installed}' ]; then printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:{actual_runtime}'; else {initial_probe}; fi ;;\n  *) exit 64 ;;\nesac\n",
+            "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\ncase \"$command\" in\n  *\"'connect'\"*) if [ -f '{installed}' ]; then export ZETA_HOME='{profile}'; exec /bin/sh -c \"$command\"; else IFS= read -r request || exit 65; printf '%s\\n' '{incompatible_response}'; fi ;;\n  *__ZETA_REMOTE_PLATFORM__*) printf '%s\\n' '__ZETA_REMOTE_PLATFORM__:linux:x86_64:gnu' ;;\n  *__ZETA_REMOTE_RUNTIME_INSTALLED__*) cat >/dev/null; printf '%s\\n' install >> '{installed}'; printf '%s\\n' '__ZETA_REMOTE_RUNTIME_INSTALLED__:{artifact_sha256}:{receipt_runtime}' ;;\n  *__ZETA_REMOTE_RUNTIME_FOUND__*) if [ -f '{installed}' ]; then printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:{actual_runtime}'; else {initial_probe}; fi ;;\n  *) exit 64 ;;\nesac\n",
             installed = installed_state.display(),
             profile = profile_root.display(),
             actual_runtime = remote::executable(),

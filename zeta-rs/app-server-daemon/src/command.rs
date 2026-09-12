@@ -5,7 +5,6 @@ use crate::ConnectionOptions;
 use crate::GrantSource;
 use crate::LifecycleCommand;
 use zeta_install_context::discovered_product_services_path;
-use zeta_install_context::local_profile_root;
 
 /// Runs daemon connection and lifecycle commands using the explicit host environment.
 pub fn run_command(
@@ -30,7 +29,7 @@ pub fn run_command(
         _ => return Err("ZETA_DIR_GRANT_SOURCE must be userConfig or hostConfiguration".into()),
     };
     let options = ConnectionOptions::new(
-        local_profile_root(),
+        zeta_utils_home_dir::find_zeta_home().map_err(|error| error.to_string())?,
         std::env::var_os("ZETA_WORKSPACE_ROOT").map(PathBuf::from),
         grant_source,
         product_services.or_else(discovered_product_services_path),

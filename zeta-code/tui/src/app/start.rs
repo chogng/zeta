@@ -52,6 +52,10 @@ pub(super) fn start(
         notices,
         ..
     } = options;
+    let profile_root = match profile_root {
+        Some(root) => zeta_utils_home_dir::resolve_path(&root)?,
+        None => zeta_utils_home_dir::find_zeta_home()?,
+    };
     let initialization = client.initialization()?;
     let server_slash_commands = initialization.slash_commands.clone();
     let plugins_enabled = initialization.capabilities.plugins;
@@ -107,7 +111,10 @@ pub(super) fn start(
     let terminal = TerminalSession::open(terminal_settings.screen_mode())?;
     let theme_resource = match theme_root {
         Some(theme_root) => ThemeResource::in_product_root(theme_root, terminal.background_color()),
-        None => ThemeResource::new(terminal.background_color()),
+        None => ThemeResource::in_product_root(
+            profile_root.join("zeta-code"),
+            terminal.background_color(),
+        ),
     };
     let file_search = host_file_search_root.map(FileSearchManager::new);
     let mut app = App::for_dir_with_input_catalog_and_startup_context(
@@ -115,7 +122,6 @@ pub(super) fn start(
         input_catalog,
         startup_context,
     );
-    let profile_root = profile_root.unwrap_or_else(zeta_install_context::local_profile_root);
     let history = (|| {
         let runtime =
             state::StateRuntime::open(&profile_root).map_err(|error| error.to_string())?;

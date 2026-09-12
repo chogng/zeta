@@ -74,7 +74,7 @@ fn zeta_code_cli_owns_shared_remote_profile_persistence() {
             "--runtime",
             "/srv/zeta/runtime/one/bin/zeta-remote-server",
         ])
-        .env("ZETA_PROFILE_ROOT", &root)
+        .env("ZETA_HOME", &root)
         .output()
         .unwrap();
     assert!(
@@ -99,7 +99,7 @@ fn zeta_code_cli_owns_shared_remote_profile_persistence() {
             "--runtime",
             "/srv/zeta/runtime/two/bin/zeta-remote-server",
         ])
-        .env("ZETA_PROFILE_ROOT", &root)
+        .env("ZETA_HOME", &root)
         .output()
         .unwrap();
     assert!(activate_second.status.success());
@@ -114,7 +114,7 @@ fn zeta_code_cli_owns_shared_remote_profile_persistence() {
             "--dir",
             "/srv/project",
         ])
-        .env("ZETA_PROFILE_ROOT", &root)
+        .env("ZETA_HOME", &root)
         .output()
         .unwrap();
     assert!(get.status.success());
@@ -146,7 +146,7 @@ fn zeta_code_cli_owns_shared_remote_profile_persistence() {
             "--ssh",
         ])
         .arg(&fake_ssh)
-        .env("ZETA_PROFILE_ROOT", &root)
+        .env("ZETA_HOME", &root)
         .output()
         .unwrap();
     assert!(
@@ -186,7 +186,7 @@ fn zeta_code_cli_owns_shared_named_remote_connections() {
             "--dir",
             "/srv/project",
         ])
-        .env("ZETA_PROFILE_ROOT", &root)
+        .env("ZETA_HOME", &root)
         .output()
         .unwrap();
     assert!(
@@ -213,7 +213,7 @@ fn zeta_code_cli_owns_shared_named_remote_connections() {
             "--dir",
             "/srv/production",
         ])
-        .env("ZETA_PROFILE_ROOT", &root)
+        .env("ZETA_HOME", &root)
         .output()
         .unwrap();
     assert!(
@@ -228,7 +228,7 @@ fn zeta_code_cli_owns_shared_named_remote_connections() {
 
     let list = Command::new(env!("CARGO_BIN_EXE_zeta"))
         .args(["remote", "connections", "list"])
-        .env("ZETA_PROFILE_ROOT", &root)
+        .env("ZETA_HOME", &root)
         .output()
         .unwrap();
     assert!(list.status.success());
@@ -240,7 +240,7 @@ fn zeta_code_cli_owns_shared_named_remote_connections() {
 
     let get = Command::new(env!("CARGO_BIN_EXE_zeta"))
         .args(["remote", "connections", "get", "--name", "PRODUCTION"])
-        .env("ZETA_PROFILE_ROOT", &root)
+        .env("ZETA_HOME", &root)
         .output()
         .unwrap();
     assert!(get.status.success());
@@ -251,7 +251,7 @@ fn zeta_code_cli_owns_shared_named_remote_connections() {
 
     let remove = Command::new(env!("CARGO_BIN_EXE_zeta"))
         .args(["remote", "connections", "remove", "--name", "production"])
-        .env("ZETA_PROFILE_ROOT", &root)
+        .env("ZETA_HOME", &root)
         .output()
         .unwrap();
     assert!(remove.status.success());
@@ -262,7 +262,7 @@ fn zeta_code_cli_owns_shared_named_remote_connections() {
 
     let missing = Command::new(env!("CARGO_BIN_EXE_zeta"))
         .args(["remote", "connections", "get", "--name", "production"])
-        .env("ZETA_PROFILE_ROOT", &root)
+        .env("ZETA_HOME", &root)
         .output()
         .unwrap();
     assert!(missing.status.success());

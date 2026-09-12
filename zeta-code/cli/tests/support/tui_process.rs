@@ -73,10 +73,16 @@ impl Fixture {
 
     fn environment(&self) -> Vec<(&'static str, PathBuf)> {
         let environment = vec![
-            ("ZETA_PROFILE_ROOT", self.profile.clone()),
+            ("ZETA_HOME", self.profile.clone()),
             ("ZETA_WORKSPACE_ROOT", self.workspace.clone()),
             ("CODEX_HOME", self.codex_home()),
-            ("ZETA_APP_SERVER_PATH", self.daemon.clone()),
+            (
+                "ZETA_APP_SERVER_PATH",
+                self.daemon.with_file_name(format!(
+                    "zeta-app-server{}",
+                    std::env::consts::EXE_SUFFIX
+                )),
+            ),
         ];
         #[cfg(windows)]
         let environment = {

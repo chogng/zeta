@@ -3,7 +3,6 @@ use crate::RemoteConnectionEntry;
 use crate::RemoteConnectionName;
 use crate::RemoteConnectionSaveMode;
 use serde::Serialize;
-use zeta_install_context::local_profile_root;
 use zeta_remote::RemoteDirPath;
 use zeta_remote::SshHost;
 use zeta_remote::SshTarget;
@@ -60,7 +59,9 @@ pub(super) fn parse(arguments: &[String]) -> Result<RemoteConnectionsCommand, St
 }
 
 pub(super) fn run(command: RemoteConnectionsCommand) -> Result<(), String> {
-    let catalog = RemoteConnectionCatalog::from_profile_root(local_profile_root());
+    let catalog = RemoteConnectionCatalog::from_profile_root(
+        zeta_utils_home_dir::find_zeta_home().map_err(|error| error.to_string())?,
+    );
     match command {
         RemoteConnectionsCommand::List => {
             let connections = catalog.connections().map_err(|error| error.to_string())?;

@@ -57,7 +57,7 @@ fn local_app_server_host_connects_through_the_profile_dir_broker() {
         StdioAppServerCommand::new("/opt/zeta/app")
             .with_argument("app-server-daemon")
             .with_argument("connect")
-            .with_environment_variable("ZETA_PROFILE_ROOT", profile.into_os_string())
+            .with_environment_variable("ZETA_HOME", profile.into_os_string())
             .with_environment_variable("ZETA_WORKSPACE_ROOT", "/dirs/project")
             .with_environment_variable(APP_SERVER_PATH_ENV, backend.into_os_string()),
     );

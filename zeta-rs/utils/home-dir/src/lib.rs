@@ -1,73 +1,89 @@
-//! Resolution and validation of the host-wide Zeta profile root.
+//! Resolution of the Zeta data root on the machine running this process.
 
 use std::ffi::OsStr;
 use std::io;
 use std::path::Path;
 use std::path::PathBuf;
 
-use zeta_utils_absolute_path::AbsolutePathBuf;
-
-const PROFILE_ROOT_ENV: &str = "ZETA_PROFILE_ROOT";
-
-/// Returns the host-wide Zeta profile root.
+/// Resolves `ZETA_HOME`, or the current user's `.zeta` directory when unset.
 ///
-/// `ZETA_PROFILE_ROOT` overrides the default `<home>/.zeta` location. An explicit override must
-/// already exist as a directory and is canonicalized. The default location does not need to exist.
-pub fn find_zeta_home() -> io::Result<AbsolutePathBuf> {
-    let configured = std::env::var_os(PROFILE_ROOT_ENV);
-    find_zeta_home_from(configured.as_deref(), dirs::home_dir())
+/// The result is absolute, with existing directory aliases resolved. Missing directories are
+/// allowed and are not created. Invalid overrides and the retired `ZETA_PROFILE_ROOT` variable
+/// are errors; a working directory is never used to select the data root.
+pub fn find_zeta_home() -> io::Result<PathBuf> {
+    resolve_from(
+        std::env::var_os("ZETA_HOME").as_deref(),
+        std::env::var_os("ZETA_PROFILE_ROOT").as_deref(),
+        dirs::home_dir().as_deref(),
+    )
 }
 
-fn find_zeta_home_from(
+fn resolve_from(
     configured: Option<&OsStr>,
-    user_home: Option<PathBuf>,
-) -> io::Result<AbsolutePathBuf> {
-    let configured = configured.filter(|value| !value.is_empty());
-    let Some(configured) = configured else {
-        let user_home = user_home.ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                "could not find user home directory",
-            )
-        })?;
-        return AbsolutePathBuf::from_absolute(user_home.join(".zeta"));
-    };
-
-    let path = Path::new(configured);
-    let metadata = path.metadata().map_err(|error| match error.kind() {
-        io::ErrorKind::NotFound => io::Error::new(
-            io::ErrorKind::NotFound,
-            format!(
-                "{PROFILE_ROOT_ENV} points to {:?}, but that path does not exist",
-                path
-            ),
-        ),
-        _ => io::Error::new(
-            error.kind(),
-            format!("failed to read {PROFILE_ROOT_ENV} {:?}: {error}", path),
-        ),
-    })?;
-
-    if !metadata.is_dir() {
+    legacy: Option<&OsStr>,
+    user_home: Option<&Path>,
+) -> io::Result<PathBuf> {
+    if legacy.is_some() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!(
-                "{PROFILE_ROOT_ENV} points to {:?}, but that path is not a directory",
-                path
-            ),
+            "ZETA_PROFILE_ROOT has been replaced by ZETA_HOME; remove ZETA_PROFILE_ROOT and set ZETA_HOME to the same absolute directory to retain your data",
         ));
     }
-
-    let canonical = path.canonicalize().map_err(|error| {
+    let path = match configured {
+        Some(value) => PathBuf::from(value),
+        None => user_home
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "could not find user home directory; set ZETA_HOME to an absolute directory",
+                )
+            })?
+            .join(".zeta"),
+    };
+    resolve_path(&path).map_err(|error| {
         io::Error::new(
             error.kind(),
-            format!(
-                "failed to canonicalize {PROFILE_ROOT_ENV} {:?}: {error}",
-                path
-            ),
+            format!("invalid ZETA_HOME {}: {error}", path.display()),
         )
-    })?;
-    AbsolutePathBuf::from_absolute(canonical)
+    })
+}
+
+/// Validates a selected data directory and resolves existing directory aliases without creating it.
+///
+/// Used for explicit host resource roots as well as the process-wide Zeta home. Existing files,
+/// dangling links, relative paths, and inaccessible ancestors are rejected.
+pub fn resolve_path(path: &Path) -> io::Result<PathBuf> {
+    if !path.is_absolute() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "expected a non-empty absolute directory path",
+        ));
+    }
+    match std::fs::metadata(path) {
+        Ok(metadata) if metadata.is_dir() => dunce::canonicalize(path),
+        Ok(_) => Err(io::Error::new(
+            io::ErrorKind::NotADirectory,
+            "path is not a directory",
+        )),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            match std::fs::symlink_metadata(path) {
+                Ok(_) => return Err(error),
+                Err(link_error) if link_error.kind() == io::ErrorKind::NotFound => {}
+                Err(link_error) => return Err(link_error),
+            }
+            let name = path.file_name().ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "missing directory has no final component",
+                )
+            })?;
+            let parent = path.parent().ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidInput, "directory has no parent")
+            })?;
+            Ok(resolve_path(parent)?.join(name))
+        }
+        Err(error) => Err(error),
+    }
 }
 
 #[cfg(test)]

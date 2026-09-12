@@ -11669,6 +11669,7 @@ dependencies = [
  "zeta-tools",
  "zeta-typst",
  "zeta-uds",
+ "zeta-utils-home-dir",
  "zeta-utils-pty",
  "zeta-web-search-extension",
  "zeta-windows-sandbox",
@@ -11719,6 +11720,7 @@ dependencies = [
  "zeta-package-store",
  "zeta-process-hardening",
  "zeta-uds",
+ "zeta-utils-home-dir",
 ]
 
 [[package]]
@@ -11903,6 +11905,7 @@ dependencies = [
  "zeta-remote-connections",
  "zeta-terminal",
  "zeta-tui",
+ "zeta-utils-home-dir",
  "zip 4.6.1",
 ]
 
@@ -12979,6 +12982,7 @@ dependencies = [
  "zeta-package-store",
  "zeta-process-hardening",
  "zeta-remote",
+ "zeta-utils-home-dir",
  "zeta-utils-path",
 ]
 
@@ -13011,6 +13015,7 @@ dependencies = [
  "zeta-install-context",
  "zeta-package-store",
  "zeta-process-hardening",
+ "zeta-utils-home-dir",
 ]
 
 [[package]]
@@ -13283,6 +13288,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.19",
+ "zeta-utils-home-dir",
  "zeta-utils-path",
 ]
 
@@ -13369,7 +13375,6 @@ dependencies = [
  "zeta-diff",
  "zeta-file-access",
  "zeta-file-search",
- "zeta-install-context",
  "zeta-keybinding",
  "zeta-memories",
  "zeta-memory-diagnostics",
@@ -13382,6 +13387,7 @@ dependencies = [
  "zeta-state",
  "zeta-terminal-detection",
  "zeta-utils-elapsed",
+ "zeta-utils-home-dir",
  "zeta-utils-image",
  "zeta-utils-path",
 ]
@@ -13491,9 +13497,8 @@ name = "zeta-utils-home-dir"
 version = "0.1.0"
 dependencies = [
  "dirs",
- "pretty_assertions",
+ "dunce",
  "tempfile",
- "zeta-utils-absolute-path",
 ]
 
 [[package]]
@@ -13663,7 +13668,6 @@ dependencies = [
  "zeta-files",
  "zeta-icons",
  "zeta-input-classifier",
- "zeta-install-context",
  "zeta-keybinding",
  "zeta-keybindings-host",
  "zeta-lsp-manager",
@@ -13685,6 +13689,7 @@ dependencies = [
  "zeta-theme",
  "zeta-ui-components",
  "zeta-ui-theme",
+ "zeta-utils-home-dir",
  "zeta-utils-path",
  "zui",
 ]

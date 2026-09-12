@@ -15,7 +15,6 @@ use zeta_app_server_transport::CapabilityTokenSha256;
 use zeta_app_server_transport::parse_loopback_websocket_bind;
 use zeta_app_server_transport::start_websocket_acceptor;
 use zeta_install_context::discovered_product_services_path;
-use zeta_install_context::local_profile_root;
 
 const DIR_GRANT_SOURCE: &str = "ZETA_DIR_GRANT_SOURCE";
 
@@ -23,7 +22,7 @@ const DIR_GRANT_SOURCE: &str = "ZETA_DIR_GRANT_SOURCE";
 pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
     let arguments = arguments.into_iter().collect::<Vec<_>>();
     if arguments.as_slice() == [zeta_app_server_daemon::MANAGED_PROCESS_ARGUMENT] {
-        return crate::managed::run(local_profile_root());
+        return crate::managed::run(zeta_utils_home_dir::find_zeta_home().map_err(|error| error.to_string())?);
     }
     if arguments.as_slice() == ["--version"] {
         println!(
@@ -204,7 +203,7 @@ impl StartupOptions {
             }
         };
         Ok(Self::new(
-            local_profile_root(),
+            zeta_utils_home_dir::find_zeta_home().map_err(|error| error.to_string())?,
             env::var_os("ZETA_WORKSPACE_ROOT").map(PathBuf::from),
             dir_grant_source,
             product_services,

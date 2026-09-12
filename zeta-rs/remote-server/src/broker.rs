@@ -350,6 +350,8 @@ mod unix {
         let mut command = Command::new(executable);
         command
             .arg("daemon")
+            .env("ZETA_HOME", options.profile_root())
+            .env("ZETA_WORKSPACE_ROOT", options.dir_root())
             .process_group(0)
             .stdin(Stdio::null())
             .stdout(Stdio::from(log))

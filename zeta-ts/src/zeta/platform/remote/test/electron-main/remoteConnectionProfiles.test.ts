@@ -6,7 +6,7 @@ test("Electron Main delegates Remote profile reads, activation, and rollback to 
 	const invocations: Array<{ executable: string; args: readonly string[]; environment: NodeJS.ProcessEnv }> = [];
 	const profiles = new RemoteConnectionProfiles({
 		remoteExecutable: "/Applications/Zeta.app/Contents/Resources/bin/zeta-remote",
-		environment: { ZETA_PROFILE_ROOT: "/Users/test/Library/Application Support/Zeta/state" },
+		environment: { ZETA_HOME: "/Users/test/Library/Application Support/Zeta/state" },
 		runCommand: async (executable, args, environment) => {
 			invocations.push({ executable, args, environment });
 			const activeRuntime = args.includes("activate") ? args.at(-1) : "/srv/zeta/runtime/one/bin/zeta-remote-server";
@@ -28,7 +28,7 @@ test("Electron Main delegates Remote profile reads, activation, and rollback to 
 		["profile", "activate", "--host", "build-linux", "--workspace", "/srv/project", "--runtime", "/srv/zeta/runtime/two/bin/zeta-remote-server"],
 		["profile", "rollback", "--host", "build-linux", "--workspace", "/srv/project", "--ssh", "/usr/bin/ssh"],
 	]);
-	assert.equal(invocations[0]?.environment.ZETA_PROFILE_ROOT, "/Users/test/Library/Application Support/Zeta/state");
+	assert.equal(invocations[0]?.environment.ZETA_HOME, "/Users/test/Library/Application Support/Zeta/state");
 });
 
 test("Remote profile adapter fails closed on command and record errors", async () => {

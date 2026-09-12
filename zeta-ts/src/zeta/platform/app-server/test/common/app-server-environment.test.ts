@@ -13,7 +13,7 @@ test("App Server environment keeps safe POSIX session variables and excludes cre
 	}, "posix", {
 		ZETA_APP_SERVER_PATH: "/opt/Zeta/zeta-app-server-daemon",
 		ZETA_ELECTRON_RUN_AS_NODE_PATH: "/opt/Zeta/zeta",
-		ZETA_PROFILE_ROOT: "/state",
+		ZETA_HOME: "/state",
 		ZETA_WORKSPACE_ROOT: "/workspace",
 		ZETA_DIR_GRANT_SOURCE: "userConfig",
 	});
@@ -26,7 +26,7 @@ test("App Server environment keeps safe POSIX session variables and excludes cre
 		LC_ALL: "C.UTF-8",
 		ZETA_APP_SERVER_PATH: "/opt/Zeta/zeta-app-server-daemon",
 		ZETA_ELECTRON_RUN_AS_NODE_PATH: "/opt/Zeta/zeta",
-		ZETA_PROFILE_ROOT: "/state",
+		ZETA_HOME: "/state",
 		ZETA_WORKSPACE_ROOT: "/workspace",
 		ZETA_DIR_GRANT_SOURCE: "userConfig",
 	});
@@ -44,7 +44,7 @@ test("App Server environment canonicalizes Windows keys case-insensitively", () 
 		UserProfile: "C:\\Users\\zeta",
 		AWS_SECRET_ACCESS_KEY: "secret",
 	}, "windows", {
-		ZETA_PROFILE_ROOT: "C:\\state",
+		ZETA_HOME: "C:\\state",
 	});
 
 	assert.equal(environment.PATH, "C:\\Windows\\System32");
@@ -55,5 +55,5 @@ test("App Server environment canonicalizes Windows keys case-insensitively", () 
 
 test("App Server product environment accepts only owned non-NUL variables", () => {
 	assert.throws(() => buildAppServerEnvironment({}, "posix", { OPENAI_API_KEY: "secret" }), /Invalid App Server product environment variable/);
-	assert.throws(() => buildAppServerEnvironment({}, "posix", { ZETA_PROFILE_ROOT: "bad\0path" }), /Invalid App Server product environment variable/);
+	assert.throws(() => buildAppServerEnvironment({}, "posix", { ZETA_HOME: "bad\0path" }), /Invalid App Server product environment variable/);
 });

@@ -136,7 +136,7 @@ Rust 与 TypeScript 都显式按“来源、同来源内优先级、注册顺序
 | App | 当前连接对应 `config.toml` 的 `[gui].keybindings` | App 拥有命令表和设置浮层；App Server 只保存 `[gui]` |
 | Zeta Code | 当前连接对应 `config.toml` 的 `[tui].keybindings` | TUI 拥有命令表和 `/shortcuts`；App Server 只保存 `[tui]` |
 
-`ZETA_PROFILE_ROOT` 是 Zeta 自己的 profile authority。App 和 Zeta Code 都通过 `config/read`、`config/update` 与 `config/changed` 访问当前连接对应的配置；连接远端时读写远端 `config.toml`，不会回头读取本机的 App/TUI 键位文件。
+`ZETA_HOME` 是 Zeta 自己的 profile authority。App 和 Zeta Code 都通过 `config/read`、`config/update` 与 `config/changed` 访问当前连接对应的配置；连接远端时读写远端 `config.toml`，不会回头读取本机的 App/TUI 键位文件。
 
 `[gui]` 与 `[tui]` 是独立产品配置。它们可以采用同一套 Rust 规则格式，但不能互相解释、复制或改写；两端 command catalog 不兼容也不构成问题。
 

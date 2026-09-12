@@ -31,7 +31,7 @@ fn remote_server_serves_a_schema_checked_stdio_session() {
         .with_argument("--listen")
         .with_argument("stdio://")
         .with_environment_variable("ZETA_WORKSPACE_ROOT", dir.into_os_string())
-        .with_environment_variable("ZETA_PROFILE_ROOT", profile.into_os_string());
+        .with_environment_variable("ZETA_HOME", profile.into_os_string());
     let mut session = AppServerSession::start_stdio(
         command,
         ClientInfo {
@@ -65,7 +65,7 @@ fn remote_server_forwards_the_terminal_lifecycle_over_stdio() {
         .with_argument("--listen")
         .with_argument("stdio://")
         .with_environment_variable("ZETA_WORKSPACE_ROOT", dir.into_os_string())
-        .with_environment_variable("ZETA_PROFILE_ROOT", profile.into_os_string());
+        .with_environment_variable("ZETA_HOME", profile.into_os_string());
     let mut session = AppServerSession::start_stdio(
         command,
         ClientInfo {
@@ -157,7 +157,7 @@ fn broker_preserves_a_reconnectable_terminal_between_stdio_clients() {
         StdioAppServerCommand::new(env!("CARGO_BIN_EXE_zeta-remote-server"))
             .with_argument("connect")
             .with_environment_variable("ZETA_WORKSPACE_ROOT", dir.clone().into_os_string())
-            .with_environment_variable("ZETA_PROFILE_ROOT", profile.clone().into_os_string())
+            .with_environment_variable("ZETA_HOME", profile.clone().into_os_string())
             .with_environment_variable("ZETA_REMOTE_SERVER_IDLE_TIMEOUT_MILLIS", "200")
     };
     let client_info = || ClientInfo {

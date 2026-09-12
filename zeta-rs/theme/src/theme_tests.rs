@@ -10,31 +10,45 @@ use crate::ThemeDocument;
 use crate::ThemeLoadOptions;
 use crate::ThemeLoader;
 use crate::ThemeSizeUnit;
-use crate::loader::resolve_device_root;
 use crate::tokens;
 
 #[test]
-fn device_preferences_share_the_profile_root_by_default() {
-    assert_eq!(
-        resolve_device_root(None, None, Some("/home/ada".into())),
-        std::path::PathBuf::from("/home/ada/.zeta")
-    );
-    assert_eq!(
-        resolve_device_root(
-            None,
-            Some("/profiles/zeta".into()),
-            Some("/home/ignored".into()),
-        ),
-        std::path::PathBuf::from("/profiles/zeta")
-    );
-    assert_eq!(
-        resolve_device_root(
-            Some("/devices/zeta".into()),
-            Some("/profiles/zeta".into()),
-            Some("/home/ignored".into()),
-        ),
-        std::path::PathBuf::from("/devices/zeta")
-    );
+fn device_preferences_use_zeta_home_unless_explicitly_overridden() {
+    const EXPECTED: &str = "ZETA_THEME_TEST_EXPECTED_ROOT";
+    if let Some(expected) = std::env::var_os(EXPECTED) {
+        let actual = crate::default_device_root();
+        if expected.is_empty() {
+            assert!(actual.is_err());
+        } else {
+            assert_eq!(actual.unwrap(), std::path::PathBuf::from(expected));
+        }
+        return;
+    }
+    let root = std::env::temp_dir().join(format!("zeta-theme-home-{}", std::process::id()));
+    fs::create_dir(&root).unwrap();
+    let root = zeta_utils_home_dir::resolve_path(&root).unwrap();
+    let selected = root.join("selected");
+    let device = root.join("device");
+    for (configured, override_root, expected) in [
+        (None, None, root.join(".zeta")),
+        (Some(selected.as_path()), None, selected.clone()),
+        (Some(selected.as_path()), Some(device.as_path()), device.clone()),
+        (Some(selected.as_path()), Some(std::path::Path::new("relative")), "".into()),
+    ] {
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap());
+        child.args(["--exact", "tests::device_preferences_use_zeta_home_unless_explicitly_overridden"])
+            .env("HOME", &root)
+            .env("USERPROFILE", &root)
+            .env(EXPECTED, expected)
+            .env_remove("ZETA_HOME")
+            .env_remove("ZETA_DEVICE_ROOT")
+            .env_remove("ZETA_PROFILE_ROOT");
+        if let Some(path) = configured { child.env("ZETA_HOME", path); }
+        if let Some(path) = override_root { child.env("ZETA_DEVICE_ROOT", path); }
+        let output = child.output().unwrap();
+        assert!(output.status.success(), "{}\n{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+    }
+    fs::remove_dir(root).unwrap();
 }
 
 #[test]

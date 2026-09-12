@@ -101,6 +101,6 @@ bazel test //zeta-rs/install-context:install-context-unit-tests
 
 ## 共享进程路径
 
-- `local_profile_root` 解析 `ZETA_PROFILE_ROOT` 或用户 home 下的 `.zeta`；仅选择路径，不加载或创建 profile 状态。
+- 用户数据根由 [`zeta-utils-home-dir`](../utils/home-dir/README.md) 统一解析；本 crate 只定位安装资源。
 - `discovered_product_services_path` 解析 `ZETA_PRODUCT_SERVICES_PATH` 或随包产品服务文件；内容验证由 App Server 负责。
 - 控制程序与后台服务复用这些轻量路径契约，无需相互依赖实现。

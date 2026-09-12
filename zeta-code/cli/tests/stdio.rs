@@ -45,7 +45,7 @@ fn zeta_code_cli_serves_the_remote_stdio_contract() {
         .with_argument("--listen")
         .with_argument("stdio://")
         .with_environment_variable("ZETA_WORKSPACE_ROOT", dir.into_os_string())
-        .with_environment_variable("ZETA_PROFILE_ROOT", profile.into_os_string());
+        .with_environment_variable("ZETA_HOME", profile.into_os_string());
     let mut session = AppServerSession::start_stdio(
         command,
         ClientInfo {
@@ -62,12 +62,16 @@ fn zeta_code_cli_serves_the_remote_stdio_contract() {
     assert!(client.list_sessions().unwrap().sessions.is_empty());
 
     session.shutdown().unwrap();
-    assert_eq!(
-        events
-            .recv_timeout(std::time::Duration::from_secs(2))
-            .unwrap(),
-        AppServerEvent::ConnectionClosed(ConnectionCloseReason::Shutdown)
-    );
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        match events.recv_timeout(deadline.saturating_duration_since(Instant::now())).unwrap() {
+            AppServerEvent::Notification(_) => {}
+            event => {
+                assert_eq!(event, AppServerEvent::ConnectionClosed(ConnectionCloseReason::Shutdown));
+                break;
+            }
+        }
+    }
     std::fs::remove_dir_all(root).unwrap();
 }
 
@@ -80,7 +84,7 @@ fn zeta_code_app_server_without_dir_does_not_inherit_its_current_directory() {
         .with_argument("--listen")
         .with_argument("stdio://")
         .without_environment_variable("ZETA_WORKSPACE_ROOT")
-        .with_environment_variable("ZETA_PROFILE_ROOT", profile.into_os_string());
+        .with_environment_variable("ZETA_HOME", profile.into_os_string());
     let session = AppServerSession::start_stdio(
         command,
         ClientInfo {
@@ -106,17 +110,16 @@ fn zeta_code_app_server_without_dir_does_not_inherit_its_current_directory() {
 
 #[cfg(unix)]
 #[test]
-fn zeta_code_remote_server_preserves_a_terminal_between_real_cli_connections() {
+fn remote_runtime_preserves_a_terminal_between_real_connections() {
     let root = test_root("broker");
     let dir = root.join("dir");
     let profile = root.join("profile");
     std::fs::create_dir_all(&dir).unwrap();
     let command = || {
-        StdioAppServerCommand::new(env!("CARGO_BIN_EXE_zeta"))
-            .with_argument("remote-server")
+        StdioAppServerCommand::new(remote::executable())
             .with_argument("connect")
             .with_environment_variable("ZETA_WORKSPACE_ROOT", dir.clone().into_os_string())
-            .with_environment_variable("ZETA_PROFILE_ROOT", profile.clone().into_os_string())
+            .with_environment_variable("ZETA_HOME", profile.clone().into_os_string())
             .with_environment_variable("ZETA_REMOTE_SERVER_IDLE_TIMEOUT_MILLIS", "200")
     };
     let client_info = || ClientInfo {
@@ -186,7 +189,7 @@ fn shared_ssh_options_reach_the_real_zeta_remote_server_entrypoint() {
     fs::write(
         &fake_ssh,
         format!(
-            "#!/bin/sh\nexport ZETA_PROFILE_ROOT='{}'\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\nexec /bin/sh -c \"$command\"\n",
+            "#!/bin/sh\nexport ZETA_HOME='{}'\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\nexec /bin/sh -c \"$command\"\n",
             profile_root.display()
         ),
     )
@@ -199,7 +202,7 @@ fn shared_ssh_options_reach_the_real_zeta_remote_server_entrypoint() {
             SshHost::parse("local-ssh-double").unwrap(),
             RemoteDirPath::parse(dir.to_str().unwrap()).unwrap(),
         ),
-        RemoteRuntime::new_exact_executable(env!("CARGO_BIN_EXE_zeta")).unwrap(),
+        RemoteRuntime::new_exact_executable(remote::executable()).unwrap(),
     );
     let connection =
         SshAppServerConnectionOptions::new(remote_profile).with_ssh_executable(&fake_ssh);
@@ -232,3 +235,6 @@ fn test_root(label: &str) -> std::path::PathBuf {
             .as_nanos(),
     ))
 }
+#[cfg(unix)]
+#[path = "support/remote.rs"]
+mod remote;

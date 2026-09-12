@@ -39,7 +39,7 @@ const MAX_PID_RECORD_BYTES: u64 = 16 * 1024;
 const PROCESS_EXIT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 #[cfg(unix)]
 const PROCESS_EXIT_TIMEOUT: Duration = Duration::from_secs(5);
-const PROFILE_ROOT_ENV: &str = "ZETA_PROFILE_ROOT";
+const HOME_ENV: &str = "ZETA_HOME";
 const DIR_ROOT_ENV: &str = "ZETA_WORKSPACE_ROOT";
 const DIR_GRANT_SOURCE_ENV: &str = "ZETA_DIR_GRANT_SOURCE";
 const EXECUTABLE_HASH_BUFFER_BYTES: usize = 64 * 1024;
@@ -311,7 +311,7 @@ pub(crate) fn spawn_backend(
     let mut command = Command::new(backend_executable);
     command
         .arg(MANAGED_PROCESS_ARGUMENT)
-        .env(PROFILE_ROOT_ENV, options.profile_root())
+        .env(HOME_ENV, options.profile_root())
         .env_remove(DIR_ROOT_ENV)
         .env_remove(DIR_GRANT_SOURCE_ENV)
         .stdin(Stdio::null())

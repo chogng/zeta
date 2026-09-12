@@ -109,10 +109,6 @@ pub(crate) struct ThemeSelection {
 }
 
 impl ThemeResource {
-    pub(crate) fn new(terminal_background: Option<TerminalRgb>) -> Self {
-        Self::in_product_root(default_product_root(), terminal_background)
-    }
-
     pub(crate) fn in_product_root(
         product_root: PathBuf,
         terminal_background: Option<TerminalRgb>,
@@ -232,18 +228,6 @@ impl ThemeResource {
             None => theme,
         }
     }
-}
-
-fn default_product_root() -> PathBuf {
-    std::env::var_os("ZETA_PROFILE_ROOT")
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
-                .map(PathBuf::from)
-                .map(|root| root.join(".zeta"))
-        })
-        .unwrap_or_else(|| PathBuf::from(".zeta"))
-        .join("zeta-code")
 }
 
 fn built_in_themes() -> Vec<AvailableTheme> {

@@ -8,7 +8,6 @@ use zeta_app_server::LocalProductServicesConfig;
 use zeta_app_server::open_local_app_server;
 
 const DIR_ROOT_ENV: &str = "ZETA_WORKSPACE_ROOT";
-const PROFILE_ROOT_ENV: &str = "ZETA_PROFILE_ROOT";
 pub(crate) const PRODUCT_SERVICES_PATH_ENV: &str = "ZETA_REMOTE_SERVER_PRODUCT_SERVICES_PATH";
 
 /// Filesystem state selected for one headless Remote App Server process.
@@ -120,9 +119,11 @@ fn options_from_environment() -> Result<RemoteServerOptions, RemoteServerError> 
         .ok_or_else(|| {
             RemoteServerError::new("ZETA_WORKSPACE_ROOT must be an absolute Remote Directory path")
         })?;
-    let profile_root = env::var_os(PROFILE_ROOT_ENV)
-        .map(PathBuf::from)
-        .unwrap_or_else(default_profile_root);
+    let profile_root =
+        zeta_utils_home_dir::find_zeta_home().map_err(|error| RemoteServerError::new(error.to_string()))?;
+    if env::var_os("ZETA_HOME").is_none() {
+        check_legacy_home(&profile_root, legacy_home().as_deref())?;
+    }
     let mut options = RemoteServerOptions::new(profile_root, dir_root);
     if let Some(path) = env::var_os(PRODUCT_SERVICES_PATH_ENV) {
         options = options.with_product_services_path(path);
@@ -130,39 +131,67 @@ fn options_from_environment() -> Result<RemoteServerOptions, RemoteServerError> 
     Ok(options)
 }
 
-#[cfg(target_os = "windows")]
-fn default_profile_root() -> PathBuf {
-    env::var_os("LOCALAPPDATA")
-        .map(PathBuf::from)
-        .map(|root| root.join("Zeta").join("remote-server"))
-        .unwrap_or_else(|| PathBuf::from(".zeta/remote-server"))
+// Legacy location discovery is used only to require an explicit data-root migration.
+// All normal reads and writes use the data root selected by zeta-utils-home-dir.
+fn legacy_home() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .map(|root| root.join("Zeta/remote-server"))
+    }
+    #[cfg(target_os = "macos")]
+    {
+        env::var_os("HOME")
+            .map(PathBuf::from)
+            .map(|root| root.join("Library/Application Support/Zeta/remote-server"))
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        env::var_os("XDG_STATE_HOME")
+            .map(PathBuf::from)
+            .or_else(|| {
+                env::var_os("HOME")
+                    .map(PathBuf::from)
+                    .map(|root| root.join(".local/state"))
+            })
+            .map(|root| root.join("zeta/remote-server"))
+    }
+    #[cfg(not(any(unix, target_os = "windows")))]
+    {
+        None
+    }
 }
 
-#[cfg(target_os = "macos")]
-fn default_profile_root() -> PathBuf {
-    env::var_os("HOME")
-        .map(PathBuf::from)
-        .map(|root| root.join("Library/Application Support/Zeta/remote-server"))
-        .unwrap_or_else(|| PathBuf::from(".zeta/remote-server"))
+fn check_legacy_home(
+    root: &std::path::Path,
+    legacy: Option<&std::path::Path>,
+) -> Result<(), RemoteServerError> {
+    let Some(legacy) = legacy else {
+        return Ok(());
+    };
+    match std::fs::symlink_metadata(legacy) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(RemoteServerError::new(error.to_string())),
+        Ok(_) => {
+            if zeta_utils_home_dir::resolve_path(legacy)
+                .map_err(|error| RemoteServerError::new(error.to_string()))?
+                == root
+            {
+                return Ok(());
+            }
+            Err(RemoteServerError::new(format!(
+                "Legacy Remote data exists at {}. Set ZETA_HOME on the remote host to that directory to retain it, or stop all Zeta services and migrate its contents to {} before removing the old directory; existing data roots must not be merged automatically",
+                legacy.display(),
+                root.display()
+            )))
+        }
+    }
 }
 
-#[cfg(all(unix, not(target_os = "macos")))]
-fn default_profile_root() -> PathBuf {
-    env::var_os("XDG_STATE_HOME")
-        .map(PathBuf::from)
-        .map(|root| root.join("zeta").join("remote-server"))
-        .or_else(|| {
-            env::var_os("HOME")
-                .map(PathBuf::from)
-                .map(|root| root.join(".local/state/zeta/remote-server"))
-        })
-        .unwrap_or_else(|| PathBuf::from(".zeta/remote-server"))
-}
-
-#[cfg(not(any(unix, target_os = "windows")))]
-fn default_profile_root() -> PathBuf {
-    PathBuf::from(".zeta/remote-server")
-}
+#[cfg(test)]
+#[path = "home_tests.rs"]
+mod home_tests;
 
 /// An invalid Remote server invocation or App Server startup failure.
 #[derive(Clone, Debug, Eq, PartialEq)]

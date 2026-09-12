@@ -122,7 +122,7 @@ fn connect(
     let command = StdioAppServerCommand::new(executable)
         .with_argument("app-server")
         .with_argument("connect")
-        .with_environment_variable("ZETA_PROFILE_ROOT", profile_root.as_os_str())
+        .with_environment_variable("ZETA_HOME", profile_root.as_os_str())
         .with_environment_variable("ZETA_WORKSPACE_ROOT", dir_root.as_os_str());
     AppServerSession::start_stdio(
         command,

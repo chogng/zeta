@@ -9,7 +9,6 @@ use zeta_app_server_daemon::APP_SERVER_PATH_ENV;
 use zeta_app_server_protocol::protocol::common::ClientCapabilities;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::common::DirPermissionsHostCapability;
-use zeta_install_context::local_profile_root;
 use zeta_remote::RemoteDirPath;
 use zeta_remote::RemoteProfile;
 use zeta_remote::SshHost;
@@ -125,12 +124,8 @@ impl AppServerHost {
                     zeta_app_server_daemon::backend_executable_path()
                         .map_err(|error| anyhow!(error))?,
                 );
-                let command = local_app_server_command(
-                    executable,
-                    local_profile_root(),
-                    cwd,
-                    daemon_executable,
-                );
+                let command =
+                    local_app_server_command(executable, zeta_utils_home_dir::find_zeta_home()?, cwd, daemon_executable);
                 AppServerSession::start_stdio(command, client_info, local_client_capabilities())
                     .map_err(|error| anyhow!(error.to_string()))
             }
@@ -183,7 +178,7 @@ pub(crate) fn local_app_server_command(
     let command = StdioAppServerCommand::new(executable)
         .with_argument("app-server-daemon")
         .with_argument("connect")
-        .with_environment_variable("ZETA_PROFILE_ROOT", profile_root.into_os_string())
+        .with_environment_variable("ZETA_HOME", profile_root.into_os_string())
         .with_environment_variable("ZETA_WORKSPACE_ROOT", dir_root.as_os_str().to_os_string());
     match daemon_executable {
         Some(daemon_executable) => command

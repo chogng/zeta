@@ -326,7 +326,7 @@ export function appServerEnvironment({ profileRoot, ripgrep, workspaceRoot, sour
   }
   return {
     ...environment,
-    ZETA_PROFILE_ROOT: profileRoot,
+    ZETA_HOME: profileRoot,
     ZETA_RG_PATH: ripgrep,
     ZETA_WORKSPACE_ROOT: workspaceRoot,
   };

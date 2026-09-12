@@ -24,7 +24,6 @@ use zui::ui::Point;
 use zui::ui::UiDispatch;
 
 use crate::WorkbenchApplication;
-use crate::app_server::local_profile_root;
 use crate::terminal_selection::read_clipboard_text;
 use crate::terminal_selection::write_clipboard_text;
 use zeta_session::interaction::CONTEXT_LOCATION;
@@ -44,17 +43,21 @@ impl WorkbenchApplication {
         let Some(anchor) = anchor else {
             return;
         };
-        let catalog = RemoteConnectionCatalog::from_profile_root(local_profile_root());
-        let connections = match catalog.connections() {
-            Ok(connections) => connections,
-            Err(error) => {
-                eprintln!(
-                    "could not load Remote connections from `{}`: {error}",
-                    catalog.path().display()
-                );
-                return;
-            }
-        };
+        let connections =
+            match zeta_utils_home_dir::find_zeta_home()
+                .map_err(|error| error.to_string())
+                .and_then(|root| {
+                    let catalog = RemoteConnectionCatalog::from_profile_root(root);
+                    catalog
+                        .connections()
+                        .map_err(|error| format!("{}: {error}", catalog.path().display()))
+                }) {
+                Ok(connections) => connections,
+                Err(error) => {
+                    eprintln!("could not load Remote connections: {error}");
+                    return;
+                }
+            };
         let restore_focus = self.ui_dispatch.focused();
         self.remote_connection_picker.open(
             anchor,

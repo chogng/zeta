@@ -16,9 +16,11 @@ zeta-remote-server connect
 The direct `app-server --listen stdio://` command remains available for diagnostics and
 compatibility, but it is process-scoped and cannot preserve a PTY after its stdio process exits.
 
-`ZETA_WORKSPACE_ROOT` must be absolute. `ZETA_PROFILE_ROOT` optionally selects durable remote
-state; otherwise the runtime uses a per-user `remote-server` state directory under the host's
-normal platform state location.
+`ZETA_WORKSPACE_ROOT` must be absolute. [`zeta-utils-home-dir`](../utils/home-dir/README.md) resolves `ZETA_HOME`
+on the remote machine, defaulting to that user's `~/.zeta`. An invalid override fails startup.
+The retired `ZETA_PROFILE_ROOT` variable must be renamed. If a former platform-specific
+`remote-server` data directory exists, startup requires an explicit `ZETA_HOME` selection before
+opening a different data root; see the linked migration instructions.
 
 The canonical runtime package includes this binary. The connection layer selects its exact
 immutable path and invokes `connect`; the broker re-enters the same binary with `daemon`.

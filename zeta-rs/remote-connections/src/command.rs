@@ -14,7 +14,6 @@ use crate::SshRemoteRuntimeInstaller;
 use serde::Serialize;
 use zeta_app_server_protocol::protocol::common::ClientCapabilities;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
-use zeta_install_context::local_profile_root;
 use zeta_remote::RemoteDirPath;
 use zeta_remote::RemotePlatform;
 use zeta_remote::RemoteProfile;
@@ -461,7 +460,9 @@ fn profile_usage() -> String {
 }
 
 fn run_profile(command: RemoteProfileCommand) -> Result<(), String> {
-    let store = RemoteConnectionProfileStore::from_profile_root(local_profile_root());
+    let store = RemoteConnectionProfileStore::from_profile_root(
+        zeta_utils_home_dir::find_zeta_home().map_err(|error| error.to_string())?,
+    );
     let record = match command {
         RemoteProfileCommand::Get(options) => store
             .connection(&options.target)

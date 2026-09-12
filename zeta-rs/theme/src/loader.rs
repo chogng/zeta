@@ -16,45 +16,11 @@ const MAX_THEME_FILES: usize = 128;
 const MAX_DEVICE_DOCUMENT_BYTES: u64 = 1_048_576;
 
 /// Resolves the host-local UI preference root without consulting Agent configuration.
-pub fn default_device_root() -> PathBuf {
-    resolve_device_root(
-        std::env::var_os("ZETA_DEVICE_ROOT"),
-        std::env::var_os("ZETA_PROFILE_ROOT"),
-        platform_home_directory(),
-    )
-}
-
-#[cfg(target_os = "windows")]
-fn platform_home_directory() -> Option<std::ffi::OsString> {
-    std::env::var_os("USERPROFILE")
-        .or_else(|| std::env::var_os("HOME"))
-        .or_else(|| {
-            let mut root = std::env::var_os("HOMEDRIVE")?;
-            root.push(std::env::var_os("HOMEPATH")?);
-            Some(root)
-        })
-}
-
-#[cfg(unix)]
-fn platform_home_directory() -> Option<std::ffi::OsString> {
-    std::env::var_os("HOME")
-}
-
-#[cfg(not(any(unix, target_os = "windows")))]
-fn platform_home_directory() -> Option<std::ffi::OsString> {
-    std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))
-}
-
-pub(crate) fn resolve_device_root(
-    configured_device_root: Option<std::ffi::OsString>,
-    configured_profile_root: Option<std::ffi::OsString>,
-    home: Option<std::ffi::OsString>,
-) -> PathBuf {
-    configured_device_root
-        .or(configured_profile_root)
-        .map(PathBuf::from)
-        .or_else(|| home.map(PathBuf::from).map(|root| root.join(".zeta")))
-        .unwrap_or_else(|| PathBuf::from(".zeta"))
+pub fn default_device_root() -> std::io::Result<PathBuf> {
+    match std::env::var_os("ZETA_DEVICE_ROOT") {
+        Some(root) => zeta_utils_home_dir::resolve_path(Path::new(&root)),
+        None => zeta_utils_home_dir::find_zeta_home(),
+    }
 }
 
 /// Named inputs for loading the selected graphical theme.

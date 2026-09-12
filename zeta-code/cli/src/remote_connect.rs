@@ -3,7 +3,6 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use serde::Serialize;
-use zeta_install_context::local_profile_root;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
 use zeta_remote::RemoteDirPath;
@@ -192,7 +191,7 @@ pub(super) fn run(options: RemoteConnectOptions) -> Result<(), String> {
                 .into(),
         );
     }
-    let profile_root = local_profile_root();
+    let profile_root = zeta_utils_home_dir::find_zeta_home().map_err(|error| error.to_string())?;
     let target = resolve_target(&profile_root, target)?;
     let store = RemoteConnectionProfileStore::from_profile_root(&profile_root);
     let ready = runtime::connect(

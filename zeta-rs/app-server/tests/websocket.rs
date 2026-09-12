@@ -37,7 +37,7 @@ fn app_server_emits_a_valid_listen_record_and_serves_websocket_requests() {
                 "--emit-listen-info",
                 "stdout-json",
             ])
-            .env("ZETA_PROFILE_ROOT", profile.path())
+            .env("ZETA_HOME", profile.path())
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

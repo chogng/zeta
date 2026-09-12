@@ -23,7 +23,7 @@ use zeta_remote_connections::RemoteRuntimeInstallProgress;
 use zeta_remote_connections::SshAppServerConnectionOptions;
 use zeta_remote_connections::SshRemoteRuntimeInstaller;
 
-use crate::app_server::{AppServerHost, local_profile_root};
+use crate::app_server::AppServerHost;
 
 const DEFAULT_REMOTE_RUNTIME: &str = "zeta-remote-server";
 const BUNDLED_REMOTE_RUNTIME_CATALOG: &str = "zeta-remote-runtimes/catalog.json";
@@ -173,9 +173,11 @@ impl AppLaunch {
             (false, None, Some(url), Some(expected_sha256), cache) => {
                 let release = RemoteRuntimeCatalogRelease::new(url, expected_sha256)
                     .map_err(|error| LaunchParseError::InvalidRuntimeCatalog(error.to_string()))?;
-                let cache = RemoteRuntimeDownloadCache::new(
-                    cache.unwrap_or_else(default_remote_runtime_download_cache),
-                )
+                let cache = RemoteRuntimeDownloadCache::new(match cache {
+                    Some(cache) => cache,
+                    None => default_remote_runtime_download_cache()
+                        .map_err(LaunchParseError::InvalidRuntimeCatalog)?,
+                })
                 .map_err(|error| LaunchParseError::InvalidRuntimeCatalog(error.to_string()))?;
                 RemoteRuntimeSource::DefaultRuntime {
                     catalog: Some(RemoteRuntimeCatalogSource::Network { release, cache }),
@@ -223,7 +225,9 @@ impl AppLaunch {
         &mut self,
         report_progress: &mut dyn FnMut(RemoteRuntimePreparationProgress),
     ) -> Result<(), String> {
-        let store = RemoteConnectionProfileStore::from_profile_root(local_profile_root());
+        let store = RemoteConnectionProfileStore::from_profile_root(
+            zeta_utils_home_dir::find_zeta_home().map_err(|error| error.to_string())?,
+        );
         self.prepare_remote_runtime_with_store_and_progress(&store, report_progress)
     }
 
@@ -474,7 +478,7 @@ fn bundled_remote_runtime_catalog_source() -> Result<Option<RemoteRuntimeCatalog
         (Some(url), Some(expected_sha256)) => Ok(Some(RemoteRuntimeCatalogSource::Network {
             release: RemoteRuntimeCatalogRelease::new(url, expected_sha256)
                 .map_err(|error| format!("invalid bundled Remote runtime release: {error}"))?,
-            cache: RemoteRuntimeDownloadCache::new(default_remote_runtime_download_cache())
+            cache: RemoteRuntimeDownloadCache::new(default_remote_runtime_download_cache()?)
                 .map_err(|error| format!("invalid Remote runtime download cache: {error}"))?,
         })),
         (None, Some(expected_sha256)) => {
@@ -496,8 +500,10 @@ fn bundled_remote_runtime_catalog_source() -> Result<Option<RemoteRuntimeCatalog
     }
 }
 
-fn default_remote_runtime_download_cache() -> PathBuf {
-    local_profile_root().join(REMOTE_RUNTIME_DOWNLOAD_CACHE)
+fn default_remote_runtime_download_cache() -> Result<PathBuf, String> {
+    Ok(zeta_utils_home_dir::find_zeta_home()
+        .map_err(|error| error.to_string())?
+        .join(REMOTE_RUNTIME_DOWNLOAD_CACHE))
 }
 
 /// A launch argument error that can be shown without starting the desktop event loop.

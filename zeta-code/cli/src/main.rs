@@ -17,7 +17,6 @@ use zeta_exec::ExecRunRequest;
 use zeta_exec::ExecRunner;
 use zeta_exec::HeadlessApprovalMode;
 use zeta_exec::JsonLinesExecEventSink;
-use zeta_install_context::local_profile_root;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
 
@@ -76,13 +75,21 @@ fn ask(prompt: String) -> Result<(), CliError> {
 }
 
 fn interactive() -> Result<(), String> {
-    local_tui::run(configured_dir()?, local_profile_root())
+    local_tui::run(
+        configured_dir()?,
+        zeta_utils_home_dir::find_zeta_home().map_err(|error| error.to_string())?,
+    )
 }
 
 fn resume(arguments: Vec<String>) -> Result<(), CliError> {
     let recovery = parse_resume_arguments(arguments)?;
     let dir_root = configured_dir().map_err(CliError::failure)?;
-    local_tui::resume(dir_root, local_profile_root(), recovery).map_err(CliError::failure)
+    local_tui::resume(
+        dir_root,
+        zeta_utils_home_dir::find_zeta_home().map_err(|error| CliError::failure(error.to_string()))?,
+        recovery,
+    )
+    .map_err(CliError::failure)
 }
 
 fn parse_resume_arguments(arguments: Vec<String>) -> Result<zeta_tui::TuiRecoveryState, CliError> {
@@ -258,7 +265,7 @@ fn run_headless(options: HeadlessCliOptions) -> Result<(), CliError> {
 fn headless_runner() -> Result<ExecRunner, CliError> {
     let target = AppServerTarget::Embedded(
         EmbeddedAppServerOptions::new(
-            local_profile_root(),
+            zeta_utils_home_dir::find_zeta_home().map_err(|error| CliError::failure(error.to_string()))?,
             ClientInfo {
                 name: "zeta-cli-exec".into(),
                 version: build_info::VERSION.into(),

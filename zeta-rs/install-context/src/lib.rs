@@ -359,6 +359,3 @@ mod tests;
 
 mod product_services;
 pub use product_services::discovered_product_services_path;
-
-mod profile;
-pub use profile::local_profile_root;

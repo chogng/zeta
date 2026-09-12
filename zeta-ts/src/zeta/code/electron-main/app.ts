@@ -43,7 +43,8 @@ import { nativeHostIpcRoutes } from "../../platform/native/electron-main/nativeH
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL } from "../../platform/native/common/nativeHost.js";
 import { sessionsWindowIpcRoutes } from "../../sessions/electron-main/sessionsWindowIpc.js";
 import { StateService } from "../../platform/state/node/stateService.js";
-import { localProfileRoot, migrateLegacyLocalProfile } from "../../platform/profile/node/localProfile.js";
+import { migrateLegacyLocalProfile } from "../../platform/profile/node/localProfile.js";
+import { resolveHome } from "../../platform/home/node/home.js";
 import { userThemeIpcRoutes } from "../../platform/theme/electron-main/userThemeIpc.js";
 import { UserThemeFileService } from "../../platform/theme/node/userThemeFileService.js";
 import { applyWindowState, resolveBrowserWindowOptions } from "../../platform/windows/electron-main/windows.js";
@@ -157,7 +158,7 @@ export class ZetaApplication extends Disposable {
 				),
 			}))
 			: undefined;
-		this.profileRoot = localProfileRoot();
+		this.profileRoot = resolveHome();
 
 		app.on("before-quit", this.onBeforeQuit);
 		app.on("will-quit", this.onWillQuit);
@@ -421,7 +422,7 @@ export class ZetaApplication extends Disposable {
 		const configuredRuntime = process.env.ZETA_REMOTE_ZETA_PATH;
 		const connectionProfiles = configuredRuntime === undefined ? new RemoteConnectionProfiles({
 			remoteExecutable,
-			environment: { ...process.env, ZETA_PROFILE_ROOT: this.profileRoot },
+			environment: { ...process.env, ZETA_HOME: this.profileRoot },
 		}) : undefined;
 		const bootstrap = resources.add(new RemoteRuntimeBootstrapMainService({
 			workspace: workspace.uri,
@@ -586,7 +587,7 @@ export class ZetaApplication extends Disposable {
 		}));
 		const remoteConnections = new RemoteConnections({
 			remoteExecutable: remoteExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath }),
-			environment: { ...process.env, ZETA_PROFILE_ROOT: this.profileRoot },
+			environment: { ...process.env, ZETA_HOME: this.profileRoot },
 			scheduleConnect: connection => this.openRemoteConnection(connection, workspaces),
 		});
 		const remoteWindowContext = windowDisposables.add(new RemoteWindowMainContext({
@@ -1149,7 +1150,7 @@ export class ZetaApplication extends Disposable {
 			ZETA_ELECTRON_RUN_AS_NODE_PATH: process.execPath,
 			ZETA_APP_SERVER_PATH: appServerExecutablePath(packageLocation),
 			...(backendSha256 ? { ZETA_APP_SERVER_SHA256: backendSha256 } : {}),
-			ZETA_PROFILE_ROOT: this.profileRoot,
+			ZETA_HOME: this.profileRoot,
 			...(isSingleFolderWorkspaceIdentifier(workspace)
 				? {
 					ZETA_WORKSPACE_ROOT: workspace.uri.fsPath,

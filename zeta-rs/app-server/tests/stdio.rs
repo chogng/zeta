@@ -15,7 +15,7 @@ fn app_server_serves_an_explicit_dir_over_stdio() {
         .with_argument("--listen")
         .with_argument("stdio://")
         .with_environment_variable("ZETA_WORKSPACE_ROOT", dir.into_os_string())
-        .with_environment_variable("ZETA_PROFILE_ROOT", profile.into_os_string());
+        .with_environment_variable("ZETA_HOME", profile.into_os_string());
     let session = AppServerSession::start_stdio(
         command,
         ClientInfo {
@@ -39,7 +39,7 @@ fn app_server_without_dir_does_not_inherit_its_current_directory() {
         .with_argument("--listen")
         .with_argument("stdio://")
         .without_environment_variable("ZETA_WORKSPACE_ROOT")
-        .with_environment_variable("ZETA_PROFILE_ROOT", profile.into_os_string());
+        .with_environment_variable("ZETA_HOME", profile.into_os_string());
     let session = AppServerSession::start_stdio(
         command,
         ClientInfo {
@@ -73,7 +73,7 @@ fn memories_round_trip_through_a_real_process_and_survive_restart() {
                 .with_argument("--listen")
                 .with_argument("stdio://")
                 .without_environment_variable("ZETA_WORKSPACE_ROOT")
-                .with_environment_variable("ZETA_PROFILE_ROOT", profile.clone().into_os_string()),
+                .with_environment_variable("ZETA_HOME", profile.clone().into_os_string()),
             ClientInfo {
                 name: "memory-process-test".into(),
                 version: "1".into(),

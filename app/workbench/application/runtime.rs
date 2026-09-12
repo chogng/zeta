@@ -85,7 +85,13 @@ impl WorkbenchApplication {
         let Ok(loader) = ThemeLoader::embedded() else {
             return;
         };
-        let device_root = default_device_root();
+        let device_root = match default_device_root() {
+            Ok(root) => root,
+            Err(error) => {
+                eprintln!("theme: {error}");
+                return;
+            }
+        };
         self.system_theme_scheme = system_scheme;
         let options = ThemeLoadOptions::new(&device_root, system_scheme)
             .with_default_entry(DEFAULT_THEME_ENTRY);
