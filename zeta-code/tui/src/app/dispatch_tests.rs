@@ -40,6 +40,7 @@ use zeta_client::ClientRequest;
 use zeta_client::ClientResponse;
 use zeta_client::OperationClient;
 use zeta_protocol::CommandId;
+use zeta_protocol::ReasoningEffort;
 use zeta_protocol::SessionStatus;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadStatus;
@@ -992,6 +993,68 @@ fn custom_model_picker_replaces_inherited_ids_with_the_configured_id() {
         .map(|entry| entry.model.model.as_str())
         .collect::<Vec<_>>();
     assert_eq!(models, vec!["private-alias"]);
+    assert_eq!(transport.calls(), 0);
+    drop(client);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn set_preferred_model_sets_and_clears_reasoning_effort() {
+    let (mut client, root, transport) = client_with_model_probe();
+    let config = ProviderConfigDto {
+        provider: "openai".into(),
+        base_url: None,
+        max_output_tokens: None,
+        model_context: Default::default(),
+        custom: None,
+    };
+    let revision = client.read_config().unwrap().revision;
+    client
+        .configure_provider(ProviderConfigureParams {
+            command_id: CommandId::new("create-openai").unwrap(),
+            expected_revision: revision,
+            config,
+        })
+        .unwrap();
+
+    // Specifying valid effort on a model that supports it
+    let update =
+        crate::models::set_preferred_model(&mut *client, "openai/gpt-6-astra high").unwrap();
+    assert_eq!(
+        update.notice,
+        "Preferred model: openai/gpt-6-astra (high)"
+    );
+    assert_eq!(update.summary.reasoning_effort(), Some(ReasoningEffort::High));
+    let read = client.read_config().unwrap();
+    assert_eq!(read.preferred_reasoning_effort, Some(ReasoningEffort::High));
+
+    // Unsupported model fails
+    let err = crate::models::set_preferred_model(&mut *client, "openai/gpt-5.6 high").unwrap_err();
+    assert!(err.to_string().contains("does not support reasoning effort"));
+
+    // Invalid effort fails
+    let err =
+        crate::models::set_preferred_model(&mut *client, "openai/gpt-6-astra super").unwrap_err();
+    assert!(err.to_string().contains("invalid reasoning effort"));
+
+    // Setting model without effort clears reasoning effort
+    let update =
+        crate::models::set_preferred_model(&mut *client, "openai/gpt-6-astra").unwrap();
+    assert_eq!(update.notice, "Preferred model: openai/gpt-6-astra");
+    assert_eq!(update.summary.reasoning_effort(), None);
+    let read = client.read_config().unwrap();
+    assert_eq!(read.preferred_reasoning_effort, None);
+
+    // Clear unsets model and effort
+    let update = crate::models::set_preferred_model(&mut *client, "clear").unwrap();
+    assert_eq!(update.notice, "Preferred model: not configured");
+    assert_eq!(update.summary.preferred_model(), None);
+    assert_eq!(update.summary.reasoning_effort(), None);
+
+    // Clear with extra argument fails
+    let err = crate::models::set_preferred_model(&mut *client, "clear now").unwrap_err();
+    assert!(err.to_string().contains("does not accept additional arguments"));
+
     assert_eq!(transport.calls(), 0);
     drop(client);
     let _ = fs::remove_dir_all(root);

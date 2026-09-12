@@ -10,7 +10,9 @@ use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_protocol::protocol::config::ConfigUpdateParams;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_protocol::Patch;
+use zeta_protocol::ReasoningEffort;
 
+#[derive(Debug)]
 pub(crate) struct PreferredModelUpdate {
     pub(crate) summary: ModelSummary,
     pub(crate) notice: String,
@@ -76,12 +78,22 @@ where
         ));
     }
 
-    let preferred_model = if arguments == "clear" {
-        Patch::Null
+    let mut tokens = arguments.split_whitespace();
+    let first = tokens.next().ok_or_else(|| {
+        ModelCommandError("model selection requires a model or 'clear'".into())
+    })?;
+
+    let (preferred_model, preferred_reasoning_effort) = if first == "clear" {
+        if tokens.next().is_some() {
+            return Err(ModelCommandError(
+                "/model clear does not accept additional arguments".into(),
+            ));
+        }
+        (Patch::Null, Patch::Null)
     } else {
-        let (provider, model) = arguments.split_once('/').ok_or_else(|| {
+        let (provider, model) = first.split_once('/').ok_or_else(|| {
             ModelCommandError(
-                "model must use <provider>/<model>; use /model clear to unset it".into(),
+                "model must use <provider>/<model> [effort]; use /model clear to unset it".into(),
             )
         })?;
         if provider.trim().is_empty()
@@ -98,10 +110,60 @@ where
                 "provider '{provider}' is not configured"
             )));
         }
-        Patch::Value(ModelRefDto {
-            provider: provider.into(),
-            model: model.into(),
-        })
+
+        let effort_opt = match tokens.next() {
+            Some(raw) => {
+                let effort = raw.parse::<ReasoningEffort>().map_err(|_| {
+                    ModelCommandError(format!(
+                        "invalid reasoning effort '{raw}'; supported values: low, medium, high, max"
+                    ))
+                })?;
+                Some(effort)
+            }
+            None => None,
+        };
+
+        if tokens.next().is_some() {
+            return Err(ModelCommandError(
+                "too many arguments; expected /model <provider>/<model> [effort]".into(),
+            ));
+        }
+
+        if let Some(effort) = effort_opt {
+            let catalog = client.list_models()?;
+            let entry = catalog.models.iter().find(|entry| {
+                entry.model.provider.as_str() == provider && entry.model.model.as_str() == model
+            });
+            if let Some(entry) = entry {
+                if entry.supported_reasoning_efforts.is_empty() {
+                    return Err(ModelCommandError(format!(
+                        "model '{provider}/{model}' does not support reasoning effort"
+                    )));
+                }
+                if !entry.supported_reasoning_efforts.contains(&effort) {
+                    let supported = entry
+                        .supported_reasoning_efforts
+                        .iter()
+                        .map(|e| e.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    return Err(ModelCommandError(format!(
+                        "model '{provider}/{model}' does not support reasoning effort '{effort}'; supported: [{supported}]"
+                    )));
+                }
+            }
+        }
+
+        (
+            Patch::Value(ModelRefDto {
+                provider: provider.into(),
+                model: model.into(),
+            }),
+            match effort_opt {
+                Some(effort) => Patch::Value(effort),
+                None => Patch::Null,
+            },
+        )
     };
 
     client.update_config(ConfigUpdateParams {
@@ -109,6 +171,7 @@ where
         command_id: new_command_id("model"),
         expected_revision: config.revision,
         preferred_model,
+        preferred_reasoning_effort,
         commit_message_model: Patch::Missing,
         approval_review_model: Patch::Missing,
         tool_mode: Patch::Missing,
@@ -117,10 +180,15 @@ where
         tui: Patch::Missing,
     })?;
     let config = client.read_config()?;
-    let summary = ModelSummary::from_catalog(config.preferred_model, None);
+    let catalog = client.list_models().ok();
+    let summary = ModelSummary::from_catalog(
+        config.preferred_model,
+        config.preferred_reasoning_effort,
+        catalog.as_ref(),
+    );
     let notice = format!(
         "Preferred model: {}",
-        preferred_model_label(summary.preferred_model())
+        preferred_model_label(summary.preferred_model(), summary.reasoning_effort())
     );
     Ok(PreferredModelUpdate {
         summary,
@@ -129,10 +197,17 @@ where
     })
 }
 
-fn preferred_model_label(model: Option<&ModelRefDto>) -> String {
-    model
-        .map(|model| format!("{}/{}", model.provider, model.model))
-        .unwrap_or_else(|| "not configured".into())
+fn preferred_model_label(
+    model: Option<&ModelRefDto>,
+    effort: Option<ReasoningEffort>,
+) -> String {
+    match (model, effort) {
+        (Some(model), Some(effort)) => {
+            format!("{}/{} ({})", model.provider, model.model, effort.as_str())
+        }
+        (Some(model), None) => format!("{}/{}", model.provider, model.model),
+        (None, _) => "not configured".into(),
+    }
 }
 
 #[derive(Debug)]
@@ -165,6 +240,7 @@ fn write_pins<T: JsonRpcTransport>(
         command_id: new_command_id("pin-model"),
         expected_revision: config.revision,
         preferred_model: Patch::Missing,
+        preferred_reasoning_effort: Patch::Missing,
         commit_message_model: Patch::Missing,
         approval_review_model: Patch::Missing,
         tool_mode: Patch::Missing,
@@ -202,7 +278,11 @@ fn set_pin<T: JsonRpcTransport>(
     } else {
         pins.retain(|pin| pin != &model);
     }
-    let summary = ModelSummary::from_catalog(config.preferred_model.clone(), None);
+    let summary = ModelSummary::from_catalog(
+        config.preferred_model.clone(),
+        config.preferred_reasoning_effort,
+        None,
+    );
     write_pins(client, config, pins)?;
     Ok(PreferredModelUpdate {
         summary,

@@ -324,6 +324,11 @@ impl ChatInput {
         self.textarea.cursor_line()
     }
 
+    pub(crate) fn argument_hint(&self) -> Option<&str> {
+        self.completion
+            .argument_hint(self.textarea.text(), self.textarea.cursor())
+    }
+
     pub(crate) fn desired_height(&self, available_width: u16) -> u16 {
         const MAX_VISIBLE_LINES: usize = 6;
         let rows = wrap_input(

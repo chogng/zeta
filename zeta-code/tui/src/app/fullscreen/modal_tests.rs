@@ -9,8 +9,12 @@ use crate::widgets::list_selection::ListSelectionState;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use crossterm::event::MouseButton;
+use crossterm::event::MouseEvent;
+use crossterm::event::MouseEventKind;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use ratatui::layout::Rect;
 use ratatui::style::Color;
 use ratatui::style::Modifier;
 
@@ -131,6 +135,7 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
                 None,
                 None,
                 crate::render::InteractionState::default(),
+                false,
                 crate::config::KeyHintStyle::Contrast,
                 test_context(),
             )
@@ -175,6 +180,7 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
                 Some(&hover),
                 None,
                 crate::render::InteractionState::default(),
+                false,
                 crate::config::KeyHintStyle::Contrast,
                 test_context(),
             )
@@ -415,6 +421,217 @@ fn modal_mouse_activation_uses_the_session_identity_and_close_requires_matching_
         &mut app,
         area,
         mouse(MouseEventKind::Up(MouseButton::Left), close),
+    );
+    assert!(app.command_panel().is_none());
+}
+
+#[test]
+fn modal_backdrop_click_closes_modal_and_drag_cancels() {
+    let mut app = crate::app::App::new();
+    let choices = crate::sessions::session_choices(
+        &[zeta_protocol::Session {
+            session_id: zeta_protocol::SessionId::new("session-1").unwrap(),
+            title: "Test session".into(),
+            status: zeta_protocol::SessionStatus::Active,
+            manager: Default::default(),
+            threads: Vec::new(),
+        }],
+        None,
+    );
+    app.update(crate::sessions::Event::PickerOpened(choices));
+    assert!(app.command_panel().is_some());
+    let area = Rect::new(0, 0, 100, 30);
+    let modal = super::layout(area).surface;
+    let outside = (area.x, area.y);
+    let inside = (modal.x + 2, modal.y + 2);
+    assert!(!modal.contains(ratatui::layout::Position::new(outside.0, outside.1)));
+    assert!(modal.contains(ratatui::layout::Position::new(inside.0, inside.1)));
+
+    let mouse = |kind, (column, row)| MouseEvent {
+        kind,
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    };
+
+    // Drag from outside to inside should cancel press and not close.
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Down(MouseButton::Left), outside),
+    );
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Drag(MouseButton::Left), inside),
+    );
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Up(MouseButton::Left), inside),
+    );
+    assert!(app.command_panel().is_some());
+
+    // Drag from inside to outside should cancel press and not close.
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Down(MouseButton::Left), inside),
+    );
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Drag(MouseButton::Left), outside),
+    );
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Up(MouseButton::Left), outside),
+    );
+    assert!(app.command_panel().is_some());
+
+    // Direct click on backdrop (Down + Up on outside) closes the modal.
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Down(MouseButton::Left), outside),
+    );
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Up(MouseButton::Left), outside),
+    );
+    assert!(app.command_panel().is_none());
+}
+
+#[test]
+fn editing_modal_blocks_backdrop_dismiss_and_protects_input() {
+    use crate::memories::Event;
+    use crate::memories::Page;
+    use memories::MemoryPolicy;
+    use memories::MemoryScope;
+    let mut app = crate::app::App::new();
+    app.update(Event::Opened(Page::List {
+        policy: MemoryPolicy::disabled(MemoryScope::Profile),
+        entries: Vec::new(),
+        cursor: None,
+    }));
+    assert!(super::allows_backdrop_dismiss(&app));
+    let area = Rect::new(0, 0, 100, 30);
+    let modal = super::layout(area).surface;
+    let outside = (area.x, area.y);
+    assert!(!modal.contains(ratatui::layout::Position::new(outside.0, outside.1)));
+
+    // Entering the multi-line editor turns the panel into an editing dialog.
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.handle_paste("Important draft".into());
+    assert!(!super::allows_backdrop_dismiss(&app));
+    assert_eq!(
+        super::target_at(&app, area, ratatui::layout::Position::new(outside.0, outside.1)),
+        Some(super::Target::Blocked)
+    );
+
+    let mouse = |kind, (column, row)| MouseEvent {
+        kind,
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    };
+
+    // Pressing down on the blocked backdrop immediately triggers transient alert.
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Down(MouseButton::Left), outside),
+    );
+    assert_eq!(
+        app.fullscreen.pointer.pressed(),
+        Some(&crate::app::fullscreen::pointer::PointerTarget::Modal(
+            super::Target::Blocked
+        ))
+    );
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    assert_eq!(
+        terminal.backend().buffer()[(modal.x, modal.y)].fg,
+        app.render_context().warning()
+    );
+
+    // Releasing the click keeps the dialog open and maintains modal_alert feedback.
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Up(MouseButton::Left), outside),
+    );
+    assert!(app.command_panel().is_some());
+    assert!(!super::allows_backdrop_dismiss(&app));
+    assert!(app.fullscreen.modal_alert);
+
+    // Frame rendered while alert is active shows warning border and "editing in progress" hint.
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    assert_eq!(
+        terminal.backend().buffer()[(modal.x, modal.y)].fg,
+        app.render_context().warning()
+    );
+    let rows = (0..area.height)
+        .map(|row| {
+            (0..area.width)
+                .map(|col| terminal.backend().buffer()[(col, row)].symbol())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>();
+    assert!(rows.iter().any(|row| row.contains("editing in progress") && row.contains("Esc to cancel")));
+
+    // Typing any key clears the alert while continuing to edit.
+    app.handle_key(KeyEvent::new(KeyCode::Char('!'), KeyModifiers::NONE));
+    assert!(!app.fullscreen.modal_alert);
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    assert_eq!(
+        terminal.backend().buffer()[(modal.x, modal.y)].fg,
+        app.render_context().modal_border()
+    );
+
+    // Clicking inside the dialog also clears the alert if it was active.
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Down(MouseButton::Left), outside),
+    );
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Up(MouseButton::Left), outside),
+    );
+    assert!(app.fullscreen.modal_alert);
+    let inside = (modal.x + 2, modal.y + 2);
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Down(MouseButton::Left), inside),
+    );
+    assert!(!app.fullscreen.modal_alert);
+
+    // Esc exits the editor and returns to the list picker.
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.command_panel().is_some());
+    assert!(super::allows_backdrop_dismiss(&app));
+
+    // Now in list picker mode, clicking backdrop closes the dialog.
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Down(MouseButton::Left), outside),
+    );
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Up(MouseButton::Left), outside),
     );
     assert!(app.command_panel().is_none());
 }

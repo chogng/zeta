@@ -59,6 +59,17 @@ pub(super) enum CommandPanelBody<'a> {
     Status(&'a StatusPanel),
 }
 
+impl CommandPanelBody<'_> {
+    pub(super) fn allows_backdrop_dismiss(&self) -> bool {
+        match self {
+            Self::Selection(_) | Self::Status(_) => true,
+            Self::Prompt(_) | Self::MemoryEditor(_) | Self::Provider(_) | Self::KeyCapture(_) => {
+                false
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) enum CommandPanel {
     Loading(ListSelection<()>),
@@ -116,6 +127,10 @@ impl CommandPanel {
 
     pub(crate) fn is_testing(&self) -> bool {
         matches!(self, Self::Config(editor) if editor.is_testing())
+    }
+
+    pub(crate) fn allows_backdrop_dismiss(&self) -> bool {
+        self.body().allows_backdrop_dismiss()
     }
 
     pub(crate) fn help(model: crate::widgets::list_selection::ListSelectionModel) -> Self {

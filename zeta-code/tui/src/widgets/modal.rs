@@ -80,10 +80,16 @@ pub(crate) fn draw(
     title: &str,
     hints: &crate::widgets::key_hint::KeyHints,
     close: InteractionState,
+    blocked_alert: bool,
     hint_style: crate::config::KeyHintStyle,
     context: RenderContext<'_>,
 ) {
     frame.render_widget(Clear, layout.surface);
+    let border_color = if blocked_alert {
+        context.warning()
+    } else {
+        context.modal_border()
+    };
     frame.render_widget(
         Block::default()
             .borders(Borders::ALL)
@@ -92,7 +98,7 @@ pub(crate) fn draw(
                     .fg(context.foreground())
                     .bg(context.background()),
             )
-            .border_style(Style::default().fg(context.modal_border())),
+            .border_style(Style::default().fg(border_color)),
         layout.surface,
     );
     frame.render_widget(

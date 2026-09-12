@@ -564,6 +564,7 @@ fn client_preserves_the_initialized_slash_command_snapshot() {
         name: "diagnose".into(),
         description: "inspect the current directory".into(),
         argument_mode: SlashCommandArgumentModeDto::Optional,
+        argument_hint: None,
     };
     let server = app_server()
         .with_slash_command_catalog(SlashCommandCatalog::new([definition.clone()]).unwrap());
@@ -601,6 +602,7 @@ fn embedded_startup_propagates_the_host_slash_command_catalog() {
         name: "diagnose".into(),
         description: "inspect the current directory".into(),
         argument_mode: SlashCommandArgumentModeDto::Optional,
+        argument_hint: None,
     };
     let state_root = std::env::temp_dir().join(format!(
         "zeta-app-server-client-slash-{}",

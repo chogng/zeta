@@ -273,6 +273,7 @@ fn slash_command_definition_preserves_discovery_and_argument_shape() {
         name: "diagnose".into(),
         description: "inspect the current directory".into(),
         argument_mode: SlashCommandArgumentModeDto::Optional,
+        argument_hint: None,
     };
 
     assert_eq!(
@@ -281,6 +282,23 @@ fn slash_command_definition_preserves_discovery_and_argument_shape() {
             "name": "diagnose",
             "description": "inspect the current directory",
             "argumentMode": "optional"
+        })
+    );
+
+    let with_hint = SlashCommandDefinition {
+        name: "cd".into(),
+        description: "move this session to a new working directory".into(),
+        argument_mode: SlashCommandArgumentModeDto::Optional,
+        argument_hint: Some("<path>".into()),
+    };
+
+    assert_eq!(
+        serde_json::to_value(with_hint).unwrap(),
+        serde_json::json!({
+            "name": "cd",
+            "description": "move this session to a new working directory",
+            "argumentMode": "optional",
+            "argumentHint": "<path>"
         })
     );
 }

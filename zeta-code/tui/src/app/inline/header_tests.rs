@@ -38,6 +38,7 @@ fn wide_header_keeps_pet_and_identity_information_together() {
             provider: "openai-chatgpt".into(),
             model: "gpt-5.6".into(),
         }),
+        None,
         Some(&catalog),
     ));
 

@@ -24,7 +24,7 @@ fn model_summary_resolves_the_selected_models_access_path() {
         models: vec![selected],
     };
 
-    let summary = ModelSummary::from_catalog(Some(preferred), Some(&catalog));
+    let summary = ModelSummary::from_catalog(Some(preferred), None, Some(&catalog));
 
     assert_eq!(summary.model_label(), "openai-chatgpt/gpt-5.6");
     assert_eq!(summary.model_and_effort_label(), "GPT-5.6 (high)");
@@ -40,14 +40,38 @@ fn missing_or_automatic_models_are_reported_without_guessing_access() {
             model: "unknown".into(),
         }),
         None,
+        None,
     );
-    let automatic = ModelSummary::from_catalog(None, None);
+    let automatic = ModelSummary::from_catalog(None, None, None);
 
     assert_eq!(configured.access(), ModelAccess::Unknown);
     assert_eq!(access_label(configured.access()), "Access unknown");
     assert_eq!(automatic.model_label(), "Automatic model");
     assert_eq!(configured.model_and_effort_label(), "unknown");
     assert_eq!(automatic.model_and_effort_label(), "Automatic model");
+}
+
+#[test]
+fn preferred_reasoning_effort_overrides_catalog_default() {
+    let preferred = ModelRefDto {
+        provider: "openai-chatgpt".into(),
+        model: "gpt-5.6".into(),
+    };
+    let mut selected = entry("openai-chatgpt", "gpt-5.6", ModelAccess::Subscription);
+    selected.display_name = "GPT-5.6".into();
+    selected.default_reasoning_effort = Some(ReasoningEffort::Medium);
+    let catalog = ModelListResult {
+        models: vec![selected],
+    };
+
+    let summary = ModelSummary::from_catalog(
+        Some(preferred),
+        Some(ReasoningEffort::High),
+        Some(&catalog),
+    );
+
+    assert_eq!(summary.model_and_effort_label(), "GPT-5.6 (high)");
+    assert_eq!(summary.reasoning_effort(), Some(ReasoningEffort::High));
 }
 
 fn entry(provider: &str, model: &str, access: ModelAccess) -> ModelCatalogEntry {
@@ -81,6 +105,7 @@ fn context_capacity_comes_only_from_the_matching_catalog_entry() {
             provider: "provider".into(),
             model: "model".into(),
         }),
+        None,
         Some(&catalog),
     );
     assert_eq!(summary.context_capacity(), Some(90_000));
@@ -89,6 +114,7 @@ fn context_capacity_comes_only_from_the_matching_catalog_entry() {
             provider: "provider".into(),
             model: "other".into(),
         }),
+        None,
         Some(&catalog),
     );
     assert_eq!(other.context_capacity(), None);

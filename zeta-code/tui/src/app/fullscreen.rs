@@ -57,6 +57,7 @@ pub(super) struct Fullscreen {
     pub(super) viewports: crate::thread::transcript::viewport::Viewports,
     pub(super) pointer: PointerInteraction<PointerTarget>,
     pub(super) selection: ScreenSelection,
+    pub(super) modal_alert: bool,
 }
 
 impl Fullscreen {
@@ -75,10 +76,12 @@ impl Fullscreen {
             viewports: crate::thread::transcript::viewport::Viewports::new(thread),
             pointer: Default::default(),
             selection: Default::default(),
+            modal_alert: false,
         }
     }
 
     pub(super) fn clear(&mut self) {
+        self.modal_alert = false;
         self.pointer.clear();
         self.selection.clear();
     }

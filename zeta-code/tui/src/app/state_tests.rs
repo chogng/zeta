@@ -1352,6 +1352,7 @@ fn runtime_command_registry_drives_popup_and_submission_consistently() {
             name: "diagnose".into(),
             description: "inspect the current dir".into(),
             argument_mode: SlashCommandArgumentMode::Optional,
+            argument_hint: None,
         }],
     )
     .unwrap();
@@ -1387,6 +1388,7 @@ fn help_uses_the_runtime_command_catalog_and_descriptions() {
             name: "diagnose".into(),
             description: "inspect the current dir".into(),
             argument_mode: SlashCommandArgumentMode::Optional,
+            argument_hint: None,
         }],
     )
     .unwrap();

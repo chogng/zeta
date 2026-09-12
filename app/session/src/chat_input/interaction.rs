@@ -294,6 +294,7 @@ fn model_command() -> SlashCommandDefinition {
         name: "model".into(),
         description: "choose the preferred model for subsequent turns".into(),
         argument_mode: SlashCommandArgumentMode::None,
+        argument_hint: None,
     }
 }
 

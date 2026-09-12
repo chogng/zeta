@@ -19,6 +19,7 @@ use zeta_model_provider_config::ModelProviderConfig;
 use zeta_protocol::CommandId;
 use zeta_protocol::Patch;
 use zeta_protocol::ProviderId;
+use zeta_protocol::ReasoningEffort;
 use zeta_protocol::ToolMode;
 
 /// A three-state update for user-facing preferences.
@@ -29,6 +30,8 @@ pub struct PreferencesUpdate {
     pub features: Patch<features::FeatureOverrides>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub preferred_model: Patch<ModelRef>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    pub preferred_reasoning_effort: Patch<ReasoningEffort>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub approval_review_model: Patch<ApprovalReviewModelSelection>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]

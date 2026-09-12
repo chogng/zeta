@@ -106,6 +106,11 @@ impl SlashCommandsState {
         SlashCommandInput::at_cursor(input, cursor, &self.catalog).command_element_range()
     }
 
+    pub fn argument_hint(&self) -> Option<&str> {
+        let input = self.input.as_deref()?;
+        SlashCommandInput::at_cursor(input, self.cursor, &self.catalog).argument_hint()
+    }
+
     pub fn dismiss(&mut self) {
         self.dismissed_input.clone_from(&self.input);
     }

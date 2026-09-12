@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use ts_rs::TS;
 use zeta_protocol::CommandId;
 use zeta_protocol::Patch;
+use zeta_protocol::ReasoningEffort;
 use zeta_protocol::ToolMode;
 
 /// Selects the implementation behind the Agent-only `grep` Tool.
@@ -421,6 +422,9 @@ pub struct ConfigReadResult {
     #[ts(type = "number")]
     pub generation: u64,
     pub preferred_model: Option<ModelRefDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub preferred_reasoning_effort: Option<ReasoningEffort>,
     pub approval_review_model: ApprovalReviewModelSelectionDto,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
@@ -557,6 +561,10 @@ pub struct ConfigUpdateParams {
     #[schemars(with = "Option<ModelRefDto>")]
     #[ts(as = "Option<ModelRefDto>", optional = nullable)]
     pub preferred_model: Patch<ModelRefDto>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    #[schemars(with = "Option<ReasoningEffort>")]
+    #[ts(as = "Option<ReasoningEffort>", optional = nullable)]
+    pub preferred_reasoning_effort: Patch<ReasoningEffort>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     #[schemars(with = "Option<ApprovalReviewModelSelectionDto>")]
     #[ts(as = "Option<ApprovalReviewModelSelectionDto>", optional = nullable)]

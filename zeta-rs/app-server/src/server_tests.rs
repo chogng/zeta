@@ -1417,6 +1417,7 @@ fn initialize_advertises_the_server_slash_command_snapshot() {
         name: "diagnose".into(),
         description: "inspect the current dir".into(),
         argument_mode: SlashCommandArgumentModeDto::Optional,
+        argument_hint: None,
     }])
     .unwrap();
     let server = server().with_slash_command_catalog(catalog);

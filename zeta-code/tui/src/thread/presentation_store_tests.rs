@@ -50,6 +50,7 @@ fn refreshed_completion_catalog_reaches_existing_and_future_threads() {
             name: "diagnose".into(),
             description: "inspect the current dir".into(),
             argument_mode: SlashCommandArgumentMode::Optional,
+            argument_hint: None,
         }],
     )
     .unwrap();

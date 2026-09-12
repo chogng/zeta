@@ -11989,6 +11989,16 @@
             }
           ]
         },
+        "preferredReasoningEffort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasoningEffort"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "providers": {
           "additionalProperties": {
             "$ref": "#/$defs/ProviderConfigDto"
@@ -12112,6 +12122,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/ModelRefDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "preferredReasoningEffort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasoningEffort"
             },
             {
               "type": "null"
@@ -28710,6 +28730,12 @@
     "SlashCommandDefinition": {
       "description": "One server-advertised command in the immutable initialization snapshot.\n\nClients may merge these commands with local presentation commands. A submitted dynamic command\nremains ordinary ordered Turn input; the definition only makes its slash syntax discoverable\nand declares whether inline arguments are accepted.",
       "properties": {
+        "argumentHint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "argumentMode": {
           "$ref": "#/$defs/SlashCommandArgumentModeDto"
         },

@@ -17,6 +17,14 @@ pub(super) fn is_open(app: &App) -> bool {
     app.overlay().is_some() || app.command_panel().is_some()
 }
 
+pub(super) fn allows_backdrop_dismiss(app: &App) -> bool {
+    if app.overlay().is_some() {
+        return true;
+    }
+    app.command_panel()
+        .is_some_and(|panel| panel.allows_backdrop_dismiss())
+}
+
 pub(super) fn layout(available: Rect) -> ModalLayout {
     ModalLayout::new(
         available,
@@ -39,6 +47,8 @@ pub(super) fn body_area(panel: &CommandPanel, content: Rect) -> Rect {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::app) enum Target {
     Close,
+    Backdrop,
+    Blocked,
     Tab(usize),
     List(crate::widgets::list_selection::ListSelectionPointerTarget),
 }
@@ -48,7 +58,17 @@ pub(super) fn target_at(
     available: Rect,
     position: ratatui::layout::Position,
 ) -> Option<Target> {
+    if !available.contains(position) {
+        return None;
+    }
     let layout = layout(available);
+    if !layout.surface.contains(position) {
+        return if allows_backdrop_dismiss(app) {
+            Some(Target::Backdrop)
+        } else {
+            Some(Target::Blocked)
+        };
+    }
     if layout.close.contains(position) {
         return Some(Target::Close);
     }
@@ -76,6 +96,7 @@ pub(super) fn target_at(
 pub(super) fn activate(app: &mut App, available: Rect, target: Target) -> Option<AppCommand> {
     match target {
         Target::Tab(index) => {
+            app.fullscreen.modal_alert = false;
             app.fullscreen.panels.command_mut()?.select_tab(index);
             None
         }
@@ -83,7 +104,18 @@ pub(super) fn activate(app: &mut App, available: Rect, target: Target) -> Option
             close(app);
             None
         }
+        Target::Backdrop => {
+            if allows_backdrop_dismiss(app) {
+                close(app);
+            }
+            None
+        }
+        Target::Blocked => {
+            app.fullscreen.modal_alert = true;
+            None
+        }
         Target::List(target) => {
+            app.fullscreen.modal_alert = false;
             let panel = app.fullscreen.panels.command_mut()?;
             let body = body_area(panel, layout(available).content);
             let outcome = panel.focus_pointer(&target, body);
@@ -112,6 +144,7 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App, context: RenderContext<'_>)
             detail.title(),
             &hints,
             close,
+            false,
             app.key_hint_style(),
             context,
         );
@@ -125,6 +158,9 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App, context: RenderContext<'_>)
             Some(super::pointer::PointerTarget::Modal(target)) => Some(target),
             _ => None,
         };
+        let blocked_alert = app.fullscreen.modal_alert
+            || app.fullscreen.pointer.pressed()
+                == Some(&super::pointer::PointerTarget::Modal(Target::Blocked));
         draw_panel(
             frame,
             panel,
@@ -132,6 +168,7 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App, context: RenderContext<'_>)
             hovered,
             pressed,
             close,
+            blocked_alert,
             app.key_hint_style(),
             context,
         );
@@ -145,16 +182,27 @@ pub(super) fn draw_panel(
     hovered: Option<&Target>,
     pressed: Option<&Target>,
     close: InteractionState,
+    blocked_alert: bool,
     hint_style: crate::config::KeyHintStyle,
     context: RenderContext<'_>,
 ) {
     let body = panel.body();
+    let alert_hints;
+    let hints = if blocked_alert {
+        alert_hints = crate::widgets::key_hint::KeyHints::new()
+            .with_note("editing in progress")
+            .with_action("Esc", "cancel");
+        &alert_hints
+    } else {
+        panel.key_hints()
+    };
     crate::widgets::modal::draw(
         frame,
         layout,
         body.title(),
-        panel.key_hints(),
+        hints,
         close,
+        blocked_alert,
         hint_style,
         context,
     );
@@ -198,6 +246,7 @@ pub(super) fn handle_key(
     if !is_open(app) {
         return None;
     }
+    app.fullscreen.modal_alert = false;
     let layout = layout(available);
     if let Some(detail) = app.overlay_mut() {
         if key.kind == KeyEventKind::Press && bindings::CLOSE.matches(key) {
@@ -214,6 +263,7 @@ pub(super) fn handle_key(
 }
 
 pub(super) fn close(app: &mut App) {
+    app.fullscreen.modal_alert = false;
     if app.overlay().is_some() {
         super::navigation::close_overlay(app);
     } else {

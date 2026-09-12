@@ -22,6 +22,7 @@ use zeta_file_search::PathSearchSnapshot;
 use zeta_protocol::SkillRef;
 use zeta_slash_commands::SlashCommandCatalog;
 use zeta_slash_commands::SlashCommandDefinition;
+use zeta_slash_commands::SlashCommandInput;
 use zeta_slash_commands::SlashCommandInvocation;
 use zeta_slash_commands::SlashCommandsState;
 use zeta_slash_commands::SlashCommandsView;
@@ -277,6 +278,10 @@ impl CompletionState {
 
     pub(super) fn command_element_range(&self, text: &str, cursor: usize) -> Option<Range<usize>> {
         self.slash_commands.command_element_range(text, cursor)
+    }
+
+    pub(super) fn argument_hint(&self, text: &str, cursor: usize) -> Option<&str> {
+        SlashCommandInput::at_cursor(text, cursor, self.slash_commands.catalog()).argument_hint()
     }
 
     pub(super) fn clear(&mut self) {

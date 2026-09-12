@@ -297,7 +297,10 @@ pub(in crate::app) fn handle_mouse(
         let target = target_at(app, area, mouse.column, mouse.row);
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
-                app.fullscreen.pointer.update_pressed(target)
+                if super::modal::layout(area).surface.contains(position) {
+                    app.fullscreen.modal_alert = false;
+                }
+                app.fullscreen.pointer.update_pressed(target);
             }
             MouseEventKind::Drag(MouseButton::Left) => app.fullscreen.pointer.clear_pressed(),
             MouseEventKind::Up(MouseButton::Left) => {

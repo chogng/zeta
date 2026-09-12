@@ -41,6 +41,7 @@ impl Renderable for ChatComposerSurface<'_, '_> {
             },
             self.focus,
             self.chrome,
+            self.view.argument_hint(),
             context,
         );
         if let Some(status) = self.view.history_status() {

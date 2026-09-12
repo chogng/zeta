@@ -113,11 +113,25 @@ impl TuiSlashCommandAction {
         }
     }
 
+    pub(crate) fn argument_hint(self) -> Option<&'static str> {
+        match self {
+            Self::Cd | Self::AddDir | Self::Export => Some("<path>"),
+            Self::Model => Some("<model> [effort]"),
+            Self::Theme => Some("<theme>"),
+            Self::Resume => Some("<session-id>"),
+            Self::Rewind => Some("<checkpoint>"),
+            Self::Fork => Some("<message>"),
+            Self::New => Some("<prompt>"),
+            _ => None,
+        }
+    }
+
     pub(crate) fn definition(self) -> SlashCommandDefinition {
         SlashCommandDefinition {
             name: self.command().into(),
             description: self.description().into(),
             argument_mode: self.argument_mode(),
+            argument_hint: self.argument_hint().map(Into::into),
         }
     }
 }

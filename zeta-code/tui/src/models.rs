@@ -40,6 +40,7 @@ pub(crate) struct ModelSummary {
 impl ModelSummary {
     pub(crate) fn from_catalog(
         preferred_model: Option<ModelRefDto>,
+        preferred_reasoning_effort: Option<ReasoningEffort>,
         catalog: Option<&ModelListResult>,
     ) -> Self {
         let entry = preferred_model.as_ref().and_then(|preferred| {
@@ -53,11 +54,11 @@ impl ModelSummary {
         let (display_name, reasoning_effort, access, context_capacity) = match entry {
             Some(entry) => (
                 Some(entry.display_name.clone()),
-                entry.default_reasoning_effort,
+                preferred_reasoning_effort.or(entry.default_reasoning_effort),
                 entry.access,
                 entry.available_context_window.map(u64::from),
             ),
-            None => (None, None, ModelAccess::Unknown, None),
+            None => (None, preferred_reasoning_effort, ModelAccess::Unknown, None),
         };
         Self {
             preferred_model,
@@ -70,6 +71,10 @@ impl ModelSummary {
 
     pub(crate) fn preferred_model(&self) -> Option<&ModelRefDto> {
         self.preferred_model.as_ref()
+    }
+
+    pub(crate) const fn reasoning_effort(&self) -> Option<ReasoningEffort> {
+        self.reasoning_effort
     }
 
     pub(crate) const fn context_capacity(&self) -> Option<u64> {

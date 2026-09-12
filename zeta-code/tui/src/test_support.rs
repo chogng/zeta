@@ -41,6 +41,7 @@ pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
         revision: 0,
         generation: 0,
         preferred_model: None,
+        preferred_reasoning_effort: None,
         approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
         commit_message_model: None,
         commit_message_active_dir_authorized: false,

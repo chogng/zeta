@@ -108,7 +108,12 @@ function validateDefinition(definition: SlashCommandDefinition): SlashCommandDef
 	validateName(definition.name);
 	if (!definition.description.trim()) throw new TypeError(`Slash Command /${definition.name} requires a description`);
 	if (definition.argumentMode !== "none" && definition.argumentMode !== "optional") throw new TypeError(`Slash Command /${definition.name} has an invalid argument mode`);
-	return Object.freeze({ name: definition.name, description: definition.description, argumentMode: definition.argumentMode });
+	return Object.freeze({
+		name: definition.name,
+		description: definition.description,
+		argumentMode: definition.argumentMode,
+		...(definition.argumentHint ? { argumentHint: definition.argumentHint } : {}),
+	});
 }
 
 function validateName(name: string): string {

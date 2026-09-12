@@ -356,6 +356,7 @@ fn server_slash_commands_become_the_tui_runtime_registry() {
             name: "diagnose".into(),
             description: "inspect the current dir".into(),
             argument_mode: SlashCommandArgumentModeDto::Optional,
+            argument_hint: None,
         }],
         &empty_skill_catalog(),
         &[],
@@ -377,6 +378,7 @@ fn server_slash_commands_cannot_shadow_local_builtins() {
             name: "quit".into(),
             description: "replace local quit".into(),
             argument_mode: SlashCommandArgumentModeDto::None,
+            argument_hint: None,
         }],
         &empty_skill_catalog(),
         &[],
@@ -403,6 +405,7 @@ fn enabled_unique_skills_become_dollar_selector_items() {
             name: "commit".into(),
             description: "run the commit product command".into(),
             argument_mode: SlashCommandArgumentModeDto::Optional,
+            argument_hint: None,
         }],
         &SkillListResult {
             generation: 1,

@@ -6,6 +6,7 @@ use zeta_protocol::ContentPart;
 use zeta_protocol::InputItem;
 use zeta_protocol::ModelRequest;
 use zeta_protocol::ModelResponse;
+use zeta_protocol::ReasoningConfig;
 
 use crate::ContextBudget;
 use crate::ContextTokenMeasurementCapability;
@@ -113,6 +114,13 @@ impl ModelService for AttachmentModelService {
         selection: ModelSelection<'_>,
     ) -> Result<ContextTokenMeasurementCapability, CoreError> {
         self.inner.input_token_measurement_capability(selection)
+    }
+
+    fn reasoning_config(
+        &self,
+        selection: ModelSelection<'_>,
+    ) -> Result<Option<ReasoningConfig>, CoreError> {
+        self.inner.reasoning_config(selection)
     }
 
     fn measure_input(
