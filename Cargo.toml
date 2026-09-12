@@ -146,6 +146,7 @@ members = [
     "zeta-rs/worktree",
     "zeta-rs/content-search",
     "zeta-rs/server-host",
+    "zeta-rs/user-verification",
     "zeta-rs/zeta-api",
     "zeta-rs/zeta-client",
     "zeta-rs/otel",
@@ -251,6 +252,7 @@ opentelemetry = "0.31.0"
 opentelemetry_sdk = "0.31.0"
 portable-pty = "0.9.0"
 pkg-config = "0.3"
+p256 = { version = "0.13", default-features = false, features = ["arithmetic", "pkcs8", "std"] }
 pretty_assertions = "1"
 prost = "0.14.3"
 crossterm = "0.28.1"
@@ -302,6 +304,7 @@ objc2 = "0.5.2"
 objc2-app-kit = { version = "0.2.2", default-features = false }
 objc2-foundation = { version = "0.2.2", default-features = false }
 tough = { version = "0.24", features = ["http"] }
+tracing = "0.1"
 tokenizers = { version = "0.23.1", default-features = false, features = ["fancy-regex"] }
 toml = "0.9"
 tree-sitter = "0.26.11"
@@ -470,6 +473,7 @@ zeta-typst = { path = "zeta-rs/utils/typst" }
 zeta-utils-pty = { path = "zeta-rs/utils/pty" }
 zeta-file-access = { path = "zeta-rs/file-access" }
 worktree = { path = "zeta-rs/worktree" }
+zeta-user-verification = { path = "zeta-rs/user-verification" }
 zui = { path = "app/zui", default-features = false }
 
 [profile.dev]
