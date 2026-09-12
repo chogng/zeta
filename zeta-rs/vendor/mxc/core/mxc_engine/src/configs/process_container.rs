@@ -81,6 +81,14 @@ impl Default for ProcessContainer {
     }
 }
 
+impl ProcessContainer {
+    /// Sets the explicit BaseProcessContainer desktop-resource policy.
+    pub fn with_ui(mut self, ui: ProcessContainerUi) -> Self {
+        self.ui = Some(ui);
+        self
+    }
+}
+
 /// ProcessContainer-specific network settings.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[non_exhaustive]
@@ -111,6 +119,14 @@ impl Default for ProcessContainerUi {
             system_settings: ProcessContainerSystemSettings::None,
             ime: false,
         }
+    }
+}
+
+impl ProcessContainerUi {
+    /// Sets how desktop handles and global atoms are isolated.
+    pub fn with_isolation(mut self, isolation: ProcessContainerUiIsolation) -> Self {
+        self.isolation = isolation;
+        self
     }
 }
 

@@ -1,9 +1,35 @@
 use super::filesystem;
+#[cfg(target_os = "windows")]
+use super::windows_process_container;
+#[cfg(target_os = "windows")]
+use super::windows_ui;
 use zeta_file_access::Dir;
 use zeta_sandboxing::FileSystemAccess;
 use zeta_sandboxing::SandboxDirAccess;
 use zeta_sandboxing::SandboxDirGrant;
 use zeta_sandboxing::SandboxScope;
+
+#[cfg(target_os = "windows")]
+#[test]
+fn windows_policy_allows_required_desktop_resources_but_keeps_sensitive_ui_blocked() {
+    let ui = windows_ui().unwrap();
+    assert!(ui.allow_windows);
+    assert_eq!(ui.clipboard, mxc_sdk::policy::ClipboardPolicy::None);
+    assert!(!ui.allow_input_injection);
+
+    let process_container = windows_process_container();
+    let ui = process_container.ui.unwrap();
+    assert_eq!(
+        ui.isolation,
+        mxc_sdk::configs::ProcessContainerUiIsolation::Desktop
+    );
+    assert!(!ui.desktop_system_control);
+    assert_eq!(
+        ui.system_settings,
+        mxc_sdk::configs::ProcessContainerSystemSettings::None
+    );
+    assert!(!ui.ime);
+}
 
 #[test]
 fn writable_grants_protect_existing_metadata_without_creating_absent_paths() {

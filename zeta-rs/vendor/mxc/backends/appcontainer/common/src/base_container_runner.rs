@@ -18,8 +18,9 @@ use std::sync::Arc;
 
 use learning_mode_core::DenialAnalyzer;
 use learning_mode_windows::{
-    CaptureSession, EtlDenialAnalyzer, LearningModeApi, ProcessSecurityEnvironment,
-    SecurityEnvironmentApi, SecurityEnvironmentStartupInfo, PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE,
+    CaptureSession, EtlDenialAnalyzer, LearningModeApi, LearningModeError,
+    ProcessSecurityEnvironment, SecurityEnvironmentApi, SecurityEnvironmentStartupInfo,
+    PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE,
 };
 use windows::Win32::Foundation::{
     CloseHandle, GetLastError, SetHandleInformation, ERROR_CALL_NOT_IMPLEMENTED,
@@ -67,6 +68,8 @@ use wxc_common::models::{
     CaptureDenialsErrorOutput, CaptureDenialsOutput, ExecutionRequest, FailurePhase, ProxyAddress,
     SandboxOutputMetadata, ScriptResponse,
 };
+use wxc_common::mxc_error::ApiFailure;
+use wxc_common::mxc_error::MxcError;
 use wxc_common::process_util::{
     create_std_pipes, InterruptiblePipeReader, OwnedHandle, PipeReadCanceller, PipeWriter,
     SendOwnedHandle,
@@ -278,6 +281,58 @@ fn learning_mode_api_not_implemented(error: &learning_mode_windows::LearningMode
         }
         _ => false,
     }
+}
+
+fn hresult_from_win32(code: u32) -> u32 {
+    if code == 0 {
+        0
+    } else {
+        (code & 0x0000_ffff) | 0x8007_0000
+    }
+}
+
+fn psec_probe_error(error: LearningModeError) -> MxcError {
+    let unsupported = match &error {
+        LearningModeError::ApiSetUnavailable { .. } | LearningModeError::ExportMissing { .. } => {
+            true
+        }
+        LearningModeError::HResultCall { code, .. } => {
+            let code = *code as u32;
+            code == E_NOTIMPL.0 as u32
+                || code == hresult_from_win32(ERROR_CALL_NOT_IMPLEMENTED.0)
+                || code == hresult_from_win32(ERROR_NOT_SUPPORTED.0)
+        }
+        LearningModeError::ApiCall { code, .. } => {
+            is_api_not_implemented(*code) || *code == ERROR_NOT_SUPPORTED.0
+        }
+        LearningModeError::DllLoad(_) | LearningModeError::InvalidInput { .. } => false,
+    };
+    let failure = match &error {
+        LearningModeError::ApiSetUnavailable { api_set, .. } => {
+            Some(ApiFailure::new(format!("IsApiSetImplemented({api_set})")))
+        }
+        LearningModeError::DllLoad(_) => Some(ApiFailure::new("LoadLibraryExW(processmodel.dll)")),
+        LearningModeError::ExportMissing { export, .. } => {
+            Some(ApiFailure::new(format!("GetProcAddress({export})")))
+        }
+        LearningModeError::HResultCall { function, code } => {
+            Some(ApiFailure::new(*function).with_native_code(format!("0x{:08X}", *code as u32)))
+        }
+        LearningModeError::ApiCall { function, code } => {
+            Some(ApiFailure::new(*function).with_native_code(code.to_string()))
+        }
+        LearningModeError::InvalidInput { .. } => None,
+    };
+    let message = error.to_string();
+    let mut result = if unsupported {
+        MxcError::unsupported_containment(message)
+    } else {
+        MxcError::backend_unavailable(message)
+    };
+    if let Some(failure) = failure {
+        result = result.with_api_failure(failure);
+    }
+    result
 }
 
 trait CaptureSessionOps {
@@ -579,6 +634,65 @@ impl BaseContainerRunner {
         })
     }
 
+    /// Verifies that PSEC can implement this exact request without starting the
+    /// user command. Confirmed missing capabilities return UnsupportedContainment;
+    /// API, resource and cleanup failures retain their operation and native code.
+    pub fn require_psec(request: &ExecutionRequest) -> Result<(), MxcError> {
+        if request.policy.least_privilege_mode {
+            return Err(MxcError::unsupported_containment(
+                "PSEC does not support the requested least-privilege process mode",
+            ));
+        }
+        if request.policy.network_proxy.is_enabled()
+            && !request.policy.runtime_network_proxy_specified
+        {
+            return Err(MxcError::unsupported_containment(
+                "PSEC requires the runtime proxy contract for proxied networking",
+            ));
+        }
+
+        let api = SecurityEnvironmentApi::load().map_err(psec_probe_error)?;
+        if !request.policy.denied_paths.is_empty() {
+            match api.supports_deny_paths().map_err(psec_probe_error)? {
+                true => {}
+                false => {
+                    return Err(MxcError::unsupported_containment(
+                        PSEC_DENIED_PATHS_UNSUPPORTED_MSG,
+                    ));
+                }
+            }
+        }
+
+        let specification = build_psec_spec(request);
+        if request.policy.capture_denials.is_some() {
+            let learning_mode = LearningModeApi::load().map_err(psec_probe_error)?;
+            let session = CaptureSession::begin(
+                api,
+                learning_mode,
+                &specification,
+                PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE,
+            )
+            .map_err(psec_probe_error)?;
+            SecurityEnvironmentStartupInfo::new(
+                STARTUPINFOW::default(),
+                session.environment(),
+                &[],
+            )
+            .map(drop)
+            .map_err(psec_probe_error)?;
+            drop(session);
+            return Ok(());
+        }
+
+        let environment = api
+            .create(&specification, PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE)
+            .map_err(psec_probe_error)?;
+        let startup =
+            SecurityEnvironmentStartupInfo::new(STARTUPINFOW::default(), environment.raw(), &[]);
+        environment.close();
+        startup.map(drop).map_err(psec_probe_error)
+    }
+
     /// Whether this host can create a PSEC environment and start a Learning Mode trace.
     ///
     /// The successful probe session is dropped immediately, which closes and discards the trace.
@@ -873,7 +987,7 @@ impl BaseContainerRunner {
 
     /// Whether this exact request can use PSEC without another containment implementation.
     pub fn supports_psec(request: &ExecutionRequest) -> bool {
-        Self::new().uses_process_security_environment(request)
+        Self::require_psec(request).is_ok()
     }
 
     pub(crate) fn is_usable_for_request(request: &ExecutionRequest) -> bool {
@@ -2996,6 +3110,58 @@ mod tests {
         NetworkPort, NetworkProtocol, NetworkRule, ProxyConfig, UiPolicy,
     };
     use wxc_common::ui_policy::EffectiveUiRestrictions;
+
+    #[test]
+    fn psec_probe_classifies_only_confirmed_missing_capabilities_as_unsupported() {
+        for error in [
+            LearningModeError::ApiSetUnavailable {
+                api: "process security-environment",
+                api_set: "api-ms-win-security-basecontainer-l1-1-0",
+            },
+            LearningModeError::ExportMissing {
+                api: "process security-environment",
+                export: "CreateProcessSecurityEnvironment",
+                detail: "missing".into(),
+            },
+            LearningModeError::HResultCall {
+                function: "CreateProcessSecurityEnvironment",
+                code: E_NOTIMPL.0,
+            },
+            LearningModeError::ApiCall {
+                function: "UpdateProcThreadAttribute",
+                code: ERROR_NOT_SUPPORTED.0,
+            },
+        ] {
+            let result = psec_probe_error(error);
+            assert_eq!(
+                result.code,
+                wxc_common::mxc_error::MxcErrorCode::UnsupportedContainment
+            );
+            assert!(result.operation().is_some());
+        }
+    }
+
+    #[test]
+    fn psec_probe_preserves_operational_failures_instead_of_enabling_fallback() {
+        let error = psec_probe_error(LearningModeError::HResultCall {
+            function: "CreateProcessSecurityEnvironment",
+            code: windows::Win32::Foundation::E_ACCESSDENIED.0,
+        });
+
+        assert_eq!(
+            error.code,
+            wxc_common::mxc_error::MxcErrorCode::BackendUnavailable
+        );
+        assert_eq!(error.operation(), Some("CreateProcessSecurityEnvironment"));
+        assert_eq!(error.native_code(), Some("0x80070005"));
+
+        let load = psec_probe_error(LearningModeError::DllLoad("bad image".into()));
+        assert_eq!(
+            load.code,
+            wxc_common::mxc_error::MxcErrorCode::BackendUnavailable
+        );
+        assert_eq!(load.operation(), Some("LoadLibraryExW(processmodel.dll)"));
+    }
 
     #[test]
     fn guarded_capture_rejects_a_child_that_was_never_suspended() {

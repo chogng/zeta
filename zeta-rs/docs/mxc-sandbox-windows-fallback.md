@@ -2,7 +2,7 @@
 
 Zeta 保留 macOS/Linux 使用 MXC、Windows 按请求能力选择 PSEC 或账户后端的架构，并把 Codex 的路径级权限、交互终端和持续执行会话纳入正式范围。后端必须同时满足权限、输入输出方式及平台能力，任何失败都不能降低要求或自动重跑命令。
 
-> 状态：对齐范围与实现要求已明确；已有普通命令接线，路径策略、代理/UI 接入、PTY、执行会话及完整验收尚未完成。
+> 状态：对齐范围与实现要求已明确；已有普通命令接线、结构化 PSEC 准备门禁和 Windows UI 请求策略。路径策略、PSEC 受管代理、PTY、执行会话及完整验收尚未完成。
 >
 > Owner：`zeta-rs` 沙箱系统。源码核对日期：2026-09-12。
 
@@ -216,13 +216,13 @@ PSEC 检查分为宿主能力和本次请求两部分，由现有 MXC 平台实�
 
 只有已识别的系统返回值能证明能力缺失。未知错误一律作为故障返回；不靠错误字符串匹配、不在本次准备中隐式重试，也不把所有 `false` 当作不支持。
 
-### 当前缺口与修复位置
+### 当前实现与边界
 
-[当前 PSEC 探测](../vendor/mxc/backends/appcontainer/common/src/base_container_runner.rs) 将 API 加载、环境创建和启动属性准备的错误用 `.is_ok()` 压为布尔值，并由 `OnceLock<bool>` 缓存；隐藏路径能力查询也有将错误变成 `false` 的路径。[准备门禁](../vendor/mxc/core/mxc_engine/src/dispatch.rs) 再把 `false` 统一转换成 `UnsupportedContainment`。因此，现有上层选择器虽然只接受 `UnsupportedPolicy` 继续，仍不能保证只有确定的能力不足才会选择账户后端。
+[当前 PSEC 准备](../vendor/mxc/backends/appcontainer/common/src/base_container_runner.rs) 使用本次请求的有效策略创建并关闭临时 PSEC 环境，同时构造启动属性并查询请求实际使用的拒绝路径能力；需要拒绝捕获时才检查 Learning Mode。API set 或导出明确缺失、已识别的 `E_NOTIMPL`/`ERROR_CALL_NOT_IMPLEMENTED`/`ERROR_NOT_SUPPORTED` 返回 `UnsupportedContainment`，DLL 加载、访问拒绝、资源及未知查询错误返回 `BackendUnavailable`，并保留失败操作和系统错误码。
 
-必须在现有 MXC 补丁内补充能区分“支持、不支持、故障”的结果，并贯穿 `request.prepare()` 到适配器。保留失败操作和系统错误码，禁止用 `to_string()` 作为唯一分类依据。不将瞬时故障缓存成永久不支持；本次请求的能力判断和启动复核不能由全局可用性布尔值代替。公开布尔探测若有其他消费者可以保留，但不能继续作为 Zeta 安全选择的唯一输入。
+[准备门禁](../vendor/mxc/core/mxc_engine/src/dispatch.rs) 直接传递该结构化结果；`mxc-sandbox` 只按 SDK 错误码决定是否返回 `UnsupportedPolicy`，不从错误文本推断。启动前再次执行同一门禁，变化或故障直接终止，不重新选择后端。公开布尔探测仍供诊断和旧入口使用，但不再是 Zeta 安全选择的输入。
 
-这项修复尚未实施，是组合方案发布前的必要工作。单纯调整 `mxc-sandbox` 最外层错误映射无法恢复已经丢失的错误信息。
+Windows Managed 请求仍受官方代理模型的入站耦合限制。当前适配器在准备阶段明确返回策略不支持，使接受 `WindowsAccount` 的请求可以继续检查账户候选；`Strict` 请求没有合格候选时拒绝。此行为是保守门禁，不代表 PSEC Managed 已实现。
 
 ### 诊断顺序
 
@@ -277,9 +277,9 @@ PSEC 检查分为宿主能力和本次请求两部分，由现有 MXC 平台实�
 | 候选顺序与统一选择器 | 已接线；选择器只接受 `UnsupportedPolicy` 继续 | [选择器](../sandboxing/src/backends.rs)、[App Server](../app-server/src/local_tools.rs) |
 | 正式版本候选与支持清单一致 | 待发布验收后核定，当前固定注册不代表取得资格 | App Server 装配与发行验证 |
 | Windows 最低模型与 Strict 拒绝 | 已实现，账户后端不改写请求 | [策略类型](../sandboxing/src/model.rs)、[账户准备](../windows-sandbox/src/windows.rs) |
-| PSEC 准备门禁 | 部分具备；探测会丢失故障类别 | [MXC 请求](../vendor/mxc/core/mxc_engine/src/request.rs)、[平台探测](../vendor/mxc/backends/appcontainer/common/src/base_container_runner.rs) |
-| PSEC Managed 接入 | 未取得成功证据；回环直连补丁不等于官方代理模式 | [网络构造](../vendor/mxc/core/mxc_engine/src/policy/network.rs)、[拒绝组合测试](../mxc-sandbox/src/sandbox_tests.rs) |
-| Windows 工具 UI 兼容 | 当前请求未指定兼容策略；需按 PSEC 路径验证 | [请求转换](../mxc-sandbox/src/policy.rs)、[UI 默认值](../vendor/mxc/core/wxc_common/src/models.rs) |
+| PSEC 准备门禁 | 已区分明确不支持与运行故障；按本次请求创建临时环境并检查启动属性，启动前复核 | [MXC 请求](../vendor/mxc/core/mxc_engine/src/request.rs)、[平台探测](../vendor/mxc/backends/appcontainer/common/src/base_container_runner.rs) |
+| PSEC Managed 接入 | 当前明确拒绝不能保持默认禁止入站的组合；正式代理身份及成功路径未完成 | [适配器门禁](../mxc-sandbox/src/lib.rs)、[拒绝组合测试](../mxc-sandbox/src/sandbox_tests.rs) |
+| Windows 工具 UI 兼容 | 已显式允许窗口与桌面资源，同时禁止剪贴板、输入注入、桌面控制和系统设置；需按 PSEC 路径实机验证 | [请求转换](../mxc-sandbox/src/policy.rs)、[UI 转换](../vendor/mxc/core/mxc_engine/src/configs/process_container.rs) |
 | 路径级规则与最小读取基线 | 目标已定义，现有目录模型需扩展 | [目录范围](../sandboxing/src/scope.rs) |
 | 受控 Unix socket | 当前有全禁补丁，目标需支持私有 IPC | [请求转换](../mxc-sandbox/src/policy.rs) |
 | PTY 与命令会话 | 有底层 PTY/driver；统一沙箱链和会话层尚未完成 | [进程接口](../sandboxing/src/process.rs)、[执行器](../tool-executor/src/lib.rs)、[PTY](../utils/pty/README.md) |

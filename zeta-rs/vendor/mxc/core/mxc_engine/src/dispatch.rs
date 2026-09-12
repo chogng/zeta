@@ -147,13 +147,7 @@ fn spawn_seatbelt(
 
 #[cfg(target_os = "windows")]
 pub(crate) fn require_windows_psec(request: &ExecutionRequest) -> Result<(), MxcError> {
-    if appcontainer_common::base_container_runner::BaseContainerRunner::supports_psec(request) {
-        Ok(())
-    } else {
-        Err(MxcError::unsupported_containment(
-            "the MXC Windows provider requires PSEC support for the complete requested policy",
-        ))
-    }
+    appcontainer_common::base_container_runner::BaseContainerRunner::require_psec(request)
 }
 
 #[cfg(target_os = "windows")]

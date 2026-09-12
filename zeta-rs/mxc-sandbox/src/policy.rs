@@ -2,9 +2,21 @@ use crate::unavailable;
 use mxc_sdk::NetworkAction;
 use mxc_sdk::NetworkEgressSection;
 use mxc_sdk::NetworkIngressSection;
+#[cfg(target_os = "windows")]
+use mxc_sdk::configs::ProcessContainer;
+#[cfg(target_os = "windows")]
+use mxc_sdk::configs::ProcessContainerUi;
+#[cfg(target_os = "windows")]
+use mxc_sdk::configs::ProcessContainerUiIsolation;
+#[cfg(target_os = "windows")]
+use mxc_sdk::policy::ClipboardPolicy;
+#[cfg(target_os = "windows")]
+use mxc_sdk::policy::Containment;
 use mxc_sdk::policy::FilesystemSection;
 use mxc_sdk::policy::HostFilesystemAccess;
 use mxc_sdk::policy::NetworkSection;
+#[cfg(target_os = "windows")]
+use mxc_sdk::policy::UiSection;
 use std::path::Path;
 use zeta_sandboxing::FileSystemAccess;
 use zeta_sandboxing::HostAclChanges;
@@ -54,11 +66,10 @@ pub(super) fn request(
         version: "0.8.0-alpha".into(),
         filesystem: Some(filesystem),
         network: Some(network),
-        ui: None,
+        ui: windows_ui(),
         timeout_ms: None,
     };
-    let mut request = mxc_sdk::build_request(&policy_input, None)
-        .map_err(|error| unavailable(error.to_string()))?;
+    let mut request = build_request(&policy_input)?;
     request
         .set_host_filesystem(if policy.file_system() == FileSystemAccess::FullAccess {
             HostFilesystemAccess::ReadWrite
@@ -104,6 +115,38 @@ pub(super) fn request(
         .map_err(|error| unavailable(error.to_string()))?;
     request.set_working_directory(text(command.working_directory())?);
     Ok(request)
+}
+
+#[cfg(target_os = "windows")]
+fn windows_ui() -> Option<UiSection> {
+    Some(UiSection {
+        allow_windows: true,
+        clipboard: ClipboardPolicy::None,
+        allow_input_injection: false,
+    })
+}
+
+#[cfg(not(target_os = "windows"))]
+fn windows_ui() -> Option<mxc_sdk::policy::UiSection> {
+    None
+}
+
+#[cfg(target_os = "windows")]
+fn build_request(policy: &mxc_sdk::SandboxPolicy) -> Result<mxc_sdk::SandboxRequest, SandboxError> {
+    let containment = Containment::ProcessContainer(windows_process_container());
+    mxc_sdk::build_request_with_containment(policy, &containment, None)
+        .map_err(|error| unavailable(error.to_string()))
+}
+
+#[cfg(target_os = "windows")]
+fn windows_process_container() -> ProcessContainer {
+    let ui = ProcessContainerUi::default().with_isolation(ProcessContainerUiIsolation::Desktop);
+    ProcessContainer::default().with_ui(ui)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn build_request(policy: &mxc_sdk::SandboxPolicy) -> Result<mxc_sdk::SandboxRequest, SandboxError> {
+    mxc_sdk::build_request(policy, None).map_err(|error| unavailable(error.to_string()))
 }
 
 fn filesystem(

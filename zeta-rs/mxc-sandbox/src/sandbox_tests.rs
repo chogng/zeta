@@ -1,7 +1,11 @@
 use super::*;
 use zeta_sandboxing::FileSystemAccess;
+#[cfg(target_os = "windows")]
+use zeta_sandboxing::FileSystemIsolation;
 use zeta_sandboxing::ManagedNetworkAccess;
 use zeta_sandboxing::NetworkAccess;
+#[cfg(target_os = "windows")]
+use zeta_sandboxing::SandboxBackends;
 
 #[test]
 fn managed_execution_requires_a_single_owned_endpoint() {
@@ -23,6 +27,99 @@ fn managed_execution_requires_a_single_owned_endpoint() {
         };
         assert!(backend.prepare(&command, policy, &dir).is_err());
     }
+}
+
+#[cfg(target_os = "windows")]
+#[test]
+fn managed_execution_rejects_psec_when_private_network_ingress_cannot_stay_denied() {
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let backend = MxcSandbox::new(InstallContext::current());
+    let policy = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Managed);
+    let proxy = ManagedNetworkAccess::new(3128.try_into().unwrap(), 3128.try_into().unwrap());
+    let command = SandboxCommand::new(
+        "must-not-start",
+        std::iter::empty::<&str>(),
+        dir.canonical_path(),
+    )
+    .with_network_proxy(proxy);
+
+    let error = backend.prepare(&command, policy, &dir).unwrap_err();
+
+    assert!(matches!(error, SandboxError::UnsupportedPolicy(_)));
+    assert!(error.to_string().contains("inbound private-network"));
+}
+
+#[cfg(target_os = "windows")]
+#[test]
+fn managed_psec_rejection_keeps_the_policy_unchanged_for_the_account_candidate() {
+    struct AccountCandidate {
+        seen: std::sync::Arc<std::sync::Mutex<Vec<SandboxPolicy>>>,
+    }
+
+    impl SandboxBackend for AccountCandidate {
+        fn kind(&self) -> SandboxKind {
+            SandboxKind::Restricted
+        }
+
+        fn prepare(
+            &self,
+            command: &SandboxCommand,
+            policy: SandboxPolicy,
+            _: &Dir,
+        ) -> Result<PreparedCommand, SandboxError> {
+            self.seen.lock().unwrap().push(policy);
+            if policy.file_system_isolation() == FileSystemIsolation::Strict {
+                return Err(SandboxError::UnsupportedPolicy(
+                    "the account candidate cannot satisfy Strict".into(),
+                ));
+            }
+            Ok(PreparedCommand::new(
+                SandboxKind::Restricted,
+                command.program(),
+                command.arguments(),
+                command.working_directory(),
+            ))
+        }
+    }
+
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let proxy = ManagedNetworkAccess::new(3128.try_into().unwrap(), 3128.try_into().unwrap());
+    let command = SandboxCommand::new(
+        "must-not-start",
+        std::iter::empty::<&str>(),
+        dir.canonical_path(),
+    )
+    .with_network_proxy(proxy);
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let backends = SandboxBackends::new(vec![
+        (
+            "mxc",
+            std::sync::Arc::new(MxcSandbox::new(InstallContext::current())),
+        ),
+        (
+            "windows",
+            std::sync::Arc::new(AccountCandidate {
+                seen: std::sync::Arc::clone(&seen),
+            }),
+        ),
+    ]);
+    let account_policy = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Managed)
+        .with_file_system_isolation(FileSystemIsolation::WindowsAccount);
+
+    let prepared = backends.prepare(&command, account_policy, &dir).unwrap();
+
+    assert_eq!(prepared.kind(), SandboxKind::Restricted);
+    assert_eq!(seen.lock().unwrap().as_slice(), &[account_policy]);
+
+    let strict_policy = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Managed);
+    let error = backends.prepare(&command, strict_policy, &dir).unwrap_err();
+    assert!(matches!(error, SandboxError::BackendUnavailable { .. }));
+    assert_eq!(
+        seen.lock().unwrap().as_slice(),
+        &[account_policy, strict_policy]
+    );
 }
 
 #[test]

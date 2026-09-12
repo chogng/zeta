@@ -85,6 +85,13 @@ impl SandboxBackend for MxcSandbox {
             return Ok(PreparedCommand::unrestricted(command));
         }
         let mut request = policy::request(command, policy, scope)?;
+        #[cfg(target_os = "windows")]
+        if policy.network() == zeta_sandboxing::NetworkAccess::Managed {
+            return Err(SandboxError::UnsupportedPolicy(
+                "Windows PSEC cannot enforce the requested managed-proxy path while denying unapproved inbound private-network traffic"
+                    .into(),
+            ));
+        }
         if let Some(path) = bubblewrap(&self.runtime)? {
             request
                 .set_bubblewrap_executable(&path)
