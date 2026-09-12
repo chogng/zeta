@@ -3,12 +3,12 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
-use zeta_connectors::ConnectorAccountId;
-use zeta_connectors::ConnectorConnectionGeneration;
-use zeta_connectors::ConnectorConnectionState;
-use zeta_connectors::ConnectorDefinition;
-use zeta_connectors::ConnectorId;
-use zeta_connectors::ConnectorRuntimeBinding;
+use crate::ConnectorAccountId;
+use crate::ConnectorConnectionGeneration;
+use crate::ConnectorConnectionState;
+use crate::ConnectorDefinition;
+use crate::ConnectorId;
+use crate::ConnectorRuntimeBinding;
 use zeta_secrets::MemorySecretStore;
 use zeta_secrets::SecretValue;
 

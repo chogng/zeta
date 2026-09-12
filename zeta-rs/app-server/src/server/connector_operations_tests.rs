@@ -1,26 +1,26 @@
 use super::*;
 use crate::local::ProviderModelService;
+use connectors::ConnectorAuthority;
+use connectors::ConnectorCredentialService;
+use connectors::ConnectorDefinition;
+use connectors::ConnectorDeviceOAuthGrant;
+use connectors::ConnectorDeviceOAuthPoll;
+use connectors::ConnectorDeviceOAuthPollRequest;
+use connectors::ConnectorDeviceOAuthProvider;
+use connectors::ConnectorDeviceOAuthService;
+use connectors::ConnectorId;
+use connectors::ConnectorOAuthChallenge;
+use connectors::ConnectorOAuthCredential;
+use connectors::ConnectorOAuthCredentialReplacement;
+use connectors::ConnectorOAuthError;
+use connectors::ConnectorOAuthExchangeRequest;
+use connectors::ConnectorOAuthProvider;
+use connectors::ConnectorOAuthRefreshRequest;
+use connectors::ConnectorOAuthRevokeRequest;
+use connectors::ConnectorOAuthService;
+use connectors::ConnectorRuntimeBinding;
 use std::sync::Arc;
 use std::time::Duration;
-use zeta_connectors::ConnectorDefinition;
-use zeta_connectors::ConnectorId;
-use zeta_connectors::ConnectorRuntimeBinding;
-use zeta_connectors_extension::ConnectorAuthority;
-use zeta_connectors_extension::ConnectorCredentialService;
-use zeta_connectors_extension::ConnectorDeviceOAuthGrant;
-use zeta_connectors_extension::ConnectorDeviceOAuthPoll;
-use zeta_connectors_extension::ConnectorDeviceOAuthPollRequest;
-use zeta_connectors_extension::ConnectorDeviceOAuthProvider;
-use zeta_connectors_extension::ConnectorDeviceOAuthService;
-use zeta_connectors_extension::ConnectorOAuthChallenge;
-use zeta_connectors_extension::ConnectorOAuthCredential;
-use zeta_connectors_extension::ConnectorOAuthCredentialReplacement;
-use zeta_connectors_extension::ConnectorOAuthError;
-use zeta_connectors_extension::ConnectorOAuthExchangeRequest;
-use zeta_connectors_extension::ConnectorOAuthProvider;
-use zeta_connectors_extension::ConnectorOAuthRefreshRequest;
-use zeta_connectors_extension::ConnectorOAuthRevokeRequest;
-use zeta_connectors_extension::ConnectorOAuthService;
 use zeta_core::InMemoryThreadStore;
 use zeta_core::ThreadController;
 use zeta_model_provider::EchoModel;
@@ -73,7 +73,7 @@ impl ConnectorOAuthProvider for TestOAuthProvider {
     ) -> Result<ConnectorOAuthCredential, ConnectorOAuthError> {
         assert_eq!(request.authorization_code.expose(), b"one-shot-code");
         Ok(ConnectorOAuthCredential {
-            account_id: zeta_connectors::ConnectorAccountId::new("octocat").unwrap(),
+            account_id: connectors::ConnectorAccountId::new("octocat").unwrap(),
             account_display_name: "Octocat".into(),
             runtime_secret: zeta_secrets::SecretValue::new(b"provider-access-token".to_vec()),
             secret: zeta_secrets::SecretValue::new(b"provider-access-token".to_vec()),
@@ -154,7 +154,7 @@ impl ConnectorDeviceOAuthProvider for TestDeviceOAuthProvider {
         assert_eq!(request.device_code.expose(), b"device-secret");
         Ok(ConnectorDeviceOAuthPoll::Complete(
             ConnectorOAuthCredential {
-                account_id: zeta_connectors::ConnectorAccountId::new("octocat").unwrap(),
+                account_id: connectors::ConnectorAccountId::new("octocat").unwrap(),
                 account_display_name: "Octocat".into(),
                 runtime_secret: zeta_secrets::SecretValue::new(b"device-access-token".to_vec()),
                 secret: zeta_secrets::SecretValue::new(b"device-lifecycle".to_vec()),

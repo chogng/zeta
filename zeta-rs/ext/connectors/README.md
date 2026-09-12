@@ -1,19 +1,39 @@
 # Connectors extension
 
-> Connector domain contract 由 [`zeta-connectors`](../../connectors/README.md) 维护；跨系统语义见
-> [`docs/connectors.md`](../../../docs/connectors.md)。
+- `zeta-connectors-extension` 统一管理外部账号定义、连接状态、目录发现、持久化和认证流程；调用方通过 `connectors` 引用。
+- 原 `zeta-rs/connectors` 的类型、状态机和测试已合入本 crate，公共类型从 crate 根导出。
+- `connection`、`definition`、`identity`、`snapshot` 负责数据校验和状态转换；`catalog` 负责 Plugin 声明转换与目录发现。
+- `authority` 负责连接状态、事件与命令回执；认证服务通过注入的 `SecretStore` 保存凭据。
+- Secret backend 属于 `zeta-secrets`，MCP 会话与工具组合属于 `zeta-mcp-extension`，产品协议属于 App Server。
+- 跨系统语义见 [`docs/connectors.md`](../../../docs/connectors.md)。
 
-`zeta-connectors-extension` 拥有 Plugin projection、durable connection authority 和 credential
-orchestration。它不拥有 Connector state machine、secret backend、MCP session 或 Tool registry；这些分别
-属于 `zeta-connectors`、`zeta-secrets` 和 `zeta-mcp-extension`。
+## 连接状态契约
+
+| 类型 | 职责 |
+| --- | --- |
+| `ConnectorId` / `ConnectorAccountId` | 分别标识外部服务声明和外部账号 |
+| `ConnectorDefinition` / `ConnectorDefinitionDigest` | 服务描述、运行时绑定与授权版本摘要 |
+| `ConnectorRuntimeBinding` | 当前支持 MCP server ID；不持有会话 |
+| `ConnectorAccount` / `ConnectorCredentialRef` | 账号信息和凭据引用；不包含凭据内容 |
+| `ConnectorConnection` / `ConnectorConnectionGeneration` | 连接状态与单调递增的连接代次 |
+| `ConnectorSnapshot` / `ConnectorSnapshotGeneration` | 不可变目录与单调递增的快照代次 |
+
+- 身份和展示文本拒绝空值、控制字符、首尾空白和超长输入。
+- `Begin` 使用更大的连接代次进入 `Connecting`；`Connected` 必须匹配该代次，不能跳过 `Connecting`。
+- `Unavailable` 只接受当前连接代次并保留经过校验的原因；重新连接必须开始新的代次。
+- `Disconnect` 推进连接代次并立即撤销可调用状态；每次状态更新还必须推进快照代次。
+- 重复身份、未知 Connector、过期快照和过期连接结果均返回错误。
+- 授权摘要包含 ID、运行时绑定和授权版本，不包含展示文案或凭据；Plugin 来源使用完整 package digest。
+- 定义变化使已连接账号进入 `ReauthorizationRequired`，保留账号信息，但立即撤销可调用状态。
+- Connector 连接不要求用户登录 Zeta；云端目录和同步不能改变本地连接状态契约。
 
 ## 当前公共契约
 
 | Symbol | 职责 | 关键失败语义 |
 | --- | --- | --- |
 | `ConnectorCatalog::from_activation` | 从 exact activation package digest 构造授权兼容 revision | duplicate identity / invalid contribution fail closed |
-| `ConnectorCatalog::from_packages` | 用调用方提供的 package 集合构造投影 | 不提供 activation generation |
-| `ConnectorCatalog::from_manifests` | 无 package handle 时的较弱 declaration projection | 不覆盖 MCP definition 文件内容；生产 activation 应优先使用 package API |
+| `ConnectorCatalog::from_packages` | 用调用方提供的 package 集合构造目录 | 不提供 activation generation |
+| `ConnectorCatalog::from_manifests` | 从 manifest 读取服务声明 | 不覆盖 MCP definition 文件内容；生产 activation 应优先使用 package API |
 | `ConnectorAuthority::open_sqlite` | 恢复 snapshot、事件和 command receipts | event + receipt 在一个 SQLite transaction 中提交 |
 | `ConnectorAuthority::apply` | expected-generation CAS 与 exact command replay | 同 ID 不同 payload 为 `CommandConflict` |
 | `ConnectorCredentialService::connect_api_token` | Begin → secret store → Complete | secret store 失败时不会发布 `Connected` |
@@ -66,6 +86,11 @@ runtime token。远端 revoke 成功后才提交本地 disconnect；失败时保
 验证入口：
 
 ```bash
-cargo test -p zeta-connectors-extension
-cargo clippy -p zeta-connectors-extension --all-targets --no-deps -- -D warnings
+just check zeta-connectors-extension
+just test zeta-connectors-extension
+just rust-warnings zeta-connectors-extension
 ```
+
+- 原状态机测试随实现迁入 `connector_tests.rs`；目录发现测试位于 `catalog_tests.rs`。
+- 现有测试覆盖连接代次、授权失效、目录发现、SQLite 恢复与命令重放、凭据清理、OAuth 和 device flow。
+- MCP 调用边界由 `zeta-mcp-extension` 测试覆盖；产品请求与通知由 App Server 的 `connector_operations_tests` 覆盖。

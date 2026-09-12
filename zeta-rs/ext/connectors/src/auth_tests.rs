@@ -2,11 +2,11 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
-use zeta_connectors::ConnectorAccountId;
-use zeta_connectors::ConnectorConnectionState;
-use zeta_connectors::ConnectorDefinition;
-use zeta_connectors::ConnectorId;
-use zeta_connectors::ConnectorRuntimeBinding;
+use crate::ConnectorAccountId;
+use crate::ConnectorConnectionState;
+use crate::ConnectorDefinition;
+use crate::ConnectorId;
+use crate::ConnectorRuntimeBinding;
 use zeta_secrets::DeleteSecretOutcome;
 use zeta_secrets::MemorySecretStore;
 use zeta_secrets::SecretKey;
@@ -80,7 +80,7 @@ fn api_token_connection_stores_only_a_reference_and_disconnect_deletes_secret() 
             command_id: ConnectorCommandId::new("connect-github").unwrap(),
             expected_generation: service.authority().snapshot().generation(),
             connector_id: connector_id.clone(),
-            connection_generation: zeta_connectors::ConnectorConnectionGeneration::new(1),
+            connection_generation: crate::ConnectorConnectionGeneration::new(1),
             account_id: ConnectorAccountId::new("octocat").unwrap(),
             account_display_name: "Octocat".into(),
             token: SecretValue::new(b"secret-token".to_vec()),
@@ -138,7 +138,7 @@ fn secret_backend_failure_never_publishes_connected_state() {
                 command_id: ConnectorCommandId::new("connect-github").unwrap(),
                 expected_generation: service.authority().snapshot().generation(),
                 connector_id: connector_id.clone(),
-                connection_generation: zeta_connectors::ConnectorConnectionGeneration::new(1),
+                connection_generation: crate::ConnectorConnectionGeneration::new(1),
                 account_id: ConnectorAccountId::new("octocat").unwrap(),
                 account_display_name: "Octocat".into(),
                 token: SecretValue::new(b"secret-token".to_vec()),
@@ -175,7 +175,7 @@ fn connect_and_disconnect_requests_replay_without_restoring_readiness() {
                 command_id: ConnectorCommandId::new("retry-connect").unwrap(),
                 expected_generation,
                 connector_id: connector_id.clone(),
-                connection_generation: zeta_connectors::ConnectorConnectionGeneration::new(1),
+                connection_generation: crate::ConnectorConnectionGeneration::new(1),
                 account_id: ConnectorAccountId::new("octocat").unwrap(),
                 account_display_name: "Octocat".into(),
                 token: SecretValue::new(b"secret-token".to_vec()),
@@ -226,7 +226,7 @@ fn connect_and_disconnect_requests_replay_without_restoring_readiness() {
             command_id: ConnectorCommandId::new("retry-connect").unwrap(),
             expected_generation,
             connector_id,
-            connection_generation: zeta_connectors::ConnectorConnectionGeneration::new(1),
+            connection_generation: crate::ConnectorConnectionGeneration::new(1),
             account_id: ConnectorAccountId::new("octocat").unwrap(),
             account_display_name: "Octocat".into(),
             token: SecretValue::new(b"must-not-be-restored".to_vec()),
@@ -248,7 +248,7 @@ fn failed_disconnect_cleanup_stays_pending_until_an_explicit_retry_succeeds() {
             command_id: ConnectorCommandId::new("connect-retry-cleanup").unwrap(),
             expected_generation: service.authority().snapshot().generation(),
             connector_id: connector_id.clone(),
-            connection_generation: zeta_connectors::ConnectorConnectionGeneration::new(1),
+            connection_generation: crate::ConnectorConnectionGeneration::new(1),
             account_id: ConnectorAccountId::new("octocat").unwrap(),
             account_display_name: "Octocat".into(),
             token: SecretValue::new(b"secret-token".to_vec()),

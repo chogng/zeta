@@ -5,17 +5,17 @@ use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
+use crate::ConnectorAccountId;
+use crate::ConnectorConnectionGeneration;
+use crate::ConnectorDefinition;
+use crate::ConnectorId;
+use crate::ConnectorSnapshotGeneration;
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use sha2::Digest;
 use sha2::Sha256;
 use url::Url;
 use zeroize::Zeroize;
-use zeta_connectors::ConnectorAccountId;
-use zeta_connectors::ConnectorConnectionGeneration;
-use zeta_connectors::ConnectorDefinition;
-use zeta_connectors::ConnectorId;
-use zeta_connectors::ConnectorSnapshotGeneration;
 use zeta_secrets::SecretValue;
 
 use crate::ConnectorApiTokenConnectRequest;
@@ -470,7 +470,7 @@ struct PendingOAuthAttempt {
     expected_generation: ConnectorSnapshotGeneration,
     authority_generation: ConnectorSnapshotGeneration,
     connector_id: ConnectorId,
-    definition_digest: zeta_connectors::ConnectorDefinitionDigest,
+    definition_digest: crate::ConnectorDefinitionDigest,
     connection_generation: ConnectorConnectionGeneration,
     redirect_uri: String,
     state: String,

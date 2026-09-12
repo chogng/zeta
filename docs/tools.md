@@ -121,10 +121,10 @@ Core durable Tool Call / Tool Result lifecycle
 
 - dynamic owner 断连已经 fail closed，但还缺“持久化后重启恢复”的完整 App Server fixture；
 - Plugin/Connector 已有 typed discovery，Plugin manifest 可声明一个 Connector 到其 MCP contribution
-  的绑定；`zeta-connectors` 拥有 account connection state，`zeta-connectors-extension` 拥有 Plugin
-  projection、SQLite authority 与 API-token credential orchestration，ready binding 已接入 MCP/App Server
-  hot composition。local package store 也已落地。仍缺 OAuth/refresh/远端 revoke、用户确认交互和
-  Plugin activation，不能用 executable registry 反向代替 package authority；
+  的绑定；`zeta-connectors-extension` 统一拥有连接状态、Plugin 目录转换、SQLite authority 与认证编排，
+  ready binding 已接入 MCP/App Server hot composition。local package store、OAuth/refresh/远端 revoke
+  和产品连接入口也已落地；完整状态见 [外部服务连接系统](connectors.md)。Plugin activation
+  由 package authority 提供，不能用 executable registry 反向代替；
 - `zeta-web-search-extension` 已有 bounded request、executor、JSON HTTP backend 与 App Server opt-in 安装口；
   当前没有默认生产 Search provider 或 credential UI，宿主未注入 backend 时工具完全不可用；
 - provider adapter 可能分别决定 namespace flattening、strict schema 和 image detail fallback；
@@ -1521,7 +1521,7 @@ mod tests;
 - ✅ `ReadOnlyToolContributor` 产出的 host extension executor 进入共享 registry/policy/runtime（当前包括统一的 `skills-read`）；
 - ✅ `CapabilityToolContributor` 冻结 exact network/credential scope，并通过普通一次性 approval 执行；
 - ✅ `ext/web-search` 提供 eager `web_search`、可注入 backend 和默认关闭门禁；
-- ✅ `zeta-connectors` 分离 Connector account lifecycle，`ext/connectors` 提供 discovery 与 ready MCP binding projection；
+- ✅ `ext/connectors` 统一管理 Connector 账号连接、目录发现与就绪 MCP 绑定；
 - ✅ enabled connector/MCP catalog 与 local/dynamic/extension port 做统一 collision check；
 - ✅ Plugin/Connector catalog-only discovery value、generation-bound snapshot 与 local Plugin projection；
 - ✅ typed install/enable/connect request 和通用 client capability filtering；

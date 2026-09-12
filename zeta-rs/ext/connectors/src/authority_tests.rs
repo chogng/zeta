@@ -2,15 +2,15 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
+use crate::ConnectorAccount;
+use crate::ConnectorAccountId;
+use crate::ConnectorConnectionGeneration;
+use crate::ConnectorConnectionState;
+use crate::ConnectorCredentialRef;
+use crate::ConnectorDefinition;
+use crate::ConnectorId;
+use crate::ConnectorRuntimeBinding;
 use tempfile::tempdir;
-use zeta_connectors::ConnectorAccount;
-use zeta_connectors::ConnectorAccountId;
-use zeta_connectors::ConnectorConnectionGeneration;
-use zeta_connectors::ConnectorConnectionState;
-use zeta_connectors::ConnectorCredentialRef;
-use zeta_connectors::ConnectorDefinition;
-use zeta_connectors::ConnectorId;
-use zeta_connectors::ConnectorRuntimeBinding;
 
 use crate::ConnectorAuthority;
 use crate::ConnectorAuthorityCommand;
@@ -252,7 +252,7 @@ fn sqlite_authority_restores_connection_and_receipts_after_restart() {
     let replay = reopened
         .apply(ConnectorCommandRequest {
             command_id: ConnectorCommandId::new("complete-connect").unwrap(),
-            expected_generation: zeta_connectors::ConnectorSnapshotGeneration::new(2),
+            expected_generation: crate::ConnectorSnapshotGeneration::new(2),
             connector_id,
             command: ConnectorAuthorityCommand::CompleteConnect {
                 account: account(generation),

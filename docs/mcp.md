@@ -199,7 +199,7 @@ Agent runtime 决定何时调用工具，Core 负责 durable commit，App Server
 flowchart TD
     P["Marketplace Manager：verified MCP/Connector capabilities"] --> A["App Server composition"]
     L["zeta-plugin definitions + zeta-core-plugins activation"] --> A
-    C["zeta-connectors：ready runtime bindings"] --> A
+    C["ext/connectors：ready runtime bindings"] --> A
     U["User / Directory MCP configuration"] --> A
     H["Credential materializer + process/HTTP host adapters"] --> A
     A --> M["zeta-mcp：multi-server runtime"]

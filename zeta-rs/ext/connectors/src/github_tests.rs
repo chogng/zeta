@@ -2,9 +2,9 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use zeta_connectors::ConnectorDefinition;
-use zeta_connectors::ConnectorId;
-use zeta_connectors::ConnectorRuntimeBinding;
+use crate::ConnectorDefinition;
+use crate::ConnectorId;
+use crate::ConnectorRuntimeBinding;
 use zeta_http_client::HttpClient;
 use zeta_http_client::HttpClientError;
 use zeta_http_client::HttpMethod;

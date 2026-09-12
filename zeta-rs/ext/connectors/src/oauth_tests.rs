@@ -1,13 +1,13 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use crate::ConnectorAccountId;
+use crate::ConnectorConnectionGeneration;
+use crate::ConnectorConnectionState;
+use crate::ConnectorDefinition;
+use crate::ConnectorId;
+use crate::ConnectorRuntimeBinding;
 use url::Url;
-use zeta_connectors::ConnectorAccountId;
-use zeta_connectors::ConnectorConnectionGeneration;
-use zeta_connectors::ConnectorConnectionState;
-use zeta_connectors::ConnectorDefinition;
-use zeta_connectors::ConnectorId;
-use zeta_connectors::ConnectorRuntimeBinding;
 use zeta_secrets::MemorySecretStore;
 use zeta_secrets::SecretKey;
 use zeta_secrets::SecretStore;
@@ -258,7 +258,7 @@ fn stale_revoke_is_rejected_before_the_provider_sees_the_credential() {
     let error = oauth
         .revoke_and_disconnect(
             ConnectorCommandId::new("stale-revoke").unwrap(),
-            zeta_connectors::ConnectorSnapshotGeneration::new(0),
+            crate::ConnectorSnapshotGeneration::new(0),
             connector_id.clone(),
         )
         .unwrap_err();

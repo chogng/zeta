@@ -1,6 +1,15 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use connectors::ConnectorAccountId;
+use connectors::ConnectorApiTokenConnectRequest;
+use connectors::ConnectorAuthority;
+use connectors::ConnectorCommandId;
+use connectors::ConnectorConnectionGeneration;
+use connectors::ConnectorCredentialService;
+use connectors::ConnectorDefinition;
+use connectors::ConnectorId;
+use connectors::ConnectorRuntimeBinding;
 use zeta_action_policy::{
     ActionDigest, ActionKind, ActionPolicyRevision, ActionProvenance, ActionReviewRequest,
     ActionSource, CapabilitySet, ExecutionDecision, ResolvedAction, SandboxCompatibility,
@@ -10,15 +19,6 @@ use zeta_config::{
     ConfigGeneration, McpConfig, McpCredentialBinding, McpServerConfig, McpServerEnablement,
     McpServerId, McpTransportConfig, ResolvedConfig,
 };
-use zeta_connectors::ConnectorAccountId;
-use zeta_connectors::ConnectorConnectionGeneration;
-use zeta_connectors::ConnectorDefinition;
-use zeta_connectors::ConnectorId;
-use zeta_connectors::ConnectorRuntimeBinding;
-use zeta_connectors_extension::ConnectorApiTokenConnectRequest;
-use zeta_connectors_extension::ConnectorAuthority;
-use zeta_connectors_extension::ConnectorCommandId;
-use zeta_connectors_extension::ConnectorCredentialService;
 use zeta_mcp::{
     McpConnectFuture, McpPageCursor, McpServerDefinition, McpServerTransport, McpSession,
     McpSessionError, McpSessionFactory, McpSessionFuture,

@@ -1,8 +1,8 @@
 use std::fs;
 
+use connectors::ConnectorCatalog;
+use connectors::ConnectorDefinition;
 use tempfile::tempdir;
-use zeta_connectors::ConnectorDefinition;
-use zeta_connectors_extension::ConnectorCatalog;
 use zeta_core_plugins::PluginActivationAuthority;
 use zeta_core_plugins::PluginActivationSnapshot;
 use zeta_core_plugins::PluginAuthorityCommand;

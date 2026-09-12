@@ -11605,7 +11605,6 @@ dependencies = [
  "zeta-codebase-store",
  "zeta-collaboration",
  "zeta-config",
- "zeta-connectors",
  "zeta-connectors-extension",
  "zeta-content-search",
  "zeta-context-engine",
@@ -12060,13 +12059,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-connectors"
-version = "0.1.0"
-dependencies = [
- "sha2 0.10.9",
-]
-
-[[package]]
 name = "zeta-connectors-extension"
 version = "0.1.0"
 dependencies = [
@@ -12079,7 +12071,6 @@ dependencies = [
  "tempfile",
  "url",
  "zeroize",
- "zeta-connectors",
  "zeta-core-plugins",
  "zeta-http-client",
  "zeta-plugin",
@@ -12672,7 +12663,6 @@ dependencies = [
  "zeta-action-policy",
  "zeta-async-utils",
  "zeta-config",
- "zeta-connectors",
  "zeta-connectors-extension",
  "zeta-core",
  "zeta-core-plugins",

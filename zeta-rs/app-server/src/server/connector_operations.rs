@@ -2,6 +2,26 @@ use super::AppServer;
 use super::RpcError;
 use super::decode;
 use super::result;
+use connectors::ConnectorAccount;
+use connectors::ConnectorAccountId;
+use connectors::ConnectorApiTokenConnectRequest;
+use connectors::ConnectorCommandDisposition;
+use connectors::ConnectorCommandId;
+use connectors::ConnectorCommandResult;
+use connectors::ConnectorConnectionGeneration;
+use connectors::ConnectorConnectionState;
+use connectors::ConnectorCredentialCleanup;
+use connectors::ConnectorCredentialServiceError;
+use connectors::ConnectorCredentialServiceErrorKind;
+use connectors::ConnectorDeviceOAuthPollResult as RuntimeDeviceOAuthPollResult;
+use connectors::ConnectorDeviceOAuthStartRequest;
+use connectors::ConnectorId;
+use connectors::ConnectorOAuthCompleteRequest;
+use connectors::ConnectorOAuthError;
+use connectors::ConnectorOAuthErrorKind;
+use connectors::ConnectorOAuthFlowId;
+use connectors::ConnectorOAuthStartRequest;
+use connectors::ConnectorSnapshotGeneration;
 use serde_json::Value;
 use zeta_app_server_protocol::protocol::connectors::ConnectorAccountDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorAvailableActionDto;
@@ -25,26 +45,6 @@ use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthStartParams;
 use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthStartResult;
 use zeta_app_server_protocol::protocol::connectors::ConnectorSecretDto;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
-use zeta_connectors::ConnectorAccount;
-use zeta_connectors::ConnectorAccountId;
-use zeta_connectors::ConnectorConnectionGeneration;
-use zeta_connectors::ConnectorConnectionState;
-use zeta_connectors::ConnectorId;
-use zeta_connectors::ConnectorSnapshotGeneration;
-use zeta_connectors_extension::ConnectorApiTokenConnectRequest;
-use zeta_connectors_extension::ConnectorCommandDisposition;
-use zeta_connectors_extension::ConnectorCommandId;
-use zeta_connectors_extension::ConnectorCommandResult;
-use zeta_connectors_extension::ConnectorCredentialCleanup;
-use zeta_connectors_extension::ConnectorCredentialServiceError;
-use zeta_connectors_extension::ConnectorCredentialServiceErrorKind;
-use zeta_connectors_extension::ConnectorDeviceOAuthPollResult as RuntimeDeviceOAuthPollResult;
-use zeta_connectors_extension::ConnectorDeviceOAuthStartRequest;
-use zeta_connectors_extension::ConnectorOAuthCompleteRequest;
-use zeta_connectors_extension::ConnectorOAuthError;
-use zeta_connectors_extension::ConnectorOAuthErrorKind;
-use zeta_connectors_extension::ConnectorOAuthFlowId;
-use zeta_connectors_extension::ConnectorOAuthStartRequest;
 use zeta_secrets::SecretValue;
 
 impl AppServer {
@@ -282,17 +282,13 @@ impl AppServer {
         ))
     }
 
-    fn connector_service(
-        &self,
-    ) -> Result<&zeta_connectors_extension::ConnectorCredentialService, RpcError> {
+    fn connector_service(&self) -> Result<&connectors::ConnectorCredentialService, RpcError> {
         self.connectors
             .as_deref()
             .ok_or_else(|| RpcError::new(-32034, AppServerErrorName::ConnectorsUnavailable))
     }
 
-    fn connector_oauth_service(
-        &self,
-    ) -> Result<&zeta_connectors_extension::ConnectorOAuthService, RpcError> {
+    fn connector_oauth_service(&self) -> Result<&connectors::ConnectorOAuthService, RpcError> {
         self.connector_oauth
             .as_deref()
             .ok_or_else(|| RpcError::new(-32037, AppServerErrorName::ConnectorOAuthUnavailable))
@@ -300,7 +296,7 @@ impl AppServer {
 
     fn connector_device_oauth_service(
         &self,
-    ) -> Result<&zeta_connectors_extension::ConnectorDeviceOAuthService, RpcError> {
+    ) -> Result<&connectors::ConnectorDeviceOAuthService, RpcError> {
         self.connector_device_oauth
             .as_deref()
             .ok_or_else(|| RpcError::new(-32037, AppServerErrorName::ConnectorOAuthUnavailable))
@@ -325,10 +321,10 @@ struct ConnectorOAuthCompleteMetadata {
 }
 
 fn connector_dto(
-    entry: &zeta_connectors::ConnectorEntry,
-    service: &zeta_connectors_extension::ConnectorCredentialService,
-    oauth: Option<&zeta_connectors_extension::ConnectorOAuthService>,
-    device_oauth: Option<&zeta_connectors_extension::ConnectorDeviceOAuthService>,
+    entry: &connectors::ConnectorEntry,
+    service: &connectors::ConnectorCredentialService,
+    oauth: Option<&connectors::ConnectorOAuthService>,
+    device_oauth: Option<&connectors::ConnectorDeviceOAuthService>,
 ) -> ConnectorDto {
     let browser_oauth_supported =
         oauth.is_some_and(|oauth| oauth.supports(entry.definition().id()));

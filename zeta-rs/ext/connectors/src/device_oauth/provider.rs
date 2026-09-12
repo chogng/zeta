@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use zeta_connectors::ConnectorDefinition;
+use crate::ConnectorDefinition;
 use zeta_secrets::SecretValue;
 
 use crate::ConnectorOAuthCredential;

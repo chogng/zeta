@@ -3,9 +3,9 @@
 > 物理位置：`zeta-rs/plugin/`、`zeta-rs/core-plugins/`
 > Rust crate：`zeta_plugin`、`zeta_core_plugins`
 > 当前状态：`zeta-plugin` 已拥有 Plugin identity、manifest、path 与 package observation；
-> `zeta-core-plugins` 已拥有 local/Marketplace package store、durable authority、activation、lease 与远端 registry 接入；Connector domain 已提取到
-> `zeta-rs/connectors`，Plugin projection、durable authority 与 API-token connect/revoke 位于
-> `zeta-rs/ext/connectors`；App Server 已能从注入的 activation 自动接线 Connector 与 MCP，通用 OAuth
+> `zeta-core-plugins` 已拥有 local/Marketplace package store、durable authority、activation、lease 与远端 registry 接入；
+> Connector 领域类型、目录发现、连接状态持久化和认证流程统一归 `zeta-rs/ext/connectors`。
+> App Server 已能从注入的 activation 自动接线 Connector 与 MCP，通用 OAuth
 > PKCE/device 状态机、App Server control plane、Desktop/TUI 产品入口与 GitHub providers 已实现；
 > PL4 的可执行 Editor Extension 本地安装/授权声明已实现，Host runtime 不由本 crate 拥有
 > crate 实现契约：[`zeta-plugin`](../zeta-rs/plugin/README.md)、[`zeta-core-plugins`](../zeta-rs/core-plugins/README.md)
@@ -197,7 +197,7 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
              SkillContribution  ConnectorContribution  McpServerContribution
                          │          │          │
                          ▼          ▼          ▼
-                    zeta-skills  zeta-connectors   zeta-mcp
+                    zeta-skills  ext/connectors   zeta-mcp
 ```
 
 具体规则：
@@ -627,8 +627,8 @@ Connector 当前通过 MCP binding 连接能力 runtime；未来只有出现真�
 binding variant。
 
 当前 v1 manifest 已允许 `contributions.connectors[]` 用 manifest-local ID 引用同包的一个
-`mcpServers[]`。`zeta-connectors-extension::ConnectorCatalog` 将声明转换为
-`zeta-connectors::ConnectorSnapshot`：disconnected entry 进入 discovery，只有认证 owner 通过合法
+`mcpServers[]`。`connectors::ConnectorCatalog` 将声明转换为同一 crate 的
+`connectors::ConnectorSnapshot`：disconnected entry 进入 discovery，只有认证 owner 通过合法
 generation transition 发布 `ConnectorAccount` 后才输出 ready MCP server ID。当前 API-token adapter、
 SQLite authority、exact activation 到 package-rooted MCP provider 的自动构造、独立 Plugin MCP、
 Connector-bound MCP composition、通用 OAuth PKCE 状态机、Desktop browser callback 与 GitHub provider

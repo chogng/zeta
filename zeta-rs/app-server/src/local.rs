@@ -436,20 +436,20 @@ impl Eq for LocalAppServerOptions {}
 /// Host-provided Connector runtime ports used by the local App Server composition root.
 #[derive(Clone)]
 pub struct LocalConnectorRuntime {
-    service: Arc<zeta_connectors_extension::ConnectorCredentialService>,
+    service: Arc<connectors::ConnectorCredentialService>,
     secrets: Arc<dyn SecretStore>,
     mcp: Arc<dyn ConnectorMcpRuntimeProvider>,
-    base_definitions: Vec<zeta_connectors::ConnectorDefinition>,
+    base_definitions: Vec<connectors::ConnectorDefinition>,
     base_mcp: Arc<dyn ConnectorMcpRuntimeProvider>,
     plugin_authority: Option<PluginActivationAuthority>,
     plugins_manager: Option<Arc<zeta_core_plugins::PluginsManager>>,
-    oauth: Option<Arc<zeta_connectors_extension::ConnectorOAuthService>>,
-    device_oauth: Option<Arc<zeta_connectors_extension::ConnectorDeviceOAuthService>>,
+    oauth: Option<Arc<connectors::ConnectorOAuthService>>,
+    device_oauth: Option<Arc<connectors::ConnectorDeviceOAuthService>>,
 }
 
 impl LocalConnectorRuntime {
     pub fn new(
-        service: Arc<zeta_connectors_extension::ConnectorCredentialService>,
+        service: Arc<connectors::ConnectorCredentialService>,
         secrets: Arc<dyn SecretStore>,
         mcp: Arc<dyn ConnectorMcpRuntimeProvider>,
     ) -> Self {
@@ -478,17 +478,15 @@ impl LocalConnectorRuntime {
         mut self,
         providers: impl IntoIterator<
             Item = (
-                zeta_connectors::ConnectorId,
-                Arc<dyn zeta_connectors_extension::ConnectorOAuthProvider>,
+                connectors::ConnectorId,
+                Arc<dyn connectors::ConnectorOAuthProvider>,
             ),
         >,
     ) -> Self {
-        self.oauth = Some(Arc::new(
-            zeta_connectors_extension::ConnectorOAuthService::new(
-                Arc::clone(&self.service),
-                providers,
-            ),
-        ));
+        self.oauth = Some(Arc::new(connectors::ConnectorOAuthService::new(
+            Arc::clone(&self.service),
+            providers,
+        )));
         self
     }
 
@@ -497,17 +495,15 @@ impl LocalConnectorRuntime {
         mut self,
         providers: impl IntoIterator<
             Item = (
-                zeta_connectors::ConnectorId,
-                Arc<dyn zeta_connectors_extension::ConnectorDeviceOAuthProvider>,
+                connectors::ConnectorId,
+                Arc<dyn connectors::ConnectorDeviceOAuthProvider>,
             ),
         >,
     ) -> Self {
-        self.device_oauth = Some(Arc::new(
-            zeta_connectors_extension::ConnectorDeviceOAuthService::new(
-                Arc::clone(&self.service),
-                providers,
-            ),
-        ));
+        self.device_oauth = Some(Arc::new(connectors::ConnectorDeviceOAuthService::new(
+            Arc::clone(&self.service),
+            providers,
+        )));
         self
     }
 
@@ -517,9 +513,9 @@ impl LocalConnectorRuntime {
         activation: &PluginActivationSnapshot,
         secrets: Arc<dyn SecretStore>,
     ) -> Result<Self, OpenAppServerError> {
-        let catalog = zeta_connectors_extension::ConnectorCatalog::from_activation(activation)
+        let catalog = connectors::ConnectorCatalog::from_activation(activation)
             .map_err(|error| OpenAppServerError(error.to_string()))?;
-        let authority = zeta_connectors_extension::ConnectorAuthority::open_sqlite(
+        let authority = connectors::ConnectorAuthority::open_sqlite(
             state.connectors_database_path(),
             catalog
                 .snapshot()
@@ -530,7 +526,7 @@ impl LocalConnectorRuntime {
         .map_err(|error| OpenAppServerError(error.to_string()))?;
         let mcp = PluginConnectorMcpRuntimeProvider::from_activation(activation)
             .map_err(|error| OpenAppServerError(error.to_string()))?;
-        let service = Arc::new(zeta_connectors_extension::ConnectorCredentialService::new(
+        let service = Arc::new(connectors::ConnectorCredentialService::new(
             authority,
             Arc::clone(&secrets),
         ));
@@ -544,10 +540,9 @@ impl LocalConnectorRuntime {
         secrets: Arc<dyn SecretStore>,
     ) -> Result<Self, OpenAppServerError> {
         let snapshot = plugin_authority.snapshot();
-        let catalog =
-            zeta_connectors_extension::ConnectorCatalog::from_activation(snapshot.activation())
-                .map_err(|error| OpenAppServerError(error.to_string()))?;
-        let authority = zeta_connectors_extension::ConnectorAuthority::open_sqlite(
+        let catalog = connectors::ConnectorCatalog::from_activation(snapshot.activation())
+            .map_err(|error| OpenAppServerError(error.to_string()))?;
+        let authority = connectors::ConnectorAuthority::open_sqlite(
             state.connectors_database_path(),
             catalog
                 .snapshot()
@@ -560,7 +555,7 @@ impl LocalConnectorRuntime {
             PluginConnectorMcpRuntimeProvider::from_authority(&plugin_authority)
                 .map_err(|error| OpenAppServerError(error.to_string()))?,
         );
-        let service = Arc::new(zeta_connectors_extension::ConnectorCredentialService::new(
+        let service = Arc::new(connectors::ConnectorCredentialService::new(
             authority,
             Arc::clone(&secrets),
         ));
@@ -595,9 +590,8 @@ impl LocalConnectorRuntime {
             return Ok(());
         };
         let snapshot = authority.snapshot();
-        let catalog =
-            zeta_connectors_extension::ConnectorCatalog::from_activation(snapshot.activation())
-                .map_err(|error| OpenAppServerError(error.to_string()))?;
+        let catalog = connectors::ConnectorCatalog::from_activation(snapshot.activation())
+            .map_err(|error| OpenAppServerError(error.to_string()))?;
         let mcp = PluginConnectorMcpRuntimeProvider::from_authority(authority)
             .map_err(|error| OpenAppServerError(error.to_string()))?;
         self.base_definitions = catalog
@@ -2391,49 +2385,39 @@ fn configure_product_connector_oauth(
                 connector_id,
                 config,
             } => {
-                let provider = zeta_connectors_extension::GitHubBrokeredOAuthProvider::new(
-                    config,
-                    Arc::clone(&http),
-                )
-                .map_err(|error| OpenAppServerError(error.to_string()))?;
+                let provider =
+                    connectors::GitHubBrokeredOAuthProvider::new(config, Arc::clone(&http))
+                        .map_err(|error| OpenAppServerError(error.to_string()))?;
                 browser.push((
                     connector_id,
-                    Arc::new(provider)
-                        as Arc<dyn zeta_connectors_extension::ConnectorOAuthProvider>,
+                    Arc::new(provider) as Arc<dyn connectors::ConnectorOAuthProvider>,
                 ));
             }
             crate::product_services::ProductConnectorOAuthConfig::GitHubDevice {
                 connector_id,
                 config,
             } => {
-                let provider = zeta_connectors_extension::GitHubDeviceOAuthProvider::new(
-                    config,
-                    Arc::clone(&http),
-                )
-                .map_err(|error| OpenAppServerError(error.to_string()))?;
+                let provider =
+                    connectors::GitHubDeviceOAuthProvider::new(config, Arc::clone(&http))
+                        .map_err(|error| OpenAppServerError(error.to_string()))?;
                 device.push((
                     connector_id,
-                    Arc::new(provider)
-                        as Arc<dyn zeta_connectors_extension::ConnectorDeviceOAuthProvider>,
+                    Arc::new(provider) as Arc<dyn connectors::ConnectorDeviceOAuthProvider>,
                 ));
             }
         }
     }
     if !browser.is_empty() {
-        runtime.oauth = Some(Arc::new(
-            zeta_connectors_extension::ConnectorOAuthService::new(
-                Arc::clone(&runtime.service),
-                browser,
-            ),
-        ));
+        runtime.oauth = Some(Arc::new(connectors::ConnectorOAuthService::new(
+            Arc::clone(&runtime.service),
+            browser,
+        )));
     }
     if !device.is_empty() {
-        runtime.device_oauth = Some(Arc::new(
-            zeta_connectors_extension::ConnectorDeviceOAuthService::new(
-                Arc::clone(&runtime.service),
-                device,
-            ),
-        ));
+        runtime.device_oauth = Some(Arc::new(connectors::ConnectorDeviceOAuthService::new(
+            Arc::clone(&runtime.service),
+            device,
+        )));
     }
     Ok(())
 }

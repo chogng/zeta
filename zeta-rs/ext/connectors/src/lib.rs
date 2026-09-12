@@ -1,14 +1,36 @@
-//! Plugin contribution and product discovery integration for Connector snapshots.
+//! External account definitions, connection lifecycle, catalogs, and authentication services.
 
 mod auth;
 mod authority;
+mod catalog;
 mod command;
+mod connection;
+mod definition;
 mod device_oauth;
+mod error;
 mod github;
 mod github_broker;
 mod github_device;
+mod identity;
 mod oauth;
-mod projection;
+mod snapshot;
+
+pub use connection::ConnectorAccount;
+pub use connection::ConnectorConnection;
+pub use connection::ConnectorConnectionState;
+pub use connection::ConnectorConnectionUpdate;
+pub use definition::ConnectorDefinition;
+pub use definition::ConnectorDefinitionDigest;
+pub use definition::ConnectorRuntimeBinding;
+pub use error::ConnectorError;
+pub use error::ConnectorErrorKind;
+pub use identity::ConnectorAccountId;
+pub use identity::ConnectorConnectionGeneration;
+pub use identity::ConnectorCredentialRef;
+pub use identity::ConnectorId;
+pub use identity::ConnectorSnapshotGeneration;
+pub use snapshot::ConnectorEntry;
+pub use snapshot::ConnectorSnapshot;
 
 pub use auth::ConnectorApiTokenConnectRequest;
 pub use auth::ConnectorCredentialCleanup;
@@ -19,6 +41,8 @@ pub use auth::ConnectorDisconnectResult;
 pub use auth::project_runtime_credential;
 pub use authority::ConnectorAuthority;
 pub use authority::ConnectorAuthoritySubscription;
+pub use catalog::ConnectorCatalog;
+pub use catalog::ConnectorCatalogError;
 pub use command::ConnectorAuthorityCommand;
 pub use command::ConnectorAuthorityError;
 pub use command::ConnectorAuthorityErrorKind;
@@ -54,12 +78,14 @@ pub use oauth::ConnectorOAuthRefreshRequest;
 pub use oauth::ConnectorOAuthRevokeRequest;
 pub use oauth::ConnectorOAuthService;
 pub use oauth::ConnectorOAuthStartRequest;
-pub use projection::ConnectorCatalog;
-pub use projection::ConnectorCatalogError;
 
 #[cfg(test)]
-#[path = "projection_tests.rs"]
-mod tests;
+#[path = "catalog_tests.rs"]
+mod catalog_tests;
+
+#[cfg(test)]
+#[path = "connector_tests.rs"]
+mod connector_tests;
 
 #[cfg(test)]
 #[path = "authority_tests.rs"]

@@ -1,11 +1,11 @@
+use connectors::ConnectorAuthority;
+use connectors::ConnectorConnectionState;
+use connectors::ConnectorDefinition;
+use connectors::project_runtime_credential;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 use zeta_config::McpServerId;
-use zeta_connectors::ConnectorConnectionState;
-use zeta_connectors::ConnectorDefinition;
-use zeta_connectors_extension::ConnectorAuthority;
-use zeta_connectors_extension::project_runtime_credential;
 use zeta_mcp::McpServerDefinition;
 use zeta_mcp::McpServerTransport;
 use zeta_secrets::SecretKey;
@@ -188,7 +188,7 @@ pub(crate) fn materialize_connector_servers(
 
 fn connector_server_id(
     contribution: &McpServerId,
-    connector: &zeta_connectors::ConnectorId,
+    connector: &connectors::ConnectorId,
 ) -> Result<McpServerId, McpToolCompositionError> {
     let local = contribution
         .as_str()

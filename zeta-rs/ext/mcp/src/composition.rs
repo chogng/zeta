@@ -2,6 +2,10 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
+use connectors::ConnectorAuthority;
+use connectors::ConnectorConnectionGeneration;
+use connectors::ConnectorDefinitionDigest;
+use connectors::ConnectorId;
 use serde_json::json;
 use zeta_action_policy::{
     ActionDigest, ActionKind, ActionPolicyRevision, ActionProvenance, ActionReviewPhase,
@@ -13,10 +17,6 @@ use zeta_config::{
     ConfigGeneration, McpCredentialBinding, McpServerEnablement, McpServerId, McpTransportConfig,
     ResolvedConfig,
 };
-use zeta_connectors::ConnectorConnectionGeneration;
-use zeta_connectors::ConnectorDefinitionDigest;
-use zeta_connectors::ConnectorId;
-use zeta_connectors_extension::ConnectorAuthority;
 use zeta_core::{ActionPolicyService, CoreError, ToolAuthorization, ToolService};
 use zeta_mcp::{
     McpCallError, McpRuntimeOptions, McpServerDefinition, McpServerTransport, McpSessionFactory,

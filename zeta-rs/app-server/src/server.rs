@@ -193,10 +193,9 @@ pub struct AppServer {
     pub(super) config: Option<Arc<ConfigStore>>,
     pub(super) provider_credentials: Option<Arc<ProviderCredentialService>>,
     pub(super) local_tool_config: Arc<RwLock<crate::local_tools::LocalToolConfig>>,
-    pub(super) connectors: Option<Arc<zeta_connectors_extension::ConnectorCredentialService>>,
-    pub(super) connector_oauth: Option<Arc<zeta_connectors_extension::ConnectorOAuthService>>,
-    pub(super) connector_device_oauth:
-        Option<Arc<zeta_connectors_extension::ConnectorDeviceOAuthService>>,
+    pub(super) connectors: Option<Arc<connectors::ConnectorCredentialService>>,
+    pub(super) connector_oauth: Option<Arc<connectors::ConnectorOAuthService>>,
+    pub(super) connector_device_oauth: Option<Arc<connectors::ConnectorDeviceOAuthService>>,
     pub(super) mcp_oauth: Option<Arc<zeta_mcp_extension::McpOAuthService>>,
     pub(super) plugins: Option<zeta_core_plugins::PluginActivationAuthority>,
     extension_hosts: Option<extension_host_runtime::ExtensionHostRuntime>,
@@ -956,7 +955,7 @@ impl AppServer {
     /// Installs the product-owned Connector credential service and change notifications.
     pub fn with_connector_service(
         mut self,
-        connectors: Arc<zeta_connectors_extension::ConnectorCredentialService>,
+        connectors: Arc<connectors::ConnectorCredentialService>,
     ) -> Self {
         self._connector_watcher = Some(connector_runtime::ConnectorWatcher::start(
             connectors.authority(),
@@ -969,7 +968,7 @@ impl AppServer {
     /// Installs product-owned OAuth provider adapters over the configured Connector authority.
     pub fn with_connector_oauth_service(
         mut self,
-        oauth: Arc<zeta_connectors_extension::ConnectorOAuthService>,
+        oauth: Arc<connectors::ConnectorOAuthService>,
     ) -> Self {
         self.connector_oauth = Some(oauth);
         self
@@ -978,7 +977,7 @@ impl AppServer {
     /// Installs product-owned OAuth device provider adapters over Connector authority.
     pub fn with_connector_device_oauth_service(
         mut self,
-        oauth: Arc<zeta_connectors_extension::ConnectorDeviceOAuthService>,
+        oauth: Arc<connectors::ConnectorDeviceOAuthService>,
     ) -> Self {
         self.connector_device_oauth = Some(oauth);
         self

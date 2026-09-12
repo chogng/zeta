@@ -21,8 +21,7 @@ url = { workspace = true }
 zeroize = { workspace = true }
 zeta-async-utils = { workspace = true }
 zeta-config = { workspace = true }
-zeta-connectors = { workspace = true }
-zeta-connectors-extension = { workspace = true }
+connectors = { workspace = true }
 zeta-core = { workspace = true }
 zeta-mcp = { workspace = true }
 zeta-action-policy = { workspace = true }

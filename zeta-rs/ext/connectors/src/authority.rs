@@ -7,16 +7,16 @@ use std::sync::Mutex;
 use std::sync::mpsc;
 use std::time::Duration;
 
-use zeta_connectors::ConnectorConnection;
-use zeta_connectors::ConnectorConnectionState;
-use zeta_connectors::ConnectorConnectionUpdate;
-use zeta_connectors::ConnectorDefinition;
-use zeta_connectors::ConnectorDefinitionDigest;
-use zeta_connectors::ConnectorEntry;
-use zeta_connectors::ConnectorError;
-use zeta_connectors::ConnectorId;
-use zeta_connectors::ConnectorSnapshot;
-use zeta_connectors::ConnectorSnapshotGeneration;
+use crate::ConnectorConnection;
+use crate::ConnectorConnectionState;
+use crate::ConnectorConnectionUpdate;
+use crate::ConnectorDefinition;
+use crate::ConnectorDefinitionDigest;
+use crate::ConnectorEntry;
+use crate::ConnectorError;
+use crate::ConnectorId;
+use crate::ConnectorSnapshot;
+use crate::ConnectorSnapshotGeneration;
 
 use crate::ConnectorAuthorityCommand;
 use crate::ConnectorAuthorityError;
@@ -42,22 +42,22 @@ pub(super) struct CommandReceipt {
 pub(super) enum AuthorityEvent {
     Begin {
         connector_id: ConnectorId,
-        generation: zeta_connectors::ConnectorConnectionGeneration,
+        generation: crate::ConnectorConnectionGeneration,
         definition_digest: ConnectorDefinitionDigest,
     },
     Complete {
         connector_id: ConnectorId,
-        account: zeta_connectors::ConnectorAccount,
+        account: crate::ConnectorAccount,
         definition_digest: ConnectorDefinitionDigest,
     },
     Unavailable {
         connector_id: ConnectorId,
-        generation: zeta_connectors::ConnectorConnectionGeneration,
+        generation: crate::ConnectorConnectionGeneration,
         reason: String,
     },
     Disconnect {
         connector_id: ConnectorId,
-        generation: zeta_connectors::ConnectorConnectionGeneration,
+        generation: crate::ConnectorConnectionGeneration,
     },
 }
 
@@ -83,7 +83,7 @@ struct AuthorityState {
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct InvocationKey {
     connector_id: ConnectorId,
-    connection_generation: zeta_connectors::ConnectorConnectionGeneration,
+    connection_generation: crate::ConnectorConnectionGeneration,
     definition_digest: ConnectorDefinitionDigest,
 }
 
@@ -388,7 +388,7 @@ impl ConnectorAuthority {
     pub fn authorizes(
         &self,
         connector_id: &ConnectorId,
-        connection_generation: zeta_connectors::ConnectorConnectionGeneration,
+        connection_generation: crate::ConnectorConnectionGeneration,
         definition_digest: &ConnectorDefinitionDigest,
     ) -> bool {
         let state = self
@@ -415,7 +415,7 @@ impl ConnectorAuthority {
     pub fn with_authorized_invocation<T>(
         &self,
         connector_id: &ConnectorId,
-        connection_generation: zeta_connectors::ConnectorConnectionGeneration,
+        connection_generation: crate::ConnectorConnectionGeneration,
         definition_digest: &ConnectorDefinitionDigest,
         operation: impl FnOnce() -> T,
     ) -> Option<T> {
@@ -429,7 +429,7 @@ impl ConnectorAuthority {
     fn acquire_invocation(
         &self,
         connector_id: &ConnectorId,
-        connection_generation: zeta_connectors::ConnectorConnectionGeneration,
+        connection_generation: crate::ConnectorConnectionGeneration,
         definition_digest: &ConnectorDefinitionDigest,
     ) -> Option<ConnectorInvocationLease> {
         let mut state = self

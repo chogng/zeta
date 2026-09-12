@@ -7,13 +7,13 @@ use std::path::PathBuf;
 use std::time::Duration;
 use zeta_plugin::MarketplaceName;
 
+use connectors::ConnectorId;
+use connectors::GitHubBrokeredOAuthConfig;
+use connectors::GitHubDeviceOAuthConfig;
 use serde::Deserialize;
 use sha2::Digest;
 use sha2::Sha256;
 use url::Url;
-use zeta_connectors::ConnectorId;
-use zeta_connectors_extension::GitHubBrokeredOAuthConfig;
-use zeta_connectors_extension::GitHubDeviceOAuthConfig;
 
 use crate::OpenAppServerError;
 

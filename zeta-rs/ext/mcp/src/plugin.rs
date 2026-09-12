@@ -2,11 +2,11 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use connectors::ConnectorDefinition;
+use connectors::ConnectorId;
 use serde::Deserialize;
 use url::Url;
 use zeta_config::McpServerId;
-use zeta_connectors::ConnectorDefinition;
-use zeta_connectors::ConnectorId;
 use zeta_core_plugins::InstalledPluginPackage;
 use zeta_core_plugins::PluginActivationAuthority;
 use zeta_core_plugins::PluginActivationSnapshot;

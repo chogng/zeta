@@ -1,12 +1,12 @@
 use std::fmt;
 use std::fmt::Write;
 
+use crate::ConnectorAccount;
+use crate::ConnectorConnectionGeneration;
+use crate::ConnectorId;
+use crate::ConnectorSnapshotGeneration;
 use sha2::Digest;
 use sha2::Sha256;
-use zeta_connectors::ConnectorAccount;
-use zeta_connectors::ConnectorConnectionGeneration;
-use zeta_connectors::ConnectorId;
-use zeta_connectors::ConnectorSnapshotGeneration;
 
 const MAX_COMMAND_ID_BYTES: usize = 256;
 const COMMAND_DIGEST_DOMAIN: &[u8] = b"zeta-connector-command-v1\0";

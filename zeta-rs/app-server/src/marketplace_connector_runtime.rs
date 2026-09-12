@@ -2,10 +2,10 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use connectors::ConnectorDefinition;
+use connectors::ConnectorId;
+use connectors::ConnectorRuntimeBinding;
 use zeta_config::McpServerId;
-use zeta_connectors::ConnectorDefinition;
-use zeta_connectors::ConnectorId;
-use zeta_connectors::ConnectorRuntimeBinding;
 use zeta_core_plugins::AcquireCapabilityRequest;
 use zeta_core_plugins::ActivationSpec;
 use zeta_core_plugins::CapabilityKind;

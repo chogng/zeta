@@ -45,7 +45,6 @@ members = [
     "zeta-code/update-sign",
     "zeta-code/sprite",
     "zeta-rs/config",
-    "zeta-rs/connectors",
     "zeta-rs/context-engine",
     "zeta-rs/core",
     "zeta-rs/diff",
@@ -359,7 +358,6 @@ zeta-api = { path = "zeta-rs/zeta-api" }
 zeta-client = { path = "zeta-rs/zeta-client" }
 zeta-otel = { path = "zeta-rs/otel" }
 zeta-config = { path = "zeta-rs/config" }
-zeta-connectors = { path = "zeta-rs/connectors" }
 zeta-context-engine = { path = "zeta-rs/context-engine" }
 zeta-core = { path = "zeta-rs/core" }
 zeta-diff = { path = "zeta-rs/diff" }
@@ -369,7 +367,7 @@ zeta-editor-host = { path = "app/editor-host" }
 zeta-editor-core = { path = "zeta-rs/editor-core" }
 zeta-environment = { path = "zeta-rs/environment" }
 zeta-extension-api = { path = "zeta-rs/ext/extension-api" }
-zeta-connectors-extension = { path = "zeta-rs/ext/connectors" }
+connectors = { package = "zeta-connectors-extension", path = "zeta-rs/ext/connectors" }
 zeta-mcp-extension = { path = "zeta-rs/ext/mcp" }
 zeta-skills-extension = { path = "zeta-rs/ext/skills" }
 zeta-web-search-extension = { path = "zeta-rs/ext/web-search" }

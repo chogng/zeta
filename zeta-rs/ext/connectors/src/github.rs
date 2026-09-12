@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
+use crate::ConnectorAccountId;
+use crate::ConnectorDefinition;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use serde::Deserialize;
 use serde::Serialize;
 use url::Url;
 use zeroize::Zeroize;
-use zeta_connectors::ConnectorAccountId;
-use zeta_connectors::ConnectorDefinition;
 use zeta_http_client::HttpClient;
 use zeta_http_client::HttpHeader;
 use zeta_http_client::HttpMethod;

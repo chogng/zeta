@@ -1,10 +1,9 @@
 # 外部服务连接系统
 
-> 领域实现：[`zeta-rs/connectors/`](../zeta-rs/connectors/README.md)，Rust crate：
-> `zeta_connectors`。
+> 实现：[`zeta-rs/ext/connectors/`](../zeta-rs/ext/connectors/README.md)，package：
+> `zeta-connectors-extension`，调用方使用 `connectors`。
 > Package 入口：[`core-plugins.md`](../zeta-rs/docs/core-plugins.md)。
-> Legacy Plugin/discovery 集成：[`zeta-rs/ext/connectors/`](../zeta-rs/ext/connectors/README.md) 与
-> [`plugins.md`](plugins.md)。MCP 调用边界：[`mcp.md`](mcp.md)。
+> Plugin 声明与目录集成：[`plugins.md`](plugins.md)。MCP 调用边界：[`mcp.md`](mcp.md)。
 > 当前状态：Connector domain、SQLite authority、API-token connect/disconnect、App Server 协议、
 > package-rooted Plugin activation、ready/standalone MCP composition、模型安全点 registry replacement、
 > in-flight dispatch drain、profile 私有文件与可注入 OS keyring `SecretStore`、OAuth PKCE 状态机和产品连接入口已实现。
@@ -85,9 +84,8 @@ Connector；Plugin 或 User/Directory 也可以独立声明 MCP server。只有�
 | --- | --- | --- |
 | `zeta-plugin` | Plugin manifest 与 `ConnectorContribution` 定义 | 安装、启用、外部账号、OAuth、MCP session |
 | `zeta-core-plugins` | package artifact/install/update/uninstall、enable/grant provenance、exact capability 与 lease | 外部账号、OAuth、MCP session |
-| `zeta-connectors` | identity、definition、account projection、状态机、generation-bound snapshot | Plugin、secret storage、I/O runtime |
-| `zeta-connectors-extension` | Plugin 转换、Plugin provenance、discovery 与 ready-binding projection | 领域状态机、live authentication/MCP |
-| Connector auth adapter | connect/revoke、OAuth callback、credential refresh/materialization | Plugin package、Tool execution |
+| `zeta-connectors-extension` | 身份、定义、连接状态、目录发现、SQLite authority、API-token/OAuth 编排 | secret backend、MCP session、Tool execution |
+| Connector auth adapter（同一 crate） | provider 授权协议、凭据交换、刷新与撤销 | Plugin package、连接状态持久化、Tool execution |
 | `zeta-mcp-extension` | ready declaration 到 live MCP tools runtime 的 host integration | Connector account authority |
 | `zeta-tools` / Core | Tool registry、approval、durable execution | Connect/OAuth lifecycle |
 

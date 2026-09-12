@@ -1,8 +1,8 @@
 use super::update_broker::UpdateBroker;
+use connectors::ConnectorAuthority;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
-use zeta_connectors_extension::ConnectorAuthority;
 
 pub(super) struct ConnectorWatcher {
     shutdown: Option<std::sync::mpsc::Sender<()>>,

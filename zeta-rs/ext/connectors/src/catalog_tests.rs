@@ -1,9 +1,9 @@
-use zeta_connectors::ConnectorAccount;
-use zeta_connectors::ConnectorAccountId;
-use zeta_connectors::ConnectorConnectionGeneration;
-use zeta_connectors::ConnectorConnectionUpdate;
-use zeta_connectors::ConnectorCredentialRef;
-use zeta_connectors::ConnectorSnapshotGeneration;
+use crate::ConnectorAccount;
+use crate::ConnectorAccountId;
+use crate::ConnectorConnectionGeneration;
+use crate::ConnectorConnectionUpdate;
+use crate::ConnectorCredentialRef;
+use crate::ConnectorSnapshotGeneration;
 use zeta_plugin::PluginManifest;
 use zeta_tools::DiscoverableCapability;
 use zeta_tools::DiscoveryAction;
