@@ -1,26 +1,24 @@
-//! Profile-scoped App Server daemon lifecycle, runtime, and stdio proxy.
+//! PID-managed App Server lifecycle, control endpoint, and stdio connection carrier.
 
 mod client;
-mod daemon;
 mod endpoint;
+mod managed;
 mod process;
-mod registry;
 mod wire;
 
 use std::path::Path;
 use std::path::PathBuf;
 
 use serde::Serialize;
-use zeta_app_server::local_profile_root;
 
-/// Environment variable that selects the daemon executable used by a client host.
-pub const DAEMON_PATH_ENV: &str = "ZETA_APP_SERVER_DAEMON_PATH";
+/// Environment variable selecting the managed App Server executable.
+pub const APP_SERVER_PATH_ENV: &str = "ZETA_APP_SERVER_PATH";
 
-/// Internal argument that selects the daemon role in a product executable that embeds this crate.
-pub const DAEMON_PROCESS_ARGUMENT: &str = "--zeta-app-server-daemon-process";
+/// Selects the managed service role in the App Server executable.
+pub const MANAGED_PROCESS_ARGUMENT: &str = "--managed";
 
 /// directory grant source attached to one daemon connection.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum GrantSource {
     /// Grant was resolved by the product host and passed explicitly.
     HostConfiguration,
@@ -111,7 +109,7 @@ pub enum LifecycleStatus {
 pub struct LifecycleOutput {
     /// Operation-specific lifecycle status.
     pub status: LifecycleStatus,
-    /// Managed daemon process identifier, when running.
+    /// Actual managed App Server process identifier, distinct from the command carrier.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pid: Option<u32>,
     /// Per-process identity published in the private daemon state directory.
@@ -136,26 +134,15 @@ pub struct LifecycleOutput {
 pub fn run_lifecycle(
     command: LifecycleCommand,
     options: ConnectionOptions,
-    daemon_executable: &Path,
+    backend_executable: &Path,
 ) -> Result<LifecycleOutput, String> {
-    client::run_lifecycle(command, options, daemon_executable)
+    client::run_lifecycle(command, options, backend_executable)
 }
 
 /// Connects stdio to a ready daemon, starting and probing it first when necessary.
 #[cfg(any(unix, windows))]
-pub fn connect(options: ConnectionOptions, daemon_executable: &Path) -> Result<(), String> {
-    client::connect(options, daemon_executable)
-}
-
-/// Runs the profile authority process until stopped or idle.
-#[cfg(any(unix, windows))]
-pub fn serve(profile_root: impl Into<PathBuf>) -> Result<(), String> {
-    daemon::serve(ConnectionOptions::new(
-        profile_root,
-        None,
-        GrantSource::HostConfiguration,
-        None,
-    ))
+pub fn connect(options: ConnectionOptions, backend_executable: &Path) -> Result<(), String> {
+    client::connect(options, backend_executable)
 }
 
 /// Returns the profile-scoped daemon endpoint path used for diagnostics and integration tests.
@@ -164,31 +151,17 @@ pub fn daemon_endpoint_path(profile_root: &Path) -> Result<PathBuf, String> {
     endpoint::EndpointPaths::prepare(profile_root).map(|endpoint| endpoint.socket)
 }
 
-/// Runs the daemon process entrypoint using the local profile selected by the environment.
-pub fn run_from_environment(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
-    let arguments = arguments.into_iter().collect::<Vec<_>>();
-    if !arguments.is_empty() && arguments.as_slice() != [DAEMON_PROCESS_ARGUMENT] {
-        return Err("usage: zeta-app-server-daemon".into());
-    }
-    serve(local_profile_root())
-}
-
 #[cfg(not(any(unix, windows)))]
 pub fn run_lifecycle(
     _command: LifecycleCommand,
     _options: ConnectionOptions,
-    _daemon_executable: &Path,
+    _backend_executable: &Path,
 ) -> Result<LifecycleOutput, String> {
     Err("Local App Server daemon requires Unix-domain socket support".into())
 }
 
 #[cfg(not(any(unix, windows)))]
-pub fn connect(_options: ConnectionOptions, _daemon_executable: &Path) -> Result<(), String> {
-    Err("Local App Server daemon requires Unix-domain socket support".into())
-}
-
-#[cfg(not(any(unix, windows)))]
-pub fn serve(_profile_root: impl Into<PathBuf>) -> Result<(), String> {
+pub fn connect(_options: ConnectionOptions, _backend_executable: &Path) -> Result<(), String> {
     Err("Local App Server daemon requires Unix-domain socket support".into())
 }
 
@@ -203,5 +176,8 @@ pub fn daemon_endpoint_path(_profile_root: &Path) -> Result<PathBuf, String> {
 mod tests;
 
 mod command;
-pub use command::executable_path;
+pub use command::backend_executable_path;
 pub use command::run_command;
+
+pub use managed::ManagedConnection;
+pub use managed::ManagedEndpoint;

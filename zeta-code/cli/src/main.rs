@@ -4,7 +4,6 @@ use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use zeta_app_server::local_profile_root;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::turn::InputItem;
 use zeta_exec::AppServerTarget;
@@ -18,6 +17,7 @@ use zeta_exec::ExecRunRequest;
 use zeta_exec::ExecRunner;
 use zeta_exec::HeadlessApprovalMode;
 use zeta_exec::JsonLinesExecEventSink;
+use zeta_install_context::local_profile_root;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
 
@@ -99,11 +99,11 @@ fn run_app_server(arguments: Vec<String>) -> Result<(), String> {
     match arguments.first().map(String::as_str) {
         Some("connect") => zeta_app_server_daemon::run_command(
             arguments,
-            &zeta_app_server_daemon::executable_path()?,
+            &zeta_app_server_daemon::backend_executable_path()?,
         ),
         Some("daemon") => zeta_app_server_daemon::run_command(
             arguments.into_iter().skip(1),
-            &zeta_app_server_daemon::executable_path()?,
+            &zeta_app_server_daemon::backend_executable_path()?,
         ),
         _ => zeta_app_server::run(arguments),
     }

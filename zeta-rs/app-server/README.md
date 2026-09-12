@@ -18,8 +18,16 @@ just test zeta-app-server
 - `zeta-app-server --listen stdio://` 提供直接连接；未设置 `ZETA_WORKSPACE_ROOT` 时不继承当前目录授权。
 - WebSocket 使用 `--listen ws://127.0.0.1:0 --ws-auth capability-token --ws-token-sha256 HEX --emit-listen-info stdout-json`，监听成功后输出一条启动记录。
 - `src/startup.rs` 负责参数、环境绑定和服务启动；CLI 调用同一 `run`。
-- profile 路径和随包产品服务发现由本 crate 提供，客户端消费相同契约。
+- profile 路径和随包产品服务发现由 `install-context` 提供，客户端消费相同契约。
 - `arg0` 在普通参数解析前分发内部 worker；启动命令绑定实际宿主可执行路径。
 - daemon 的连接和生命周期命令由 [`app-server-daemon`](../app-server-daemon/README.md) 提供。
 
 验证：`just test zeta-app-server --test stdio --test websocket --test worker`。
+
+## 受管后台进程
+
+- `zeta-app-server --managed` 运行 profile 级共享服务；PID 记录直接指向此进程。
+- `src/managed.rs` 拥有服务循环、连接线程、停止期限和空闲退出。
+- `src/managed/registry.rs` 拥有目录服务组合，以及共享队列与自动化运行。
+- 先取得 profile 端点，再启动后台工作，避免并发启动重复运行任务。
+- daemon crate 提供进程管理和控制端点机制，App Server 依赖它；依赖方向保持单向。

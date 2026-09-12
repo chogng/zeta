@@ -58,7 +58,7 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 │   ├── editor-browser/          # editor browser-test bundle
 │   ├── playwright/              # Playwright results and reports
 │   └── dev/
-│       ├── app-server/          # daemon hot-reload generations
+│       ├── app-server/          # backend hot-reload generations
 │       └── web-profile/         # full Web development profile
 ├── zeta-package/dev/store-v1/<target>/<javascript-runtime>/<build-profile>/
 │   ├── manifests/<sequence>.json # immutable package selection history

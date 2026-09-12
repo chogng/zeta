@@ -3,7 +3,7 @@ use crate::RemoteConnectionEntry;
 use crate::RemoteConnectionName;
 use crate::RemoteConnectionSaveMode;
 use serde::Serialize;
-use zeta_app_server::local_profile_root;
+use zeta_install_context::local_profile_root;
 use zeta_remote::RemoteDirPath;
 use zeta_remote::SshHost;
 use zeta_remote::SshTarget;

@@ -15,7 +15,7 @@ import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry, WorkbenchRenderer
 import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/contextmenu.js";
 import { buildAppServerEnvironment } from "../../platform/app-server/common/appServerEnvironment.js";
 import { AppServerConnectionRelay } from "../../platform/app-server/electron-main/appServerConnectionRelay.js";
-import { appServerDaemonExecutablePath, developmentAppServerGenerationPath, packagedAppServerDaemonSha256, remoteExecutablePath } from "../../platform/app-server/electron-main/appServerPackage.js";
+import { appServerExecutablePath, appServerDaemonExecutablePath, developmentAppServerGenerationPath, packagedAppServerDaemonSha256, packagedAppServerSha256, remoteExecutablePath } from "../../platform/app-server/electron-main/appServerPackage.js";
 import { DevelopmentAppServerReloader, readDevelopmentAppServerGenerationSync, selectDevelopmentAppServerExecutable } from "../../platform/app-server/electron-main/developmentAppServerReloader.js";
 import { LocalAppServerProcessLauncher } from "../../platform/app-server/electron-main/localAppServerProcessLauncher.js";
 import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from "../../platform/ipc/electron-main/trustedIpcRouter.js";
@@ -375,10 +375,10 @@ export class ZetaApplication extends Disposable {
 		const processLauncher = isRemoteWorkspaceIdentifier(workspace)
 			? this.createSshAppServerProcessLauncher(workspace, resources)
 			: new LocalAppServerProcessLauncher({
-				executable: selectDevelopmentAppServerExecutable(packagedExecutable, developmentExecutable),
+				executable: packagedExecutable,
 				expectedSha256: expectedPackagedSha256,
 				args: ["connect"],
-				environment: this.appServerEnvironment(workspace),
+				environment: { ...this.appServerEnvironment(workspace), ZETA_APP_SERVER_PATH: selectDevelopmentAppServerExecutable(appServerExecutablePath(packageLocation), developmentExecutable) },
 			});
 		const supervisor = new AppServerConnectionRelay({
 			processLauncher,
@@ -1138,6 +1138,7 @@ export class ZetaApplication extends Disposable {
 			platform: process.platform,
 			resourcesPath: process.resourcesPath,
 		};
+		const backendSha256 = packagedAppServerSha256(packageLocation);
 		return buildAppServerEnvironment(process.env, process.platform === "win32" ? "windows" : "posix", {
 			...(process.env.ZETA_RG_PATH
 				? { ZETA_RG_PATH: process.env.ZETA_RG_PATH }
@@ -1146,7 +1147,8 @@ export class ZetaApplication extends Disposable {
 				? { ZETA_PRODUCT_SERVICES_PATH: process.env.ZETA_PRODUCT_SERVICES_PATH }
 				: {}),
 			ZETA_ELECTRON_RUN_AS_NODE_PATH: process.execPath,
-			ZETA_APP_SERVER_DAEMON_PATH: appServerDaemonExecutablePath(packageLocation),
+			ZETA_APP_SERVER_PATH: appServerExecutablePath(packageLocation),
+			...(backendSha256 ? { ZETA_APP_SERVER_SHA256: backendSha256 } : {}),
 			ZETA_PROFILE_ROOT: this.profileRoot,
 			...(isSingleFolderWorkspaceIdentifier(workspace)
 				? {

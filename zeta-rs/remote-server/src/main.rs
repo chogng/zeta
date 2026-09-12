@@ -26,7 +26,7 @@ fn main() -> ExitCode {
     }
     match zeta_remote_server::run_from_environment_with_product_services(
         std::env::args().skip(1),
-        zeta_app_server::discovered_product_services_path(),
+        zeta_install_context::discovered_product_services_path(),
     ) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {

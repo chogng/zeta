@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../../../../../generated/app-server/index.js";
-import { appServerDaemonExecutablePath, packagedAppServerDaemonSha256, remoteExecutablePath } from "../../../../platform/app-server/electron-main/appServerPackage.js";
+import { appServerDaemonExecutablePath, packagedAppServerDaemonSha256, packagedAppServerSha256, remoteExecutablePath } from "../../../../platform/app-server/electron-main/appServerPackage.js";
 
 test("development and production resolve the same canonical package entrypoint", () => {
 	const workspace = mkdtempSync(join(tmpdir(), "zeta-workspace-"));
@@ -72,7 +72,7 @@ test("packaged server host digest is bound to the canonical package entrypoint",
 	try {
 		writeFileSync(join(resourcesPath, "zeta-package.json"), JSON.stringify({
 			buildId: `sha256:${"b".repeat(64)}`,
-			components: { appServerDaemon: { binarySha256: "a".repeat(64) } },
+			components: { appServerDaemon: { binarySha256: "a".repeat(64) }, appServer: { binarySha256: "c".repeat(64) } },
 			entrypoint: "bin/zeta-app-server.exe",
 			layoutVersion: 2,
 			protocol: {
@@ -82,6 +82,7 @@ test("packaged server host digest is bound to the canonical package entrypoint",
 			},
 			version: "1.2.3",
 		}));
+		assert.equal(packagedAppServerSha256({ appPath: "/workspace/zeta-ts", isPackaged: true, platform: "win32", resourcesPath }), "c".repeat(64));
 		assert.equal(packagedAppServerDaemonSha256({
 			appPath: "/unused",
 			expectedVersion: "1.2.3",

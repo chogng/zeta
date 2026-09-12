@@ -37,7 +37,7 @@ test *args:
 
 # Build the matching daemon and run real CLI/TUI scenarios through a PTY.
 test-tui *args:
-    {{ python }} -B scripts/cargo.py build -p zeta-app-server-daemon --bin zeta-app-server-daemon -p zeta-remote-server --bin zeta-remote-server
+    {{ python }} -B scripts/cargo.py build -p zeta-app-server --bin zeta-app-server -p zeta-app-server-daemon --bin zeta-app-server-daemon -p zeta-remote-server --bin zeta-remote-server
     {{ python }} -B scripts/cargo.py test -p zeta-cli --test tui_real_scenarios {args}
 
 # Check one Rust package. V8 inputs are configured only when its dependency graph needs them.
@@ -83,6 +83,7 @@ zeta-desktop:
 
 # Launch the pure-Rust app Desktop product.
 app:
+    {{ python }} -B scripts/cargo.py build -p zeta-app-server --bin zeta-app-server
     {{ python }} -B scripts/cargo.py run -p app
 
 # Check every pure-Rust app target with the locked sandbox-enabled V8 inputs.

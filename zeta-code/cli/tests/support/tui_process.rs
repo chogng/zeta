@@ -76,7 +76,7 @@ impl Fixture {
             ("ZETA_PROFILE_ROOT", self.profile.clone()),
             ("ZETA_WORKSPACE_ROOT", self.workspace.clone()),
             ("CODEX_HOME", self.codex_home()),
-            ("ZETA_APP_SERVER_DAEMON_PATH", self.daemon.clone()),
+            ("ZETA_APP_SERVER_PATH", self.daemon.clone()),
         ];
         #[cfg(windows)]
         let environment = {

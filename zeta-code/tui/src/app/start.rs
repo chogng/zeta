@@ -115,7 +115,7 @@ pub(super) fn start(
         input_catalog,
         startup_context,
     );
-    let profile_root = profile_root.unwrap_or_else(zeta_app_server::local_profile_root);
+    let profile_root = profile_root.unwrap_or_else(zeta_install_context::local_profile_root);
     let history = (|| {
         let runtime =
             state::StateRuntime::open(&profile_root).map_err(|error| error.to_string())?;

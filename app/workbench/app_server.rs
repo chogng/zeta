@@ -12,10 +12,10 @@ pub(crate) use host::AppServerHost;
 #[cfg(test)]
 pub(crate) use host::local_app_server_command;
 
-pub(crate) use zeta_app_server::local_profile_root;
 pub(crate) use zeta_app_server_client::AppServerRequestHandle;
 pub(crate) use zeta_app_server_client::ClientError;
 pub(crate) use zeta_app_server_client::ServerNotification;
+pub(crate) use zeta_install_context::local_profile_root;
 
 #[cfg(test)]
 pub(crate) mod testing {

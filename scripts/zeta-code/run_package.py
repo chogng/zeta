@@ -92,12 +92,12 @@ def main(arguments: list[str] | None = None) -> int:
 
     package_root = current_package()
     suffix = ".exe" if os.name == "nt" else ""
-    daemon = package_root / "bin" / f"zeta-app-server-daemon{suffix}"
+    backend = package_root / "bin" / f"zeta-app-server{suffix}"
     product_services = (
         package_root / "zeta-resources/product-services/product-services.json"
     )
-    if not daemon.is_file():
-        raise RuntimeError(f"Zeta App Server daemon is missing: {daemon}")
+    if not backend.is_file():
+        raise RuntimeError(f"Zeta App Server backend is missing: {backend}")
     if not product_services.is_file():
         raise RuntimeError(f"Zeta product services are missing: {product_services}")
 
@@ -106,7 +106,7 @@ def main(arguments: list[str] | None = None) -> int:
         return returncode
     executable = run.stage_runtime(built)["zeta"]
     environment = environment.copy()
-    environment["ZETA_APP_SERVER_DAEMON_PATH"] = str(daemon.resolve())
+    environment["ZETA_APP_SERVER_PATH"] = str(backend.resolve())
     environment["ZETA_PRODUCT_SERVICES_PATH"] = str(product_services.resolve())
     return subprocess.run(
         [str(executable), *(arguments or [])],

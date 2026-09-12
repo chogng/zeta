@@ -3,13 +3,13 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use anyhow::anyhow;
-use zeta_app_server::local_profile_root;
 use zeta_app_server_client::AppServerSession;
 use zeta_app_server_client::StdioAppServerCommand;
-use zeta_app_server_daemon::DAEMON_PATH_ENV;
+use zeta_app_server_daemon::APP_SERVER_PATH_ENV;
 use zeta_app_server_protocol::protocol::common::ClientCapabilities;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::common::DirPermissionsHostCapability;
+use zeta_install_context::local_profile_root;
 use zeta_remote::RemoteDirPath;
 use zeta_remote::RemoteProfile;
 use zeta_remote::SshHost;
@@ -121,7 +121,10 @@ impl AppServerHost {
             AppServerBackend::Local { cwd } => {
                 let executable = std::env::current_exe()
                     .map_err(|error| anyhow!("could not resolve app executable: {error}"))?;
-                let daemon_executable = development_daemon_executable(&executable);
+                let daemon_executable = Some(
+                    zeta_app_server_daemon::backend_executable_path()
+                        .map_err(|error| anyhow!(error))?,
+                );
                 let command = local_app_server_command(
                     executable,
                     local_profile_root(),
@@ -183,18 +186,9 @@ pub(crate) fn local_app_server_command(
         .with_environment_variable("ZETA_PROFILE_ROOT", profile_root.into_os_string())
         .with_environment_variable("ZETA_WORKSPACE_ROOT", dir_root.as_os_str().to_os_string());
     match daemon_executable {
-        Some(daemon_executable) => {
-            command.with_environment_variable(DAEMON_PATH_ENV, daemon_executable.into_os_string())
-        }
+        Some(daemon_executable) => command
+            .with_environment_variable(APP_SERVER_PATH_ENV, daemon_executable.into_os_string()),
         None => command,
-    }
-}
-
-fn development_daemon_executable(app_executable: &Path) -> Option<PathBuf> {
-    if cfg!(debug_assertions) && std::env::var_os(DAEMON_PATH_ENV).is_none() {
-        Some(app_executable.to_path_buf())
-    } else {
-        None
     }
 }
 

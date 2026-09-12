@@ -15,33 +15,26 @@ name = "zeta_app_server_daemon"
 path = "src/lib.rs"
 
 [dependencies]
-arg0 = { workspace = true }
-queue = { workspace = true }
+signal-hook = { workspace = true }
+zeta-install-context = { workspace = true }
 process-hardening = { workspace = true }
 build-info = { workspace = true }
-zeta-automation = { workspace = true }
-zeta-protocol = { workspace = true }
 dunce = { workspace = true }
 libc = { workspace = true }
 rustix = { workspace = true, features = ["process"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-signal-hook = { workspace = true }
-zeta-app-server = { workspace = true }
-zeta-app-server-client = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
 zeta-app-server-transport = { workspace = true }
-zeta-fast-regex-search = { workspace = true }
 zeta-package-store = { workspace = true }
 zeta-uds = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { workspace = true, features = ["Win32_System_Threading"] }
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_Threading"] }
 
 [dev-dependencies]
-zeta-file-access = { workspace = true }
 tempfile = { workspace = true }
 
-[lints]
-workspace = true
+[lints.rust]
+unsafe_code = "deny"

@@ -137,7 +137,7 @@ automation 通过窄的执行请求和结果契约与现有 Agent 能力协作�
 | [时间协议](../protocol/src/automation.rs) | 使用有界 Unix 毫秒整数；不依赖日期库 |
 | [管理协议](../app-server-protocol/src/protocol/automation.rs) | list、write、delete、run、runs、stop 六个方法；`automation/changed` 通知 |
 | [Agent 执行接入](../app-server/src/server/automation_execution.rs) | 稳定命令身份查找原 Thread/Turn，使用已有执行和中断入口；结果未确认时不新建另一次执行 |
-| [后台宿主](../app-server-daemon/src/daemon.rs) | 启用中且有下次运行的计划，以及未结束运行，均阻止空闲退出 |
+| [后台宿主](../app-server/src/managed.rs) | 启用中且有下次运行的计划，以及未结束运行，均阻止空闲退出 |
 | [管理面板](../../zeta-ts/src/zeta/workbench/contrib/automation/browser/automationViewPane.ts) | 创建、编辑、暂停、立即运行、停止、历史及打开关联 Chat |
 | [Renderer 协议客户端](../../zeta-ts/src/zeta/platform/app-server/browser/appServerProtocolClient.ts) | 每个窗口独立连接，负责初始化、生成协议解码、请求表、通知和反向请求 |
 | [Main 连接载体](../../zeta-ts/src/zeta/platform/app-server/electron-main/appServerConnectionRelay.ts) | 启动连接进程、传递 MessagePort、限制帧大小与队列；不分派后端方法 |

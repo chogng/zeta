@@ -31,11 +31,12 @@ fn daemon_keeps_a_directory_connection_open_after_initialize() {
     let profile = root.path().join("p");
     let dir = root.path().join("dir");
     let product_services = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/product-services.json");
+        .join("tests/fixtures/managed-product-services.json");
     fs::create_dir(&profile).unwrap();
     fs::create_dir(&dir).unwrap();
     let endpoint = daemon_endpoint_path(&profile).unwrap();
-    let daemon = Command::new(env!("CARGO_BIN_EXE_zeta-app-server-daemon"))
+    let daemon = Command::new(env!("CARGO_BIN_EXE_zeta-app-server"))
+        .arg(zeta_app_server_daemon::MANAGED_PROCESS_ARGUMENT)
         .env("ZETA_PROFILE_ROOT", &profile)
         .env("ZETA_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "5000")
         .spawn()

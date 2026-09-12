@@ -15,13 +15,13 @@ class PackageRunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             package = Path(temporary) / "package"
             suffix = ".exe" if run_package.os.name == "nt" else ""
-            daemon = package / "bin" / f"zeta-app-server-daemon{suffix}"
+            backend = package / "bin" / f"zeta-app-server{suffix}"
             product_services = (
                 package / "zeta-resources/product-services/product-services.json"
             )
-            daemon.parent.mkdir(parents=True)
+            backend.parent.mkdir(parents=True)
             product_services.parent.mkdir(parents=True)
-            daemon.touch()
+            backend.touch()
             product_services.touch()
             built = Path(temporary) / "built-zeta"
             staged = Path(temporary) / "staged-zeta"
@@ -47,7 +47,7 @@ class PackageRunnerTests(unittest.TestCase):
                 ]
 
                 self.assertEqual(
-                    run_package.main(["app-server", "daemon", "version"]), 0
+                    run_package.main(["app-server", "backend", "version"]), 0
                 )
 
             build.assert_called_once_with(["zeta"], environment)
@@ -60,11 +60,11 @@ class PackageRunnerTests(unittest.TestCase):
                         check=False,
                     ),
                     call(
-                        [str(staged), "app-server", "daemon", "version"],
+                        [str(staged), "app-server", "backend", "version"],
                         cwd=run_package.run.REPOSITORY_ROOT,
                         env={
                             **environment,
-                            "ZETA_APP_SERVER_DAEMON_PATH": str(daemon.resolve()),
+                            "ZETA_APP_SERVER_PATH": str(backend.resolve()),
                             "ZETA_PRODUCT_SERVICES_PATH": str(
                                 product_services.resolve()
                             ),

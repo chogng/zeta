@@ -68,9 +68,8 @@ mod tests;
 mod protocol_schema_tests;
 
 mod product_discovery;
-mod profile;
 mod startup;
-pub use product_discovery::discovered_product_services_path;
 pub use product_discovery::load_discovered_product_services;
-pub use profile::local_profile_root;
 pub use startup::run;
+
+mod managed;

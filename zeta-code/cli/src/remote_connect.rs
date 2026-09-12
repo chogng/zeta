@@ -3,7 +3,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use serde::Serialize;
-use zeta_app_server::local_profile_root;
+use zeta_install_context::local_profile_root;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
 use zeta_remote::RemoteDirPath;

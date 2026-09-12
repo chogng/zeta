@@ -30,3 +30,16 @@ fn lifecycle_and_connection_commands_preserve_explicit_product_services() {
         assert!(parse(&arguments.into_iter().map(Into::into).collect::<Vec<_>>()).is_err());
     }
 }
+
+#[test]
+fn packaged_backend_digest_rejects_a_changed_executable_before_launch() {
+    use sha2::Digest;
+    let root = tempfile::tempdir().unwrap();
+    let executable = root.path().join("backend");
+    std::fs::write(&executable, b"signed backend").unwrap();
+    let expected = format!("{:x}", sha2::Sha256::digest(b"signed backend"));
+    super::validate_backend_digest(&executable, &expected).unwrap();
+    std::fs::write(&executable, b"changed backend").unwrap();
+    assert!(super::validate_backend_digest(&executable, &expected).is_err());
+    assert!(super::validate_backend_digest(&executable, "invalid").is_err());
+}

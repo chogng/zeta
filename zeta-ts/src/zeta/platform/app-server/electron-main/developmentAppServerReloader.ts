@@ -45,7 +45,7 @@ export class DevelopmentAppServerReloader extends Disposable {
 	async reloadNow(): Promise<void> {
 		if (this.isDisposed) return;
 		const executable = await this.readGeneration(this.options.generationFile);
-		if (!executable || executable === this.options.launcher.executable) return;
+		if (!executable || executable === this.options.launcher.environment.ZETA_APP_SERVER_PATH) return;
 		this.pendingExecutable = executable;
 		await this.ensureDrain();
 	}
@@ -65,7 +65,7 @@ export class DevelopmentAppServerReloader extends Disposable {
 			if (!isStableState(this.options.supervisor.state)) return;
 			this.pendingExecutable = undefined;
 			if (this.options.supervisor.state === "stopped") {
-				this.options.launcher.replaceExecutable(executable);
+				this.options.launcher.replaceEnvironment({ ...this.options.launcher.environment, ZETA_APP_SERVER_PATH: executable });
 				this.log(`[app-server] Selected ${basename(executable)} for initial startup`);
 				continue;
 			}
@@ -135,15 +135,15 @@ export async function restartDevelopmentAppServer(
 	launcher: LocalAppServerProcessLauncher,
 	executable: string,
 ): Promise<void> {
-	if (launcher.executable === executable) return;
-	const previous = launcher.executable;
+	if (launcher.environment.ZETA_APP_SERVER_PATH === executable) return;
+	const previous = launcher.environment;
 	await supervisor.stop();
-	launcher.replaceExecutable(executable);
+	launcher.replaceEnvironment({ ...launcher.environment, ZETA_APP_SERVER_PATH: executable });
 	try {
 		await supervisor.start();
 	} catch (error) {
 		await supervisor.stop().catch(() => {});
-		launcher.replaceExecutable(previous);
+		launcher.replaceEnvironment(previous);
 		try {
 			await supervisor.start();
 		} catch (rollbackError) {
@@ -169,7 +169,7 @@ function isExactGeneration(value: unknown): value is { readonly version: 1; read
 	if (Object.keys(record).sort().join(",") !== "executable,version") return false;
 	if (record.version !== 1 || typeof record.executable !== "string") return false;
 	return record.executable === basename(record.executable)
-		&& /^zeta-app-server-daemon(?:\.\d+\.\d+|\.[a-f0-9]{64})(?:\.exe)?$/u.test(record.executable);
+		&& /^zeta-app-server(?:\.\d+\.\d+|\.[a-f0-9]{64})(?:\.exe)?$/u.test(record.executable);
 }
 
 function parseDevelopmentAppServerGeneration(generationFile: string, contents: string): string {

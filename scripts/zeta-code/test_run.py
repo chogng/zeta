@@ -35,14 +35,14 @@ class SourceRunnerTests(unittest.TestCase):
         )
 
     def test_build_binaries_uses_one_cargo_invocation(self) -> None:
-        binaries = ["zeta", "zeta-app-server-daemon"]
+        binaries = ["zeta", "zeta-app-server"]
         with (
             tempfile.TemporaryDirectory() as temporary,
             patch.object(run, "built_executable") as built_executable,
             patch.object(run.subprocess, "run") as subprocess_run,
         ):
             first = Path(temporary) / "zeta"
-            second = Path(temporary) / "zeta-app-server-daemon"
+            second = Path(temporary) / "zeta-app-server"
             first.touch()
             second.touch()
             built_executable.side_effect = [first, second]
@@ -50,7 +50,7 @@ class SourceRunnerTests(unittest.TestCase):
 
             self.assertEqual(
                 run.build_binaries(binaries, {"CARGO_BUILD_JOBS": "4"}),
-                (0, {"zeta": first, "zeta-app-server-daemon": second}),
+                (0, {"zeta": first, "zeta-app-server": second}),
             )
 
         subprocess_run.assert_called_once_with(
@@ -65,7 +65,7 @@ class SourceRunnerTests(unittest.TestCase):
                 "--bin",
                 "zeta",
                 "--bin",
-                "zeta-app-server-daemon",
+                "zeta-app-server",
             ],
             cwd=run.REPOSITORY_ROOT,
             env={"CARGO_BUILD_JOBS": "4"},
@@ -118,7 +118,7 @@ class SourceRunnerTests(unittest.TestCase):
     def _executables(root: Path) -> dict[str, Path]:
         return {
             "zeta": root / "zeta.exe",
-            "zeta-app-server-daemon": root / "zeta-app-server-daemon.exe",
+            "zeta-app-server": root / "zeta-app-server.exe",
         }
 
 

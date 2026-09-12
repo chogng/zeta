@@ -15,6 +15,7 @@ interface ZetaPackageMetadata {
 	readonly buildId?: unknown;
 	readonly components?: {
 		readonly appServerDaemon?: { readonly binarySha256?: unknown };
+		readonly appServer?: { readonly binarySha256?: unknown };
 	};
 	readonly entrypoint?: unknown;
 	readonly layoutVersion?: unknown;
@@ -28,6 +29,15 @@ interface ZetaPackageMetadata {
 
 /** Reads the digest bound to the signed product package; development generations use protocol negotiation. */
 export function packagedAppServerDaemonSha256(location: AppServerPackageLocation): string | undefined {
+	return packagedComponentSha256(location, "appServerDaemon");
+}
+
+/** Reads the separately signed managed backend digest. */
+export function packagedAppServerSha256(location: AppServerPackageLocation): string | undefined {
+	return packagedComponentSha256(location, "appServer");
+}
+
+function packagedComponentSha256(location: AppServerPackageLocation, component: "appServer" | "appServerDaemon"): string | undefined {
 	if (!location.isPackaged) return undefined;
 	const packageRoot = appServerPackageRoot(location);
 	const metadataPath = join(packageRoot, "zeta-package.json");
@@ -37,7 +47,7 @@ export function packagedAppServerDaemonSha256(location: AppServerPackageLocation
 	}
 	const metadata = JSON.parse(readFileSync(metadataPath, "utf8")) as ZetaPackageMetadata;
 	const expectedEntrypoint = `bin/${location.platform === "win32" ? "zeta-app-server.exe" : "zeta-app-server"}`;
-	const digest = metadata.components?.appServerDaemon?.binarySha256;
+	const digest = metadata.components?.[component]?.binarySha256;
 	const protocolMatchesDesktop = metadata.protocol?.major === APP_SERVER_PROTOCOL_MAJOR
 		&& metadata.protocol.revision === APP_SERVER_PROTOCOL_REVISION
 		&& metadata.protocol.schemaHash === APP_SERVER_SCHEMA_HASH;
@@ -67,4 +77,9 @@ export function developmentAppServerGenerationPath(appPath: string): string {
 /** Resolves the local Remote management executable from the product package. */
 export function remoteExecutablePath(location: AppServerPackageLocation): string {
 	return join(appServerPackageRoot(location), "bin", location.platform === "win32" ? "zeta-remote.exe" : "zeta-remote");
+}
+
+/** Resolves the managed App Server executable independently of its lifecycle command carrier. */
+export function appServerExecutablePath(location: AppServerPackageLocation): string {
+	return join(appServerPackageRoot(location), "bin", location.platform === "win32" ? "zeta-app-server.exe" : "zeta-app-server");
 }

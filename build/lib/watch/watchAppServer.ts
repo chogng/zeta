@@ -89,7 +89,7 @@ async function drainBuilds(): Promise<void> {
 }
 
 async function buildAndPublish(): Promise<void> {
-  console.log("[app-server] Building zeta-app-server-daemon");
+  console.log("[app-server] Building zeta-app-server");
   const source = await runCargo();
   const published = await publishAppServerGeneration(source, generationDirectory, generationFile, process.platform);
   console.log(published.changed ? `[app-server] Published ${published.generation}` : `[app-server] Unchanged ${published.generation}`);
@@ -102,8 +102,8 @@ function runCargo(): Promise<string> {
     const child = spawn("cargo", [
       "build",
       "--manifest-path", cargoWorkspace,
-      "--package", "zeta-app-server-daemon",
-      "--bin", "zeta-app-server-daemon",
+      "--package", "zeta-app-server",
+      "--bin", "zeta-app-server",
       "--profile", "dev-small",
       "--target-dir", targetDirectory,
       "--message-format", "json-render-diagnostics",
@@ -114,7 +114,7 @@ function runCargo(): Promise<string> {
       const message = parseCargoMessage(line);
       const diagnostic = cargoRenderedDiagnostic(message);
       if (diagnostic) process.stderr.write(diagnostic);
-      executable = cargoArtifactExecutable(message, "zeta-app-server-daemon") ?? executable;
+      executable = cargoArtifactExecutable(message, "zeta-app-server") ?? executable;
     });
     child.once("error", error => {
       if (settled) return;
@@ -129,7 +129,7 @@ function runCargo(): Promise<string> {
       if (code !== 0) {
         reject(new Error(signal ? `cargo build stopped by ${signal}` : `cargo build exited with status ${code ?? "unknown"}`));
       } else if (!executable) {
-        reject(new Error("cargo build did not report the zeta-app-server-daemon executable"));
+        reject(new Error("cargo build did not report the zeta-app-server executable"));
       } else {
         resolvePromise(executable);
       }
@@ -139,7 +139,7 @@ function runCargo(): Promise<string> {
 
 export async function publishAppServerGeneration(source: string, directory: string, pointer: string, platform: NodeJS.Platform = process.platform): Promise<Readonly<{ changed: boolean; generation: string }>> {
   const digest = await sha256(source);
-  const generation = platform === "win32" ? `zeta-app-server-daemon.${digest}.exe` : `zeta-app-server-daemon.${digest}`;
+  const generation = platform === "win32" ? `zeta-app-server.${digest}.exe` : `zeta-app-server.${digest}`;
   const executable = join(directory, generation);
   await mkdir(directory, { recursive: true });
   const current = await readCurrentGeneration(pointer);
@@ -177,7 +177,7 @@ async function pruneGenerations(directory: string, current: string): Promise<voi
   if (!await pathExists(join(directory, current))) return;
   const entries = await readdir(directory, { withFileTypes: true });
   const generations = await Promise.all(entries
-    .filter(entry => entry.isFile() && entry.name.startsWith("zeta-app-server-daemon.") && entry.name !== current)
+    .filter(entry => entry.isFile() && entry.name.startsWith("zeta-app-server.") && entry.name !== current)
     .map(async entry => ({ name: entry.name, modified: (await stat(join(directory, entry.name))).mtimeMs })));
   generations.sort((left, right) => right.modified - left.modified || right.name.localeCompare(left.name));
   const retainedDigests = new Set([await generationDigest(directory, current)]);
@@ -194,7 +194,7 @@ async function pruneGenerations(directory: string, current: string): Promise<voi
 }
 
 async function generationDigest(directory: string, generation: string): Promise<string> {
-  const addressed = generation.match(/^zeta-app-server-daemon\.([a-f0-9]{64})(?:\.exe)?$/u)?.[1];
+  const addressed = generation.match(/^zeta-app-server\.([a-f0-9]{64})(?:\.exe)?$/u)?.[1];
   return addressed ?? sha256(join(directory, generation));
 }
 

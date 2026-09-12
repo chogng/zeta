@@ -54,3 +54,23 @@ fn lifecycle_errors_include_only_the_bounded_log_tail() {
     assert!(error.ends_with("useful tail"));
     assert!(error.len() < 5000);
 }
+
+#[cfg(unix)]
+#[test]
+fn failed_initialization_reaps_only_the_new_backend() {
+    use crate::ConnectionOptions;
+    use crate::GrantSource;
+    use crate::LifecycleCommand;
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = tempfile::tempdir().unwrap();
+    let executable = root.path().join("failed-backend");
+    std::fs::write(&executable, "#!/bin/sh\nexit 23\n").unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let options = ConnectionOptions::new(root.path(), None, GrantSource::HostConfiguration, None);
+    let error = super::run_lifecycle(LifecycleCommand::Start, options, &executable).unwrap_err();
+    assert!(error.contains("exited before initialization"), "{error}");
+    let endpoint = EndpointPaths::prepare(root.path()).unwrap();
+    assert!(!endpoint.pid.exists());
+    assert!(!endpoint.socket.exists());
+}

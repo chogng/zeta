@@ -9,14 +9,14 @@ import { publishAppServerGeneration, relativeWatchedDirectory, shouldRebuildAppS
 
 test("reads executable paths and diagnostics from Cargo JSON messages", () => {
   const artifact = parseCargoMessage(JSON.stringify({
-    executable: "/custom/target/aarch64-apple-darwin/dev-small/zeta-app-server-daemon",
+    executable: "/custom/target/aarch64-apple-darwin/dev-small/zeta-app-server",
     reason: "compiler-artifact",
-    target: { kind: ["bin"], name: "zeta-app-server-daemon" },
+    target: { kind: ["bin"], name: "zeta-app-server" },
   }));
   assert.ok(artifact && typeof artifact === "object");
-  assert.equal(cargoArtifactExecutable(artifact, "zeta-app-server-daemon"), "/custom/target/aarch64-apple-darwin/dev-small/zeta-app-server-daemon");
+  assert.equal(cargoArtifactExecutable(artifact, "zeta-app-server"), "/custom/target/aarch64-apple-darwin/dev-small/zeta-app-server");
   assert.equal(cargoArtifactExecutable(artifact, "other"), undefined);
-  assert.equal(cargoArtifactExecutable({ ...artifact, executable: null }, "zeta-app-server-daemon"), undefined);
+  assert.equal(cargoArtifactExecutable({ ...artifact, executable: null }, "zeta-app-server"), undefined);
   assert.equal(cargoRenderedDiagnostic({ reason: "compiler-message", message: { rendered: "warning\n" } }), "warning\n");
   assert.equal(parseCargoMessage("not JSON"), undefined);
 });
@@ -26,7 +26,7 @@ test("app-server watcher selects Rust sources and Cargo manifests", () => {
   assert.equal(shouldRebuildAppServer("zeta-rs/app-server/build.rs"), true);
   assert.equal(shouldRebuildAppServer("zeta-rs/app-server/Cargo.toml"), true);
   assert.equal(shouldRebuildAppServer("Cargo.lock"), true);
-  assert.equal(shouldRebuildAppServer("target/debug/zeta-app-server-daemon"), false);
+  assert.equal(shouldRebuildAppServer("target/debug/zeta-app-server"), false);
   assert.equal(shouldRebuildAppServer("target/debug/build/generated/out/schema.rs"), false);
   assert.equal(shouldRebuildAppServer("crate/target/debug/build/generated/out/schema.rs"), false);
   assert.equal(shouldRebuildAppServer("zeta-ts/src/main.ts"), false);
@@ -51,8 +51,8 @@ test("workspace-root watcher accepts only canonical root manifests", () => {
 });
 
 test("app-server publisher reuses identical content and retains one rollback generation", async () => {
-  const root = await mkdtemp(join(tmpdir(), "zeta-app-server-daemon-publisher-"));
-  const source = join(root, "target", "debug", "zeta-app-server-daemon");
+  const root = await mkdtemp(join(tmpdir(), "zeta-app-server-publisher-"));
+  const source = join(root, "target", "debug", "zeta-app-server");
   const generations = join(root, "generations");
   const pointer = join(generations, "current.json");
   try {
@@ -60,12 +60,12 @@ test("app-server publisher reuses identical content and retains one rollback gen
     await writeFile(source, "one");
     const first = await publishAppServerGeneration(source, generations, pointer, "darwin");
     assert.equal(first.changed, true);
-    assert.match(first.generation, /^zeta-app-server-daemon\.[a-f0-9]{64}$/u);
-    assert.equal((await readdir(generations)).filter(name => name.startsWith("zeta-app-server-daemon.")).length, 1);
+    assert.match(first.generation, /^zeta-app-server\.[a-f0-9]{64}$/u);
+    assert.equal((await readdir(generations)).filter(name => name.startsWith("zeta-app-server.")).length, 1);
 
     const unchanged = await publishAppServerGeneration(source, generations, pointer, "darwin");
     assert.deepEqual(unchanged, { changed: false, generation: first.generation });
-    assert.equal((await readdir(generations)).filter(name => name.startsWith("zeta-app-server-daemon.")).length, 1);
+    assert.equal((await readdir(generations)).filter(name => name.startsWith("zeta-app-server.")).length, 1);
 
     await writeFile(source, "two");
     const second = await publishAppServerGeneration(source, generations, pointer, "darwin");
@@ -73,7 +73,7 @@ test("app-server publisher reuses identical content and retains one rollback gen
     await utimes(join(generations, second.generation), new Date(2_000), new Date(2_000));
     await writeFile(source, "three");
     const third = await publishAppServerGeneration(source, generations, pointer, "darwin");
-    const published = (await readdir(generations)).filter(name => name.startsWith("zeta-app-server-daemon.")).sort();
+    const published = (await readdir(generations)).filter(name => name.startsWith("zeta-app-server.")).sort();
     assert.deepEqual(published, [second.generation, third.generation].sort());
     assert.deepEqual(JSON.parse(await readFile(pointer, "utf8")), { version: 1, executable: third.generation });
   } finally {
@@ -82,22 +82,22 @@ test("app-server publisher reuses identical content and retains one rollback gen
 });
 
 test("app-server publisher removes duplicate legacy generations while preserving distinct rollback content", async () => {
-  const root = await mkdtemp(join(tmpdir(), "zeta-app-server-daemon-publisher-"));
-  const source = join(root, "target", "debug", "zeta-app-server-daemon");
+  const root = await mkdtemp(join(tmpdir(), "zeta-app-server-publisher-"));
+  const source = join(root, "target", "debug", "zeta-app-server");
   const generations = join(root, "generations");
   const pointer = join(generations, "current.json");
   try {
     await mkdir(join(root, "target", "debug"), { recursive: true });
     await mkdir(generations);
     await writeFile(source, "current");
-    await writeFile(join(generations, "zeta-app-server-daemon.100.0"), "rollback");
-    await writeFile(join(generations, "zeta-app-server-daemon.200.0"), "current");
-    await writeFile(join(generations, "zeta-app-server-daemon.300.0"), "current");
-    await writeFile(pointer, `${JSON.stringify({ version: 1, executable: "zeta-app-server-daemon.300.0" })}\n`);
+    await writeFile(join(generations, "zeta-app-server.100.0"), "rollback");
+    await writeFile(join(generations, "zeta-app-server.200.0"), "current");
+    await writeFile(join(generations, "zeta-app-server.300.0"), "current");
+    await writeFile(pointer, `${JSON.stringify({ version: 1, executable: "zeta-app-server.300.0" })}\n`);
 
     const published = await publishAppServerGeneration(source, generations, pointer, "darwin");
-    const files = (await readdir(generations)).filter(name => name.startsWith("zeta-app-server-daemon.")).sort();
-    assert.deepEqual(files, ["zeta-app-server-daemon.100.0", published.generation].sort());
+    const files = (await readdir(generations)).filter(name => name.startsWith("zeta-app-server.")).sort();
+    assert.deepEqual(files, ["zeta-app-server.100.0", published.generation].sort());
   } finally {
     await rm(root, { force: true, recursive: true });
   }

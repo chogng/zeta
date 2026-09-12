@@ -6,7 +6,9 @@ use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Child;
 use std::process::Command;
+use std::process::ExitStatus;
 use std::process::Stdio;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -17,7 +19,6 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::process::CommandExt;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
-#[cfg(unix)]
 use std::thread;
 #[cfg(unix)]
 use std::time::Duration;
@@ -30,7 +31,7 @@ use zeta_package_store::PackageLease;
 use zeta_package_store::acquire_package_lease_for_executable;
 
 use crate::ConnectionOptions;
-use crate::DAEMON_PROCESS_ARGUMENT;
+use crate::MANAGED_PROCESS_ARGUMENT;
 use crate::endpoint::EndpointPaths;
 
 const MAX_PID_RECORD_BYTES: u64 = 16 * 1024;
@@ -63,12 +64,16 @@ pub(crate) struct ExecutableIdentity {
 }
 
 impl ExecutableIdentity {
+    pub(crate) fn matches_sha256(&self, expected: &str) -> bool {
+        self.sha256 == expected
+    }
+
     pub(crate) fn same_contents(&self, other: &Self) -> bool {
         !self.sha256.is_empty() && self.sha256 == other.sha256
     }
 }
 
-pub(crate) struct DaemonExecutable {
+pub(crate) struct BackendExecutable {
     pub(crate) path: PathBuf,
     pub(crate) identity: ExecutableIdentity,
     _package_lease: Option<PackageLease>,
@@ -77,7 +82,10 @@ pub(crate) struct DaemonExecutable {
 impl ProcessRecord {
     pub(crate) fn current(endpoint: &EndpointPaths) -> Result<Self, String> {
         let pid = std::process::id();
-        let process_start_identity = process_start_identity(pid)?;
+        let process_start_identity = Some(
+            process_start_identity(pid)?
+                .ok_or("current backend process has no live start identity")?,
+        );
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|error| error.to_string())?
@@ -117,20 +125,20 @@ pub(crate) fn executable_identity(path: &Path) -> Result<ExecutableIdentity, Str
     })
 }
 
-pub(crate) fn resolve_daemon_executable(
-    daemon_executable: &Path,
-) -> Result<DaemonExecutable, String> {
-    let metadata = fs::symlink_metadata(daemon_executable).map_err(io_error)?;
+pub(crate) fn resolve_backend_executable(
+    backend_executable: &Path,
+) -> Result<BackendExecutable, String> {
+    let metadata = fs::symlink_metadata(backend_executable).map_err(io_error)?;
     if metadata.file_type().is_symlink() || !metadata.is_file() {
         return Err(format!(
             "Local App Server daemon is not a regular executable: {}",
-            daemon_executable.display()
+            backend_executable.display()
         ));
     }
-    let path = dunce::canonicalize(daemon_executable).map_err(io_error)?;
+    let path = dunce::canonicalize(backend_executable).map_err(io_error)?;
     let package_lease = acquire_package_lease_for_executable(&path).map_err(io_error)?;
     let identity = executable_identity(&path)?;
-    Ok(DaemonExecutable {
+    Ok(BackendExecutable {
         path,
         identity,
         _package_lease: package_lease,
@@ -139,7 +147,7 @@ pub(crate) fn resolve_daemon_executable(
 
 pub(crate) struct ProcessRecordGuard {
     path: PathBuf,
-    instance_id: String,
+    record: ProcessRecord,
 }
 
 impl ProcessRecordGuard {
@@ -147,9 +155,12 @@ impl ProcessRecordGuard {
         let temp = path.with_extension(format!("{}.tmp", record.instance_id));
         let contents = serde_json::to_vec(record).map_err(|error| error.to_string())?;
         let mut file = open_private_record(&temp)?;
-        file.write_all(&contents).map_err(io_error)?;
-        file.sync_all().map_err(io_error)?;
+        let written = file.write_all(&contents).and_then(|_| file.sync_all());
         drop(file);
+        if let Err(error) = written {
+            let _ = fs::remove_file(&temp);
+            return Err(io_error(error));
+        }
         if cfg!(windows) && path.exists() {
             fs::remove_file(path).map_err(io_error)?;
         }
@@ -159,7 +170,7 @@ impl ProcessRecordGuard {
         }
         Ok(Self {
             path: path.to_path_buf(),
-            instance_id: record.instance_id.clone(),
+            record: record.clone(),
         })
     }
 }
@@ -169,7 +180,7 @@ impl Drop for ProcessRecordGuard {
         if read_process_record(&self.path)
             .ok()
             .flatten()
-            .is_some_and(|record| record.instance_id == self.instance_id)
+            .is_some_and(|record| record == self.record)
         {
             let _ = fs::remove_file(&self.path);
         }
@@ -194,7 +205,21 @@ pub(crate) fn read_process_record(path: &Path) -> Result<Option<ProcessRecord>, 
         .map_err(|error| format!("invalid Local App Server process record: {error}"))
 }
 
-pub(crate) fn remove_stale_process_record(path: &Path) -> Result<(), String> {
+pub(crate) fn record_is_active(record: &ProcessRecord) -> Result<bool, String> {
+    let expected = record
+        .process_start_identity
+        .as_ref()
+        .ok_or("managed process record has no start identity")?;
+    Ok(process_start_identity(record.pid)?.as_ref() == Some(expected))
+}
+
+pub(crate) fn remove_matching_process_record(
+    path: &Path,
+    expected: &ProcessRecord,
+) -> Result<(), String> {
+    if read_process_record(path)?.as_ref() != Some(expected) {
+        return Ok(());
+    }
     match fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
@@ -202,23 +227,90 @@ pub(crate) fn remove_stale_process_record(path: &Path) -> Result<(), String> {
     }
 }
 
-pub(crate) fn spawn_daemon(
+pub(crate) fn remove_stale_process_record(path: &Path) -> Result<(), String> {
+    if let Some(record) = read_process_record(path)? {
+        if record_is_active(&record)? {
+            return Err("managed backend is alive but its control endpoint is unavailable".into());
+        }
+        remove_matching_process_record(path, &record)?;
+    }
+    Ok(())
+}
+
+/// Owns an unready child. Every unsuccessful launch terminates and reaps that exact child.
+pub(crate) struct SpawnedBackend {
+    child: Option<Child>,
+    endpoint: EndpointPaths,
+    start_identity: Option<String>,
+}
+
+impl SpawnedBackend {
+    pub(crate) fn exit_status(&mut self) -> Result<Option<ExitStatus>, String> {
+        self.child.as_mut().unwrap().try_wait().map_err(io_error)
+    }
+
+    pub(crate) fn release(mut self) {
+        let mut child = self.child.take().unwrap();
+        // Reap the child if this controller outlives it; the service itself is independently managed.
+        thread::spawn(move || {
+            let _ = child.wait();
+        });
+    }
+
+    pub(crate) fn abort(&mut self) -> Result<(), String> {
+        let Some(child) = self.child.as_mut() else {
+            return Ok(());
+        };
+        let pid = child.id();
+        if child.try_wait().map_err(io_error)?.is_none() {
+            child.kill().map_err(io_error)?;
+        }
+        child.wait().map_err(io_error)?;
+        self.child.take();
+        if let Some(record) = read_process_record(&self.endpoint.pid)?
+            && record.pid == pid
+            && self.start_identity.is_some()
+            && record.process_start_identity == self.start_identity
+        {
+            remove_matching_process_record(&self.endpoint.pid, &record)?;
+            // Only the failed child's generation may lose its stale socket.
+            if read_process_record(&self.endpoint.pid)?.is_none()
+                && crate::endpoint::connect_existing(&self.endpoint.socket)?.is_none()
+            {
+                drop(crate::endpoint::SocketCleanup::new(
+                    self.endpoint.socket.clone(),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Drop for SpawnedBackend {
+    fn drop(&mut self) {
+        if let Err(error) = self.abort() {
+            eprintln!("failed to clean up unready backend: {error}");
+        }
+    }
+}
+
+pub(crate) fn spawn_backend(
     endpoint: &EndpointPaths,
     options: &ConnectionOptions,
-    daemon_executable: &Path,
-) -> Result<u32, String> {
-    let metadata = fs::symlink_metadata(daemon_executable).map_err(io_error)?;
+    backend_executable: &Path,
+) -> Result<SpawnedBackend, String> {
+    let metadata = fs::symlink_metadata(backend_executable).map_err(io_error)?;
     if metadata.file_type().is_symlink() || !metadata.is_file() {
         return Err(format!(
             "Local App Server daemon is not a regular executable: {}",
-            daemon_executable.display()
+            backend_executable.display()
         ));
     }
     let log = endpoint.open_log()?;
     let error_log = log.try_clone().map_err(io_error)?;
-    let mut command = Command::new(daemon_executable);
+    let mut command = Command::new(backend_executable);
     command
-        .arg(DAEMON_PROCESS_ARGUMENT)
+        .arg(MANAGED_PROCESS_ARGUMENT)
         .env(PROFILE_ROOT_ENV, options.profile_root())
         .env_remove(DIR_ROOT_ENV)
         .env_remove(DIR_GRANT_SOURCE_ENV)
@@ -226,7 +318,14 @@ pub(crate) fn spawn_daemon(
         .stdout(Stdio::from(log))
         .stderr(Stdio::from(error_log));
     detach_command(&mut command);
-    command.spawn().map(|child| child.id()).map_err(io_error)
+    let child = command.spawn().map_err(io_error)?;
+    let mut spawned = SpawnedBackend {
+        child: Some(child),
+        endpoint: endpoint.clone(),
+        start_identity: None,
+    };
+    spawned.start_identity = process_start_identity(spawned.child.as_ref().unwrap().id())?;
+    Ok(spawned)
 }
 
 #[cfg(unix)]
@@ -236,10 +335,12 @@ fn detach_command(command: &mut Command) {
 
 #[cfg(windows)]
 fn detach_command(command: &mut Command) {
+    use windows_sys::Win32::System::Threading::CREATE_BREAKAWAY_FROM_JOB;
     use windows_sys::Win32::System::Threading::CREATE_NEW_PROCESS_GROUP;
     use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
 
-    command.creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
+    // A managed backend must survive the controller and its containing job.
+    command.creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB);
 }
 
 #[cfg(unix)]
@@ -265,8 +366,12 @@ pub(crate) fn force_terminate(record: &ProcessRecord) -> Result<(), String> {
 }
 
 #[cfg(windows)]
-pub(crate) fn force_terminate(_record: &ProcessRecord) -> Result<(), String> {
-    Err("managed daemon did not honor its authenticated stop request; automatic force termination is unavailable on Windows".into())
+pub(crate) fn force_terminate(record: &ProcessRecord) -> Result<(), String> {
+    let expected = record
+        .process_start_identity
+        .as_deref()
+        .ok_or("managed backend has no process start identity")?;
+    windows::terminate(record.pid, expected)
 }
 
 #[cfg(unix)]
@@ -287,7 +392,7 @@ fn wait_for_process_exit(record: &ProcessRecord) -> Result<(), String> {
 #[cfg(unix)]
 fn process_start_identity(pid: u32) -> Result<Option<String>, String> {
     let output = Command::new("ps")
-        .args(["-p", &pid.to_string(), "-o", "lstart="])
+        .args(["-p", &pid.to_string(), "-o", "stat=", "-o", "lstart="])
         .output()
         .map_err(io_error)?;
     if !output.status.success() {
@@ -297,12 +402,19 @@ fn process_start_identity(pid: u32) -> Result<Option<String>, String> {
         .map_err(|error| error.to_string())?
         .trim()
         .to_string();
-    Ok((!identity.is_empty()).then_some(identity))
+    let Some((state, created)) = identity.split_once(char::is_whitespace) else {
+        return Ok(None);
+    };
+    if state.starts_with('Z') {
+        return Ok(None);
+    }
+    let created = created.trim();
+    Ok((!created.is_empty()).then(|| created.to_owned()))
 }
 
 #[cfg(windows)]
-fn process_start_identity(_pid: u32) -> Result<Option<String>, String> {
-    Ok(None)
+fn process_start_identity(pid: u32) -> Result<Option<String>, String> {
+    windows::start_identity(pid)
 }
 
 #[cfg(unix)]
@@ -332,3 +444,8 @@ fn io_error(error: io::Error) -> String {
 #[cfg(test)]
 #[path = "process_tests.rs"]
 mod tests;
+
+#[cfg(windows)]
+#[allow(unsafe_code)]
+#[path = "process/windows.rs"]
+mod windows;

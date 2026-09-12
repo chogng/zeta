@@ -15,6 +15,7 @@ name = "zeta_remote_connections"
 path = "src/lib.rs"
 
 [dependencies]
+zeta-install-context = { workspace = true }
 zeta-app-server = { workspace = true }
 build-info = { workspace = true }
 zeta-package-store = { workspace = true }

@@ -93,7 +93,7 @@ watch program，但只在两边都完成当前编译且为 0 errors 后重启 El
 进程，避免加载同一轮增量编译中的半成品模块图。
 
 完整 Electron 开发命令还会运行 `build/lib/watch/watchAppServer.ts`。Rust 源码或 Cargo manifest 变化后，它先完成
-`zeta-app-server-daemon` 的 `dev-small` profile 构建，再发布一个不可变 generation；每个本地 Workbench window 随后通过现有 App
+`zeta-app-server` 的 `dev-small` profile 构建，再发布一个不可变 generation；每个本地 Workbench window 随后通过现有 App
 Server supervisor 停止旧连接并启动新 generation。构建失败时当前 App Server 继续运行，初始化失败
 时自动回滚到上一 generation。Host 构建遵循 `CARGO_TARGET_DIR`，并直接读取 Cargo JSON artifact 报告的
 executable 路径，不依赖默认 target layout；generation 以 executable 内容摘要命名，内容未变化时不会重复发布，只保留当前版本

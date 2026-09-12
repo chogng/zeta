@@ -4,19 +4,24 @@ use std::path::PathBuf;
 use crate::ConnectionOptions;
 use crate::GrantSource;
 use crate::LifecycleCommand;
-use zeta_app_server::discovered_product_services_path;
-use zeta_app_server::local_profile_root;
+use zeta_install_context::discovered_product_services_path;
+use zeta_install_context::local_profile_root;
 
 /// Runs daemon connection and lifecycle commands using the explicit host environment.
 pub fn run_command(
     arguments: impl IntoIterator<Item = String>,
-    daemon_executable: &Path,
+    backend_executable: &Path,
 ) -> Result<(), String> {
-    if !daemon_executable.is_absolute() {
+    if !backend_executable.is_absolute() {
         return Err("daemon executable must be an absolute path".into());
     }
     let arguments = arguments.into_iter().collect::<Vec<_>>();
     let (command, product_services) = parse(&arguments)?;
+    match std::env::var("ZETA_APP_SERVER_SHA256") {
+        Ok(expected) => validate_backend_digest(backend_executable, &expected)?,
+        Err(std::env::VarError::NotPresent) => {}
+        Err(_) => return Err("ZETA_APP_SERVER_SHA256 must contain a SHA-256 digest".into()),
+    }
     let grant_source = match std::env::var("ZETA_DIR_GRANT_SOURCE").as_deref() {
         Ok("userConfig") => GrantSource::UserConfig,
         Ok("hostConfiguration") | Err(std::env::VarError::NotPresent) => {
@@ -31,9 +36,9 @@ pub fn run_command(
         product_services.or_else(discovered_product_services_path),
     );
     match command {
-        Command::Connect => crate::connect(options, daemon_executable),
+        Command::Connect => crate::connect(options, backend_executable),
         Command::Lifecycle(command) => {
-            let output = crate::run_lifecycle(command, options, daemon_executable)?;
+            let output = crate::run_lifecycle(command, options, backend_executable)?;
             println!(
                 "{}",
                 serde_json::to_string(&output).map_err(|error| error.to_string())?
@@ -73,14 +78,14 @@ fn usage() -> &'static str {
     "usage: zeta-app-server-daemon <connect|start|restart|stop|version> [--product-services PATH]"
 }
 
-/// Resolves the daemon executable for a product that embeds its command adapter.
-pub fn executable_path() -> Result<PathBuf, String> {
-    if let Some(path) = std::env::var_os(crate::DAEMON_PATH_ENV) {
+/// Resolves the App Server executable managed by this command adapter.
+pub fn backend_executable_path() -> Result<PathBuf, String> {
+    if let Some(path) = std::env::var_os(crate::APP_SERVER_PATH_ENV) {
         let path = PathBuf::from(path);
         if !path.is_absolute() {
             return Err(format!(
                 "{} must be an absolute path",
-                crate::DAEMON_PATH_ENV
+                crate::APP_SERVER_PATH_ENV
             ));
         }
         return Ok(path);
@@ -90,12 +95,26 @@ pub fn executable_path() -> Result<PathBuf, String> {
         .parent()
         .ok_or("daemon executable has no parent directory")?;
     Ok(directory.join(if cfg!(windows) {
-        "zeta-app-server-daemon.exe"
+        "zeta-app-server.exe"
     } else {
-        "zeta-app-server-daemon"
+        "zeta-app-server"
     }))
 }
 
 #[cfg(test)]
 #[path = "command_tests.rs"]
 mod tests;
+
+fn validate_backend_digest(executable: &Path, expected: &str) -> Result<(), String> {
+    if expected.len() != 64
+        || !expected
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err("ZETA_APP_SERVER_SHA256 must contain 64 lowercase hexadecimal digits".into());
+    }
+    if !crate::process::executable_identity(executable)?.matches_sha256(expected) {
+        return Err("App Server executable does not match its signed package digest".into());
+    }
+    Ok(())
+}

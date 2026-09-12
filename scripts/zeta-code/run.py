@@ -20,7 +20,7 @@ def development_binaries(
     *, platform_name: str | None = None, code_mode: str | None = None
 ) -> list[str]:
     platform_name = platform_name or sys.platform
-    binaries = ["zeta", "zeta-app-server-daemon"]
+    binaries = ["zeta", "zeta-app-server"]
     if platform_name.startswith("linux"):
         binaries.append("bwrap")
     if (code_mode or "embedded").strip().lower() == "host":
@@ -100,8 +100,8 @@ def runtime_environment(
     environment: dict[str, str], executables: dict[str, Path]
 ) -> dict[str, str]:
     runtime = environment.copy()
-    runtime["ZETA_APP_SERVER_DAEMON_PATH"] = str(
-        executables["zeta-app-server-daemon"].resolve()
+    runtime["ZETA_APP_SERVER_PATH"] = str(
+        executables["zeta-app-server"].resolve()
     )
     runtime["ZETA_PRODUCT_SERVICES_PATH"] = str(
         (REPOSITORY_ROOT / "resources/product-services/product-services.json").resolve()

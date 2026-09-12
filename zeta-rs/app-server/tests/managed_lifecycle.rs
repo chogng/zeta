@@ -39,7 +39,7 @@ fn lifecycle_commands_are_idempotent_and_probe_initialize() {
     std::fs::create_dir(&profile).unwrap();
     std::fs::create_dir(&dir).unwrap();
     let options = ConnectionOptions::new(&profile, Some(dir), GrantSource::HostConfiguration, None);
-    let executable = Path::new(env!("CARGO_BIN_EXE_zeta-app-server-daemon"));
+    let executable = Path::new(env!("CARGO_BIN_EXE_zeta-app-server"));
     let cleanup = StopOnDrop {
         options: options.clone(),
         executable,
@@ -55,6 +55,18 @@ fn lifecycle_commands_are_idempotent_and_probe_initialize() {
             .is_some_and(|hash| hash.starts_with("sha256:"))
     );
     assert!(started.pid.is_some());
+    assert_ne!(started.pid, Some(std::process::id()));
+    let record_path = daemon_endpoint_path(&profile)
+        .unwrap()
+        .with_extension("pid.json");
+    let record: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(record_path).unwrap()).unwrap();
+    assert_eq!(record["pid"].as_u64(), started.pid.map(u64::from));
+    assert!(
+        record["processStartIdentity"]
+            .as_str()
+            .is_some_and(|identity| !identity.is_empty())
+    );
     assert!(started.instance_id.is_some());
 
     let already = run_lifecycle(LifecycleCommand::Start, options.clone(), executable).unwrap();
@@ -92,7 +104,7 @@ fn start_replaces_a_daemon_from_a_different_executable_identity() {
     std::fs::create_dir(&profile).unwrap();
     std::fs::create_dir(&dir).unwrap();
     let options = ConnectionOptions::new(&profile, Some(dir), GrantSource::HostConfiguration, None);
-    let packaged = Path::new(env!("CARGO_BIN_EXE_zeta-app-server-daemon"));
+    let packaged = Path::new(env!("CARGO_BIN_EXE_zeta-app-server"));
     let first_executable = root.path().join("daemon-first");
     let second_executable = root.path().join("daemon-second");
     std::fs::copy(packaged, &first_executable).unwrap();
@@ -126,7 +138,7 @@ fn source_executable_can_be_replaced_while_daemon_is_running() {
     std::fs::create_dir(&profile).unwrap();
     std::fs::create_dir(&dir).unwrap();
     let options = ConnectionOptions::new(&profile, Some(dir), GrantSource::HostConfiguration, None);
-    let packaged = Path::new(env!("CARGO_BIN_EXE_zeta-app-server-daemon"));
+    let packaged = Path::new(env!("CARGO_BIN_EXE_zeta-app-server"));
     let source = root.path().join(if cfg!(windows) {
         "zeta-app-server-daemon.exe"
     } else {
@@ -163,7 +175,7 @@ fn concurrent_starts_publish_one_process_generation() {
     std::fs::create_dir(&profile).unwrap();
     std::fs::create_dir(&dir).unwrap();
     let options = ConnectionOptions::new(&profile, Some(dir), GrantSource::HostConfiguration, None);
-    let executable = Path::new(env!("CARGO_BIN_EXE_zeta-app-server-daemon"));
+    let executable = Path::new(env!("CARGO_BIN_EXE_zeta-app-server"));
     let cleanup = StopOnDrop {
         options: options.clone(),
         executable,
@@ -211,7 +223,7 @@ fn stop_closes_active_connections_after_its_bounded_grace_window() {
         GrantSource::HostConfiguration,
         None,
     );
-    let executable = Path::new(env!("CARGO_BIN_EXE_zeta-app-server-daemon"));
+    let executable = Path::new(env!("CARGO_BIN_EXE_zeta-app-server"));
     let cleanup = StopOnDrop {
         options: options.clone(),
         executable,
@@ -272,5 +284,34 @@ fn stop_closes_active_connections_after_its_bounded_grace_window() {
         result => panic!("active connection remained readable after stop: {result:?}"),
     }
     drop(stream);
+    drop(cleanup);
+}
+
+#[test]
+fn failed_initialize_cleans_the_published_backend_before_retry() {
+    let root = tempfile::tempdir().unwrap();
+    let profile = root.path().join("profile");
+    let services = root.path().join("services.json");
+    std::fs::write(&services, r#"{"schemaVersion":1}"#).unwrap();
+    let options = ConnectionOptions::new(
+        &profile,
+        None,
+        GrantSource::HostConfiguration,
+        Some(services.clone()),
+    );
+    let executable = Path::new(env!("CARGO_BIN_EXE_zeta-app-server"));
+    let error = run_lifecycle(LifecycleCommand::Start, options.clone(), executable).unwrap_err();
+    assert!(error.contains("initialize"), "{error}");
+    let endpoint = daemon_endpoint_path(&profile).unwrap();
+    assert!(!endpoint.with_extension("pid.json").exists());
+    assert!(!endpoint.exists());
+
+    std::fs::write(&services, r#"{"schemaVersion":2}"#).unwrap();
+    let cleanup = StopOnDrop {
+        options: options.clone(),
+        executable,
+    };
+    let started = run_lifecycle(LifecycleCommand::Start, options, executable).unwrap();
+    assert_eq!(started.status, LifecycleStatus::Started);
     drop(cleanup);
 }

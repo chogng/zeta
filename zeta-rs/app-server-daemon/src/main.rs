@@ -15,23 +15,9 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let result = match arg0::dispatch(std::env::args_os().skip(1)) {
-        Some(result) => result,
-        None => {
-            let arguments = std::env::args().skip(1).collect::<Vec<_>>();
-            if arguments.is_empty()
-                || arguments.as_slice() == [zeta_app_server_daemon::DAEMON_PROCESS_ARGUMENT]
-            {
-                zeta_app_server_daemon::run_from_environment(arguments)
-            } else {
-                std::env::current_exe()
-                    .map_err(|error| error.to_string())
-                    .and_then(|executable| {
-                        zeta_app_server_daemon::run_command(arguments, &executable)
-                    })
-            }
-        }
-    };
+    let result = zeta_app_server_daemon::backend_executable_path().and_then(|executable| {
+        zeta_app_server_daemon::run_command(std::env::args().skip(1), &executable)
+    });
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {

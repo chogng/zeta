@@ -6,22 +6,21 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use zeta_app_server::AppServer;
-use zeta_app_server::LocalAppServerOptions;
-use zeta_app_server::LocalProductServicesConfig;
-use zeta_app_server::LocalProfileRuntime;
-use zeta_app_server::open_local_app_server;
+use crate::AppServer;
+use crate::LocalAppServerOptions;
+use crate::LocalProductServicesConfig;
+use crate::LocalProfileRuntime;
+use crate::open_local_app_server;
 
-use crate::ConnectionOptions;
-use crate::wire::ConnectionGrantSource;
-use crate::wire::ConnectionPrelude;
+use zeta_app_server_daemon::ConnectionOptions;
+use zeta_app_server_daemon::GrantSource;
 
 const MAX_PRODUCT_SERVICES_IDENTITY_BYTES: u64 = 1024 * 1024;
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct DirRuntimeKey {
     dir_root: Option<PathBuf>,
-    dir_grant_source: ConnectionGrantSource,
+    dir_grant_source: GrantSource,
     product_services_identity: Option<[u8; 32]>,
 }
 
@@ -43,21 +42,17 @@ impl ProfileAppServerRegistry {
         })
     }
 
-    pub(crate) fn server_for(&self, prelude: ConnectionPrelude) -> Result<Arc<AppServer>, String> {
-        prelude.validate()?;
+    pub(crate) fn server_for(&self, prelude: ConnectionOptions) -> Result<Arc<AppServer>, String> {
         let dir_root = prelude
-            .dir_root
-            .as_deref()
+            .dir_root()
             .map(dunce::canonicalize)
             .transpose()
             .map_err(io_error)?;
-        let product_services_identity = product_services_identity(
-            prelude.product_services.as_deref(),
-            self.host.profile_root(),
-        )?;
+        let product_services_identity =
+            product_services_identity(prelude.product_services(), self.host.profile_root())?;
         let key = DirRuntimeKey {
             dir_root: dir_root.clone(),
-            dir_grant_source: prelude.dir_grant_source,
+            dir_grant_source: prelude.dir_grant_source(),
             product_services_identity,
         };
         let mut servers = self
@@ -70,8 +65,8 @@ impl ProfileAppServerRegistry {
         let host = ConnectionOptions::new(
             self.host.profile_root(),
             dir_root,
-            prelude.grant_source(),
-            prelude.product_services,
+            prelude.dir_grant_source(),
+            prelude.product_services().map(Path::to_path_buf),
         );
         let server = Arc::new(open_server_with_profile_runtime(
             &host,
@@ -153,11 +148,10 @@ impl zeta_automation::AutomationExecutor for ProfileAppServerRegistry {
         let options = ConnectionOptions::new(
             self.host.profile_root(),
             Some(PathBuf::from(&run.definition.directory)),
-            crate::GrantSource::UserConfig,
+            GrantSource::UserConfig,
             self.host.product_services().map(Path::to_path_buf),
         );
-        self.server_for(ConnectionPrelude::from_options(&options))?
-            .advance_automation_run(run, now)
+        self.server_for(options)?.advance_automation_run(run, now)
     }
 
     fn changed(&self) {
@@ -180,8 +174,8 @@ fn open_server_with_profile_runtime(
     ));
     if let Some(dir_root) = host.dir_root() {
         options = match host.dir_grant_source() {
-            crate::GrantSource::UserConfig => options.with_user_config_dir_root(dir_root),
-            crate::GrantSource::HostConfiguration => options.with_dir_root(dir_root),
+            GrantSource::UserConfig => options.with_user_config_dir_root(dir_root),
+            GrantSource::HostConfiguration => options.with_dir_root(dir_root),
         };
     }
     if let Some(path) = host.product_services() {
@@ -221,11 +215,10 @@ impl queue::QueueExecutor for ProfileAppServerRegistry {
         let options = ConnectionOptions::new(
             self.host.profile_root(),
             Some(PathBuf::from(&message.request.directory)),
-            crate::GrantSource::UserConfig,
+            GrantSource::UserConfig,
             self.host.product_services().map(Path::to_path_buf),
         );
-        self.server_for(ConnectionPrelude::from_options(&options))?
-            .queued_message_ready(message)
+        self.server_for(options)?.queued_message_ready(message)
     }
 
     fn accepts(&self, _: &queue::QueuedMessage) -> bool {
@@ -235,11 +228,10 @@ impl queue::QueueExecutor for ProfileAppServerRegistry {
         let options = ConnectionOptions::new(
             self.host.profile_root(),
             Some(PathBuf::from(&message.request.directory)),
-            crate::GrantSource::UserConfig,
+            GrantSource::UserConfig,
             self.host.product_services().map(Path::to_path_buf),
         );
-        self.server_for(ConnectionPrelude::from_options(&options))?
-            .deliver_queued_message(message)
+        self.server_for(options)?.deliver_queued_message(message)
     }
     fn changed(&self) {
         self.profile_runtime.queue_changed();

@@ -9,19 +9,22 @@ use std::sync::Arc;
 use crate::AppServer;
 use crate::LocalAppServerOptions;
 use crate::LocalProductServicesConfig;
-use crate::discovered_product_services_path;
-use crate::local_profile_root;
 use crate::open_local_app_server;
 use zeta_app_server_protocol::AppServerListenInfo;
 use zeta_app_server_transport::CapabilityTokenSha256;
 use zeta_app_server_transport::parse_loopback_websocket_bind;
 use zeta_app_server_transport::start_websocket_acceptor;
+use zeta_install_context::discovered_product_services_path;
+use zeta_install_context::local_profile_root;
 
 const DIR_GRANT_SOURCE: &str = "ZETA_DIR_GRANT_SOURCE";
 
 /// Starts the App Server using explicit process arguments and environment configuration.
 pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
     let arguments = arguments.into_iter().collect::<Vec<_>>();
+    if arguments.as_slice() == [zeta_app_server_daemon::MANAGED_PROCESS_ARGUMENT] {
+        return crate::managed::run(local_profile_root());
+    }
     if arguments.as_slice() == ["--version"] {
         println!(
             "{}",

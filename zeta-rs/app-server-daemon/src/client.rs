@@ -28,9 +28,11 @@ use crate::process::ProcessRecord;
 use crate::process::executable_identity;
 use crate::process::force_terminate;
 use crate::process::read_process_record;
+use crate::process::record_is_active;
+use crate::process::remove_matching_process_record;
 use crate::process::remove_stale_process_record;
-use crate::process::resolve_daemon_executable;
-use crate::process::spawn_daemon;
+use crate::process::resolve_backend_executable;
+use crate::process::spawn_backend;
 use crate::wire::ConnectionPrelude;
 use crate::wire::ControlCommand;
 use crate::wire::ControlPrelude;
@@ -55,25 +57,25 @@ struct ProbeInfo {
 pub(crate) fn run_lifecycle(
     command: LifecycleCommand,
     options: ConnectionOptions,
-    daemon_executable: &Path,
+    backend_executable: &Path,
 ) -> Result<LifecycleOutput, String> {
     let endpoint = EndpointPaths::prepare(options.profile_root())?;
     let _operation_lock = endpoint.acquire_operation_lock()?;
     match command {
-        LifecycleCommand::Start => start_unlocked(&endpoint, &options, daemon_executable),
+        LifecycleCommand::Start => start_unlocked(&endpoint, &options, backend_executable),
         LifecycleCommand::Restart => {
             let _ = stop_unlocked(&endpoint)?;
-            let mut output = start_unlocked(&endpoint, &options, daemon_executable)?;
+            let mut output = start_unlocked(&endpoint, &options, backend_executable)?;
             output.status = LifecycleStatus::Restarted;
             Ok(output)
         }
         LifecycleCommand::Stop => stop_unlocked(&endpoint),
-        LifecycleCommand::Version => version_unlocked(&endpoint, &options, daemon_executable),
+        LifecycleCommand::Version => version_unlocked(&endpoint, &options, backend_executable),
     }
 }
 
-pub(crate) fn connect(options: ConnectionOptions, daemon_executable: &Path) -> Result<(), String> {
-    run_lifecycle(LifecycleCommand::Start, options.clone(), daemon_executable)?;
+pub(crate) fn connect(options: ConnectionOptions, backend_executable: &Path) -> Result<(), String> {
+    run_lifecycle(LifecycleCommand::Start, options.clone(), backend_executable)?;
     let endpoint = EndpointPaths::prepare(options.profile_root())?;
     let stream = connect_existing(&endpoint.socket)?
         .ok_or_else(|| "Local App Server daemon exited before the client connected".to_string())?;
@@ -83,9 +85,9 @@ pub(crate) fn connect(options: ConnectionOptions, daemon_executable: &Path) -> R
 fn start_unlocked(
     endpoint: &EndpointPaths,
     options: &ConnectionOptions,
-    daemon_executable: &Path,
+    backend_executable: &Path,
 ) -> Result<LifecycleOutput, String> {
-    let daemon = resolve_daemon_executable(daemon_executable)?;
+    let daemon = resolve_backend_executable(backend_executable)?;
     let mut replaced_stale_daemon = false;
     if let Some(control) = request_control(endpoint, ControlCommand::Status)? {
         if control.state == ControlState::Stopping {
@@ -107,62 +109,77 @@ fn start_unlocked(
     }
 
     remove_stale_process_record(&endpoint.pid)?;
-    let _spawned_pid = spawn_daemon(endpoint, options, &daemon.path)?;
-    let deadline = Instant::now() + START_TIMEOUT;
-    let mut last_error = None;
-    while Instant::now() < deadline {
-        match request_control(endpoint, ControlCommand::Status) {
-            Ok(Some(control)) if control.state == ControlState::Running => {
-                let record = validate_managed_response(endpoint, &control)
-                    .map_err(|error| diagnostic_error(endpoint, &error))?;
-                validate_executable_identity(&record, &daemon.identity)
-                    .map_err(|error| diagnostic_error(endpoint, &error))?;
-                let probe = probe_app_server(endpoint, options)
-                    .map_err(|error| diagnostic_error(endpoint, &error))?;
-                return Ok(lifecycle_output(
-                    if replaced_stale_daemon {
-                        LifecycleStatus::Restarted
-                    } else {
-                        LifecycleStatus::Started
-                    },
+    let mut spawned = spawn_backend(endpoint, options, &daemon.path)?;
+    let result = (|| {
+        let deadline = Instant::now() + START_TIMEOUT;
+        let mut last_error = None;
+        while Instant::now() < deadline {
+            if let Some(status) = spawned.exit_status()? {
+                return Err(diagnostic_error(
                     endpoint,
-                    Some(&control),
-                    Some(&probe),
+                    &format!("App Server exited before initialization: {status}"),
                 ));
             }
-            Ok(Some(_)) | Ok(None) => {}
-            Err(error) => last_error = Some(error),
+            match request_control(endpoint, ControlCommand::Status) {
+                Ok(Some(control)) if control.state == ControlState::Running => {
+                    let record = validate_managed_response(endpoint, &control)
+                        .map_err(|error| diagnostic_error(endpoint, &error))?;
+                    validate_executable_identity(&record, &daemon.identity)
+                        .map_err(|error| diagnostic_error(endpoint, &error))?;
+                    let probe = probe_app_server(endpoint, options)
+                        .map_err(|error| diagnostic_error(endpoint, &error))?;
+                    return Ok(lifecycle_output(
+                        if replaced_stale_daemon {
+                            LifecycleStatus::Restarted
+                        } else {
+                            LifecycleStatus::Started
+                        },
+                        endpoint,
+                        Some(&control),
+                        Some(&probe),
+                    ));
+                }
+                Ok(Some(_)) | Ok(None) => {}
+                Err(error) => last_error = Some(error),
+            }
+            thread::sleep(CONNECT_RETRY_INTERVAL);
         }
-        thread::sleep(CONNECT_RETRY_INTERVAL);
+        let reason = last_error.unwrap_or_else(|| "daemon control endpoint was unavailable".into());
+        Err(diagnostic_error(
+            endpoint,
+            &format!("Local App Server daemon did not become ready: {reason}"),
+        ))
+    })();
+    match result {
+        Ok(output) => {
+            spawned.release();
+            Ok(output)
+        }
+        Err(error) => {
+            spawned
+                .abort()
+                .map_err(|cleanup| format!("{error}; startup cleanup failed: {cleanup}"))?;
+            Err(error)
+        }
     }
-    let reason = last_error.unwrap_or_else(|| "daemon control endpoint was unavailable".into());
-    Err(diagnostic_error(
-        endpoint,
-        &format!("Local App Server daemon did not become ready: {reason}"),
-    ))
 }
 
 fn stop_unlocked(endpoint: &EndpointPaths) -> Result<LifecycleOutput, String> {
-    let Some(control) = request_control(endpoint, ControlCommand::Status)? else {
-        remove_stale_process_record(&endpoint.pid)?;
-        return Ok(lifecycle_output(
-            LifecycleStatus::NotRunning,
-            endpoint,
-            None,
-            None,
-        ));
+    let control = match request_control(endpoint, ControlCommand::Status) {
+        Ok(Some(control)) => control,
+        Ok(None) | Err(_) => return stop_recorded_process(endpoint),
     };
     let record = validate_managed_response(endpoint, &control)?;
-    let stop = request_control(endpoint, ControlCommand::Stop)?
-        .ok_or_else(|| "Local App Server daemon exited before acknowledging stop".to_string())?;
-    if stop.instance_id != control.instance_id || stop.pid != control.pid {
-        return Err("Local App Server daemon changed generation during stop".into());
+    if let Ok(Some(stop)) = request_control(endpoint, ControlCommand::Stop)
+        && (stop.instance_id != control.instance_id || stop.pid != control.pid)
+    {
+        return Err("Local App Server changed generation during stop".into());
     }
 
     let deadline = Instant::now() + STOP_TIMEOUT;
     while Instant::now() < deadline {
-        if connect_existing(&endpoint.socket)?.is_none() {
-            remove_stale_process_record(&endpoint.pid)?;
+        if !record_is_active(&record)? {
+            remove_matching_process_record(&endpoint.pid, &record)?;
             return Ok(lifecycle_output(
                 LifecycleStatus::Stopped,
                 endpoint,
@@ -174,7 +191,7 @@ fn stop_unlocked(endpoint: &EndpointPaths) -> Result<LifecycleOutput, String> {
     }
 
     force_terminate(&record).map_err(|error| diagnostic_error(endpoint, &error))?;
-    remove_stale_process_record(&endpoint.pid)?;
+    remove_matching_process_record(&endpoint.pid, &record)?;
     Ok(lifecycle_output(
         LifecycleStatus::Stopped,
         endpoint,
@@ -183,10 +200,41 @@ fn stop_unlocked(endpoint: &EndpointPaths) -> Result<LifecycleOutput, String> {
     ))
 }
 
+fn stop_recorded_process(endpoint: &EndpointPaths) -> Result<LifecycleOutput, String> {
+    let Some(record) = read_process_record(&endpoint.pid)? else {
+        return Ok(lifecycle_output(
+            LifecycleStatus::NotRunning,
+            endpoint,
+            None,
+            None,
+        ));
+    };
+    let active = record_is_active(&record)?;
+    if active {
+        force_terminate(&record)?;
+    }
+    remove_matching_process_record(&endpoint.pid, &record)?;
+    let mut output = lifecycle_output(
+        if active {
+            LifecycleStatus::Stopped
+        } else {
+            LifecycleStatus::NotRunning
+        },
+        endpoint,
+        None,
+        None,
+    );
+    if active {
+        output.pid = Some(record.pid);
+        output.instance_id = Some(record.instance_id);
+    }
+    Ok(output)
+}
+
 fn version_unlocked(
     endpoint: &EndpointPaths,
     options: &ConnectionOptions,
-    daemon_executable: &Path,
+    backend_executable: &Path,
 ) -> Result<LifecycleOutput, String> {
     let Some(control) = request_control(endpoint, ControlCommand::Status)? else {
         remove_stale_process_record(&endpoint.pid)?;
@@ -201,7 +249,7 @@ fn version_unlocked(
         return Err("Local App Server daemon is stopping".into());
     }
     let record = validate_managed_response(endpoint, &control)?;
-    let expected = executable_identity(daemon_executable)?;
+    let expected = executable_identity(backend_executable)?;
     validate_executable_identity(&record, &expected)?;
     let probe =
         probe_app_server(endpoint, options).map_err(|error| diagnostic_error(endpoint, &error))?;
@@ -258,6 +306,9 @@ fn validate_managed_response(
     let record = read_process_record(&endpoint.pid)?.ok_or_else(|| {
         "App Server daemon endpoint is running without a managed process record".to_string()
     })?;
+    if !record_is_active(&record)? {
+        return Err("App Server control response belongs to an exited or reused process".into());
+    }
     if record.pid != control.pid
         || record.instance_id != control.instance_id
         || record.daemon_version != control.daemon_version

@@ -119,7 +119,7 @@ export function webAppServerVitePlugin(options: WebAppServerPluginOptions = {}):
         await mkdir(profileRoot, { recursive: true });
         const child = spawn(executable, ["connect"], {
           cwd: workspaceRoot,
-          env: { ...appServerEnvironment({ profileRoot, ripgrep, workspaceRoot }), ZETA_APP_SERVER_DAEMON_PATH: join(dirname(executable), process.platform === 'win32' ? 'zeta-app-server-daemon.exe' : 'zeta-app-server-daemon') },
+          env: { ...appServerEnvironment({ profileRoot, ripgrep, workspaceRoot }), ZETA_APP_SERVER_PATH: join(dirname(executable), process.platform === 'win32' ? 'zeta-app-server.exe' : 'zeta-app-server') },
           shell: false,
           stdio: "pipe",
           windowsHide: true,

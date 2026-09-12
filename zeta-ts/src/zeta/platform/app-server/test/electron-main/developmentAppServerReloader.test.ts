@@ -9,18 +9,18 @@ import { LocalAppServerProcessLauncher } from "../../../../platform/app-server/e
 import { DevelopmentAppServerReloader, readDevelopmentAppServerGeneration, restartDevelopmentAppServer, selectDevelopmentAppServerExecutable } from "../../../../platform/app-server/electron-main/developmentAppServerReloader.js";
 
 test("development Server Host generation resolves one confined built executable", async () => {
-	const root = await mkdtemp(join(tmpdir(), "zeta-app-server-daemon-generation-"));
+	const root = await mkdtemp(join(tmpdir(), "zeta-app-server-generation-"));
 	try {
 		const generationDirectory = join(root, ".tmp", "dev-server-host");
 		const generationFile = join(generationDirectory, "current.json");
-		const executable = join(generationDirectory, "zeta-app-server-daemon.123.0");
+		const executable = join(generationDirectory, "zeta-app-server.123.0");
 		await mkdir(generationDirectory, { recursive: true });
 		await writeFile(executable, "server", "utf8");
 		await chmod(executable, 0o700);
-		await writeFile(generationFile, `${JSON.stringify({ version: 1, executable: "zeta-app-server-daemon.123.0" })}\n`, "utf8");
+		await writeFile(generationFile, `${JSON.stringify({ version: 1, executable: "zeta-app-server.123.0" })}\n`, "utf8");
 
 		assert.equal(await readDevelopmentAppServerGeneration(generationFile), executable);
-		await writeFile(generationFile, `${JSON.stringify({ version: 1, executable: "../zeta-app-server-daemon.123.0" })}\n`, "utf8");
+		await writeFile(generationFile, `${JSON.stringify({ version: 1, executable: "../zeta-app-server.123.0" })}\n`, "utf8");
 		await assert.rejects(readDevelopmentAppServerGeneration(generationFile), /invalid/u);
 	} finally {
 		await rm(root, { recursive: true, force: true });
@@ -28,11 +28,11 @@ test("development Server Host generation resolves one confined built executable"
 });
 
 test("development Server Host generation accepts a content-addressed executable", async () => {
-	const root = await mkdtemp(join(tmpdir(), "zeta-app-server-daemon-generation-"));
+	const root = await mkdtemp(join(tmpdir(), "zeta-app-server-generation-"));
 	try {
 		const generationDirectory = join(root, ".tmp", "dev-server-host");
 		const generationFile = join(generationDirectory, "current.json");
-		const generation = `zeta-app-server-daemon.${"a".repeat(64)}`;
+		const generation = `zeta-app-server.${"a".repeat(64)}`;
 		const executable = join(generationDirectory, generation);
 		await mkdir(generationDirectory, { recursive: true });
 		await writeFile(executable, "server", "utf8");
@@ -46,24 +46,25 @@ test("development Server Host generation accepts a content-addressed executable"
 });
 
 test("development Server Host restart selects the new executable after stopping", async () => {
-	const launcher = launcherAt("/test/zeta-app-server-daemon.old");
+	const launcher = launcherAt("/test/zeta-app-server.old");
 	const lifecycle: string[] = [];
 	const supervisor = {
 		stop: async () => { lifecycle.push("stop"); },
-		start: async () => { lifecycle.push(`start:${launcher.executable}`); },
+		start: async () => { lifecycle.push(`start:${launcher.environment.ZETA_APP_SERVER_PATH}`); },
 	};
 
-	await restartDevelopmentAppServer(supervisor, launcher, "/test/zeta-app-server-daemon.123.0");
+	await restartDevelopmentAppServer(supervisor, launcher, "/test/zeta-app-server.123.0");
 
-	assert.equal(launcher.executable, "/test/zeta-app-server-daemon.123.0");
-	assert.deepEqual(lifecycle, ["stop", "start:/test/zeta-app-server-daemon.123.0"]);
+	assert.equal(launcher.environment.ZETA_APP_SERVER_PATH, "/test/zeta-app-server.123.0");
+	assert.equal(launcher.executable, "/test/zeta-app-server-daemon");
+	assert.deepEqual(lifecycle, ["stop", "start:/test/zeta-app-server.123.0"]);
 });
 
 test("development Server Host startup ignores a generation older than the assembled package", async () => {
-	const root = await mkdtemp(join(tmpdir(), "zeta-app-server-daemon-selection-"));
+	const root = await mkdtemp(join(tmpdir(), "zeta-app-server-selection-"));
 	try {
-		const packaged = join(root, "packaged-zeta-app-server-daemon");
-		const development = join(root, "development-zeta-app-server-daemon");
+		const packaged = join(root, "packaged-zeta-app-server");
+		const development = join(root, "development-zeta-app-server");
 		await writeFile(packaged, "packaged", "utf8");
 		await writeFile(development, "development", "utf8");
 		await utimes(development, new Date(1_000), new Date(1_000));
@@ -77,30 +78,30 @@ test("development Server Host startup ignores a generation older than the assemb
 });
 
 test("development Server Host restart restores the previous generation after failure", async () => {
-	const launcher = launcherAt("/test/zeta-app-server-daemon.old");
+	const launcher = launcherAt("/test/zeta-app-server.old");
 	const lifecycle: string[] = [];
 	let starts = 0;
 	const supervisor = {
 		stop: async () => { lifecycle.push("stop"); },
 		start: async () => {
-			lifecycle.push(`start:${launcher.executable}`);
+			lifecycle.push(`start:${launcher.environment.ZETA_APP_SERVER_PATH}`);
 			if (starts++ === 0) throw new Error("new generation failed");
 		},
 	};
 
-	await assert.rejects(restartDevelopmentAppServer(supervisor, launcher, "/test/zeta-app-server-daemon.123.0"), /new generation failed/u);
+	await assert.rejects(restartDevelopmentAppServer(supervisor, launcher, "/test/zeta-app-server.123.0"), /new generation failed/u);
 
-	assert.equal(launcher.executable, "/test/zeta-app-server-daemon.old");
+	assert.equal(launcher.environment.ZETA_APP_SERVER_PATH, "/test/zeta-app-server.old");
 	assert.deepEqual(lifecycle, [
 		"stop",
-		"start:/test/zeta-app-server-daemon.123.0",
+		"start:/test/zeta-app-server.123.0",
 		"stop",
-		"start:/test/zeta-app-server-daemon.old",
+		"start:/test/zeta-app-server.old",
 	]);
 });
 
 test("development Server Host queues a generation until initial startup is stable", async () => {
-	const launcher = launcherAt("/test/zeta-app-server-daemon.old");
+	const launcher = launcherAt("/test/zeta-app-server.old");
 	const listeners = new Set<(state: AppServerConnectionState) => void>();
 	let state: AppServerConnectionState = "initializing";
 	const supervisor = {
@@ -117,24 +118,25 @@ test("development Server Host queues a generation until initial startup is stabl
 		launcher,
 		supervisor,
 		watchGeneration: () => toDisposable(() => {}),
-		readGeneration: async () => "/test/zeta-app-server-daemon.123.0",
+		readGeneration: async () => "/test/zeta-app-server.123.0",
 		log: () => {},
 	});
 
 	await reloader.reloadNow();
-	assert.equal(launcher.executable, "/test/zeta-app-server-daemon.old");
+	assert.equal(launcher.environment.ZETA_APP_SERVER_PATH, "/test/zeta-app-server.old");
 	state = "stopped";
 	for (const listener of listeners) listener(state);
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.equal(launcher.executable, "/test/zeta-app-server-daemon.123.0");
+	assert.equal(launcher.environment.ZETA_APP_SERVER_PATH, "/test/zeta-app-server.123.0");
+	assert.equal(launcher.executable, "/test/zeta-app-server-daemon");
 	reloader.dispose();
 });
 
 function launcherAt(executable: string): LocalAppServerProcessLauncher {
 	return new LocalAppServerProcessLauncher({
-		executable,
-		args: ["app-server", "connect"],
-		environment: {},
+		executable: "/test/zeta-app-server-daemon",
+		args: ["connect"],
+		environment: { ZETA_APP_SERVER_PATH: executable },
 		fileExists: () => true,
 	});
 }
