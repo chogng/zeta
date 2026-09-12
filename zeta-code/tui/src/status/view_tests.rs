@@ -50,12 +50,7 @@ fn expressive_status_line_renders_emoji_bars_and_permission_text() {
     settings.set_style(StatusLineStyle::Rich);
     let mut model = StatusLineModel::new();
     model.apply_settings(settings);
-    model.apply_preferred_model(Some(
-        &zeta_app_server_protocol::protocol::config::ModelRefDto {
-            provider: "test".into(),
-            model: "model".into(),
-        },
-    ));
+    model.apply_model_label("model");
     let runtime = StatusLineRuntime {
         plan: Some((1, 3)),
         ..Default::default()

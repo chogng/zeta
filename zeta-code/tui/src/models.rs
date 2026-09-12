@@ -17,6 +17,7 @@ pub(crate) enum Command {
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::model::ModelListResult;
 use zeta_protocol::ModelAccess;
+use zeta_protocol::ReasoningEffort;
 
 pub(crate) use picker::ModelChoices;
 pub(crate) use picker::ModelSelectionAction;
@@ -30,6 +31,8 @@ pub(crate) use request::set_preferred_model;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ModelSummary {
     preferred_model: Option<ModelRefDto>,
+    display_name: Option<String>,
+    reasoning_effort: Option<ReasoningEffort>,
     access: ModelAccess,
     context_capacity: Option<u64>,
 }
@@ -47,14 +50,21 @@ impl ModelSummary {
                 })
             })
         });
+        let (display_name, reasoning_effort, access, context_capacity) = match entry {
+            Some(entry) => (
+                Some(entry.display_name.clone()),
+                entry.default_reasoning_effort,
+                entry.access,
+                entry.available_context_window.map(u64::from),
+            ),
+            None => (None, None, ModelAccess::Unknown, None),
+        };
         Self {
             preferred_model,
-            access: entry
-                .map(|entry| entry.access)
-                .unwrap_or(ModelAccess::Unknown),
-            context_capacity: entry
-                .and_then(|entry| entry.available_context_window)
-                .map(u64::from),
+            display_name,
+            reasoning_effort,
+            access,
+            context_capacity,
         }
     }
 
@@ -73,8 +83,36 @@ impl ModelSummary {
             .unwrap_or_else(|| "Automatic model".into())
     }
 
+    pub(crate) fn model_and_effort_label(&self) -> String {
+        let model = self
+            .display_name
+            .as_deref()
+            .or_else(|| {
+                self.preferred_model
+                    .as_ref()
+                    .map(|model| model.model.as_str())
+            })
+            .unwrap_or("Automatic model");
+        match self.reasoning_effort {
+            Some(effort) => format!("{model} ({})", reasoning_effort_label(effort)),
+            None => model.into(),
+        }
+    }
+
     pub(crate) const fn access(&self) -> ModelAccess {
         self.access
+    }
+}
+
+const fn reasoning_effort_label(effort: ReasoningEffort) -> &'static str {
+    match effort {
+        ReasoningEffort::None => "none",
+        ReasoningEffort::Minimal => "minimal",
+        ReasoningEffort::Low => "low",
+        ReasoningEffort::Medium => "medium",
+        ReasoningEffort::High => "high",
+        ReasoningEffort::ExtraHigh => "extra high",
+        ReasoningEffort::Max => "max",
     }
 }
 

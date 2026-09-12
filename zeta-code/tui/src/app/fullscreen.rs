@@ -84,6 +84,16 @@ impl Fullscreen {
         self.page == Page::Home
     }
 
+    pub(in crate::app) fn welcome_visible(&self) -> bool {
+        self.home_visible() && self.home.welcome_visible()
+    }
+
+    pub(super) fn dismiss_welcome(&mut self) {
+        if self.home_visible() {
+            self.home.dismiss_welcome();
+        }
+    }
+
     pub(super) fn focus_input(&mut self) {
         self.focus = Focus::Input;
     }
@@ -115,7 +125,7 @@ pub(super) fn draw(
     header::draw(frame, areas.header, app, context);
     let hovered = app.fullscreen.pointer.hovered();
     let pressed = app.fullscreen.pointer.pressed();
-    if app.fullscreen.home_visible() {
+    if app.fullscreen.welcome_visible() {
         let hovered_action = match hovered {
             Some(PointerTarget::HomeAction(action)) => Some(*action),
             _ => None,
@@ -132,7 +142,7 @@ pub(super) fn draw(
             pressed_action,
             context,
         );
-    } else {
+    } else if !app.fullscreen.home_visible() {
         conversation::draw(frame, &areas, app, context);
     }
     if app.session_preview().is_none() {

@@ -264,7 +264,6 @@ fn modal_restores_home_focus_and_survives_background_thread_updates() {
     let mut app = crate::app::App::new();
     app.open_home();
     app.insert_text("preserved draft");
-    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.update(crate::config::Event::EditorOpened(config_choices()));
     assert!(!app.chat_input_focused());
     app.update(crate::thread::Event::ContextChanged {
@@ -278,9 +277,7 @@ fn modal_restores_home_focus_and_survives_background_thread_updates() {
     insta::assert_snapshot!("settings_on_home", frame_text(&app));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
-    assert_eq!(app.fullscreen.home.selected, Some(0));
-    assert!(!app.chat_input_focused());
-    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert_eq!(app.fullscreen.home.selected, None);
     assert!(app.chat_input_focused());
     assert_eq!(app.input(), "preserved draft");
     insta::assert_snapshot!("home_after_modal_closed", frame_text(&app));

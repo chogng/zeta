@@ -56,6 +56,7 @@ use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_memory_diagnostics::ProcessResourceDemand;
 use zeta_memory_diagnostics::ProcessResourceMetrics;
 use zeta_protocol::ContentDigest;
+use zeta_protocol::ReasoningEffort;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 use zeta_protocol::SessionManagerActivity;
@@ -347,7 +348,7 @@ fn status_command_panel_uses_the_shared_title_and_close_hint() {
     assert!(text.contains("Thread"));
     assert!(text.contains("Processes"));
     assert!(text.contains("Esc to close"));
-    assert!(text.contains("[×]"));
+    assert!(text.contains("[X]"));
 }
 
 #[test]
@@ -940,27 +941,30 @@ fn workspace_header_stays_fixed_while_scrolling_conversation_history() {
 #[test]
 fn composer_shows_the_configured_model_once_at_wide_and_narrow_widths() {
     let mut app = App::new();
-    app.update(ModelEvent::SummaryReceived(ModelSummary::from_catalog(
-        Some(ModelRefDto {
-            provider: "anthropic".into(),
-            model: "claude-sonnet".into(),
-        }),
-        None,
-    )));
-    for width in [80, 24] {
-        let screen = render(&app, width, 20);
-        let input = layout(&app, Rect::new(0, 0, width, 20)).input;
-        assert_eq!(screen.matches("claude-sonnet").count(), 1);
-        assert!(
-            screen
-                .lines()
-                .nth(usize::from(input.bottom() - 1))
-                .unwrap()
-                .contains(" claude-sonnet ")
-        );
-        assert!(!screen.contains("anthropic"));
-        assert!(screen.lines().nth(18).unwrap().trim().is_empty());
-    }
+    app.update(ModelEvent::SummaryReceived(configured_model_summary()));
+    let wide = render(&app, 80, 20);
+    let wide_input = layout(&app, Rect::new(0, 0, 80, 20)).input;
+    assert_eq!(wide.matches("Claude Sonnet (high)").count(), 1);
+    assert!(
+        wide.lines()
+            .nth(usize::from(wide_input.bottom() - 1))
+            .unwrap()
+            .contains(" Claude Sonnet (high) ")
+    );
+    assert!(!wide.contains("anthropic"));
+    assert!(wide.lines().nth(18).unwrap().trim().is_empty());
+
+    let narrow = render(&app, 24, 20);
+    let narrow_input = layout(&app, Rect::new(0, 0, 24, 20)).input;
+    assert!(
+        narrow
+            .lines()
+            .nth(usize::from(narrow_input.bottom() - 1))
+            .unwrap()
+            .contains(" Claude Sonnet… ")
+    );
+    assert!(!narrow.contains("anthropic"));
+    assert!(narrow.lines().nth(18).unwrap().trim().is_empty());
 }
 
 #[test]
@@ -1619,6 +1623,7 @@ fn bare_slash_renders_the_first_command_window() {
 #[test]
 fn slash_popup_clears_covered_transcript_rows_edge_to_edge() {
     let mut app = App::new();
+    app.update(ModelEvent::SummaryReceived(configured_model_summary()));
     for index in 0..12 {
         app.update(ThreadEvent::FailureReported(format!(
             "Model invocation failed {index} {}",
@@ -1630,8 +1635,24 @@ fn slash_popup_clears_covered_transcript_rows_edge_to_edge() {
     let terminal_area = Rect::new(0, 0, 80, 20);
     let popup_bottom = layout(&app, terminal_area).input.y;
     let popup_top = popup_bottom - 6;
+    let popup_border = popup_top - 1;
     let buffer = render_buffer(&app, terminal_area.width, terminal_area.height);
 
+    for column in 2..terminal_area.width - 2 {
+        assert_eq!(buffer[(column, popup_border)].symbol(), "─");
+        assert_eq!(buffer[(column, popup_border)].fg, test_context().border());
+        assert_eq!(
+            buffer[(column, popup_border)].bg,
+            test_context().background()
+        );
+    }
+    for column in [0, 1, terminal_area.width - 2, terminal_area.width - 1] {
+        assert_eq!(buffer[(column, popup_border)].symbol(), " ");
+        assert_eq!(
+            buffer[(column, popup_border)].bg,
+            test_context().background()
+        );
+    }
     for row in popup_top..popup_bottom {
         assert_eq!(buffer[(0, row)].symbol(), " ");
         assert_eq!(buffer[(79, row)].symbol(), " ");
@@ -2177,6 +2198,34 @@ fn render_buffer(app: &App, width: u16, height: u16) -> Buffer {
     let mut terminal = Terminal::new(backend).unwrap();
     terminal.draw(|frame| draw(frame, app)).unwrap();
     terminal.backend().buffer().clone()
+}
+
+fn configured_model_summary() -> ModelSummary {
+    let preferred = ModelRefDto {
+        provider: "anthropic".into(),
+        model: "claude-sonnet".into(),
+    };
+    let catalog = zeta_app_server_protocol::protocol::model::ModelListResult {
+        models: vec![
+            zeta_app_server_protocol::protocol::model::ModelCatalogEntry {
+                model: zeta_protocol::ModelRef::new(
+                    zeta_protocol::ProviderId::new("anthropic").unwrap(),
+                    zeta_protocol::ModelId::new("claude-sonnet").unwrap(),
+                ),
+                display_name: "Claude Sonnet".into(),
+                access: zeta_protocol::ModelAccess::Subscription,
+                output_transport: zeta_protocol::ModelOutputTransport::Unary,
+                context_window: Some(200_000),
+                auto_compact_token_limit: None,
+                available_context_window: Some(180_000),
+                capabilities: zeta_protocol::ModelCapabilities::UNKNOWN,
+                supported_reasoning_efforts: vec![ReasoningEffort::Medium, ReasoningEffort::High],
+                default_reasoning_effort: Some(ReasoningEffort::High),
+                default_personality: None,
+            },
+        ],
+    };
+    ModelSummary::from_catalog(Some(preferred), Some(&catalog))
 }
 
 #[test]

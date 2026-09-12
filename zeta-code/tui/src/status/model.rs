@@ -159,7 +159,7 @@ pub(crate) struct StatusLineModel {
     context_model: Option<ModelRefDto>,
     context_capacity: Option<u64>,
     context_usage: Option<(zeta_protocol::ModelRef, zeta_protocol::ModelContextUsage)>,
-    preferred_model: Option<DisplayValue>,
+    model: Option<DisplayValue>,
     cache_hit_rate: Option<DisplayValue>,
     reference_cost: Option<DisplayValue>,
     git_branch: Option<DisplayValue>,
@@ -171,7 +171,7 @@ pub(crate) struct StatusLineModel {
 
 impl StatusLineModel {
     pub(crate) fn model_label(&self) -> &str {
-        match &self.preferred_model {
+        match &self.model {
             Some(value) => &value.full[0].text,
             None => "Automatic model",
         }
@@ -197,9 +197,9 @@ impl StatusLineModel {
         self.settings = settings;
     }
 
-    pub(crate) fn apply_preferred_model(&mut self, model: Option<&ModelRefDto>) {
-        self.preferred_model =
-            model.map(|model| DisplayValue::plain(model.model.clone(), model.model.clone()));
+    pub(crate) fn apply_model_label(&mut self, label: impl Into<String>) {
+        let label = label.into();
+        self.model = Some(DisplayValue::plain(label.clone(), label));
     }
 
     pub(crate) fn apply_context_capacity(
@@ -411,7 +411,7 @@ impl StatusLineModel {
             match item {
                 StatusLineItem::Context => values.push(self.context_display()),
                 StatusLineItem::Permissions => {}
-                StatusLineItem::Model => values.extend(self.preferred_model.iter().cloned()),
+                StatusLineItem::Model => values.extend(self.model.iter().cloned()),
                 StatusLineItem::CacheHitRate => values.extend(self.cache_hit_rate.iter().cloned()),
                 StatusLineItem::ReferenceCost => values.extend(self.reference_cost.iter().cloned()),
                 StatusLineItem::Memory => values.push(DisplayValue::process_resource(

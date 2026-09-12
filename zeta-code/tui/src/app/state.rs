@@ -631,6 +631,7 @@ impl App {
         if self.accepts_input() {
             let (panel, input) = self.composer_parts_mut();
             panel.insert_text(input, text);
+            self.dismiss_fullscreen_welcome_on_input();
         }
     }
 
@@ -669,6 +670,7 @@ impl App {
                 self.thread
                     .update(ThreadPresentationEvent::FailureReported(error));
             }
+            self.dismiss_fullscreen_welcome_on_input();
         }
     }
 
@@ -716,6 +718,7 @@ impl App {
             Err(error) if visible => self.record_clipboard_error(error),
             Err(_) => {}
         }
+        self.dismiss_fullscreen_welcome_on_input();
     }
 
     fn record_clipboard_error(&mut self, error: String) {
@@ -957,6 +960,19 @@ impl App {
             && self.fullscreen.home_visible()
     }
 
+    pub(crate) fn fullscreen_welcome_visible(&self) -> bool {
+        self.screen_mode() == crate::terminal::ScreenMode::Fullscreen
+            && self.fullscreen.welcome_visible()
+    }
+
+    fn dismiss_fullscreen_welcome_on_input(&mut self) {
+        let input = self.input_state();
+        let draft_started = !input.text().is_empty() || !input.is_empty();
+        if self.fullscreen_welcome_visible() && draft_started {
+            self.fullscreen.dismiss_welcome();
+        }
+    }
+
     pub(super) fn starts_new_session(&self) -> bool {
         self.fullscreen_home_visible()
             || self.sessions.active_session_id().is_none()
@@ -988,11 +1004,13 @@ impl App {
     pub(super) fn handle_composer_key(&mut self, key: KeyEvent) -> ChatComposerOutcome {
         let new_session = self.starts_new_session();
         let (panel, input) = self.composer_parts_mut();
-        if new_session {
+        let outcome = if new_session {
             panel.handle_new_session_key(input, key)
         } else {
             panel.handle_composer_key(input, key)
-        }
+        };
+        self.dismiss_fullscreen_welcome_on_input();
+        outcome
     }
 
     pub(super) fn open_home(&mut self) {
@@ -2205,9 +2223,10 @@ impl App {
     fn apply_model_event(&mut self, event: ModelEvent) {
         match event {
             ModelEvent::SummaryReceived(summary) => {
+                let model_label = summary.model_and_effort_label();
                 self.chat_panel
                     .status_line_mut()
-                    .apply_preferred_model(summary.preferred_model());
+                    .apply_model_label(model_label);
                 self.chat_panel
                     .status_line_mut()
                     .apply_context_capacity(summary.preferred_model(), summary.context_capacity());

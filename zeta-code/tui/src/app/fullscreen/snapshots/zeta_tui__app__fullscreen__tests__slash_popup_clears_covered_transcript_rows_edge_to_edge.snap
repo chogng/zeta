@@ -10,7 +10,7 @@ content underlying transcript content underlying transcript content
 ● Model invocation failed 9 underlying transcript content underlying transcript 
 content underlying transcript content underlying transcript content             
                                                                                 
-● Model invocation failed 10 underlying transcript content underlying transcript
+  ────────────────────────────────────────────────────────────────────────────  
   /status                    show the active session, thread, and model         
   /statusline                choose the items shown in the status line          
   /skills                    browse configured skill sources                    
@@ -19,6 +19,6 @@ content underlying transcript content underlying transcript content
   /archive                   archive the current session and start a new chat   
   ╭──────────────────────────────────────────────────────────────────────────╮  
   │ > /                                                                      │  
-  ╰──────────────────────────────────────────────────────── Automatic model ─╯  
+  ╰─────────────────────────────────────────────────── Claude Sonnet (high) ─╯  
                                                                                 
   Enter send  ·  shift+tab permissions  ·  /home

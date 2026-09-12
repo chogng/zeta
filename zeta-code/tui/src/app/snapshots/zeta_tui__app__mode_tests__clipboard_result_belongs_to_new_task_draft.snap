@@ -4,17 +4,17 @@ expression: render(&app)
 ---
   ≡ .                                             
                                                   
-  ╭────────────────────────────────────────────╮  
-  │                                            │  
-  │  Zeta Code v0.1.0                          │  
-  │  Resume session                            │  
-  │  Manage sessions                           │  
-  │  Settings                                  │  
-  │  Help and shortcuts                        │  
-  ╰────────────────────────────────────────────╯  
+                                                  
+                                                  
+                                                  
+                                                  
+                                                  
+                                                  
+                                                  
+                                                  
   ⏸ ask permissions on                            
   ╭────────────────────────────────────────────╮  
   │ > new task [Image #1]                      │  
   ╰────────────────────────── Automatic model ─╯  
                                                   
-  Enter send  ·  Tab actions  ·  / commands
+  Enter send  ·  / commands

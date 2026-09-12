@@ -4,19 +4,6 @@ expression: frame_text(&app)
 ---
   ≡ .                                                                                               
                                                                                                     
-  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
-  │                                                                                              │  
-  │    ▄  ▄      Zeta Code v0.1.0                                                                │  
-  │  ▗█▛██▜█▖                                                                                    │  
-  │  ▝▜████▛▘    Start a task below, or continue a previous session.                             │  
-  │    ▝  ▘                                                                                      │  
-  │              Resume session                                                                  │  
-  │              Manage sessions                                                                 │  
-  │              Settings                                                                        │  
-  │              Help and shortcuts                                                              │  
-  │              Quit                                                                            │  
-  │                                                                                              │  
-  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
                                                                                                     
                                                                                                     
                                                                                                     
@@ -26,9 +13,22 @@ expression: frame_text(&app)
                                                                                                     
                                                                                                     
                                                                                                     
-  Type a new task · Tab actions · Esc return                                                        
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+  ⏸ ask permissions on                                                                              
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
   │ > preserved draft                                                                            │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯  
                                                                                                     
-  Enter send  ·  Tab actions  ·  / commands                                   ⏸ ask permissions on
+  Enter send  ·  / commands

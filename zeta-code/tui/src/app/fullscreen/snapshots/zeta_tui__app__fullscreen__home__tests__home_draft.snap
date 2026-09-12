@@ -4,19 +4,6 @@ expression: "text(&render(&app, terminal.width, terminal.height))"
 ---
   ≡ .                                                                                                                                       
                                                                                                                                             
-  ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  
-  │                                                                                                                                      │  
-  │    ▄  ▄      Zeta Code v0.1.0                                                                                                        │  
-  │  ▗█▛██▜█▖                                                                                                                            │  
-  │  ▝▜████▛▘    Start a task below, or continue a previous session.                                                                     │  
-  │    ▝  ▘                                                                                                                              │  
-  │              Resume session                                                                                                          │  
-  │              Manage sessions                                                                                                         │  
-  │              Settings                                                                                                                │  
-  │              Help and shortcuts                                                                                                      │  
-  │              Quit                                                                                                                    │  
-  │                                                                                                                                      │  
-  ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
@@ -26,9 +13,22 @@ expression: "text(&render(&app, terminal.width, terminal.height))"
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
-  Type a task to begin, or use Tab to choose an action.                                                                                     
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+  ⏸ ask permissions on                                                                                                                      
   ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  
   │ > 检 查 项 目 结 构                                                                                                                        │  
   ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Automatic model ─╯  
                                                                                                                                             
-  Enter send  ·  Tab actions  ·  / commands                                                                           ⏸ ask permissions on
+  Enter send  ·  / commands

@@ -9,6 +9,7 @@ use zeta_protocol::ModelId;
 use zeta_protocol::ModelOutputTransport;
 use zeta_protocol::ModelRef;
 use zeta_protocol::ProviderId;
+use zeta_protocol::ReasoningEffort;
 
 #[test]
 fn model_summary_resolves_the_selected_models_access_path() {
@@ -16,17 +17,17 @@ fn model_summary_resolves_the_selected_models_access_path() {
         provider: "openai-chatgpt".into(),
         model: "gpt-5.6".into(),
     };
+    let mut selected = entry("openai-chatgpt", "gpt-5.6", ModelAccess::Subscription);
+    selected.display_name = "GPT-5.6".into();
+    selected.default_reasoning_effort = Some(ReasoningEffort::High);
     let catalog = ModelListResult {
-        models: vec![entry(
-            "openai-chatgpt",
-            "gpt-5.6",
-            ModelAccess::Subscription,
-        )],
+        models: vec![selected],
     };
 
     let summary = ModelSummary::from_catalog(Some(preferred), Some(&catalog));
 
     assert_eq!(summary.model_label(), "openai-chatgpt/gpt-5.6");
+    assert_eq!(summary.model_and_effort_label(), "GPT-5.6 (high)");
     assert_eq!(summary.access(), ModelAccess::Subscription);
     assert_eq!(access_label(summary.access()), "Subscription");
 }
@@ -45,6 +46,8 @@ fn missing_or_automatic_models_are_reported_without_guessing_access() {
     assert_eq!(configured.access(), ModelAccess::Unknown);
     assert_eq!(access_label(configured.access()), "Access unknown");
     assert_eq!(automatic.model_label(), "Automatic model");
+    assert_eq!(configured.model_and_effort_label(), "unknown");
+    assert_eq!(automatic.model_and_effort_label(), "Automatic model");
 }
 
 fn entry(provider: &str, model: &str, access: ModelAccess) -> ModelCatalogEntry {

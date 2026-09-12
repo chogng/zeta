@@ -16,7 +16,7 @@ use zeta_protocol::StreamInstanceId;
 #[test]
 fn status_line_combines_plan_subagents_model_branch_and_changes() {
     let mut status_line = StatusLineModel::new();
-    status_line.apply_preferred_model(Some(&model("anthropic", "claude-sonnet")));
+    status_line.apply_model_label("claude-sonnet");
     status_line.apply_git_status(&git_status(1));
 
     assert_eq!(
@@ -263,7 +263,7 @@ fn running_turn_and_next_turn_are_both_explicit_when_the_modes_differ() {
 #[test]
 fn configured_items_can_be_hidden_independently() {
     let mut status_line = StatusLineModel::new();
-    status_line.apply_preferred_model(Some(&model("anthropic", "claude-sonnet")));
+    status_line.apply_model_label("claude-sonnet");
     status_line.apply_git_status(&git_status(1));
     let mut settings = StatusLineSettings::default();
     settings.set(StatusLineItem::Permissions, false);
@@ -312,7 +312,7 @@ fn base_git_updates_remain_independent_of_status_line_items() {
 #[test]
 fn narrow_status_line_keeps_configured_order_and_uses_compact_values() {
     let mut status_line = StatusLineModel::new();
-    status_line.apply_preferred_model(Some(&model("anthropic", "claude-sonnet")));
+    status_line.apply_model_label("claude-sonnet");
     status_line.apply_git_status(&git_status(1));
     let mut settings = StatusLineSettings::default();
     settings.set(StatusLineItem::Permissions, false);
@@ -346,7 +346,7 @@ fn status_line_with_every_item_disabled_is_empty() {
 #[test]
 fn very_narrow_status_line_truncates_on_character_boundaries() {
     let mut status_line = StatusLineModel::new();
-    status_line.apply_preferred_model(Some(&model("provider", "模型alpha")));
+    status_line.apply_model_label("模型alpha");
     let mut settings = StatusLineSettings::default();
     for item in StatusLineItem::ALL {
         settings.set(item, item == StatusLineItem::Model);

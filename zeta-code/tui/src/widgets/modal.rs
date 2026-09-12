@@ -101,7 +101,7 @@ pub(crate) fn draw(
         layout.title,
     );
     frame.render_widget(
-        Paragraph::new("[×]").style(Style::default().fg(context.muted())),
+        Paragraph::new("[X]").style(Style::default().fg(context.muted())),
         layout.close,
     );
     crate::widgets::key_hint::draw_content(frame, layout.footer, hints, hint_style, context);

@@ -66,11 +66,76 @@ fn home_keeps_actions_above_the_fixed_composer() {
     app.handle_key(key(KeyCode::Esc));
     assert_eq!(app.fullscreen.home.selected, None);
     app.insert_text("检查项目结构");
+    assert!(app.fullscreen_home_visible());
+    assert!(!app.fullscreen_welcome_visible());
     insta::assert_snapshot!(
         "home_draft",
         text(&render(&app, terminal.width, terminal.height))
     );
     assert!(app.messages().is_empty());
+}
+
+#[test]
+fn first_character_clears_welcome_and_keeps_the_workspace_header() {
+    let mut app = unstarted_app();
+    app.open_home();
+    assert!(app.fullscreen_welcome_visible());
+
+    app.handle_key(key(KeyCode::Char('x')));
+
+    assert!(app.fullscreen_home_visible());
+    assert!(!app.fullscreen_welcome_visible());
+    let rendered = text(&render(&app, 80, 24));
+    assert!(rendered.lines().next().unwrap().contains("≡ ."));
+    assert!(!rendered.contains("Zeta Code v"));
+    assert!(!rendered.contains("Resume session"));
+    assert!(rendered.contains("> x"));
+    insta::assert_snapshot!("home_after_first_character", rendered);
+
+    app.handle_key(key(KeyCode::Backspace));
+
+    assert_eq!(app.input(), "");
+    assert!(!app.fullscreen_welcome_visible());
+
+    let mut whitespace = unstarted_app();
+    whitespace.open_home();
+    whitespace.handle_key(key(KeyCode::Char(' ')));
+    assert_eq!(whitespace.input(), " ");
+    assert!(!whitespace.fullscreen_welcome_visible());
+}
+
+#[test]
+fn home_slash_command_starts_a_new_session_from_the_initial_page() {
+    let mut app = App::new();
+    app.update(crate::thread::Event::ContextChanged {
+        session_id: zeta_protocol::SessionId::new("existing-session").unwrap(),
+        thread_id: zeta_protocol::ThreadId::new("existing-thread").unwrap(),
+    });
+    assert!(!app.fullscreen_home_visible());
+
+    for character in "/home".chars() {
+        app.handle_key(key(KeyCode::Char(character)));
+    }
+    assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
+
+    assert_eq!(app.input(), "");
+    assert!(app.fullscreen_home_visible());
+    assert!(app.fullscreen_welcome_visible());
+    let rendered = text(&render(&app, 80, 24));
+    assert!(rendered.lines().next().unwrap().contains("≡ ."));
+    assert!(rendered.contains("Zeta Code v"));
+    assert!(rendered.contains("Resume session"));
+    insta::assert_snapshot!("home_restored_by_slash_command", rendered);
+
+    for character in "start a fresh task".chars() {
+        app.handle_key(key(KeyCode::Char(character)));
+    }
+    let Some(AppCommand::Sessions(SessionCommand::CreateAndEnter { submission })) =
+        app.handle_key(key(KeyCode::Enter))
+    else {
+        panic!("the first task after /home must create a new session");
+    };
+    assert_eq!(submission.display_text, "start a fresh task");
 }
 
 #[test]
@@ -163,6 +228,7 @@ fn home_submission_failure_restores_the_complete_draft() {
     assert_eq!(app.input(), draft);
     assert!(app.accepts_input());
     assert!(app.fullscreen_home_visible());
+    assert!(!app.fullscreen_welcome_visible());
     insta::assert_snapshot!("home_submission_failed", text(&render(&app, 80, 24)));
 }
 

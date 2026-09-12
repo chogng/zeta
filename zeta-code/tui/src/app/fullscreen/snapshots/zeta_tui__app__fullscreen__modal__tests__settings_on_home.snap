@@ -4,19 +4,19 @@ expression: frame_text(&app)
 ---
   ≡ .                                                                                               
                                                                                                     
-  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
-  │         ┌── Config ───────────────────────────────────────────────────────────[×]─┐          │  
-  │    ▄  ▄ │                                                                         │          │  
-  │  ▗█▛██▜█│   General    Providers    Language servers    Issues                    │          │  
-  │  ▝▜████▛│                                                                         │          │  
-  │    ▝  ▘ │  ╭────────────────────────────────────────────────────────────────────╮ │          │  
-  │         │  │ Search configuration                                               │ │          │  
-  │         │  ╰────────────────────────────────────────────────────────────────────╯ │          │  
-  │         │> Vim mode                    Use Vim editing in ChatInput    [   ]      │          │  
-  │         │  Memory diagnostics          Continuously collect bounded    [   ]      │          │  
-  │         │  Automatic updates           Choose release cadence          Latest     │          │  
-  │         │  Show Git changes as diff    Show added and deleted lines    [   ]      │          │  
-  ╰─────────│  Language                    Change the interface languag    English    │──────────╯  
+                                                                                                    
+            ┌── Config ───────────────────────────────────────────────────────────[X]─┐             
+            │                                                                         │             
+            │   General    Providers    Language servers    Issues                    │             
+            │                                                                         │             
+            │  ╭────────────────────────────────────────────────────────────────────╮ │             
+            │  │ Search configuration                                               │ │             
+            │  ╰────────────────────────────────────────────────────────────────────╯ │             
+            │> Vim mode                    Use Vim editing in ChatInput    [   ]      │             
+            │  Memory diagnostics          Continuously collect bounded    [   ]      │             
+            │  Automatic updates           Choose release cadence          Latest     │             
+            │  Show Git changes as diff    Show added and deleted lines    [   ]      │             
+            │  Language                    Change the interface languag    English    │             
             │  Status bar style            Text and numbers, clean and     Simple     │             
             │  Key hint style              Emphasize keys over their de    Contrast   │             
             │  Screen mode                 Use a full screen or keep te    fullscreen │             
@@ -26,7 +26,7 @@ expression: frame_text(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-  Type a new│                                                                         │             
+            │                                                                         │             
   ╭─────────│  Enter/Space to change · Tab/Shift+Tab to switch · Esc to close         │──────────╮  
   │ > preser└─────────────────────────────────────────────────────────────────────────┘          │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

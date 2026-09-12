@@ -718,11 +718,15 @@ fn clear_page_focus(app: &mut App) {
 }
 
 pub(in crate::app) fn open_home(app: &mut App) {
+    let draft_is_empty = app.sessions.input.text().is_empty() && app.sessions.input.is_empty();
     close_transient_surfaces(app);
     app.fullscreen.issues.close();
     app.fullscreen.agent_thread_switcher.blur();
     app.fullscreen.sessions.manager_mut().blur();
-    app.fullscreen.home.selected = None;
+    app.fullscreen.home.show_welcome();
+    if !draft_is_empty {
+        app.fullscreen.home.dismiss_welcome();
+    }
     app.fullscreen.page = super::Page::Home;
     app.chat_panel.reset_top_tip();
     app.fullscreen.focus_input();

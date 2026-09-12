@@ -27,6 +27,23 @@ use ratatui::widgets::Paragraph;
 #[derive(Debug, Default)]
 pub(in crate::app) struct Home {
     pub(in crate::app) selected: Option<usize>,
+    welcome_visible: bool,
+}
+
+impl Home {
+    pub(super) fn show_welcome(&mut self) {
+        self.selected = None;
+        self.welcome_visible = true;
+    }
+
+    pub(super) fn dismiss_welcome(&mut self) {
+        self.selected = None;
+        self.welcome_visible = false;
+    }
+
+    pub(super) const fn welcome_visible(&self) -> bool {
+        self.welcome_visible
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -242,7 +259,7 @@ pub(super) fn activate(app: &mut App, action: Action) -> Option<AppCommand> {
 }
 
 pub(super) fn handle_key(app: &mut App, key: KeyEvent) -> Option<Option<AppCommand>> {
-    if !app.fullscreen.home_visible() || app.completion().is_some() {
+    if !app.fullscreen.welcome_visible() || app.completion().is_some() {
         return None;
     }
     if key.kind != KeyEventKind::Press {

@@ -354,6 +354,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
 use ratatui::widgets::Clear;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Wrap;
@@ -367,16 +368,23 @@ fn clear_popup(
     content_area: Rect,
     context: RenderContext<'_>,
 ) {
+    let surface_top = content_area.y.saturating_sub(1);
     let surface_area = Rect::new(
         available_area.x,
-        content_area.y,
+        surface_top,
         available_area.width,
-        content_area.height,
+        content_area.bottom().saturating_sub(surface_top),
     );
     frame.render_widget(Clear, surface_area);
     frame.render_widget(
         Block::default().style(Style::default().bg(context.background())),
         surface_area,
+    );
+    frame.render_widget(
+        Block::default()
+            .borders(Borders::TOP)
+            .border_style(Style::default().fg(context.border())),
+        horizontal_margin(surface_area, 2),
     );
 }
 

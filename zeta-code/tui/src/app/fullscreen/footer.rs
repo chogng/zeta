@@ -53,16 +53,20 @@ pub(super) fn draw(
 
 fn input_hints(app: &App) -> KeyHints {
     if app.fullscreen_home_visible() {
-        if !app.fullscreen.input_focused() {
+        if app.fullscreen_welcome_visible() && !app.fullscreen.input_focused() {
             return KeyHints::new()
                 .with_compact_action("Enter", "select")
                 .with_compact_action("↑↓", "actions")
                 .with_compact_action("Esc", "input");
         }
-        return KeyHints::new()
-            .with_compact_action("Enter", "send")
-            .with_compact_action("Tab", "actions")
-            .with_compact_action("/", "commands");
+        let hints = KeyHints::new().with_compact_action("Enter", "send");
+        return if app.fullscreen_welcome_visible() {
+            hints
+                .with_compact_action("Tab", "actions")
+                .with_compact_action("/", "commands")
+        } else {
+            hints.with_compact_action("/", "commands")
+        };
     }
     let mut hints = KeyHints::new().with_compact_action(
         "Enter",
@@ -152,13 +156,14 @@ pub(super) fn draw_tip(
             );
             return;
         }
-        Some(if app.sessions.active_session_id().is_some() {
-            "Type a new task · Tab actions · Esc return"
-        } else if area.width < 54 {
-            "Type a task · Tab actions"
-        } else {
-            "Type a task to begin, or use Tab to choose an action."
-        })
+        app.fullscreen_welcome_visible()
+            .then_some(if app.sessions.active_session_id().is_some() {
+                "Type a new task · Tab actions · Esc return"
+            } else if area.width < 54 {
+                "Type a task · Tab actions"
+            } else {
+                "Type a task to begin, or use Tab to choose an action."
+            })
     } else {
         app.screen_navigation_tip()
     };

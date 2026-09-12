@@ -157,7 +157,7 @@ pub(crate) fn target_at(
     {
         return Some(PointerTarget::Composer(ChatComposerPointerTarget::Input));
     }
-    if app.fullscreen.home_visible() {
+    if app.fullscreen.welcome_visible() {
         return super::home::action_at(app, areas.session.transcript, position)
             .map(PointerTarget::HomeAction);
     }
