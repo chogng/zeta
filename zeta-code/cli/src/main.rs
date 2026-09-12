@@ -86,7 +86,8 @@ fn resume(arguments: Vec<String>) -> Result<(), CliError> {
     let dir_root = configured_dir().map_err(CliError::failure)?;
     local_tui::resume(
         dir_root,
-        zeta_utils_home_dir::find_zeta_home().map_err(|error| CliError::failure(error.to_string()))?,
+        zeta_utils_home_dir::find_zeta_home()
+            .map_err(|error| CliError::failure(error.to_string()))?,
         recovery,
     )
     .map_err(CliError::failure)
@@ -265,7 +266,8 @@ fn run_headless(options: HeadlessCliOptions) -> Result<(), CliError> {
 fn headless_runner() -> Result<ExecRunner, CliError> {
     let target = AppServerTarget::Embedded(
         EmbeddedAppServerOptions::new(
-            zeta_utils_home_dir::find_zeta_home().map_err(|error| CliError::failure(error.to_string()))?,
+            zeta_utils_home_dir::find_zeta_home()
+                .map_err(|error| CliError::failure(error.to_string()))?,
             ClientInfo {
                 name: "zeta-cli-exec".into(),
                 version: build_info::VERSION.into(),

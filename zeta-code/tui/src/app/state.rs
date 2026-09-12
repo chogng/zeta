@@ -481,21 +481,23 @@ impl App {
                     Some(GitCommand::Switch { name: action.name }.into())
                 }
             }
-            CommandPanelOutcome::ProjectRoot(action) => {
-                if action.current {
+            CommandPanelOutcome::ProjectRoot(action) => match action {
+                crate::projects::RootSelectionAction::Switch { path, current } => {
                     self.close_command_panel();
-                    return None;
+                    if current {
+                        None
+                    } else {
+                        Some(crate::dirs::Command::MoveSession { path }.into())
+                    }
                 }
-                if !self.input().is_empty() {
-                    self.close_command_panel();
-                    self.thread.update(ThreadPresentationEvent::FailureReported(
-                        "Clear the current draft before switching Project folders".into(),
+                crate::projects::RootSelectionAction::Add => {
+                    self.open_command_panel(CommandPanel::loading(
+                        "Add project folder",
+                        "Loading directory permissions…",
                     ));
-                    return None;
+                    Some(crate::projects::Command::OpenAddRoot.into())
                 }
-                self.close_command_panel();
-                Some(AppCommand::SwitchWorkspace(action.path))
-            }
+            },
             CommandPanelOutcome::Rewind(RewindSelectionAction::Rewind {
                 before_turn_id,
                 checkpoint_label,
@@ -2202,6 +2204,17 @@ impl App {
                 self.chat_panel.start_input();
             }
             DirEvent::PermissionsUpdated(choices) => self.update_dirs_picker(choices),
+            DirEvent::Moved { path } => {
+                self.welcome = WelcomeModel::for_workspace(&path);
+                self.startup_context.workspace = path.clone();
+                self.thread
+                    .update(ThreadPresentationEvent::NoticeReceived(format!(
+                        "Moved session to {}",
+                        path.display()
+                    )));
+                self.set_status(Status::Ready);
+                self.chat_panel.start_input();
+            }
         }
     }
 

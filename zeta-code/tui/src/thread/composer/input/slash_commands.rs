@@ -30,6 +30,7 @@ pub(crate) enum TuiSlashCommandAction {
     Startup,
     Home,
     AddDir,
+    Cd,
     Fork,
     Help,
     Shortcuts,
@@ -52,7 +53,9 @@ impl TuiSlashCommandAction {
         use crate::thread::transcript::LocalCommandCompletion;
         match self {
             Self::New | Self::Fork | Self::Archive => LocalCommandCompletion::Deferred,
-            Self::Theme | Self::AddDir | Self::Resume | Self::Rewind if !arguments.is_empty() => {
+            Self::Theme | Self::AddDir | Self::Cd | Self::Resume | Self::Rewind
+                if !arguments.is_empty() =>
+            {
                 LocalCommandCompletion::Deferred
             }
             _ => LocalCommandCompletion::Immediate,
@@ -82,6 +85,7 @@ impl TuiSlashCommandAction {
             Self::Startup => "show the current startup context",
             Self::Home => "return to the home page",
             Self::AddDir => "add or manage a session directory",
+            Self::Cd => "move this session to a new working directory",
             Self::Fork => "fork the current chat",
             Self::Help => "show shortcuts and commands",
             Self::Shortcuts => "browse and customize terminal shortcuts",
@@ -99,6 +103,7 @@ impl TuiSlashCommandAction {
             | Self::Memories
             | Self::Rewind
             | Self::AddDir
+            | Self::Cd
             | Self::Fork
             | Self::Export
             | Self::Model

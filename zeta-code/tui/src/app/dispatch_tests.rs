@@ -620,6 +620,7 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
     let output = super::execute_product_command(
         Some(conversation),
         &mut client,
+        &dir,
         invocation(
             TuiSlashCommandAction::AddDir,
             &additional.display().to_string(),
@@ -636,6 +637,7 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
     let repeated = execute_product_command(
         Some(conversation.clone()),
         &mut client,
+        &dir,
         invocation(
             TuiSlashCommandAction::AddDir,
             &additional.display().to_string(),
@@ -995,6 +997,54 @@ fn custom_model_picker_replaces_inherited_ids_with_the_configured_id() {
     let _ = fs::remove_dir_all(root);
 }
 
+#[test]
+fn cd_moves_the_active_session_to_a_new_working_directory() {
+    let _test_guard = dispatch_test_guard();
+    let state_root = std::env::temp_dir().join(format!(
+        "zeta-tui-cd-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let dir = state_root.join("dir");
+    let next_dir = state_root.join("next_dir");
+    fs::create_dir_all(&dir).unwrap();
+    fs::create_dir_all(&next_dir).unwrap();
+    let mut client = start_in_process_client(
+        InProcessClientOptions::new(
+            &state_root,
+            ClientInfo {
+                name: "zeta-tui-cd-test".into(),
+                version: "1".into(),
+            },
+        )
+        .with_capabilities(crate::client_capabilities())
+        .with_dir_root(&dir)
+        .with_model_operation_client(Arc::new(OfflineOperationClient::default())),
+    )
+    .unwrap();
+    let mut conversation = ActiveConversation::start(&mut client, "cd test".into()).unwrap();
+    let mut app = App::for_dir(&dir);
+
+    execute(
+        &mut conversation,
+        &mut client,
+        invocation(TuiSlashCommandAction::Cd, &next_dir.display().to_string()),
+        &mut app,
+    );
+    assert_eq!(
+        app.startup_context().workspace,
+        next_dir.canonicalize().unwrap()
+    );
+    assert_eq!(
+        app.welcome().directory(),
+        next_dir.canonicalize().unwrap().display().to_string()
+    );
+    let _ = fs::remove_dir_all(state_root);
+}
+
 fn execute<T>(
     conversation: &mut ActiveConversation,
     client: &mut AppServerClient<T>,
@@ -1003,7 +1053,12 @@ fn execute<T>(
 ) where
     T: JsonRpcTransport,
 {
-    match execute_product_command(Some(conversation.clone()), client, invocation) {
+    match execute_product_command(
+        Some(conversation.clone()),
+        client,
+        &app.startup_context().workspace,
+        invocation,
+    ) {
         Ok(output) => {
             *conversation = output
                 .conversation

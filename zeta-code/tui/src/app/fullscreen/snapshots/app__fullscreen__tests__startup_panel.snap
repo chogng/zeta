@@ -2,7 +2,7 @@
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
 expression: "render(&app, 80, 20)"
 ---
-  ≡ .                       [+]                            [— / —] [Dashboard]  
+  ≡ .                                                      [— / —] [Dashboard]  
                                                                                 
 > /start┌── Startup ───────────────────────────────────────────────[✗]─┐        
         │                                                              │        

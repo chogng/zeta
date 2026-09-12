@@ -19,7 +19,6 @@ pub(crate) enum AppCommand {
     Thread(crate::thread::Command),
     Quit,
     Suspend,
-    SwitchWorkspace(std::path::PathBuf),
 }
 
 impl AppCommand {

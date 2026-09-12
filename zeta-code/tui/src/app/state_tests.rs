@@ -2191,7 +2191,7 @@ fn project_folder_picker_switches_only_to_a_non_current_root_without_a_draft() {
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert!(matches!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::SwitchWorkspace(path)) if path == std::path::Path::new("/work/other")
+        Some(AppCommand::Dirs(crate::dirs::Command::MoveSession { path })) if path == std::path::Path::new("/work/other")
     ));
     assert!(app.command_panel().is_none());
 
@@ -2201,16 +2201,51 @@ fn project_folder_picker_switches_only_to_a_non_current_root_without_a_draft() {
         crate::projects::root_choices(&project, std::path::Path::new("/work/current")),
     ));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    assert_eq!(
+    assert!(matches!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        None
-    );
+        Some(AppCommand::Dirs(crate::dirs::Command::MoveSession { path })) if path == std::path::Path::new("/work/other")
+    ));
     assert_eq!(app.input(), "keep this draft");
     assert!(app.command_panel().is_none());
-    assert_eq!(
-        app.messages().last().unwrap().text(),
-        "Clear the current draft before switching Project folders"
-    );
+}
+
+#[test]
+fn project_folder_picker_opens_add_root_when_add_item_is_selected() {
+    use zeta_app_server_protocol::protocol::projects::ProjectDto;
+    use zeta_app_server_protocol::protocol::projects::ProjectRootDto;
+    use zeta_app_server_protocol::protocol::projects::ProjectStatusDto;
+    use zeta_file_access::DirId;
+    use zeta_file_access::EnvId;
+    let mut app = App::for_dir(std::path::Path::new("/work/current"));
+    let dir_id = |seed: char| {
+        format!("sha256:{}", seed.to_string().repeat(64))
+            .parse::<DirId>()
+            .unwrap()
+    };
+    let project = ProjectDto {
+        project_id: zeta_protocol::ProjectId::new("project").unwrap(),
+        revision: 1,
+        status: ProjectStatusDto::Active,
+        name: "Project".into(),
+        description: String::new(),
+        roots: vec![ProjectRootDto {
+            environment_id: EnvId::local(),
+            dir_id: dir_id('a'),
+            path: "/work/current".into(),
+            name: "current".into(),
+            purpose: String::new(),
+        }],
+        session_ids: Vec::new(),
+    };
+    app.update(crate::projects::Event::RootsOpened(
+        crate::projects::root_choices(&project, std::path::Path::new("/work/current")),
+    ));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Projects(crate::projects::Command::OpenAddRoot))
+    ));
+    assert!(app.command_panel().is_some());
 }
 
 #[test]

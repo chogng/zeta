@@ -209,9 +209,6 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     CommandEffect::None => {}
                     CommandEffect::Quit => return Ok(TuiExit::UserRequested),
                     CommandEffect::Suspend => terminal.suspend()?,
-                    CommandEffect::SwitchWorkspace(path) => {
-                        return Ok(TuiExit::SwitchWorkspace { path });
-                    }
                 }
             }
             driver.schedule_refreshes();

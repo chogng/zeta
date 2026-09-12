@@ -103,7 +103,6 @@ fn every_header_action_has_its_own_hit_target_and_activation() {
         super::Target::Home,
         super::Target::Branch,
         super::Target::Workspace,
-        super::Target::AddRoot,
         super::Target::Context,
         super::Target::Dashboard,
     ] {
@@ -124,10 +123,6 @@ fn every_header_action_has_its_own_hit_target_and_activation() {
     assert!(matches!(
         activate(super::Target::Workspace).1,
         Some(AppCommand::Projects(crate::projects::Command::OpenRoots))
-    ));
-    assert!(matches!(
-        activate(super::Target::AddRoot).1,
-        Some(AppCommand::Projects(crate::projects::Command::OpenAddRoot))
     ));
     assert!(matches!(
         activate(super::Target::Context).1,
@@ -204,7 +199,6 @@ fn header_hovers_never_paint_a_background_or_move_keyboard_selection() {
         super::Target::Home,
         super::Target::Branch,
         super::Target::Workspace,
-        super::Target::AddRoot,
         super::Target::Context,
         super::Target::Dashboard,
     ] {
@@ -247,7 +241,82 @@ fn workspace_mutations_are_not_pointer_targets_while_a_turn_is_starting() {
         .collect::<std::collections::BTreeSet<_>>();
     assert!(!visible.contains(&super::Target::Branch));
     assert!(!visible.contains(&super::Target::Workspace));
-    assert!(!visible.contains(&super::Target::AddRoot));
     assert!(visible.contains(&super::Target::Context));
     assert!(visible.contains(&super::Target::Dashboard));
+}
+
+#[test]
+fn workspace_path_truncates_with_ellipsis_when_exceeding_width() {
+    let long_path = "/Volumes/1t/zeta/very/deep/and/extremely/long/nested/directory/path/that/exceeds/terminal/width";
+    let app = App::for_dir(std::path::Path::new(long_path));
+    let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    let row = terminal.backend().buffer().content[..80]
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(row.contains("…"));
+    assert!(!row.contains("[+]"));
+    let area = Rect::new(0, 0, 80, 20);
+    let header = super::super::layout(&app, area).header;
+    let workspace_pos = (0..80)
+        .map(|col| Position::new(col, header.y))
+        .find(|pos| super::target_at(&app, header, *pos) == Some(super::Target::Workspace));
+    assert!(workspace_pos.is_some());
+}
+
+#[test]
+fn dashboard_action_has_depth_contrast_on_hover_and_no_bold_on_press_or_selection() {
+    let app = app_with_branch();
+    let area = Rect::new(0, 0, 100, 20);
+    let header = super::super::layout(&app, area).header;
+    let dashboard_pos = (0..area.width)
+        .map(|col| Position::new(col, header.y))
+        .find(|pos| super::target_at(&app, header, *pos) == Some(super::Target::Dashboard))
+        .unwrap();
+
+    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    let cell = &terminal.backend().buffer()[(dashboard_pos.x, dashboard_pos.y)];
+    assert_eq!(cell.fg, app.render_context().muted());
+    assert!(!cell.modifier.contains(Modifier::BOLD));
+
+    let mut hovered_app = app_with_branch();
+    hovered_app.fullscreen.pointer.update_hover(Some(
+        super::super::pointer::PointerTarget::Header(super::Target::Dashboard),
+    ));
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &hovered_app))
+        .unwrap();
+    let hovered_cell = &terminal.backend().buffer()[(dashboard_pos.x, dashboard_pos.y)];
+    assert_eq!(hovered_cell.fg, app.render_context().hover_foreground());
+    assert_ne!(hovered_cell.fg, app.render_context().muted());
+    assert!(!hovered_cell.modifier.contains(Modifier::BOLD));
+
+    let mut pressed_app = app_with_branch();
+    pressed_app.fullscreen.pointer.update_pressed(Some(
+        super::super::pointer::PointerTarget::Header(super::Target::Dashboard),
+    ));
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &pressed_app))
+        .unwrap();
+    let pressed_cell = &terminal.backend().buffer()[(dashboard_pos.x, dashboard_pos.y)];
+    assert_eq!(pressed_cell.fg, app.render_context().pressed_foreground());
+    assert!(!pressed_cell.modifier.contains(Modifier::BOLD));
+
+    let mut selected_app = app_with_branch();
+    selected_app
+        .fullscreen
+        .focus_header(super::Target::Dashboard);
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &selected_app))
+        .unwrap();
+    let selected_cell = &terminal.backend().buffer()[(dashboard_pos.x, dashboard_pos.y)];
+    assert_eq!(selected_cell.fg, app.render_context().focus());
+    assert!(selected_cell.modifier.contains(Modifier::UNDERLINED));
+    assert!(!selected_cell.modifier.contains(Modifier::BOLD));
 }

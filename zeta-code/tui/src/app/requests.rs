@@ -167,7 +167,6 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         AppCommand::Host(HostCommand::ExportTranscript { .. }) => Some(RequestKey::FileExport),
         AppCommand::Quit
         | AppCommand::Suspend
-        | AppCommand::SwitchWorkspace(_)
         | AppCommand::Thread(ThreadCommand::CycleNextApprovalMode) => None,
         AppCommand::Config(
             ConfigCommand::SetIssues(_)
@@ -196,7 +195,10 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
             ConnectorCommand::ConnectDeviceOAuth { .. } | ConnectorCommand::Disconnect { .. },
         ) => Some(RequestKey::Connectors),
         AppCommand::Dirs(
-            DirCommand::Add { .. } | DirCommand::Remove { .. } | DirCommand::SetPermissions(_),
+            DirCommand::Add { .. }
+            | DirCommand::Remove { .. }
+            | DirCommand::SetPermissions(_)
+            | DirCommand::MoveSession { .. },
         ) => Some(RequestKey::Directories),
         AppCommand::Projects(
             ProjectCommand::OpenRoots

@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
+use zeta_app_server_protocol::protocol::environment::EnvCwdSetParams;
 use zeta_app_server_protocol::protocol::environment::PermissionDto;
 use zeta_app_server_protocol::protocol::environment::SessionDirAddParams;
 use zeta_app_server_protocol::protocol::environment::SessionDirListParams;
@@ -32,6 +33,9 @@ pub(crate) enum Event {
         choices: DirChoices,
     },
     PermissionsUpdated(DirChoices),
+    Moved {
+        path: std::path::PathBuf,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -39,6 +43,7 @@ pub(crate) enum Command {
     Add { request_id: u64, path: PathBuf },
     Remove { path: std::path::PathBuf },
     SetPermissions(SessionDirPermissionsSetParams),
+    MoveSession { path: PathBuf },
 }
 
 impl Command {
@@ -47,6 +52,7 @@ impl Command {
             Self::Add { .. } => "zeta-tui-add-directory",
             Self::Remove { .. } => "zeta-tui-remove-directory",
             Self::SetPermissions(_) => "zeta-tui-set-directory-permissions",
+            Self::MoveSession { .. } => "zeta-tui-move-session",
         }
     }
 }
@@ -198,8 +204,30 @@ where
         Command::SetPermissions(params) => {
             set_permissions(client, params).map(Event::PermissionsUpdated)
         }
+        Command::MoveSession { path } => {
+            move_session(client, session_id, path).map(|path| Event::Moved { path })
+        }
     }
     .map_err(|error| error.to_string())
+}
+
+pub(crate) fn move_session<T>(
+    client: &mut AppServerClient<T>,
+    session_id: &SessionId,
+    path: PathBuf,
+) -> Result<PathBuf, ClientError>
+where
+    T: JsonRpcTransport,
+{
+    let target = client.add_session_dir(SessionDirAddParams {
+        session_id: session_id.clone(),
+        path,
+        permissions: Vec::new(),
+    })?;
+    client.set_env_cwd(EnvCwdSetParams {
+        cwd: target.path.clone(),
+    })?;
+    Ok(target.path)
 }
 
 pub(crate) fn choices(session_id: &SessionId, result: SessionDirListResult) -> DirChoices {

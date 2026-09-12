@@ -26,18 +26,15 @@ pub(super) fn run(
         let mut options =
             zeta_tui::TuiOptions::new(format!("Remote SSH: {}", profile.target().host().as_str()))
                 .with_remote_dir(PathBuf::from(profile.target().dir().as_str()))
-                .with_profile_root(zeta_utils_home_dir::find_zeta_home().map_err(|error| error.to_string())?);
+                .with_profile_root(
+                    zeta_utils_home_dir::find_zeta_home().map_err(|error| error.to_string())?,
+                );
         if let Some(state) = recovery.take() {
             options = options.with_recovery(state);
         }
         match zeta_tui::run(session, options).map_err(|error| error.to_string())? {
             zeta_tui::TuiExit::UserRequested | zeta_tui::TuiExit::TerminationRequested => {
                 return Ok(());
-            }
-            zeta_tui::TuiExit::SwitchWorkspace { .. } => {
-                return Err(
-                    "Remote Project folder switching requires a new connection target".into(),
-                );
             }
             zeta_tui::TuiExit::ConnectionLost {
                 kind: zeta_tui::TuiConnectionLossKind::Transport,

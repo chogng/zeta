@@ -10,14 +10,12 @@ use unicode_width::UnicodeWidthStr;
 use zeta_memory_diagnostics::ProcessResourceDemand;
 
 const DASHBOARD: &str = "[Dashboard]";
-const ADD_ROOT: &str = "[+]";
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub(in crate::app) enum Target {
     Home,
     Branch,
     Workspace,
-    AddRoot,
     Context,
     Dashboard,
 }
@@ -28,7 +26,6 @@ impl Target {
             Self::Home => "Home",
             Self::Branch => "Switch branch",
             Self::Workspace => "Switch project folder",
-            Self::AddRoot => "Add project folder",
             Self::Context => "Context usage",
             Self::Dashboard => "Dashboard",
         }
@@ -59,7 +56,6 @@ struct HeaderLayout {
     home: Rect,
     branch: Rect,
     workspace: Rect,
-    add_root: Rect,
     status: Rect,
     context: Rect,
     dashboard: Rect,
@@ -100,16 +96,6 @@ pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, context: Render
             areas.workspace,
         );
     }
-
-    draw_action(
-        frame,
-        areas.add_root,
-        ADD_ROOT,
-        app,
-        Target::AddRoot,
-        add_root_enabled(app),
-        context,
-    );
 
     if !areas.status.is_empty() {
         let status = crate::status::header_line(
@@ -156,7 +142,11 @@ fn draw_action(
 ) {
     if !area.is_empty() {
         frame.render_widget(
-            Paragraph::new(label).style(action_surface(app, target, enabled, context)),
+            Paragraph::new(label).style(
+                Style::default()
+                    .fg(context.muted())
+                    .patch(action_surface(app, target, enabled, context)),
+            ),
             area,
         );
     }
@@ -171,14 +161,12 @@ fn action_surface(app: &App, target: Target, enabled: bool, context: RenderConte
             .add_modifier(Modifier::DIM);
     }
     if state.pressed {
-        return Style::default()
-            .fg(context.pressed_foreground())
-            .add_modifier(Modifier::BOLD);
+        return Style::default().fg(context.pressed_foreground());
     }
     if app.fullscreen.header.selected() == Some(target) {
         return Style::default()
             .fg(context.focus())
-            .add_modifier(Modifier::BOLD | Modifier::UNDERLINED);
+            .add_modifier(Modifier::UNDERLINED);
     }
     if state.hovered {
         return Style::default().fg(context.hover_foreground());
@@ -192,7 +180,6 @@ pub(super) fn target_at(app: &App, area: Rect, position: Position) -> Option<Tar
         (Target::Home, areas.home, true),
         (Target::Branch, areas.branch, branch_enabled(app)),
         (Target::Workspace, areas.workspace, workspace_enabled(app)),
-        (Target::AddRoot, areas.add_root, add_root_enabled(app)),
         (Target::Context, areas.context, true),
         (Target::Dashboard, areas.dashboard, true),
     ]
@@ -205,7 +192,6 @@ pub(super) fn keyboard_targets(app: &App) -> Vec<Target> {
         (Target::Home, true),
         (Target::Branch, branch_enabled(app)),
         (Target::Workspace, workspace_enabled(app)),
-        (Target::AddRoot, add_root_enabled(app)),
         (Target::Context, true),
         (Target::Dashboard, true),
     ]
@@ -220,10 +206,6 @@ fn branch_enabled(app: &App) -> bool {
 
 fn workspace_enabled(app: &App) -> bool {
     app.workspace_mutation_available() && app.workspace_switch_available()
-}
-
-fn add_root_enabled(app: &App) -> bool {
-    app.workspace_mutation_available() && app.sessions.active_session_id().is_some()
 }
 
 fn header_layout(area: Rect, app: &App, context: RenderContext<'_>) -> HeaderLayout {
@@ -301,46 +283,24 @@ fn header_layout(area: Rect, app: &App, context: RenderContext<'_>) -> HeaderLay
         status.x.saturating_sub(1)
     };
     let workspace_start = home.right();
-    let add_width = if workspace_right.saturating_sub(workspace_start) >= 8 {
-        ADD_ROOT.width() as u16
-    } else {
-        0
-    };
-    let add_root = if add_width > 0 {
-        Rect::new(
-            workspace_right.saturating_sub(add_width),
-            area.y,
-            add_width,
-            1,
-        )
-    } else {
-        Rect::default()
-    };
-    let identity_right = if add_root.is_empty() {
-        workspace_right
-    } else {
-        add_root.x.saturating_sub(1)
-    };
-    let identity_width = identity_right.saturating_sub(workspace_start);
+    let available_identity = workspace_right.saturating_sub(workspace_start);
+    let content_budget = available_identity;
     let branch_text = app.status_line().branch_label().unwrap_or_default();
     let branch_width = if branch_text.is_empty() {
         0
     } else {
-        (branch_text.width() as u16).min(identity_width / 2)
+        (branch_text.width() as u16).min(content_budget / 2)
     };
     let branch = Rect::new(workspace_start, area.y, branch_width, 1);
     let path_start = branch.right().saturating_add(u16::from(branch_width > 0));
-    let workspace = Rect::new(
-        path_start,
-        area.y,
-        identity_right.saturating_sub(path_start),
-        1,
-    );
+    let remaining_for_path = workspace_right.saturating_sub(path_start);
+    let path_text = app.welcome().directory();
+    let path_width = (path_text.width() as u16).min(remaining_for_path);
+    let workspace = Rect::new(path_start, area.y, path_width, 1);
     HeaderLayout {
         home,
         branch,
         workspace,
-        add_root,
         status,
         context,
         dashboard,

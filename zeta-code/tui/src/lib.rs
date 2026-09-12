@@ -335,8 +335,6 @@ pub enum TuiExit {
     UserRequested,
     /// The host process received an operating-system termination request.
     TerminationRequested,
-    /// The local host should reopen the product at another Project root.
-    SwitchWorkspace { path: PathBuf },
     /// The initialized App Server connection ended; a home page may have no durable conversation.
     ConnectionLost {
         kind: TuiConnectionLossKind,

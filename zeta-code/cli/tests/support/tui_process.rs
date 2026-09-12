@@ -78,10 +78,8 @@ impl Fixture {
             ("CODEX_HOME", self.codex_home()),
             (
                 "ZETA_APP_SERVER_PATH",
-                self.daemon.with_file_name(format!(
-                    "zeta-app-server{}",
-                    std::env::consts::EXE_SUFFIX
-                )),
+                self.daemon
+                    .with_file_name(format!("zeta-app-server{}", std::env::consts::EXE_SUFFIX)),
             ),
         ];
         #[cfg(windows)]

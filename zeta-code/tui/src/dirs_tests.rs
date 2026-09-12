@@ -479,3 +479,56 @@ fn dir_view_maps_exact_paths_to_remove_actions() {
                 && params.permissions.is_empty()
     ));
 }
+
+#[test]
+fn move_session_adds_directory_and_updates_cwd() {
+    use std::sync::Arc;
+    use zeta_app_server_client::InProcessClientOptions;
+    use zeta_app_server_client::start_in_process_client;
+    use zeta_app_server_protocol::protocol::common::ClientInfo;
+    struct NoModel;
+    impl zeta_client::OperationClient for NoModel {
+        fn execute(
+            &self,
+            _: &zeta_client::ClientRequest,
+        ) -> Result<zeta_client::ClientResponse, zeta_client::ClientError> {
+            panic!("Directory operations must not invoke a model")
+        }
+    }
+    let _guard = crate::test_support::in_process_test_guard();
+    let root = tempfile::tempdir().unwrap();
+    let primary = root.path().join("primary");
+    let target = root.path().join("target");
+    std::fs::create_dir_all(&primary).unwrap();
+    std::fs::create_dir_all(&target).unwrap();
+    let mut client = start_in_process_client(
+        InProcessClientOptions::new(
+            root.path().join("state"),
+            ClientInfo {
+                name: "dir-move-test".into(),
+                version: "1".into(),
+            },
+        )
+        .with_dir_root(primary.clone())
+        .with_model_operation_client(Arc::new(NoModel))
+        .with_capabilities(crate::client_capabilities()),
+    )
+    .unwrap();
+    let conversation =
+        crate::sessions::ActiveConversation::start(&mut client, "test".into()).unwrap();
+    let session_id = conversation.session_id().clone();
+
+    let event = super::execute(
+        &mut client,
+        &session_id,
+        super::Command::MoveSession {
+            path: target.clone(),
+        },
+    )
+    .unwrap();
+
+    let super::Event::Moved { path } = event else {
+        panic!("execute MoveSession must return Event::Moved");
+    };
+    assert_eq!(path, target.canonicalize().unwrap());
+}

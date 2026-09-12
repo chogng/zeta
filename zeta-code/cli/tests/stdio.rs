@@ -64,10 +64,16 @@ fn zeta_code_cli_serves_the_remote_stdio_contract() {
     session.shutdown().unwrap();
     let deadline = Instant::now() + Duration::from_secs(2);
     loop {
-        match events.recv_timeout(deadline.saturating_duration_since(Instant::now())).unwrap() {
+        match events
+            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+            .unwrap()
+        {
             AppServerEvent::Notification(_) => {}
             event => {
-                assert_eq!(event, AppServerEvent::ConnectionClosed(ConnectionCloseReason::Shutdown));
+                assert_eq!(
+                    event,
+                    AppServerEvent::ConnectionClosed(ConnectionCloseReason::Shutdown)
+                );
                 break;
             }
         }

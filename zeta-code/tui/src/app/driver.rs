@@ -56,7 +56,6 @@ pub(super) enum CommandEffect {
     None,
     Quit,
     Suspend,
-    SwitchWorkspace(PathBuf),
 }
 
 #[derive(Default)]

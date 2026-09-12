@@ -255,13 +255,6 @@ pub(super) fn activate_header_target(
             ));
             Some(crate::projects::Command::OpenRoots.into())
         }
-        Target::AddRoot => {
-            app.open_command_panel(CommandPanel::loading(
-                "Add project folder",
-                "Loading directory permissions…",
-            ));
-            Some(crate::projects::Command::OpenAddRoot.into())
-        }
         Target::Context => {
             app.open_command_panel(CommandPanel::loading("Status", "Loading context…"));
             Some(crate::status::Command::OpenPanel.into())

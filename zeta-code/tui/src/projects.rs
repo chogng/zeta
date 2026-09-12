@@ -54,9 +54,9 @@ impl Command {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct RootSelectionAction {
-    pub(crate) path: PathBuf,
-    pub(crate) current: bool,
+pub(crate) enum RootSelectionAction {
+    Switch { path: PathBuf, current: bool },
+    Add,
 }
 
 pub(crate) fn execute<T>(
@@ -70,8 +70,12 @@ where
 {
     match command {
         Command::OpenRoots => {
-            let project = current_project(client, workspace, session_id)?
-                .ok_or("This workspace is not part of a Project yet. Use [+] to add one.")?;
+            let session_id =
+                session_id.ok_or("Start or resume a session before viewing Project folders")?;
+            let project = match current_project(client, workspace, Some(session_id))? {
+                Some(project) => project,
+                None => create_project(client, workspace, session_id)?,
+            };
             Ok(Event::RootsOpened(root_choices(&project, workspace)))
         }
         Command::OpenAddRoot => {
@@ -302,7 +306,7 @@ pub(crate) fn root_choices(project: &ProjectDto, workspace: &Path) -> RootChoice
         .expect("Project root choices require the current workspace root");
     let mut actions = BTreeMap::new();
     let mut current = 0;
-    let items = project
+    let mut items: Vec<ListSelectionItem> = project
         .roots
         .iter()
         .filter(|root| root.environment_id == current_environment)
@@ -315,7 +319,7 @@ pub(crate) fn root_choices(project: &ProjectDto, workspace: &Path) -> RootChoice
             let id = ListSelectionItemId::new(format!("project-root:{}", root.dir_id));
             actions.insert(
                 id.clone(),
-                RootSelectionAction {
+                RootSelectionAction::Switch {
                     path: root.path.clone(),
                     current: is_current,
                 },
@@ -325,6 +329,13 @@ pub(crate) fn root_choices(project: &ProjectDto, workspace: &Path) -> RootChoice
                 .with_description(root.path.display().to_string())
         })
         .collect();
+    let add_id = ListSelectionItemId::new("project-root:add");
+    actions.insert(add_id.clone(), RootSelectionAction::Add);
+    items.push(
+        ListSelectionItem::new("+ Add folder to project…")
+            .with_id(add_id)
+            .with_description("Add a directory to this project"),
+    );
     RootChoices {
         model: ListSelectionModel::new(
             "Switch project folder",

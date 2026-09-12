@@ -276,7 +276,6 @@ impl AppDriver {
             }
             AppCommand::Quit => return CommandEffect::Quit,
             AppCommand::Suspend => return CommandEffect::Suspend,
-            AppCommand::SwitchWorkspace(path) => return CommandEffect::SwitchWorkspace(path),
         }
         CommandEffect::None
     }
@@ -418,14 +417,16 @@ impl AppDriver {
             .conversation
             .as_ref()
             .map(|current| current.subscription.clone());
+        let workspace = self.app.startup_context().workspace.clone();
         self.requests.spawn(
             request_key,
             "zeta-tui-product-command",
             move || Completion::ProductCommand {
                 command: invocation.display_text(),
-                result: execute_product_command(conversation, &mut client, invocation).and_then(
-                    |output| finish_product_command_request(&mut client, subscription, output),
-                ),
+                result: execute_product_command(conversation, &mut client, &workspace, invocation)
+                    .and_then(|output| {
+                        finish_product_command_request(&mut client, subscription, output)
+                    }),
             },
             &mut self.app,
             origin,

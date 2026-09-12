@@ -14,6 +14,8 @@ use crate::thread::composer::SlashCommandInvocation;
 use crate::thread::composer::TuiSlashCommandAction;
 use crate::thread::rewind;
 use std::fmt;
+use std::path::Path;
+use std::path::PathBuf;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
@@ -30,13 +32,14 @@ pub(crate) struct ProductCommandOutput {
 pub(crate) fn execute_product_command<T>(
     mut conversation: Option<ActiveConversation>,
     client: &mut AppServerClient<T>,
+    workspace: &Path,
     invocation: SlashCommandInvocation,
 ) -> Result<ProductCommandOutput, String>
 where
     T: JsonRpcTransport,
 {
     let command = invocation.display_text();
-    dispatch(&mut conversation, client, invocation)
+    dispatch(&mut conversation, client, workspace, invocation)
         .map(|output| ProductCommandOutput {
             conversation,
             command,
@@ -49,6 +52,7 @@ where
 fn dispatch<T>(
     conversation: &mut Option<ActiveConversation>,
     client: &mut AppServerClient<T>,
+    workspace: &Path,
     invocation: SlashCommandInvocation,
 ) -> Result<CommandOutput, CommandExecutionError>
 where
@@ -221,6 +225,54 @@ where
                     .events
                     .push(crate::thread::Event::CommandCompleted { command, result }.into());
             }
+        }
+        TuiSlashCommandAction::Cd => {
+            let session_id = require_conversation(conversation)?.session_id();
+            let target = arguments.trim();
+            if target.is_empty() {
+                return Err(CommandExecutionError(
+                    "/cd requires a target directory path".into(),
+                ));
+            }
+            let expanded = if let Some(stripped) = target.strip_prefix("~/") {
+                ::dirs::home_dir()
+                    .map(|h| h.join(stripped))
+                    .unwrap_or_else(|| PathBuf::from(target))
+            } else if target == "~" {
+                ::dirs::home_dir().unwrap_or_else(|| PathBuf::from(target))
+            } else {
+                PathBuf::from(target)
+            };
+            let target_path = if expanded.is_relative() {
+                workspace.join(expanded)
+            } else {
+                expanded
+            };
+            let canonical = target_path.canonicalize().map_err(|error| {
+                CommandExecutionError(format!(
+                    "Cannot access directory {}: {error}",
+                    target_path.display()
+                ))
+            })?;
+            if !canonical.is_dir() {
+                return Err(CommandExecutionError(format!(
+                    "Path is not a directory: {}",
+                    canonical.display()
+                )));
+            }
+            dirs::move_session(client, session_id, canonical.clone())
+                .map_err(|error| CommandExecutionError(error.to_string()))?;
+            let command = format!("/cd {target}");
+            let result = format!("Moved session to {}", canonical.display());
+            output
+                .events
+                .push(crate::dirs::Event::Moved { path: canonical }.into());
+            output
+                .events
+                .push(crate::thread::Event::CommandStarted(command.clone()).into());
+            output
+                .events
+                .push(crate::thread::Event::CommandCompleted { command, result }.into());
         }
         TuiSlashCommandAction::Fork => {
             output.conversation_change = Some(

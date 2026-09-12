@@ -23,6 +23,7 @@ fn builtins_follow_enum_presentation_order() {
             "startup",
             "home",
             "add-dir",
+            "cd",
             "fork",
             "help",
             "shortcuts",
@@ -37,11 +38,15 @@ fn builtins_follow_enum_presentation_order() {
             "pr",
         ]
     );
-    assert_eq!(definitions.len(), 25);
+    assert_eq!(definitions.len(), 26);
 }
 
 #[test]
 fn builtins_declare_argument_support() {
+    assert_eq!(
+        TuiSlashCommandAction::Cd.argument_mode(),
+        SlashCommandArgumentMode::Optional
+    );
     assert_eq!(
         TuiSlashCommandAction::Model.argument_mode(),
         SlashCommandArgumentMode::Optional

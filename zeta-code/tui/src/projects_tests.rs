@@ -30,8 +30,19 @@ fn project_root_picker_preselects_the_current_workspace() {
     assert_eq!(picker.state().selected_item().unwrap().label(), "b");
     assert!(matches!(
         picker.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        ListSelectionOutcome::Activate(RootSelectionAction { path, current: true })
+        ListSelectionOutcome::Activate(RootSelectionAction::Switch { path, current: true })
             if path == Path::new("/work/b")
+    ));
+
+    // Navigating to the last item selects the add folder action
+    picker.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(
+        picker.state().selected_item().unwrap().label(),
+        "+ Add folder to project…"
+    );
+    assert!(matches!(
+        picker.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        ListSelectionOutcome::Activate(RootSelectionAction::Add)
     ));
 }
 
