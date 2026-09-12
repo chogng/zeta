@@ -649,3 +649,5 @@ just test zeta-model-provider --lib live_luna_cache_requires_session_routing_hea
 - checkpoint durable，但不删除原始 history；
 - 多 Agent 只通过 immutable seed 和 durable message/result 传递 context；
 - 跨 Thread memory 在单独 RFC 完成前不进入 ContextManager。
+
+Code Mode 重新绑定工具服务时同步更新工具与权限服务，并保留共享的单元、父调用关系和会话存储。已有单元保留创建时的调用服务与冻结目录；宿主只授权隔离运行器的控制操作，每个嵌套工具仍经过自己的权限检查。

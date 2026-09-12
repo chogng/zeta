@@ -19,6 +19,13 @@ export async function launchElectron(options: ElectronLaunchOptions): Promise<El
 	});
 	const page = application.windows()[0] ?? await application.waitForEvent("window", { timeout: 30_000 });
 	const driver = new ElectronPlaywrightDriver(application, page);
-	await driver.workbench.waitForReady();
+	try {
+		await driver.workbench.waitForReady();
+	} catch (error) {
+		const text = await page.locator('body').innerText().catch(() => 'Document is unavailable');
+		const details = driver.consoleErrors.slice(-8).join('\n');
+		await application.close().catch(() => undefined);
+		throw new Error(`Workbench startup failed at ${page.url()}:\n${text}\n${details}`, { cause: error });
+	}
 	return { application, driver };
 }

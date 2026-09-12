@@ -13,6 +13,7 @@ pub enum AppCommandId {
     ToggleTerminalSurface,
     OpenKeyboardShortcuts,
     ManageRemoteTunnels,
+    ManageMemories,
     ToggleTabContainer,
     ToggleFilesPane,
     AddSession,
@@ -42,13 +43,14 @@ pub enum AppCommandId {
 
 impl AppCommandId {
     /// Commands that can currently be assigned a user keybinding.
-    pub const BINDABLE: [Self; 22] = [
+    pub const BINDABLE: [Self; 23] = [
         Self::Copy,
         Self::Paste,
         Self::Save,
         Self::ToggleTerminalSurface,
         Self::OpenKeyboardShortcuts,
         Self::ManageRemoteTunnels,
+        Self::ManageMemories,
         Self::PickExecutionLocation,
         Self::ToggleTabContainer,
         Self::ToggleFilesPane,
@@ -68,13 +70,14 @@ impl AppCommandId {
     ];
 
     /// Every command known to the app command catalog.
-    pub const ALL: [Self; 31] = [
+    pub const ALL: [Self; 32] = [
         Self::Copy,
         Self::Paste,
         Self::Save,
         Self::ToggleTerminalSurface,
         Self::OpenKeyboardShortcuts,
         Self::ManageRemoteTunnels,
+        Self::ManageMemories,
         Self::ToggleTabContainer,
         Self::ToggleFilesPane,
         Self::AddSession,
@@ -115,6 +118,7 @@ impl AppCommandId {
             Self::ToggleTerminalSurface => "workbench.action.toggleTerminal",
             Self::OpenKeyboardShortcuts => "workbench.action.openKeyboardShortcuts",
             Self::ManageRemoteTunnels => "workbench.action.manageRemoteTunnels",
+            Self::ManageMemories => "zeta.memories.open",
             Self::ToggleTabContainer => "workbench.action.toggleTabContainer",
             Self::ToggleFilesPane => "workbench.action.toggleAuxiliaryBar",
             Self::AddSession => "workbench.action.newSession",
@@ -152,6 +156,7 @@ impl AppCommandId {
             Self::ToggleTerminalSurface => "Toggle terminal",
             Self::OpenKeyboardShortcuts => "Keyboard shortcuts",
             Self::ManageRemoteTunnels => "Manage Remote tunnels",
+            Self::ManageMemories => "Manage memories",
             Self::ToggleTabContainer => "Toggle sidebar",
             Self::ToggleFilesPane => "Toggle files pane",
             Self::AddSession => "New session",

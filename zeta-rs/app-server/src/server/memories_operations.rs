@@ -64,6 +64,7 @@ impl AppServer {
                 scope: params.scope,
                 expected_revision: params.expected_revision,
                 automatic_read: params.automatic_read,
+                model_write: params.model_write,
             })
             .map_err(memory_error)?;
         if mutation.disposition == MemoryMutationDisposition::Committed {
@@ -95,6 +96,57 @@ impl AppServer {
             .map_err(memory_error)?;
         if mutation.disposition == MemoryMutationDisposition::Committed {
             self.analytics.record(analytics::UsageEvent::MemoryAdded);
+            self.updates.publish_memory_changed(MemoryChanged {
+                scope: mutation.memory.scope.clone(),
+                catalog_revision: mutation.catalog_revision,
+            });
+        }
+        result(&mutation)
+    }
+
+    pub(super) fn memory_scopes(
+        &self,
+        connection: &ConnectionState,
+        value: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: zeta_app_server_protocol::protocol::memory::MemoryScopesParams = decode(value)?;
+        let memories = self.memories(connection)?;
+        let scopes = self
+            .memory_scope_labels(params.thread_id.as_ref())
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?
+            .into_iter()
+            .map(|(scope, label)| {
+                memories.policy(&scope).map(|policy| {
+                    zeta_app_server_protocol::protocol::memory::MemoryScopeDescriptor {
+                        label,
+                        policy,
+                    }
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(memory_error)?;
+        result(&zeta_app_server_protocol::protocol::memory::MemoryScopesResult { scopes })
+    }
+
+    pub(super) fn memory_update(
+        &self,
+        connection: &ConnectionState,
+        value: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: zeta_app_server_protocol::protocol::memory::MemoryUpdateParams = decode(value)?;
+        self.authorize_memory_scope(connection, &params.scope)?;
+        let mutation = self
+            .memories(connection)?
+            .update_user_memory(memories::UpdateMemoryRequest {
+                command_id: params.command_id,
+                memory_id: params.memory_id,
+                scope: params.scope,
+                expected_revision: params.expected_revision,
+                title: params.title,
+                body: params.body,
+            })
+            .map_err(memory_error)?;
+        if mutation.disposition == MemoryMutationDisposition::Committed {
             self.updates.publish_memory_changed(MemoryChanged {
                 scope: mutation.memory.scope.clone(),
                 catalog_revision: mutation.catalog_revision,
@@ -215,6 +267,7 @@ impl AppServer {
 
 fn memory_error(error: MemoryError) -> RpcError {
     match error {
+        MemoryError::WriteDenied => RpcError::new(-32073, AppServerErrorName::PermissionRequired),
         MemoryError::ReadDenied => RpcError::new(-32135, AppServerErrorName::MemoryOperationFailed),
         MemoryError::InvalidInput(_) => RpcError::new(-32602, AppServerErrorName::InvalidParams),
         MemoryError::NotFound => RpcError::new(-32131, AppServerErrorName::MemoryNotFound),

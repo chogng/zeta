@@ -1,3 +1,4 @@
+import { AppServerMemoriesService } from '../../memories/browser/appServerMemoriesService.js';
 import { AppServerMemoryDiagnosticsService } from '../../memory/browser/appServerMemoryDiagnosticsService.js';
 import type { MemoryObservation } from '../../memory/common/memoryDiagnosticsService.js';
 import { AppServerProtocolIncompatibleError } from '../../app-server/common/appServerProtocolCompatibility.js';
@@ -100,6 +101,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				},
 				clipboardService: { readText: () => invoke<string>('zeta:host:readClipboard'), writeText: text => invoke<void>('zeta:host:writeClipboard', text) },
 			}, contributions);
+			if (client.capabilities?.memories) { backend = { ...backend, memories: resources.add(new AppServerMemoriesService(client)) }; }
 			if (client.capabilities?.contracts.memoryDiagnostics?.version === 1) { backend = { ...backend, memoryDiagnostics: resources.add(new AppServerMemoryDiagnosticsService(client, 'electron', () => invoke<MemoryObservation[]>('zeta:memory:collect'))) }; }
 			if (client.capabilities?.contracts.automation?.version === 1) { backend = { ...backend, automation: resources.add(new AppServerAutomationService(client)) }; }
 			if ((await createRemoteAgentApi().getConnection()).kind === 'ssh') {

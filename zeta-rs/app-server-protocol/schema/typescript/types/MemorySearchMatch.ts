@@ -2,5 +2,6 @@
 import type { MemoryCitation } from './MemoryCitation.js';
 import type { MemoryId } from './MemoryId.js';
 import type { MemoryScope } from './MemoryScope.js';
+import type { MemorySource } from './MemorySource.js';
 
-export type MemorySearchMatch = { citation: MemoryCitation, memoryId: MemoryId, scope: MemoryScope, revision: number, title: string, excerpt: string, updatedAtUnixMs: number, };
+export type MemorySearchMatch = { source: MemorySource, citation: MemoryCitation, memoryId: MemoryId, scope: MemoryScope, revision: number, title: string, excerpt: string, updatedAtUnixMs: number, };

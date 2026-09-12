@@ -299,3 +299,5 @@ impl SettingsPageLayout {
 #[cfg(test)]
 #[path = "lib_tests.rs"]
 mod tests;
+
+pub use sections::OPEN_MEMORIES;

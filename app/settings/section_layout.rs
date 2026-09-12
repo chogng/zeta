@@ -1,6 +1,5 @@
 use zui::ui::Rect;
 
-pub(crate) const CARD_GAP: f32 = 12.0;
 pub(crate) const ROW_HEIGHT: f32 = 36.0;
 
 const CONTENT_INSET_X: f32 = 38.0;

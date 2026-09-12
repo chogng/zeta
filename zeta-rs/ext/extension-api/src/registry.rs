@@ -43,11 +43,11 @@ pub struct ExtensionRegistryBuilder {
     lifecycle: Vec<Arc<dyn LifecycleObserver>>,
     idle: Vec<Arc<dyn IdleContributor>>,
     items: Vec<Arc<dyn ItemContributor>>,
-    capability_tools: Vec<Arc<dyn CapabilityToolContributor>>,
+    capability_tools: Vec<(&'static str, Arc<dyn CapabilityToolContributor>)>,
     read_only_tools: Vec<(&'static str, Arc<dyn ReadOnlyToolContributor>)>,
     context: Vec<(&'static str, Arc<dyn ContextContributor>)>,
     skill_activation: Vec<Arc<dyn SkillActivationContributor>>,
-    turn_input: Vec<Arc<dyn TurnInputContributor>>,
+    turn_input: Vec<(&'static str, Arc<dyn TurnInputContributor>)>,
 }
 
 impl ExtensionRegistryBuilder {
@@ -118,17 +118,28 @@ impl ExtensionRegistryBuilder {
 
     pub fn capability_tool_contributor(
         &mut self,
+        name: &'static str,
         contributor: Arc<dyn CapabilityToolContributor>,
     ) -> &mut Self {
-        self.capability_tools.push(contributor);
+        if let Some((_, current)) = self.capability_tools.iter_mut().find(|(id, _)| *id == name) {
+            *current = contributor;
+        } else {
+            self.capability_tools.push((name, contributor));
+        }
         self
     }
 
+    /// Installs or replaces one extension's invocation instructions in registration order.
     pub fn turn_input_contributor(
         &mut self,
+        name: &'static str,
         contributor: Arc<dyn TurnInputContributor>,
     ) -> &mut Self {
-        self.turn_input.push(contributor);
+        if let Some((_, current)) = self.turn_input.iter_mut().find(|(id, _)| *id == name) {
+            *current = contributor;
+        } else {
+            self.turn_input.push((name, contributor));
+        }
         self
     }
 
@@ -151,11 +162,11 @@ pub struct ExtensionRegistry {
     lifecycle: Vec<Arc<dyn LifecycleObserver>>,
     idle: Vec<Arc<dyn IdleContributor>>,
     items: Vec<Arc<dyn ItemContributor>>,
-    capability_tools: Vec<Arc<dyn CapabilityToolContributor>>,
+    capability_tools: Vec<(&'static str, Arc<dyn CapabilityToolContributor>)>,
     read_only_tools: Vec<(&'static str, Arc<dyn ReadOnlyToolContributor>)>,
     context: Vec<(&'static str, Arc<dyn ContextContributor>)>,
     skill_activation: Vec<Arc<dyn SkillActivationContributor>>,
-    turn_input: Vec<Arc<dyn TurnInputContributor>>,
+    turn_input: Vec<(&'static str, Arc<dyn TurnInputContributor>)>,
 }
 
 impl ExtensionRegistry {
@@ -224,7 +235,7 @@ impl ExtensionRegistry {
     ) -> Result<Vec<CapabilityToolContribution>, ExtensionError> {
         let mut tools = Vec::new();
         let mut names = BTreeSet::new();
-        for contributor in &self.capability_tools {
+        for (_, contributor) in &self.capability_tools {
             for contribution in contributor.contribute()? {
                 let definition = contribution.executor().definition();
                 if !names.insert(definition.name().clone()) {
@@ -287,7 +298,7 @@ impl ExtensionRegistry {
         input: TurnInputContext<'_>,
     ) -> Result<Vec<PromptFragment>, ExtensionError> {
         let mut fragments = Vec::new();
-        for contributor in &self.turn_input {
+        for (_, contributor) in &self.turn_input {
             fragments.extend(contributor.contribute(match input.session_id() {
                 Some(session_id) => TurnInputContext::for_session(
                     session_id,

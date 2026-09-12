@@ -14,6 +14,20 @@ pub enum MemoryReadMode {
     FirstInvocation,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum MemoryWriteMode {
+    #[default]
+    Disabled,
+    Enabled,
+}
+
+impl MemoryWriteMode {
+    fn is_disabled(&self) -> bool {
+        *self == Self::Disabled
+    }
+}
+
 /// Scope-specific consent for automatic reading. Explicit management does not grant this consent.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -22,6 +36,7 @@ pub struct MemoryPolicy {
     #[ts(type = "number")]
     pub revision: u64,
     pub automatic_read: MemoryReadMode,
+    pub model_write: MemoryWriteMode,
 }
 
 impl MemoryPolicy {
@@ -30,6 +45,7 @@ impl MemoryPolicy {
             scope,
             revision: 0,
             automatic_read: MemoryReadMode::Disabled,
+            model_write: MemoryWriteMode::Disabled,
         }
     }
 }
@@ -49,4 +65,6 @@ pub struct UpdateMemoryPolicyRequest {
     pub scope: MemoryScope,
     pub expected_revision: u64,
     pub automatic_read: MemoryReadMode,
+    #[serde(skip_serializing_if = "MemoryWriteMode::is_disabled")]
+    pub model_write: MemoryWriteMode,
 }

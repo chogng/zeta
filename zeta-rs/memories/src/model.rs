@@ -101,10 +101,16 @@ impl MemoryScope {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[ts(rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum MemorySource {
     User,
+    Model {
+        session_id: zeta_protocol::SessionId,
+        thread_id: zeta_protocol::ThreadId,
+        turn_id: zeta_protocol::TurnId,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -130,7 +136,7 @@ impl Memory {
             scope: self.scope.clone(),
             revision: self.revision,
             title: self.title.clone(),
-            source: self.source,
+            source: self.source.clone(),
             created_at_unix_ms: self.created_at_unix_ms,
             updated_at_unix_ms: self.updated_at_unix_ms,
         }
@@ -164,6 +170,7 @@ pub struct MemoryListPage {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct MemorySearchMatch {
+    pub source: MemorySource,
     pub citation: crate::MemoryCitation,
     pub memory_id: MemoryId,
     pub scope: MemoryScope,

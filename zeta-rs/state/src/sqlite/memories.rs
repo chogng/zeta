@@ -14,12 +14,15 @@ use memories::MemoryPolicyCommit;
 use memories::MemoryPolicyMutationResult;
 use memories::MemoryReadMode;
 use memories::MemoryScope;
+use memories::MemorySource;
 use memories::MemoryStore;
 use memories::MemoryStoreContextRequest;
 use memories::MemoryStoreError;
 use memories::MemoryStoreListRequest;
 use memories::MemoryStorePage;
 use memories::MemoryStoreSearchRequest;
+use memories::MemoryUpdateCommit;
+use memories::MemoryWriteMode;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::TransactionBehavior;
@@ -30,7 +33,7 @@ use std::sync::Mutex;
 use zeta_protocol::CommandId;
 
 const MEMORIES_COMPONENT: &str = "memories";
-const MEMORIES_SCHEMA_VERSION: u32 = 2;
+const MEMORIES_SCHEMA_VERSION: u32 = 3;
 
 /// SQLite implementation of Memory records, tombstones, catalog revisions, and command receipts.
 pub struct SqliteMemoryStore {
@@ -129,6 +132,7 @@ impl MemoryStore for SqliteMemoryStore {
             scope: request.scope.clone(),
             revision,
             automatic_read: request.automatic_read,
+            model_write: request.model_write,
         };
         let result = MemoryPolicyMutationResult {
             disposition: MemoryMutationDisposition::Committed,
@@ -219,6 +223,7 @@ impl MemoryStore for SqliteMemoryStore {
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(storage_error)?;
+        authorize_model_write(&transaction, &commit.memory.scope, &commit.memory.source)?;
         reject_policy_command(&transaction, &commit.command_id)?;
         if let Some(command) = load_command(&transaction, &commit.command_id)? {
             command.matches(
@@ -228,6 +233,12 @@ impl MemoryStore for SqliteMemoryStore {
                 &commit.memory.scope,
             )?;
             let memory = load_memory(&transaction, &commit.memory.scope, &commit.memory.memory_id)?;
+            if memory.revision != command.record_revision {
+                return Err(MemoryStoreError::RevisionConflict {
+                    expected: command.record_revision,
+                    actual: memory.revision,
+                });
+            }
             transaction.commit().map_err(storage_error)?;
             return Ok(MemoryMutationResult {
                 disposition: MemoryMutationDisposition::Replayed,
@@ -268,6 +279,78 @@ impl MemoryStore for SqliteMemoryStore {
             disposition: MemoryMutationDisposition::Committed,
             catalog_revision,
             memory: commit.memory.clone(),
+        })
+    }
+
+    fn update(
+        &self,
+        commit: &MemoryUpdateCommit,
+    ) -> Result<MemoryMutationResult, MemoryStoreError> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(storage_error)?;
+        authorize_model_write(&transaction, &commit.scope, &commit.source)?;
+        reject_policy_command(&transaction, &commit.command_id)?;
+        let mut memory = load_memory(&transaction, &commit.scope, &commit.memory_id)?;
+        if matches!(&commit.source, MemorySource::Model { .. })
+            && memory.source == MemorySource::User
+        {
+            return Err(MemoryStoreError::WriteDenied);
+        }
+        if let Some(command) = load_command(&transaction, &commit.command_id)? {
+            command.matches(
+                "update",
+                &commit.fingerprint,
+                &commit.memory_id,
+                &commit.scope,
+            )?;
+            if memory.revision != command.record_revision {
+                return Err(MemoryStoreError::RevisionConflict {
+                    expected: command.record_revision,
+                    actual: memory.revision,
+                });
+            }
+            return Ok(MemoryMutationResult {
+                disposition: MemoryMutationDisposition::Replayed,
+                catalog_revision: command.catalog_revision,
+                memory,
+            });
+        }
+        if memory.revision != commit.expected_revision {
+            return Err(MemoryStoreError::RevisionConflict {
+                expected: commit.expected_revision,
+                actual: memory.revision,
+            });
+        }
+        memory.revision = memory
+            .revision
+            .checked_add(1)
+            .ok_or_else(|| MemoryStoreError::Storage("Memory revision overflow".into()))?;
+        memory.title = commit.title.clone();
+        memory.body = commit.body.clone();
+        memory.source = commit.source.clone();
+        memory.updated_at_unix_ms = commit.updated_at_unix_ms;
+        let catalog_revision = next_catalog_revision(&transaction)?;
+        transaction.execute(
+            "UPDATE memories SET record_revision = ?1, record_json = ?2, normalized_search = ?3 WHERE memory_id = ?4 AND scope_key = ?5",
+            params![to_sql_integer(memory.revision).map_err(MemoryStoreError::Storage)?, serialize(&memory)?, commit.normalized_search_text, memory.memory_id.as_str(), memory.scope.storage_key()],
+        ).map_err(storage_error)?;
+        insert_command(
+            &transaction,
+            &commit.command_id,
+            "update",
+            &commit.fingerprint,
+            &memory.memory_id,
+            &memory.scope,
+            memory.revision,
+            catalog_revision,
+        )?;
+        transaction.commit().map_err(storage_error)?;
+        Ok(MemoryMutationResult {
+            disposition: MemoryMutationDisposition::Committed,
+            catalog_revision,
+            memory,
         })
     }
 
@@ -432,7 +515,7 @@ fn initialize(connection: &mut Connection) -> Result<(), MemoryStoreError> {
                 )
                 .map_err(storage_error)?;
         }
-        Some(1 | MEMORIES_SCHEMA_VERSION) => {}
+        Some(1 | 2 | MEMORIES_SCHEMA_VERSION) => {}
         Some(version) => {
             return Err(MemoryStoreError::Storage(format!(
                 "unsupported Memories SQLite schema version {version}"
@@ -443,6 +526,18 @@ fn initialize(connection: &mut Connection) -> Result<(), MemoryStoreError> {
         transaction.execute_batch(
             "CREATE TABLE memory_policies (scope_key TEXT PRIMARY KEY, policy_json TEXT NOT NULL);
              CREATE TABLE memory_policy_commands (command_id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, result_json TEXT NOT NULL);"
+        ).map_err(storage_error)?;
+        transaction
+            .execute(
+                "UPDATE zeta_schema_migrations SET version = ?1 WHERE component = ?2",
+                params![MEMORIES_SCHEMA_VERSION, MEMORIES_COMPONENT],
+            )
+            .map_err(storage_error)?;
+    }
+    if version == Some(2) {
+        transaction.execute_batch(
+            "UPDATE memory_policies SET policy_json = json_set(policy_json, '$.modelWrite', 'disabled');
+             UPDATE memory_policy_commands SET result_json = json_set(result_json, '$.policy.modelWrite', 'disabled');"
         ).map_err(storage_error)?;
         transaction
             .execute(
@@ -732,6 +827,19 @@ fn reject_policy_command(
         .map_err(storage_error)?;
     if exists {
         return Err(MemoryStoreError::CommandConflict);
+    }
+    Ok(())
+}
+
+fn authorize_model_write(
+    connection: &Connection,
+    scope: &MemoryScope,
+    source: &MemorySource,
+) -> Result<(), MemoryStoreError> {
+    if matches!(source, MemorySource::Model { .. })
+        && read_policy(connection, scope)?.model_write != MemoryWriteMode::Enabled
+    {
+        return Err(MemoryStoreError::WriteDenied);
     }
     Ok(())
 }

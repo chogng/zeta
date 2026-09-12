@@ -22,6 +22,8 @@ use zeta_protocol::ToolOutputStream;
 
 pub(super) struct BrokerToolInvoker {
     broker: Weak<CodeModeBrokerInner>,
+    tools: Arc<dyn crate::ToolService>,
+    policy: Arc<dyn crate::ActionPolicyService>,
     key: RuntimeKey,
     frozen_catalog: crate::ModelToolCatalogSnapshot,
     cancellation: CancellationToken,
@@ -37,6 +39,8 @@ pub(super) struct BrokerToolInvoker {
 impl BrokerToolInvoker {
     pub(super) fn new(
         broker: Weak<CodeModeBrokerInner>,
+        tools: Arc<dyn crate::ToolService>,
+        policy: Arc<dyn crate::ActionPolicyService>,
         key: RuntimeKey,
         frozen_catalog: crate::ModelToolCatalogSnapshot,
         cancellation: &CancellationToken,
@@ -47,6 +51,8 @@ impl BrokerToolInvoker {
         let close_source = cancellation.child_source();
         Self {
             broker,
+            tools,
+            policy,
             key,
             frozen_catalog,
             cancellation: close_source.token(),
@@ -89,6 +95,8 @@ impl ToolInvoker for BrokerToolInvoker {
             .invoke_nested(
                 &self.key,
                 &self.frozen_catalog,
+                Arc::clone(&self.tools),
+                Arc::clone(&self.policy),
                 call,
                 &cell_cancellation,
                 Arc::clone(&self.updates),

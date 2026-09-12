@@ -15,6 +15,20 @@ pub struct MemoryAddCommit {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MemoryUpdateCommit {
+    pub command_id: CommandId,
+    pub fingerprint: String,
+    pub memory_id: MemoryId,
+    pub scope: MemoryScope,
+    pub expected_revision: u64,
+    pub title: String,
+    pub body: String,
+    pub source: crate::MemorySource,
+    pub normalized_search_text: String,
+    pub updated_at_unix_ms: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MemoryDeleteCommit {
     pub command_id: CommandId,
     pub fingerprint: String,
@@ -62,6 +76,9 @@ pub trait MemoryStore: Send + Sync {
     fn context(&self, request: &MemoryStoreContextRequest)
     -> Result<Vec<Memory>, MemoryStoreError>;
     fn add(&self, commit: &MemoryAddCommit) -> Result<MemoryMutationResult, MemoryStoreError>;
+    /// Updates one exact revision and checks model-write consent and ownership in the same transaction.
+    fn update(&self, commit: &MemoryUpdateCommit)
+    -> Result<MemoryMutationResult, MemoryStoreError>;
     fn delete(&self, commit: &MemoryDeleteCommit) -> Result<MemoryDeleteResult, MemoryStoreError>;
     fn read(&self, scope: &MemoryScope, memory_id: &MemoryId) -> Result<Memory, MemoryStoreError>;
     /// Reads an opted-in Memory and its policy in one snapshot, before loading any body.
@@ -79,6 +96,7 @@ pub trait MemoryStore: Send + Sync {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum MemoryStoreError {
+    WriteDenied,
     ReadDenied,
     NotFound,
     AlreadyExists,
@@ -91,6 +109,7 @@ pub enum MemoryStoreError {
 impl fmt::Display for MemoryStoreError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::WriteDenied => formatter.write_str("Memory model writing is not authorized"),
             Self::ReadDenied => {
                 formatter.write_str("Memory scope is not enabled for model reading")
             }

@@ -27,6 +27,8 @@ impl CodeModeBrokerInner {
         &self,
         key: &RuntimeKey,
         frozen_catalog: &crate::ModelToolCatalogSnapshot,
+        tools: Arc<dyn crate::ToolService>,
+        policy: Arc<dyn crate::ActionPolicyService>,
         call: NestedToolCall,
         cancellation: &CancellationToken,
         updates: Arc<dyn ThreadUpdateSink>,
@@ -95,8 +97,7 @@ impl CodeModeBrokerInner {
                     call.tool_name
                 ))
             })?;
-        let current_definition = self
-            .tools
+        let current_definition = tools
             .definitions()
             .into_iter()
             .find(|candidate| candidate.name == call.tool_name)
@@ -137,8 +138,7 @@ impl CodeModeBrokerInner {
             Some(result) => result?.ok_or_else(|| {
                 CoreError::Execution("frozen nested Tool binding is unavailable".into())
             })?,
-            None => self
-                .tools
+            None => tools
                 .bind_call(&nested_call, caller)?
                 .ok_or_else(|| CoreError::Execution("nested Tool binding is unavailable".into()))?,
         };
@@ -154,13 +154,9 @@ impl CodeModeBrokerInner {
             },
         )?;
         let item_id = recorded.item.item_id().clone();
-        let scheduler = ToolScheduler::new(
-            Arc::clone(&self.threads),
-            Arc::clone(&self.tools),
-            Arc::clone(&self.policy),
-        )
-        .with_thread_updates(updates)
-        .with_hooks(hooks);
+        let scheduler = ToolScheduler::new(Arc::clone(&self.threads), tools, policy)
+            .with_thread_updates(updates)
+            .with_hooks(hooks);
 
         loop {
             cancellation

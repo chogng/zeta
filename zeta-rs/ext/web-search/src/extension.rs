@@ -34,5 +34,5 @@ impl CapabilityToolContributor for WebSearchExtension {
 
 /// Installs Web Search into the capability-bearing extension registry.
 pub fn install(builder: &mut ExtensionRegistryBuilder, backend: Arc<dyn WebSearchBackend>) {
-    builder.capability_tool_contributor(Arc::new(WebSearchExtension { backend }));
+    builder.capability_tool_contributor("web-search", Arc::new(WebSearchExtension { backend }));
 }

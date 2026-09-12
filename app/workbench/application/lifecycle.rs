@@ -247,6 +247,11 @@ impl App<WorkbenchEvent> for WorkbenchApplication {
                 self.handle_remote_tunnel_event(event);
                 return;
             }
+            WorkbenchEvent::Memories(completion) => {
+                self.memories.finish(completion);
+                self.rebuild_presentation_on_next_redraw();
+                return;
+            }
             WorkbenchEvent::Memory(completion) => {
                 self.memory.finish(completion);
                 self.rebuild_presentation_on_next_redraw();

@@ -36,6 +36,7 @@ enum InputMethodTarget {
     RemoteConnectionHost,
     RemoteConnectionDirectory,
     RemoteTunnelPort,
+    Memories(zui::ui::ElementId),
     KeyboardShortcutsSearch,
     SettingsSearch,
     FileEditor,
@@ -137,6 +138,22 @@ impl WorkbenchApplication {
             return;
         }
         match target {
+            InputMethodTarget::Memories(id) => {
+                if let Some(composition) = text_input_composition_event(event) {
+                    if id == crate::memories::BODY {
+                        self.memories.state.body.apply_composition(composition);
+                        self.memories.state.dirty = true;
+                    } else if id == crate::memories::TITLE {
+                        self.memories.state.title.apply_composition(composition);
+                        self.memories.state.dirty = true;
+                    } else {
+                        self.memories.state.query.apply_composition(composition);
+                    }
+                    self.caret_blink.activity(Instant::now());
+                    self.rebuild_presentation();
+                    self.request_redraw();
+                }
+            }
             InputMethodTarget::Disabled => {}
             InputMethodTarget::Composer => {
                 if self.session_pane.composer_model_picker_visible() {
@@ -326,6 +343,7 @@ impl WorkbenchApplication {
                 | InputMethodTarget::RemoteConnectionHost
                 | InputMethodTarget::RemoteConnectionDirectory
                 | InputMethodTarget::RemoteTunnelPort
+                | InputMethodTarget::Memories(_)
                 | InputMethodTarget::KeyboardShortcutsSearch
                 | InputMethodTarget::SettingsSearch
                 | InputMethodTarget::FileEditor
@@ -359,6 +377,15 @@ impl WorkbenchApplication {
         }
         self.remote_connection_manager
             .cancel_compositions_except(target.remote_connection_manager_field());
+        if target != InputMethodTarget::Memories(crate::memories::BODY) {
+            self.memories.state.body.cancel_composition();
+        }
+        if target != InputMethodTarget::Memories(crate::memories::TITLE) {
+            self.memories.state.title.cancel_composition();
+        }
+        if target != InputMethodTarget::Memories(crate::memories::QUERY) {
+            self.memories.state.query.cancel_composition();
+        }
         if target != InputMethodTarget::RemoteTunnelPort {
             self.remote_tunnel_manager.cancel_remote_port_composition();
         }
@@ -387,6 +414,22 @@ impl WorkbenchApplication {
     }
 
     fn input_method_target(&self) -> InputMethodTarget {
+        if !self.ui_dispatch.window_active()
+            || (self.memories.state.open && self.memories.state.busy)
+        {
+            return InputMethodTarget::Disabled;
+        }
+        if self.memories.state.open {
+            return match self.ui_dispatch.focused() {
+                Some(id @ (crate::memories::TITLE | crate::memories::BODY))
+                    if !self.memories.state.read_only =>
+                {
+                    InputMethodTarget::Memories(id)
+                }
+                Some(crate::memories::QUERY) => InputMethodTarget::Memories(crate::memories::QUERY),
+                _ => InputMethodTarget::Disabled,
+            };
+        }
         InputMethodTarget::for_context(InputMethodContext {
             window_active: self.ui_dispatch.window_active(),
             main_surface: self.main_surface.active(),

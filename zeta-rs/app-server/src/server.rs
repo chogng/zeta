@@ -1981,6 +1981,8 @@ impl AppServer {
             Some(ClientMethod::MemoryPolicyUpdate) => {
                 self.memory_policy_update(connection, &request.params)
             }
+            Some(ClientMethod::MemoryScopes) => self.memory_scopes(connection, &request.params),
+            Some(ClientMethod::MemoryUpdate) => self.memory_update(connection, &request.params),
             Some(ClientMethod::MemoryAdd) => self.memory_add(connection, &request.params),
             Some(ClientMethod::MemoryList) => self.memory_list(connection, &request.params),
             Some(ClientMethod::MemoryRead) => self.memory_read(connection, &request.params),

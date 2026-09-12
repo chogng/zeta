@@ -38,6 +38,28 @@ pub struct AddMemoryRequest {
     pub body: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct UpdateMemoryRequest {
+    pub command_id: CommandId,
+    pub memory_id: MemoryId,
+    pub scope: MemoryScope,
+    pub expected_revision: u64,
+    pub title: String,
+    pub body: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct SaveModelMemoryRequest {
+    pub command_id: CommandId,
+    pub scope: MemoryScope,
+    pub expected_revision: u64,
+    pub title: String,
+    pub body: String,
+    pub session_id: zeta_protocol::SessionId,
+    pub thread_id: zeta_protocol::ThreadId,
+    pub turn_id: zeta_protocol::TurnId,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DeleteMemoryRequest {
     pub command_id: CommandId,
@@ -119,6 +141,97 @@ impl Memories {
                     created_at_unix_ms: now,
                     updated_at_unix_ms: now,
                 },
+            })
+            .map_err(MemoryError::from)
+    }
+
+    pub fn update_user_memory(
+        &self,
+        request: UpdateMemoryRequest,
+    ) -> Result<MemoryMutationResult, MemoryError> {
+        validate_title(&request.title)?;
+        validate_body(&request.body)?;
+        if request.expected_revision == 0 {
+            return Err(MemoryError::InvalidInput(
+                "Memory update requires a positive revision".into(),
+            ));
+        }
+        let fingerprint = fingerprint(&request)?;
+        self.store
+            .update(&crate::MemoryUpdateCommit {
+                command_id: request.command_id,
+                fingerprint,
+                memory_id: request.memory_id,
+                scope: request.scope,
+                expected_revision: request.expected_revision,
+                normalized_search_text: normalize_search(&format!(
+                    "{}\n{}",
+                    request.title, request.body
+                )),
+                title: request.title,
+                body: request.body,
+                source: MemorySource::User,
+                updated_at_unix_ms: now_unix_ms()?,
+            })
+            .map_err(MemoryError::from)
+    }
+
+    /// Saves a model-authored fact under a stable scope/title identity, with current write consent.
+    /// Updating requires the observed revision and can never overwrite a user-owned Memory.
+    pub fn save_model_memory(
+        &self,
+        request: SaveModelMemoryRequest,
+    ) -> Result<MemoryMutationResult, MemoryError> {
+        validate_title(&request.title)?;
+        validate_body(&request.body)?;
+        let fingerprint = fingerprint(&request)?;
+        let identity = serde_json::to_vec(&(
+            request.scope.storage_key(),
+            request.title.trim().to_lowercase(),
+        ))
+        .map_err(|error| MemoryError::Storage(error.to_string()))?;
+        let memory_id = MemoryId::new(format!("model-{:x}", Sha256::digest(identity)))
+            .map_err(|error| MemoryError::InvalidInput(error.to_string()))?;
+        let source = MemorySource::Model {
+            session_id: request.session_id,
+            thread_id: request.thread_id,
+            turn_id: request.turn_id,
+        };
+        let now = now_unix_ms()?;
+        let normalized_search_text =
+            normalize_search(&format!("{}\n{}", request.title, request.body));
+        if request.expected_revision == 0 {
+            return self
+                .store
+                .add(&MemoryAddCommit {
+                    command_id: request.command_id,
+                    fingerprint,
+                    normalized_search_text,
+                    memory: Memory {
+                        memory_id,
+                        scope: request.scope,
+                        revision: 1,
+                        title: request.title,
+                        body: request.body,
+                        source,
+                        created_at_unix_ms: now,
+                        updated_at_unix_ms: now,
+                    },
+                })
+                .map_err(MemoryError::from);
+        }
+        self.store
+            .update(&crate::MemoryUpdateCommit {
+                command_id: request.command_id,
+                fingerprint,
+                memory_id,
+                scope: request.scope,
+                expected_revision: request.expected_revision,
+                title: request.title,
+                body: request.body,
+                source,
+                normalized_search_text,
+                updated_at_unix_ms: now,
             })
             .map_err(MemoryError::from)
     }
@@ -209,6 +322,7 @@ impl Memories {
                     let (citation, excerpt) =
                         crate::read::excerpt(memory, &[normalize_search(query)], MAX_EXCERPT_BYTES);
                     MemorySearchMatch {
+                        source: memory.source.clone(),
                         citation,
                         memory_id: memory.memory_id.clone(),
                         scope: memory.scope.clone(),
@@ -226,6 +340,8 @@ impl Memories {
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum MemoryError {
+    #[error("Memory scope is not authorized for model writing, or the memory is owned by the user")]
+    WriteDenied,
     #[error("Memory scope is not authorized for model reading")]
     ReadDenied,
     #[error("{0}")]
@@ -249,6 +365,7 @@ pub enum MemoryError {
 impl From<MemoryStoreError> for MemoryError {
     fn from(error: MemoryStoreError) -> Self {
         match error {
+            MemoryStoreError::WriteDenied => Self::WriteDenied,
             MemoryStoreError::ReadDenied => Self::ReadDenied,
             MemoryStoreError::NotFound => Self::NotFound,
             MemoryStoreError::AlreadyExists => Self::AlreadyExists,

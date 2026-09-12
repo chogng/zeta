@@ -237,6 +237,7 @@ fn default_keybinding(command: AppCommandId) -> Option<&'static KeySequence> {
         | AppCommandId::ShowGitDiff
         | AppCommandId::FocusNextPane
         | AppCommandId::FocusPreviousPane
+        | AppCommandId::ManageMemories
         | AppCommandId::ClosePane => None,
     }
 }

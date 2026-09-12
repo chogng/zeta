@@ -945,6 +945,7 @@ fn memory_client_checks_citations_and_policy_mutation_identity() {
                 scope: ::memories::MemoryScope::Profile,
                 revision,
                 automatic_read: mode,
+                model_write: ::memories::MemoryWriteMode::Disabled,
             },
         };
         let mut client = AppServerClient::new(MockTransport(VecDeque::from([response(
@@ -955,6 +956,7 @@ fn memory_client_checks_citations_and_policy_mutation_identity() {
             scope: ::memories::MemoryScope::Profile,
             expected_revision: 0,
             automatic_read: ::memories::MemoryReadMode::FirstInvocation,
+            model_write: ::memories::MemoryWriteMode::Disabled,
         });
         if valid {
             assert_eq!(actual.unwrap(), result);

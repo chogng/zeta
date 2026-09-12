@@ -502,7 +502,11 @@ use crate::protocol::memory::MemoryListParams;
 use crate::protocol::memory::MemoryPolicyReadParams;
 use crate::protocol::memory::MemoryPolicyUpdateParams;
 use crate::protocol::memory::MemoryReadParams;
+use crate::protocol::memory::MemoryScopeDescriptor;
+use crate::protocol::memory::MemoryScopesParams;
+use crate::protocol::memory::MemoryScopesResult;
 use crate::protocol::memory::MemorySearchParams;
+use crate::protocol::memory::MemoryUpdateParams;
 use crate::protocol::memory_diagnostics::MemoryDiagnosticsSessionParams;
 use crate::protocol::model::ModelCatalogEntry;
 use crate::protocol::model::ModelListResult;
@@ -1225,6 +1229,12 @@ client_methods! {
     },
     MemoryPolicyUpdate => "memory/policy/update" {
         params: MemoryPolicyUpdateParams, response: memories::MemoryPolicyMutationResult, serialization: GlobalExclusive,
+    },
+    MemoryScopes => "memory/scopes" {
+        params: MemoryScopesParams, response: MemoryScopesResult, serialization: None,
+    },
+    MemoryUpdate => "memory/update" {
+        params: MemoryUpdateParams, response: memories::MemoryMutationResult, serialization: GlobalExclusive,
     },
     MemoryAdd => "memory/add" {
         params: MemoryAddParams, response: memories::MemoryMutationResult, serialization: GlobalExclusive,
@@ -3269,12 +3279,17 @@ typescript_bindings! {
     FeatureSource,
     MemoryDiagnosticsSessionParams,
     MemoryAddParams,
+    MemoryUpdateParams,
+    MemoryScopesParams,
+    MemoryScopesResult,
+    MemoryScopeDescriptor,
     MemoryCitationReadParams,
     MemoryPolicyReadParams,
     MemoryPolicyUpdateParams,
     memories::MemoryCitation,
     memories::MemoryCitationResult,
     memories::MemoryReadMode,
+    memories::MemoryWriteMode,
     memories::MemoryPolicy,
     memories::MemoryPolicyMutationResult,
     MemoryListParams,

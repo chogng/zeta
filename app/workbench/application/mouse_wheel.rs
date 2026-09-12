@@ -17,6 +17,53 @@ const SETTINGS_PIXELS_PER_LINE: f32 = 18.0;
 
 impl WorkbenchApplication {
     pub(super) fn mouse_wheel(&mut self, delta: MouseScrollDelta) {
+        if self.memories.state.open {
+            if let Some((point, presentation)) =
+                self.cursor_position.zip(self.presentation.as_ref())
+            {
+                let pixels = match delta {
+                    MouseScrollDelta::LineDelta(_, y) => -y * 28.0 * 3.0,
+                    MouseScrollDelta::PixelDelta(point) => -point.y as f32,
+                };
+                if let Some(panel) = presentation.element_bounds(crate::memories::ROOT) {
+                    let bounds = crate::memories::list_bounds(panel);
+                    if bounds.contains(point) {
+                        let list = zeta_ui_components::ListView::new(
+                            bounds,
+                            self.memories.state.entries.len(),
+                            28.0,
+                            self.memories.state.list_scroll,
+                            self.palette.file_list_scroll_view_style(),
+                        );
+                        self.memories.state.list_scroll.apply(
+                            zeta_ui_components::ScrollCommand::ByPixels(
+                                zeta_ui_components::ScrollDelta::vertical(pixels),
+                            ),
+                            list.scroll_view().metrics(),
+                            zeta_ui_components::ScrollAxis::Vertical,
+                        );
+                    } else if let Some(body) = presentation.element_bounds(crate::memories::BODY)
+                        && body.contains(point)
+                    {
+                        let editor = crate::memories::body_editor(
+                            &self.memories.state,
+                            body,
+                            &self.code_editor_style,
+                            zui::ui::CaretVisibility::Hidden,
+                        );
+                        let (count, capacity) =
+                            (editor.visual_row_count(), editor.visible_row_capacity());
+                        self.memories.state.viewport.scroll_rows(
+                            (pixels / self.code_editor_style.row_height()) as isize,
+                            count,
+                            capacity,
+                        );
+                    }
+                }
+            }
+            self.rebuild_presentation_on_next_redraw();
+            return;
+        }
         if self.route_remote_tunnel_manager_wheel(delta) {
             return;
         }

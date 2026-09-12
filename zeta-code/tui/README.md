@@ -342,3 +342,9 @@ just test-tui
 主屏模式的真实边界检查使用 `just test-tui actual_tui_inline_preserves_history_across_panels_resize_and_exit -- --nocapture`；两种模式的即时切换和设置保存使用 `just test-tui actual_tui_screen_mode_switches_live_and_persists -- --nocapture`。组件状态与文本基线位于 [frame_tests.rs](src/app/inline/frame_tests.rs)，定稿边界与去重位于 [output_tests.rs](src/app/inline/output_tests.rs)，历史顺序与样式位于 [scrollback_tests.rs](src/terminal/scrollback_tests.rs)。命令列出验证入口，不代表所有终端组合均已验证。
 
 输入历史验证：`just test zeta-tui history`；跨进程重启验证：`just test-tui actual_tui_recalls_input_history_after_process_restart`。
+
+## Memories
+
+- `/memories` 管理当前任务的个人、项目和目录记忆，以及独立的读取与模型保存授权。
+- 编辑保留换行和空格，Ctrl+S 提交，Esc 取消；失败保留草稿，重试复用命令身份。
+- `/memories memory:…` 打开精确引用，列表中的 “View full content” 可滚动查看完整正文。

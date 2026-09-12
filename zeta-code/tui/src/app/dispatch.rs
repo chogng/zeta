@@ -89,6 +89,22 @@ where
                 .into(),
             );
         }
+        TuiSlashCommandAction::Memories => {
+            let command = if arguments.is_empty() {
+                crate::memories::Command::Scopes
+            } else {
+                crate::memories::Command::Citation(arguments)
+            };
+            output.events.push(
+                crate::memories::execute(
+                    client,
+                    conversation.as_ref().map(ActiveConversation::thread_id),
+                    command,
+                )
+                .map_err(CommandExecutionError)?
+                .into(),
+            );
+        }
         TuiSlashCommandAction::Skills => {
             output.events.push(
                 crate::skills::Event::SettingsOpened(load_selection(

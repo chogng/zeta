@@ -48,6 +48,7 @@ use std::collections::BTreeMap;
 pub(super) enum CommandPanelBody<'a> {
     Selection(&'a ListSelectionState),
     Prompt(&'a TextPrompt),
+    MemoryEditor(&'a crate::memories::Editor),
     Provider(&'a crate::config::provider::Panel),
     KeyCapture(&'a KeyCapture),
     Status(&'a StatusPanel),
@@ -62,6 +63,7 @@ pub(crate) enum CommandPanel {
     Connectors(ListSelection<ConnectorSelectionAction>),
     Keymap(KeymapEditor),
     Mcp(ListSelection<McpSelectionAction>),
+    Memories(crate::memories::Panel),
     Model(ListSelection<ModelSelectionAction>),
     Rewind(ListSelection<RewindSelectionAction>),
     Sessions(ListSelection<SessionSelectionAction>),
@@ -79,6 +81,7 @@ pub(crate) enum CommandPanelOutcome {
     Connectors(ConnectorSelectionAction),
     Keymap(KeymapEditorOutcome),
     Mcp(McpSelectionAction),
+    Memories(crate::memories::Command),
     Model(ModelSelectionAction),
     Rewind(RewindSelectionAction),
     Sessions(SessionSelectionAction),
@@ -142,6 +145,10 @@ impl CommandPanel {
         Self::Sessions(ListSelection::new(spec.model, spec.actions))
     }
 
+    pub(crate) fn memories(page: crate::memories::Page) -> Self {
+        Self::Memories(crate::memories::Panel::new(page))
+    }
+
     pub(crate) fn skills(spec: SkillChoices) -> Self {
         Self::Skills(ListSelection::new(spec.model, spec.actions))
     }
@@ -195,6 +202,9 @@ impl CommandPanel {
                 map_selection(content.handle_key(key), CommandPanelOutcome::Connectors)
             }
             Self::Keymap(content) => CommandPanelOutcome::Keymap(content.handle_key(key)),
+            Self::Memories(content) => {
+                map_selection(content.handle_key(key), CommandPanelOutcome::Memories)
+            }
             Self::Mcp(content) => map_selection(content.handle_key(key), CommandPanelOutcome::Mcp),
             Self::Model(content) => {
                 if key.kind == crossterm::event::KeyEventKind::Press
@@ -244,6 +254,7 @@ impl CommandPanel {
             Self::Config(content) => content.handle_paste(pasted),
             Self::Connectors(content) => content.handle_paste(pasted),
             Self::Keymap(content) => content.handle_paste(pasted),
+            Self::Memories(content) => content.paste(pasted),
             Self::Mcp(content) => content.handle_paste(pasted),
             Self::Model(content) => content.handle_paste(pasted),
             Self::Rewind(content) => content.handle_paste(pasted),
@@ -263,6 +274,7 @@ impl CommandPanel {
             Self::Config(editor) => editor.selection(),
             Self::Connectors(selection) => Some(selection.state()),
             Self::Keymap(editor) => editor.selection(),
+            Self::Memories(panel) => panel.selection(),
             Self::Mcp(selection) => Some(selection.state()),
             Self::Model(selection) => Some(selection.state()),
             Self::Rewind(selection) => Some(selection.state()),
@@ -286,6 +298,7 @@ impl CommandPanel {
             Self::Config(s) => s.selection_mut(),
             Self::Connectors(s) => Some(s.state_mut()),
             Self::Keymap(s) => s.selection_mut(),
+            Self::Memories(panel) => panel.selection_mut(),
             Self::Mcp(s) => Some(s.state_mut()),
             Self::Model(s) => Some(s.state_mut()),
             Self::Rewind(s) => Some(s.state_mut()),
@@ -326,6 +339,10 @@ impl CommandPanel {
                 KeymapEditorPage::Selection(selection) => CommandPanelBody::Selection(selection),
                 KeymapEditorPage::Capture(capture) => CommandPanelBody::KeyCapture(capture),
             },
+            Self::Memories(panel) => match panel.editor() {
+                Some(editor) => CommandPanelBody::MemoryEditor(editor),
+                None => CommandPanelBody::Selection(panel.selection().expect("memory list")),
+            },
             Self::Mcp(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Model(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Rewind(selection) => CommandPanelBody::Selection(selection.state()),
@@ -345,6 +362,7 @@ impl CommandPanel {
             Self::Config(content) => content.key_hints(),
             Self::Connectors(content) => content.key_hints(),
             Self::Keymap(content) => content.key_hints(),
+            Self::Memories(panel) => panel.key_hints(),
             Self::Mcp(content) => content.key_hints(),
             Self::Model(content) => content.key_hints(),
             Self::Rewind(content) => content.key_hints(),
@@ -501,6 +519,7 @@ impl<'a> CommandPanelBody<'a> {
     pub(super) fn title(self) -> &'a str {
         match self {
             Self::Selection(selection) => selection.title(),
+            Self::MemoryEditor(editor) => editor.title(),
             Self::Prompt(prompt) => prompt.title(),
             Self::Provider(_) => "Custom provider",
             Self::KeyCapture(capture) => capture.title(),
@@ -512,13 +531,14 @@ impl<'a> CommandPanelBody<'a> {
         match self {
             Self::Selection(selection) => selection.tab_rows(width),
             Self::Status(panel) => panel.tab_rows(width),
-            Self::Provider(_) | Self::Prompt(_) | Self::KeyCapture(_) => 0,
+            Self::MemoryEditor(_) | Self::Provider(_) | Self::Prompt(_) | Self::KeyCapture(_) => 0,
         }
     }
 
     pub(super) fn body_rows(self, width: u16) -> u16 {
         match self {
             Self::Selection(selection) => selection.body_rows(),
+            Self::MemoryEditor(_) => 16,
             Self::Prompt(prompt) => prompt.desired_height(),
             Self::KeyCapture(capture) => capture.desired_height(),
             Self::Status(panel) => panel.body_rows(width),
@@ -529,7 +549,11 @@ impl<'a> CommandPanelBody<'a> {
     pub(super) fn presentation_focus(self) -> Option<ratatui::style::Color> {
         match self {
             Self::Selection(selection) => selection.presentation_focus(),
-            Self::Prompt(_) | Self::KeyCapture(_) | Self::Status(_) | Self::Provider(_) => None,
+            Self::MemoryEditor(_)
+            | Self::Prompt(_)
+            | Self::KeyCapture(_)
+            | Self::Status(_)
+            | Self::Provider(_) => None,
         }
     }
 
@@ -546,7 +570,7 @@ impl<'a> CommandPanelBody<'a> {
                 list_selection::draw_tabs(frame, area, selection, hovered_tab, pressed_tab, context)
             }
             Self::Status(panel) => panel.draw_tabs(frame, area, hovered_tab, pressed_tab, context),
-            Self::Provider(_) | Self::Prompt(_) | Self::KeyCapture(_) => {}
+            Self::MemoryEditor(_) | Self::Provider(_) | Self::Prompt(_) | Self::KeyCapture(_) => {}
         }
     }
 
@@ -586,6 +610,7 @@ impl<'a> CommandPanelBody<'a> {
                     context,
                 )
             }
+            Self::MemoryEditor(editor) => editor.draw(frame, area, context),
             Self::Prompt(prompt) => text_prompt::draw(frame, area, prompt, context),
             Self::KeyCapture(capture) => key_capture::draw(frame, area, capture, context),
             Self::Status(panel) => panel.draw_body(frame, area, context),

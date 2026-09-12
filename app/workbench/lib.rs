@@ -10,6 +10,7 @@ mod application;
 mod host;
 mod keybinding_hint;
 mod layout;
+mod memories;
 mod memory;
 mod model;
 mod pane_binding;

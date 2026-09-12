@@ -1315,10 +1315,13 @@ fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
         .turn_id;
     let model = Arc::new(ScriptedModel::new([Ok(text_response("done"))]));
     let mut extensions = zeta_extension_api::ExtensionRegistryBuilder::new();
-    extensions.turn_input_contributor(Arc::new(FixedSkillContributor {
-        expected: activation.clone(),
-        body: "# Review workflow\nInspect correctness first.".into(),
-    }));
+    extensions.turn_input_contributor(
+        "skills",
+        Arc::new(FixedSkillContributor {
+            expected: activation.clone(),
+            body: "# Review workflow\nInspect correctness first.".into(),
+        }),
+    );
     let executor = TurnExecutor::without_tools(threads.clone(), model.clone())
         .with_extensions(Arc::new(extensions.build()));
 

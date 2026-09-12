@@ -304,3 +304,53 @@ fn approval_mode_policy_runs_the_reviewer_only_for_auto_review() {
         ExecutionDecision::RunWithPermissionBypass(_)
     ));
 }
+
+#[test]
+fn code_mode_control_grants_only_the_isolated_runtime_capability() {
+    let policy = ApprovalModeActionPolicyService::new(Arc::new(AskPolicy), None);
+    let request = |revision: String, capability: Capability| {
+        ActionReviewRequest::new(
+            ResolvedAction::new(
+                ActionDigest::from_canonical_bytes(b"code-mode-test"),
+                ActionKind::SystemOperation,
+                "Code Mode",
+                CapabilitySet::new([capability]),
+            ),
+            ActionProvenance::new(ActionSource::BuiltInTool, "code-mode"),
+            SandboxCompatibility::NotApplicable {
+                reason: "isolated runtime".into(),
+            },
+            ActionPolicyRevision::new(revision),
+        )
+    };
+    let cancellation = CancellationSource::new();
+    let control = request(
+        policy.revision(),
+        Capability::new(CapabilityKind::SystemConfiguration, "code-mode"),
+    );
+    assert!(matches!(
+        policy.decide(&control, &cancellation.token()),
+        Ok(ExecutionDecision::RunUnsandboxed { .. })
+    ));
+    let write = request(
+        policy.revision(),
+        Capability::new(CapabilityKind::FileWrite, "/tmp"),
+    );
+    assert!(matches!(
+        policy.decide(&write, &cancellation.token()),
+        Err(CoreError::Policy(_))
+    ));
+    let stale = request(
+        "old-policy".into(),
+        Capability::new(CapabilityKind::SystemConfiguration, "code-mode"),
+    );
+    assert!(matches!(
+        policy.decide(&stale, &cancellation.token()),
+        Err(CoreError::Policy(_))
+    ));
+    cancellation.cancel();
+    assert!(matches!(
+        policy.decide(&control, &cancellation.token()),
+        Err(CoreError::Cancelled(_))
+    ));
+}

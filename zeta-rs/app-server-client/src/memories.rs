@@ -45,11 +45,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         let scope = params.scope.clone();
         let expected_revision = params.expected_revision.checked_add(1);
         let mode = params.automatic_read;
+        let write = params.model_write;
         let result: memories::MemoryPolicyMutationResult =
             self.call(ClientMethod::MemoryPolicyUpdate, params)?;
         if result.policy.scope != scope
             || Some(result.policy.revision) != expected_revision
             || result.policy.automatic_read != mode
+            || result.policy.model_write != write
         {
             return Err(ClientError::Protocol(
                 "Memory policy mutation returned another scope".into(),
@@ -67,6 +69,35 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         if result.memory.memory_id != expected.0 || result.memory.scope != expected.1 {
             return Err(ClientError::Protocol(
                 "Memory mutation returned another identity".into(),
+            ));
+        }
+        Ok(result)
+    }
+
+    pub fn memory_scopes(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::memory::MemoryScopesParams,
+    ) -> Result<zeta_app_server_protocol::protocol::memory::MemoryScopesResult, ClientError> {
+        self.call(ClientMethod::MemoryScopes, params)
+    }
+
+    pub fn update_memory(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::memory::MemoryUpdateParams,
+    ) -> Result<memories::MemoryMutationResult, ClientError> {
+        let expected = (
+            params.memory_id.clone(),
+            params.scope.clone(),
+            params.expected_revision.checked_add(1),
+        );
+        let result: memories::MemoryMutationResult =
+            self.call(ClientMethod::MemoryUpdate, params)?;
+        if result.memory.memory_id != expected.0
+            || result.memory.scope != expected.1
+            || Some(result.memory.revision) != expected.2
+        {
+            return Err(ClientError::Protocol(
+                "Memory update returned another identity or revision".into(),
             ));
         }
         Ok(result)

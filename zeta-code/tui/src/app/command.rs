@@ -8,6 +8,7 @@ pub(crate) enum AppCommand {
     Issues(crate::issues::Command),
     Keymap(crate::keymap_setup::Command),
     Mcp(crate::mcp::Command),
+    Memories(crate::memories::Command),
     Models(crate::models::Command),
     Sessions(crate::sessions::Command),
     Skills(crate::skills::Command),
@@ -33,6 +34,7 @@ impl AppCommand {
                     "model" => Some("Model"),
                     "resume" => Some("Resume session"),
                     "skills" => Some("Skills"),
+                    "memories" => Some("Memories"),
                     "mcp" => Some("MCP"),
                     "connectors" => Some("Connectors"),
                     "status" => Some("Status"),
@@ -70,3 +72,5 @@ app_command_from!(crate::theme::Command, Theme);
 app_command_from!(crate::thread::Command, Thread);
 
 app_command_from!(crate::issues::Command, Issues);
+
+app_command_from!(crate::memories::Command, Memories);

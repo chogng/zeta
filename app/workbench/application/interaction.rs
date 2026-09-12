@@ -169,6 +169,9 @@ impl WorkbenchApplication {
         if self.activate_remote_connection_manager_element(id) {
             return;
         }
+        if self.activate_memory_element(id) {
+            return;
+        }
         if self.activate_remote_tunnel_manager_element(id) {
             return;
         }
@@ -288,6 +291,16 @@ impl WorkbenchApplication {
         let point = self.logical_pointer_position(physical_x, physical_y);
         self.cursor_position = Some(point);
         if self.route_remote_connection_manager_pointer_move(point) {
+            return;
+        }
+        if self.memories.state.open {
+            if let Some(presentation) = &self.presentation {
+                let outcome = self
+                    .ui_dispatch
+                    .pointer_moved(point, presentation.interaction_frame());
+                self.apply_dispatch_outcome(outcome);
+            }
+            self.update_cursor();
             return;
         }
         if self.route_remote_tunnel_manager_pointer_move(point) {
@@ -417,6 +430,12 @@ impl WorkbenchApplication {
 
     pub(super) fn mouse_button_changed(&mut self, state: ElementState, button: MouseButton) {
         if self.route_remote_connection_manager_button(state, button) {
+            return;
+        }
+        if self.memories.state.open {
+            if button == MouseButton::Left {
+                self.primary_button_changed(state);
+            }
             return;
         }
         if self.route_remote_tunnel_manager_button(state, button) {

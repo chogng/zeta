@@ -41,6 +41,7 @@ export class ChatPane extends Disposable {
 		this.goalElement.className = "zeta-chat-goal";
 		this.goalElement.hidden = true;
 		this.listWidget = this._register(new ChatListWidget(this.element, {
+			onDidRequestMemoryReference: reference => { void commandService.executeCommand('zeta.memories.openReference', reference).catch(error => console.error('Could not open memory reference', error)); },
 			onDidRequestErrorAction: (action) => void this.handleTurnErrorAction(action).catch(() => undefined),
 		}));
 		const inputDelegate: ChatInputDelegate = {

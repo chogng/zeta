@@ -355,6 +355,7 @@ pub struct WorkbenchPresentationModel<'a> {
     pub remote_connection_picker: &'a RemoteConnectionPickerState,
     pub remote_connection_manager: &'a RemoteConnectionManagerState,
     pub remote_tunnel_manager: &'a RemoteTunnelManagerState,
+    pub memories: &'a crate::memories::State,
     pub keybindings: &'a dyn WorkbenchKeybindings,
     pub quick_access: &'a QuickAccess,
     pub settings: &'a SettingsState,
@@ -835,6 +836,20 @@ fn draw_workbench_overlays(
             ime_cursor_area = tunnel_manager.remote_port_caret_bounds();
         }
         frame.draw_component(&tunnel_manager);
+    }
+    if model.memories.open {
+        ime_cursor_area = frame.with_context(|context| {
+            crate::memories::draw(
+                context,
+                viewport_bounds,
+                model.memories,
+                palette,
+                model.dispatch,
+                model.caret_visibility,
+                text_layout,
+                model.code_editor_style,
+            )
+        });
     }
     if let Some(branch_picker) = GitBranchPicker::new(
         viewport_bounds,

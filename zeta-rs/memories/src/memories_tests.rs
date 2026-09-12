@@ -6,6 +6,7 @@ use zeta_protocol::CommandId;
 #[derive(Default)]
 struct RecordingStore {
     add: Mutex<Option<MemoryAddCommit>>,
+    read_gate: Option<(Arc<std::sync::Barrier>, Arc<std::sync::Barrier>)>,
 }
 
 impl MemoryStore for RecordingStore {
@@ -31,6 +32,10 @@ impl MemoryStore for RecordingStore {
         })
     }
 
+    fn update(&self, _: &MemoryUpdateCommit) -> Result<MemoryMutationResult, MemoryStoreError> {
+        Err(MemoryStoreError::NotFound)
+    }
+
     fn delete(&self, _: &MemoryDeleteCommit) -> Result<MemoryDeleteResult, MemoryStoreError> {
         Err(MemoryStoreError::NotFound)
     }
@@ -40,7 +45,16 @@ impl MemoryStore for RecordingStore {
     }
 
     fn read_for_context(&self, _: &MemoryScope, _: &MemoryId) -> Result<Memory, MemoryStoreError> {
-        Err(MemoryStoreError::ReadDenied)
+        if let Some((entered, released)) = &self.read_gate {
+            entered.wait();
+            released.wait();
+        }
+        self.add
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|commit| commit.memory.clone())
+            .ok_or(MemoryStoreError::ReadDenied)
     }
 
     fn list(&self, _: &MemoryStoreListRequest) -> Result<MemoryStorePage, MemoryStoreError> {
@@ -140,4 +154,46 @@ fn citation_round_trip_rejects_malformed_references() {
         ..citation
     };
     assert!(MemoryCitation::parse(&empty.reference().unwrap()).is_err());
+}
+
+#[test]
+fn cancellation_during_citation_read_discards_the_loaded_body() {
+    let entered = Arc::new(std::sync::Barrier::new(2));
+    let released = Arc::new(std::sync::Barrier::new(2));
+    let store = Arc::new(RecordingStore {
+        read_gate: Some((entered.clone(), released.clone())),
+        ..RecordingStore::default()
+    });
+    let service = Arc::new(Memories::new(store));
+    service
+        .add_user_memory(AddMemoryRequest {
+            command_id: CommandId::new("add").unwrap(),
+            memory_id: MemoryId::new("memory").unwrap(),
+            scope: MemoryScope::Profile,
+            title: "Decision".into(),
+            body: "Rust memory".into(),
+        })
+        .unwrap();
+    let cancellation = async_utils::CancellationSource::new();
+    let token = cancellation.token();
+    let worker = std::thread::spawn(move || {
+        service.read_context_citation(
+            &[MemoryScope::Profile],
+            MemoryCitation {
+                memory_id: MemoryId::new("memory").unwrap(),
+                scope: MemoryScope::Profile,
+                revision: 1,
+                start_byte: 0,
+                end_byte: 11,
+            },
+            &token,
+        )
+    });
+    entered.wait();
+    cancellation.cancel();
+    released.wait();
+    assert!(matches!(
+        worker.join().unwrap(),
+        Err(MemoryError::Cancelled(_))
+    ));
 }

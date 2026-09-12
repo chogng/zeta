@@ -32,6 +32,8 @@ zeta-remote-connections = { workspace = true }
 zeta-remote-server = { workspace = true }
 
 [dev-dependencies]
+memories = { workspace = true }
+zeta-protocol = { workspace = true }
 futures = { workspace = true }
 sha2 = { workspace = true }
 tempfile = { workspace = true }

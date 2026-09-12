@@ -83,4 +83,39 @@ pub struct MemoryPolicyUpdateParams {
     #[ts(type = "number")]
     pub expected_revision: u64,
     pub automatic_read: memories::MemoryReadMode,
+    pub model_write: memories::MemoryWriteMode,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MemoryUpdateParams {
+    pub command_id: CommandId,
+    pub memory_id: memories::MemoryId,
+    pub scope: memories::MemoryScope,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    #[schemars(length(min = 1, max = 256))]
+    pub title: String,
+    #[schemars(length(min = 1, max = 16384))]
+    pub body: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MemoryScopesParams {
+    #[ts(optional = nullable)]
+    pub thread_id: Option<zeta_protocol::ThreadId>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryScopeDescriptor {
+    pub label: String,
+    pub policy: memories::MemoryPolicy,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryScopesResult {
+    pub scopes: Vec<MemoryScopeDescriptor>,
 }

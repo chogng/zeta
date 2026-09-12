@@ -1,3 +1,4 @@
+import { AppServerMemoriesService } from '../../memories/browser/appServerMemoriesService.js';
 import { AppServerMemoryDiagnosticsService } from '../../memory/browser/appServerMemoryDiagnosticsService.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { createAppServerAppServerApi, createAppServerResourceApi, createAppServerServerEventApi } from "./appServerApi.js";
@@ -42,11 +43,12 @@ export async function connectViteDevRendererApi(hot: AppServerTransport, connect
 		const metadata = await connection.connect();
 		const instanceId = generateUuid();
 		const memoryDiagnostics = connection.capabilities?.contracts.memoryDiagnostics?.version === 1 ? new AppServerMemoryDiagnosticsService(connection, 'browser', async () => [{ instanceId, processId: null, role: 'renderer', phase: 'unknown', metrics: [{ kind: 'domNodes', value: document.getElementsByTagName('*').length, unavailable: null }, { kind: 'javaScriptHeapBytes', value: null, unavailable: 'unsupported' }, { kind: 'residentBytes', value: null, unavailable: 'unsupported' }] }]) : undefined;
+		const memories = connection.capabilities?.memories ? new AppServerMemoriesService(connection) : undefined;
 		const automation = connection.capabilities?.contracts.automation?.version === 1 ? new AppServerAutomationService(connection) : undefined;
 		return {
-			api: { ...createRendererHost(connection, connectorHostServices, contributions), automation, memoryDiagnostics },
+			api: { ...createRendererHost(connection, connectorHostServices, contributions), automation, memoryDiagnostics, memories },
 			metadata,
-			dispose: () => { memoryDiagnostics?.dispose(); automation?.dispose(); connection.dispose(); },
+			dispose: () => { memories?.dispose(); memoryDiagnostics?.dispose(); automation?.dispose(); connection.dispose(); },
 		};
 	} catch (error) {
 		connection.dispose();

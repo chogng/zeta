@@ -20,6 +20,7 @@ pub(crate) enum TuiSlashCommandAction {
     #[strum(serialize = "statusline")]
     StatusLine,
     Skills,
+    Memories,
     Mcp,
     Resume,
     Archive,
@@ -71,6 +72,7 @@ impl TuiSlashCommandAction {
             Self::StatusLine => "choose the items shown in the status line",
             Self::Sessions | Self::Agents => "open the Session Manager",
             Self::Subagents => "focus the current Session Thread list",
+            Self::Memories => "manage memories, reading consent and model saving",
             Self::Skills => "browse configured skill sources",
             Self::Mcp => "list configured MCP tools",
             Self::Connectors => "show external service connections",
@@ -95,6 +97,7 @@ impl TuiSlashCommandAction {
     pub(crate) fn argument_mode(self) -> SlashCommandArgumentMode {
         match self {
             Self::Resume
+            | Self::Memories
             | Self::Rewind
             | Self::AddDir
             | Self::Fork

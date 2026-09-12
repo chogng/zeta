@@ -531,6 +531,10 @@ fn refresh_server_event(
             }
             ServerRefresh::default()
         }
+        client::ClientEvent::MemoriesChanged => {
+            app.update(crate::memories::Event::Changed);
+            ServerRefresh::default()
+        }
         client::ClientEvent::SkillsChanged => ServerRefresh {
             skills: true,
             ..ServerRefresh::default()

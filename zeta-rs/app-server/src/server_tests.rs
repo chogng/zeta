@@ -3,6 +3,9 @@ use super::*;
 #[path = "checkpoint_live_tests.rs"]
 mod checkpoint_live_tests;
 
+#[path = "memories_live_tests.rs"]
+mod memories_live_tests;
+
 #[path = "automation_tests.rs"]
 mod automation_tests;
 #[path = "infrastructure_tests.rs"]

@@ -82,6 +82,9 @@ impl WorkbenchApplication {
             self.request_redraw();
             return;
         }
+        if self.route_memories_keyboard(&event) {
+            return;
+        }
         if self.route_settings_keyboard(&event) {
             return;
         }

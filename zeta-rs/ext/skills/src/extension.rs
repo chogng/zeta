@@ -23,7 +23,7 @@ pub fn install(builder: &mut ExtensionRegistryBuilder, runtime: Arc<SkillRuntime
         "skills",
         Arc::new(SkillToolContributor::new(runtime.clone())),
     );
-    builder.turn_input_contributor(runtime);
+    builder.turn_input_contributor("skills", runtime);
 }
 
 impl SkillActivationContributor for SkillRuntime {

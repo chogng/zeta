@@ -106,7 +106,10 @@ impl ActionPolicyService for ApprovalModeActionPolicyService {
             || "unavailable".into(),
             |model| format!("{}/{}", model.model().provider, model.model().model),
         );
-        format!("{}:auto-review={reviewer}", self.base.revision())
+        format!(
+            "{}:auto-review={reviewer}:isolated-controls=v1",
+            self.base.revision()
+        )
     }
 
     fn decide(
@@ -114,6 +117,38 @@ impl ActionPolicyService for ApprovalModeActionPolicyService {
         request: &ActionReviewRequest,
         cancellation: &CancellationToken,
     ) -> Result<ExecutionDecision, CoreError> {
+        if request.provenance().source() == &zeta_action_policy::ActionSource::BuiltInTool
+            && request.provenance().source_id() == "code-mode"
+        {
+            cancellation
+                .check()
+                .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
+            let capabilities =
+                zeta_action_policy::CapabilitySet::new([zeta_action_policy::Capability::new(
+                    zeta_action_policy::CapabilityKind::SystemConfiguration,
+                    "code-mode",
+                )]);
+            if request.action().kind() != &zeta_action_policy::ActionKind::SystemOperation
+                || request.action().required_capabilities() != &capabilities
+                || request.action_policy_revision().as_str() != self.revision()
+                || !matches!(
+                    request.phase(),
+                    zeta_action_policy::ActionReviewPhase::Initial
+                )
+                || !matches!(
+                    request.sandbox(),
+                    zeta_action_policy::SandboxCompatibility::NotApplicable { .. }
+                )
+            {
+                return Err(CoreError::Policy(
+                    "Code Mode control request exceeds its isolated runtime authority".into(),
+                ));
+            }
+            // The runtime has no ambient host authority. Every nested tool re-enters its own policy.
+            return Ok(zeta_action_policy::ExecutionDecision::RunUnsandboxed {
+                grant_id: zeta_action_policy::GrantId::new("host-code-mode-control"),
+            });
+        }
         self.base.decide(request, cancellation)
     }
 
@@ -130,7 +165,7 @@ impl ActionPolicyService for ApprovalModeActionPolicyService {
                 "Turn policy revision changed from {frozen_revision} to {current_revision}; continuation requires explicit authorization"
             )));
         }
-        let decision = self.base.decide(request, cancellation)?;
+        let decision = self.decide(request, cancellation)?;
         if !matches!(decision, ExecutionDecision::AskUser(_)) {
             return Ok(decision);
         }

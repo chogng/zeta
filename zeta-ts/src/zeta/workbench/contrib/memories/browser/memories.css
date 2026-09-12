@@ -1,0 +1,31 @@
+.zeta-memories {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 0;
+	min-height: 0;
+	overflow: auto;
+	padding: 12px;
+	font-size: var(--zeta-font-size-body1);
+}
+.zeta-memories label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.zeta-memories .memories-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.zeta-memories input,
+.zeta-memories select,
+.zeta-memories textarea,
+.zeta-memories button {
+	box-sizing: border-box;
+	min-width: 0;
+	max-width: 100%;
+	padding: 6px 8px;
+	font: inherit;
+	color: var(--zeta-input-foreground);
+	background: var(--zeta-input-background);
+	border: var(--zeta-stroke-thickness) solid var(--zeta-input-border);
+	border-radius: var(--zeta-corner-radius-small);
+}
+.zeta-memories input[type='checkbox'] { align-self: flex-start; }
+.zeta-memories textarea { resize: vertical; white-space: pre-wrap; }
+.zeta-memories button { cursor: pointer; }
+.zeta-memories :focus-visible { outline: var(--zeta-stroke-thickness) solid var(--zeta-focus-border); outline-offset: 2px; }
+.zeta-memories .memories-status { overflow-wrap: anywhere; min-height: 1.5em; color: var(--zeta-description-foreground); }

@@ -253,9 +253,12 @@ import type { MemoryPolicyReadParams } from './types/MemoryPolicyReadParams.js';
 import type { MemoryPolicyUpdateParams } from './types/MemoryPolicyUpdateParams.js';
 import type { MemoryReadParams } from './types/MemoryReadParams.js';
 import type { MemoryReport } from './types/MemoryReport.js';
+import type { MemoryScopesParams } from './types/MemoryScopesParams.js';
+import type { MemoryScopesResult } from './types/MemoryScopesResult.js';
 import type { MemorySearchPage } from './types/MemorySearchPage.js';
 import type { MemorySearchParams } from './types/MemorySearchParams.js';
 import type { MemoryStart } from './types/MemoryStart.js';
+import type { MemoryUpdateParams } from './types/MemoryUpdateParams.js';
 import type { MessageCheckpointsParams } from './types/MessageCheckpointsParams.js';
 import type { MessageCheckpointsResult } from './types/MessageCheckpointsResult.js';
 import type { ModelListResult } from './types/ModelListResult.js';
@@ -381,6 +384,8 @@ export interface AppServerRequestMap {
   "memory/citation/read": { params: MemoryCitationReadParams; response: MemoryCitationResult };
   "memory/policy/read": { params: MemoryPolicyReadParams; response: MemoryPolicy };
   "memory/policy/update": { params: MemoryPolicyUpdateParams; response: MemoryPolicyMutationResult };
+  "memory/scopes": { params: MemoryScopesParams; response: MemoryScopesResult };
+  "memory/update": { params: MemoryUpdateParams; response: MemoryMutationResult };
   "memory/add": { params: MemoryAddParams; response: MemoryMutationResult };
   "memory/list": { params: MemoryListParams; response: MemoryListPage };
   "memory/read": { params: MemoryReadParams; response: Memory };
@@ -646,6 +651,8 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "memory/citation/read": { method: "memory/citation/read" },
   "memory/policy/read": { method: "memory/policy/read" },
   "memory/policy/update": { method: "memory/policy/update" },
+  "memory/scopes": { method: "memory/scopes" },
+  "memory/update": { method: "memory/update" },
   "memory/add": { method: "memory/add" },
   "memory/list": { method: "memory/list" },
   "memory/read": { method: "memory/read" },

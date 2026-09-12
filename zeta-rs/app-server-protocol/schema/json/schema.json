@@ -3097,6 +3097,38 @@
         {
           "properties": {
             "method": {
+              "const": "memory/scopes",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/MemoryScopesParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/update",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/MemoryUpdateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "memory/add",
               "type": "string"
             },
@@ -7138,6 +7170,38 @@
             },
             "result": {
               "$ref": "#/$defs/MemoryPolicyMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/scopes",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/MemoryScopesResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/update",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/MemoryMutationResult"
             }
           },
           "required": [
@@ -22885,6 +22949,9 @@
         "automaticRead": {
           "$ref": "#/$defs/MemoryReadMode"
         },
+        "modelWrite": {
+          "$ref": "#/$defs/MemoryWriteMode"
+        },
         "revision": {
           "format": "uint64",
           "minimum": 0,
@@ -22897,7 +22964,8 @@
       "required": [
         "scope",
         "revision",
-        "automaticRead"
+        "automaticRead",
+        "modelWrite"
       ],
       "type": "object"
     },
@@ -22948,6 +23016,9 @@
           "minimum": 0,
           "type": "integer"
         },
+        "modelWrite": {
+          "$ref": "#/$defs/MemoryWriteMode"
+        },
         "scope": {
           "$ref": "#/$defs/MemoryScope"
         }
@@ -22956,7 +23027,8 @@
         "commandId",
         "scope",
         "expectedRevision",
-        "automaticRead"
+        "automaticRead",
+        "modelWrite"
       ],
       "type": "object"
     },
@@ -23137,6 +23209,51 @@
         }
       ]
     },
+    "MemoryScopeDescriptor": {
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "policy": {
+          "$ref": "#/$defs/MemoryPolicy"
+        }
+      },
+      "required": [
+        "label",
+        "policy"
+      ],
+      "type": "object"
+    },
+    "MemoryScopesParams": {
+      "additionalProperties": false,
+      "properties": {
+        "threadId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "MemoryScopesResult": {
+      "properties": {
+        "scopes": {
+          "items": {
+            "$ref": "#/$defs/MemoryScopeDescriptor"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "scopes"
+      ],
+      "type": "object"
+    },
     "MemorySearchMatch": {
       "properties": {
         "citation": {
@@ -23156,6 +23273,9 @@
         "scope": {
           "$ref": "#/$defs/MemoryScope"
         },
+        "source": {
+          "$ref": "#/$defs/MemorySource"
+        },
         "title": {
           "type": "string"
         },
@@ -23166,6 +23286,7 @@
         }
       },
       "required": [
+        "source",
         "citation",
         "memoryId",
         "scope",
@@ -23235,10 +23356,42 @@
       "type": "object"
     },
     "MemorySource": {
-      "enum": [
-        "user"
-      ],
-      "type": "string"
+      "oneOf": [
+        {
+          "enum": [
+            "user"
+          ],
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "model": {
+              "properties": {
+                "sessionId": {
+                  "$ref": "#/$defs/SessionId"
+                },
+                "threadId": {
+                  "$ref": "#/$defs/ThreadId"
+                },
+                "turnId": {
+                  "$ref": "#/$defs/TurnId"
+                }
+              },
+              "required": [
+                "sessionId",
+                "threadId",
+                "turnId"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "model"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "MemoryStart": {
       "additionalProperties": false,
@@ -23404,6 +23557,51 @@
         "permissionDenied",
         "readFailed",
         "exited"
+      ],
+      "type": "string"
+    },
+    "MemoryUpdateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "maxLength": 16384,
+          "minLength": 1,
+          "type": "string"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "memoryId": {
+          "$ref": "#/$defs/MemoryId"
+        },
+        "scope": {
+          "$ref": "#/$defs/MemoryScope"
+        },
+        "title": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "commandId",
+        "memoryId",
+        "scope",
+        "expectedRevision",
+        "title",
+        "body"
+      ],
+      "type": "object"
+    },
+    "MemoryWriteMode": {
+      "enum": [
+        "disabled",
+        "enabled"
       ],
       "type": "string"
     },

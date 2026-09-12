@@ -203,6 +203,14 @@ impl ActionPolicyService for ExtensionToolPolicy {
             .expect("validated extension registration")
             .authority
         {
+            RegisteredExtensionAuthority::Capability(
+                ExtensionToolAuthority::ManagedStateWrite { .. },
+            ) => Ok(ExecutionDecision::RunUnsandboxed {
+                grant_id: GrantId::new(format!(
+                    "host-managed-state:{}",
+                    request.provenance().source_id()
+                )),
+            }),
             RegisteredExtensionAuthority::ReadOnlyLocal => Ok(ExecutionDecision::RunUnsandboxed {
                 grant_id: GrantId::new(format!(
                     "host-read-only-extension:{}",
@@ -241,6 +249,9 @@ fn extension_capabilities(
             CapabilityKind::FileRead,
             format!("extension-tool:{}", name.as_str()),
         )]),
+        RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ManagedStateWrite {
+            resource,
+        }) => CapabilitySet::new([Capability::new(CapabilityKind::FileWrite, resource)]),
         RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ExternalRead {
             network_scopes,
             credential_reference,
@@ -260,7 +271,10 @@ fn extension_capabilities(
 
 fn extension_action_kind(authority: &RegisteredExtensionAuthority) -> ActionKind {
     match authority {
-        RegisteredExtensionAuthority::ReadOnlyLocal => ActionKind::SystemOperation,
+        RegisteredExtensionAuthority::ReadOnlyLocal
+        | RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ManagedStateWrite {
+            ..
+        }) => ActionKind::SystemOperation,
         RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ExternalRead {
             ..
         }) => ActionKind::NetworkRequest,
@@ -272,6 +286,9 @@ fn extension_summary(name: &ToolName, authority: &RegisteredExtensionAuthority) 
         RegisteredExtensionAuthority::ReadOnlyLocal => {
             format!("run host-installed read-only extension tool '{name}'")
         }
+        RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ManagedStateWrite {
+            resource,
+        }) => format!("write {resource} through extension tool '{name}' with domain consent"),
         RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ExternalRead {
             service,
             ..
@@ -282,6 +299,7 @@ fn extension_summary(name: &ToolName, authority: &RegisteredExtensionAuthority) 
 fn extension_sandbox_reason(authority: &RegisteredExtensionAuthority) -> String {
     match authority {
         RegisteredExtensionAuthority::ReadOnlyLocal => "the host extension executes in process and is constrained to the read-only extension contract".into(),
+        RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ManagedStateWrite { .. }) => "the domain storage transaction enforces current user consent and record ownership".into(),
         RegisteredExtensionAuthority::Capability(_) => "external network access cannot be enforced by the local process sandbox".into(),
     }
 }
@@ -289,6 +307,9 @@ fn extension_sandbox_reason(authority: &RegisteredExtensionAuthority) -> String 
 fn authority_digest_value(authority: &RegisteredExtensionAuthority) -> serde_json::Value {
     match authority {
         RegisteredExtensionAuthority::ReadOnlyLocal => json!({"type": "read_only_local"}),
+        RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ManagedStateWrite {
+            resource,
+        }) => json!({"type": "managed_state_write", "resource": resource}),
         RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ExternalRead {
             service,
             network_scopes,

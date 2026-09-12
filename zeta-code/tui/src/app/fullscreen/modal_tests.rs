@@ -467,3 +467,52 @@ fn paste_targets_the_modal_and_home_instead_of_a_background_question() {
     assert_eq!(app.input(), "new task");
     assert!(app.chat_panel.query_view().unwrap().custom_answer.is_none());
 }
+
+#[test]
+fn memories_manager_edits_multiline_text_keeps_failed_drafts_and_restores_home() {
+    use crate::memories::Event;
+    use crate::memories::Page;
+    use memories::MemoryPolicy;
+    use memories::MemoryScope;
+    let mut app = crate::app::App::new();
+    app.open_home();
+    app.insert_text("background draft");
+    app.update(Event::Opened(Page::List {
+        policy: MemoryPolicy::disabled(MemoryScope::Profile),
+        entries: Vec::new(),
+        cursor: None,
+    }));
+    insta::assert_snapshot!("memories_management", frame_text(&app));
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.handle_paste("Fixture decision".into());
+    app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL));
+    app.handle_paste("Use Rust\n保留  两个空格".into());
+    insta::assert_snapshot!("memories_multiline_editor", frame_text(&app));
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
+    app.update(crate::config::Event::SettingsReceived(settings.clone()));
+    insta::assert_snapshot!("memories_inline_editor", frame_text(&app));
+    settings.set_screen_mode(crate::terminal::ScreenMode::Fullscreen);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    let Some(crate::app::AppCommand::Memories(crate::memories::Command::Add {
+        title, body, ..
+    })) = app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL))
+    else {
+        panic!("save must emit a Memory command");
+    };
+    assert_eq!(title, "Fixture decision");
+    assert_eq!(body, "Use Rust\n保留  两个空格");
+    app.update(Event::Failed(
+        "The memory changed in another window. Refresh before saving.".into(),
+    ));
+    insta::assert_snapshot!("memories_failed_draft", frame_text(&app));
+    let Some(crate::app::AppCommand::Memories(crate::memories::Command::Add { body, .. })) =
+        app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL))
+    else {
+        panic!("failed save must retain the draft");
+    };
+    assert_eq!(body, "Use Rust\n保留  两个空格");
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.command_panel().is_none());
+    assert_eq!(app.input(), "background draft");
+}

@@ -30,6 +30,7 @@ pub(super) enum RequestKey {
     Preview,
     SessionDetails,
     Mcp,
+    Memories,
     Skills,
     Clipboard,
     FileExport,
@@ -217,6 +218,7 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         ) => Some(RequestKey::Thread),
         AppCommand::Issues(command) if command.is_control() => Some(RequestKey::IssueControl),
         AppCommand::Issues(_) => Some(RequestKey::Issues),
+        AppCommand::Memories(_) => Some(RequestKey::Memories),
         AppCommand::Mcp(_) => Some(RequestKey::Mcp),
         AppCommand::Skills(_) => Some(RequestKey::Skills),
     }

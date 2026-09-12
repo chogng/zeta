@@ -50,6 +50,14 @@ mod unavailable {
             Self
         }
 
+        pub(crate) fn with_tool_service(
+            &self,
+            _: Arc<dyn ToolService>,
+            _: Arc<dyn ActionPolicyService>,
+        ) -> Self {
+            self.clone()
+        }
+
         pub(crate) fn close_turn(&self, _: &ThreadId, _: &TurnId) -> Result<(), CoreError> {
             Ok(())
         }

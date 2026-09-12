@@ -11,6 +11,7 @@ use crate::TAB_CONTAINER_TOGGLE;
 /// Resolves a command-like Workbench element into its stable command identity.
 pub(crate) fn command_for_element(element: ElementId) -> Option<AppCommandId> {
     match element {
+        zeta_settings::OPEN_MEMORIES => Some(AppCommandId::ManageMemories),
         TAB_CONTAINER_TOGGLE => Some(AppCommandId::ToggleTabContainer),
         CHANGES_PANE_BUTTON => Some(AppCommandId::ShowAgentChanges),
         ADD_SESSION => Some(AppCommandId::AddSession),
@@ -34,6 +35,7 @@ impl WorkbenchApplication {
             | AppCommandId::ExportMemoryDiagnostics => {
                 self.memory.execute(command, self.app_server_client.clone())
             }
+            AppCommandId::ManageMemories => self.open_memories(),
             AppCommandId::Copy => execute_copy(self),
             AppCommandId::Paste => execute_paste(self),
             AppCommandId::Save => execute_save(self),

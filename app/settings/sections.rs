@@ -23,11 +23,12 @@ use zui::ui::UiScene;
 use crate::SETTINGS_PAGE;
 use crate::SettingsPageSection;
 use crate::keybindings_section::KeybindingsSection;
-use crate::section_layout::CARD_GAP;
 use crate::section_layout::ROW_HEIGHT;
 use crate::section_layout::SettingsSectionLayout;
 
 const SETTINGS_SECTION_SCOPE: u32 = 11;
+
+pub const OPEN_MEMORIES: ElementId = ElementId::scoped(43, 1);
 
 pub const SETTINGS_SECTION_CONTENT: ElementId = ElementId::scoped(SETTINGS_SECTION_SCOPE, 1);
 
@@ -155,11 +156,41 @@ impl<'a> SettingsSectionPane<'a> {
             ("Surface", self.surface_label.to_owned()),
         ];
         self.paint_value_card(scene, 92.0, &rows);
-        self.paint_note(
-            scene,
-            92.0 + card_height(rows.len()),
-            "General preferences come from the active environment. Persistent controls will be added here as their configuration authority is defined.",
-        );
+        scene.draw_component(&self.memories_button());
+    }
+
+    fn memories_bounds(&self) -> Rect {
+        let bounds = self.content_bounds();
+        Rect::from_xywh(
+            bounds.origin.x,
+            bounds.origin.y + 92.0 + card_height(3) + 20.0,
+            180.0,
+            34.0,
+        )
+    }
+    fn memories_button(&self) -> zeta_ui_components::Button {
+        let state = if self.dispatch.is_pressed(OPEN_MEMORIES) {
+            zeta_ui_components::ButtonState::Pressed
+        } else if self.dispatch.is_hovered(OPEN_MEMORIES) {
+            zeta_ui_components::ButtonState::Hovered
+        } else if self.dispatch.is_focused(OPEN_MEMORIES) {
+            zeta_ui_components::ButtonState::Focused
+        } else {
+            zeta_ui_components::ButtonState::Resting
+        };
+        zeta_ui_components::Button::new(
+            self.memories_bounds(),
+            "Manage memories",
+            state,
+            zeta_ui_components::ButtonStyle::new(
+                zeta_ui_components::ButtonBackgrounds::new(self.style.surface_raised)
+                    .with_hovered(self.style.surface_hovered)
+                    .with_focused(self.style.surface_hovered),
+                self.style.control_text.clone(),
+            )
+            .with_border(Border::uniform(1.0, self.style.border))
+            .with_corner_radii(CornerRadii::uniform(4.0)),
+        )
     }
 
     fn paint_appearance(&self, scene: &mut UiScene) {
@@ -292,21 +323,6 @@ impl<'a> SettingsSectionPane<'a> {
             );
         }
     }
-
-    fn paint_note(&self, scene: &mut UiScene, y_offset: f32, note: &str) {
-        let content = self.content_bounds();
-        draw_label(
-            scene,
-            note,
-            Rect::from_xywh(
-                content.origin.x,
-                content.origin.y + y_offset + CARD_GAP,
-                content.size.width,
-                48.0,
-            ),
-            self.style.label_text.clone(),
-        );
-    }
 }
 
 impl Component for SettingsSectionPane<'_> {
@@ -330,6 +346,20 @@ impl Component for SettingsSectionPane<'_> {
 
     fn compose(&self, context: &mut ComponentContext<'_, '_>, _element: &ComputedElement) {
         self.paint_section(context.scene_mut());
+        if self.section == SettingsPageSection::General {
+            context.draw_component(
+                &zeta_ui_components::InteractionRegion::new(
+                    "OpenMemories",
+                    OPEN_MEMORIES,
+                    self.memories_bounds(),
+                    AccessibilityRole::Button,
+                    "Manage memories",
+                )
+                .with_parent(SETTINGS_SECTION_CONTENT)
+                .with_focus(zui::ui::FocusBehavior::TabStop)
+                .with_action(zui::ui::NodeAction::Activate),
+            );
+        }
         if self.section == SettingsPageSection::Keybindings {
             context.draw_component(&self.keybindings_section());
         }

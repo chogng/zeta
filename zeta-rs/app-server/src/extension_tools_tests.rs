@@ -132,7 +132,7 @@ impl CapabilityToolContributor for NetworkContributor {
 #[test]
 fn capability_extension_tools_freeze_scopes_and_require_user_approval() {
     let mut builder = ExtensionRegistryBuilder::new();
-    builder.capability_tool_contributor(Arc::new(NetworkContributor));
+    builder.capability_tool_contributor("network", Arc::new(NetworkContributor));
     let port = compose_extension_tools(&builder.build()).unwrap().unwrap();
     let combined = combine_tool_ports(vec![port]).unwrap().unwrap();
     let call = ToolCall {

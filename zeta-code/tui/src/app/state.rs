@@ -490,6 +490,7 @@ impl App {
                 }
                 .into(),
             ),
+            CommandPanelOutcome::Memories(command) => Some(command.into()),
             CommandPanelOutcome::Skills(SkillSelectionAction::SetEnablement {
                 skill_id,
                 enablement,
@@ -1776,6 +1777,32 @@ impl App {
             AppEvent::Keymap(event) => self.apply_keymap_event(event),
             AppEvent::Status(event) => self.apply_status_event(event),
             AppEvent::Connectors(event) => self.apply_connector_event(event),
+            AppEvent::Memories(event) => match event {
+                crate::memories::Event::Changed => {
+                    if let Some(CommandPanel::Memories(panel)) = self.panels_mut().command_mut() {
+                        panel.notice(
+                            "Memories changed; reopen the list to refresh. Your draft is kept."
+                                .into(),
+                        );
+                    }
+                }
+                crate::memories::Event::Failed(error) => {
+                    if let Some(CommandPanel::Memories(panel)) = self.panels_mut().command_mut() {
+                        panel.fail(error);
+                    } else {
+                        self.open_command_panel(CommandPanel::loading("Memories", &error));
+                    }
+                }
+                crate::memories::Event::Opened(page) => {
+                    self.open_command_panel(CommandPanel::memories(page))
+                }
+                crate::memories::Event::Detail(entry) => self.show_overlay(DetailList::new(
+                    entry.title,
+                    vec![crate::widgets::detail_list::DetailListRow::new(
+                        "Content", entry.body,
+                    )],
+                )),
+            },
             AppEvent::Mcp(event) => self.apply_mcp_event(event),
             AppEvent::Sessions(event) => self.apply_session_event(event),
             AppEvent::CommandPanelClosed => self.close_command_panel(),
@@ -1860,6 +1887,7 @@ impl App {
             | AppEvent::Connectors(
                 ConnectorEvent::PickerOpened(_) | ConnectorEvent::PickerUpdated(_),
             )
+            | AppEvent::Memories(_)
             | AppEvent::Mcp(McpEvent::SettingsOpened(_) | McpEvent::SettingsUpdated(_))
             | AppEvent::Theme(ThemeEvent::PickerOpened(_))
             | AppEvent::Thread(ThreadEvent::RewindPickerOpened(_))

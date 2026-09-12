@@ -109,6 +109,7 @@ zeta-utils-pty = { workspace = true }
 worktree = { workspace = true }
 
 [dev-dependencies]
+zeta-context-engine = { workspace = true }
 image = { workspace = true, features = ["png"] }
 tempfile = { workspace = true }
 zeta-uds = { workspace = true }

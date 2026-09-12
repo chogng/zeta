@@ -16,6 +16,71 @@ struct MemoryScopes {
 }
 
 impl AppServer {
+    pub(super) fn memory_scope_labels(
+        &self,
+        thread_id: Option<&ThreadId>,
+    ) -> Result<Vec<(MemoryScope, String)>, String> {
+        let Some(thread_id) = thread_id else {
+            return Ok(vec![(MemoryScope::Profile, "Personal memories".into())]);
+        };
+        let thread = self
+            .threads
+            .read_thread(thread_id)
+            .map_err(|error| error.to_string())?;
+        let dirs = self
+            .env_runtime
+            .read()
+            .map_err(|_| "Environment lock poisoned")?
+            .dir_grants
+            .clone();
+        let scopes = MemoryScopes {
+            projects: self.projects.clone(),
+            dirs: dirs.clone(),
+        }
+        .scopes(&thread.session_id, thread_id)
+        .map_err(|error| error.to_string())?;
+        let mut directory_labels = std::collections::BTreeMap::new();
+        if let Some(scope) = dirs
+            .thread_scope(thread_id, Permission::ReadFiles)
+            .map_err(|error| error.to_string())?
+        {
+            let dir = scope.primary().dir();
+            directory_labels.insert(dir.id(), dir.requested_path().display().to_string());
+        }
+        for entry in dirs.list(&thread.session_id) {
+            directory_labels.insert(
+                entry.dir().id(),
+                entry.dir().requested_path().display().to_string(),
+            );
+        }
+        scopes
+            .into_iter()
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .map(|scope| {
+                let label = match &scope {
+                    MemoryScope::Profile => "Personal memories".into(),
+                    MemoryScope::Project { project_id } => format!(
+                        "Project: {}",
+                        self.projects
+                            .as_ref()
+                            .ok_or("Projects unavailable")?
+                            .read(project_id)
+                            .map_err(|error| error.to_string())?
+                            .name
+                    ),
+                    MemoryScope::Dir { dir_id } => format!(
+                        "Directory: {}",
+                        directory_labels
+                            .get(dir_id)
+                            .ok_or("Directory authorization changed; refresh memory scopes")?
+                    ),
+                };
+                Ok((scope, label))
+            })
+            .collect()
+    }
+
     pub(super) fn with_memory_extension(mut self) -> Result<Self, String> {
         let Some(memories) = self.memories.clone() else {
             return Ok(self);
@@ -26,7 +91,7 @@ impl AppServer {
         });
         let mut builder =
             zeta_extension_api::ExtensionRegistryBuilder::from_registry(&self.agent_extensions);
-        memories_extension::install(&mut builder, memories, scopes);
+        memories_extension::install(&mut builder, memories, scopes, self.updates.clone());
         let registry = Arc::new(builder.build());
         let tools = crate::extension_tools::compose_extension_tools(&registry)
             .map_err(|error| error.to_string())?;
@@ -77,6 +142,15 @@ impl MemoryScopeProvider for MemoryScopes {
             }
         }
         Ok(scopes)
+    }
+}
+
+impl memories_extension::MemoryEventSink for super::update_broker::UpdateBroker {
+    fn changed(&self, scope: &MemoryScope, catalog_revision: u64) {
+        self.publish_memory_changed(zeta_app_server_protocol::protocol::memory::MemoryChanged {
+            scope: scope.clone(),
+            catalog_revision,
+        });
     }
 }
 

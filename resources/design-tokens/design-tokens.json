@@ -2638,6 +2638,62 @@
       }
     },
     {
+      "id": "editorOverviewRuler.border",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-overview-ruler-border",
+      "owner": "editor.presentation",
+      "description": "Color of the editor overview ruler border.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#7f7f7f4d",
+        "light": "#7f7f7f4d",
+        "high-contrast-dark": "#7f7f7f4d",
+        "high-contrast-light": "#666666"
+      },
+      "values": {
+        "dark": "rgba(127, 127, 127, 0.3)",
+        "light": "rgba(127, 127, 127, 0.3)",
+        "high-contrast-dark": "rgba(127, 127, 127, 0.3)",
+        "high-contrast-light": "#666666"
+      }
+    },
+    {
+      "id": "editorOverviewRuler.background",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-overview-ruler-background",
+      "owner": "editor.presentation",
+      "description": "Background color of the editor overview ruler.",
+      "needsTransparency": true,
+      "defaults": {
+        "dark": {
+          "op": "transparent",
+          "value": "editor.background",
+          "factor": 0
+        },
+        "light": {
+          "op": "transparent",
+          "value": "editor.background",
+          "factor": 0
+        },
+        "high-contrast-dark": {
+          "op": "transparent",
+          "value": "editor.background",
+          "factor": 0
+        },
+        "high-contrast-light": {
+          "op": "transparent",
+          "value": "editor.background",
+          "factor": 0
+        }
+      },
+      "values": {
+        "dark": "rgba(30, 30, 30, 0)",
+        "light": "rgba(255, 255, 255, 0)",
+        "high-contrast-dark": "rgba(30, 30, 30, 0)",
+        "high-contrast-light": "rgba(255, 255, 255, 0)"
+      }
+    },
+    {
       "id": "editor.lineHighlightBackground",
       "kind": "color",
       "cssVariable": "--zeta-editor-line-highlight-background",

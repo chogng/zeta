@@ -10,6 +10,7 @@ mod issues;
 mod keymap;
 mod keymap_setup;
 mod mcp;
+mod memories;
 mod memory;
 mod models;
 mod nls;

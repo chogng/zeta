@@ -126,7 +126,7 @@ impl CapabilityToolContributor for FixedCapabilityContributor {
 #[test]
 fn capability_tool_contributions_preserve_declared_authority() {
     let mut builder = ExtensionRegistryBuilder::new();
-    builder.capability_tool_contributor(Arc::new(FixedCapabilityContributor));
+    builder.capability_tool_contributor("test", Arc::new(FixedCapabilityContributor));
 
     let tools = builder.build().contribute_capability_tools().unwrap();
 

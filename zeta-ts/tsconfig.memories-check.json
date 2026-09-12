@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.renderer.json",
+  "include": [
+    "src/typings/**/*.d.ts",
+    "src/zeta/platform/memories/**/*.ts",
+    "src/zeta/platform/native/electron-browser/rendererApi.ts",
+    "src/zeta/platform/app-server/browser/webRendererApi.ts",
+    "src/zeta/workbench/workbench.common.main.ts",
+    "src/zeta/workbench/browser/workbench.ts"
+  ]
+}

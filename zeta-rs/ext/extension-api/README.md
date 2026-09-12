@@ -22,20 +22,21 @@ App Server may construct the registry and adapt extension events to protocol not
 must not implement contributor selection, loading, or prompt composition. For read-only tools it
 may validate definitions and adapt executors to the normal tool policy/registry pipeline; the domain
 operation remains in the contributing extension. `ExtensionRegistry::contribute_read_only_tools`
-rejects duplicate model-visible names before host composition. Read-only tools and context sources
+rejects duplicate model-visible names before host composition. Tools, context sources and invocation instructions
 are registered by extension identity; reinstalling that identity replaces its contribution in place.
 `ContextEvidence` and `ContextSourceRequest` belong to this contract. Core also re-exports these values
 for host context sources, applies the shared evidence budget, and never turns them into instructions.
 
-The Memories extension contributes both first-invocation evidence and model-requested search/read
-tools. Both routes resolve current host-bound Session/Thread authority and Memory consent on every
-read. Tool execution contexts carry these identities independently of model arguments.
+The Memories extension contributes first-invocation evidence, model-requested search/read tools,
+and a separately authorized Memory writer. Every operation resolves current host-bound Session/Thread
+authority and the corresponding Memory consent. Tool execution contexts carry these identities independently of model arguments.
 
 `ReadOnlyToolContributor` is intentionally not a generic capability escape hatch. Its executors may
 read extension-owned source roots that were validated before registration; they must not use ambient
 filesystem authority or perform filesystem mutation, process, network, credential, UI, or external
-mutation operations. A future extension that needs those capabilities requires a separate
-host-reviewed contract.
+mutation operations. `CapabilityToolContributor` declares host-reviewed authority. `ExternalRead` names exact network
+and credential scopes. `ManagedStateWrite` modifies extension-owned state only through a domain
+transaction that checks current user consent; it grants no ambient filesystem or process access.
 
 ## 生命周期与展示项
 

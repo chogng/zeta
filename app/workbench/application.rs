@@ -211,3 +211,6 @@ pub(crate) const APP_DISPLAY_NAME: &str = "app";
 const DEFAULT_THEME_ENTRY: &str = "app";
 const INITIAL_WIDTH: f64 = 1_280.0;
 const INITIAL_HEIGHT: f64 = 800.0;
+
+#[path = "memories/input.rs"]
+mod memories_input;

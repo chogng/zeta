@@ -5,6 +5,7 @@ import { Disposable, DisposableStore } from "../../../../../base/common/lifecycl
 import type { ChatTurnErrorAction, IChatListItem } from "./chatListItems.js";
 
 interface ChatListWidgetOptions {
+	readonly onDidRequestMemoryReference?: (reference: string) => void;
 	readonly onDidRequestErrorAction?: (action: ChatTurnErrorAction) => void;
 }
 
@@ -15,12 +16,14 @@ export class ChatListWidget extends Disposable {
 	private readonly transcript: HTMLDivElement;
 	private readonly renderedItems = this._register(new DisposableStore());
 	private readonly onDidRequestErrorAction: ((action: ChatTurnErrorAction) => void) | undefined;
+	private readonly onDidRequestMemoryReference: ((reference: string) => void) | undefined;
 	private visible = false;
 	private shouldFollow = true;
 
 	constructor(container: HTMLElement, options: ChatListWidgetOptions = {}) {
 		super();
 		this.onDidRequestErrorAction = options.onDidRequestErrorAction;
+		this.onDidRequestMemoryReference = options.onDidRequestMemoryReference;
 		this.scrollable = this._register(new ScrollableElement(container, {
 			direction: "vertical",
 			vertical: "auto",
@@ -81,6 +84,16 @@ export class ChatListWidget extends Disposable {
 			const content = h(this.element.ownerDocument, "pre");
 			content.textContent = item.text;
 			article.append(content);
+		}
+		if (this.onDidRequestMemoryReference) {
+			const references = [...new Set(item.text.match(/memory:[A-Za-z0-9_-]+/g) ?? [])].filter(reference => reference.length <= 4096).slice(0, 8);
+			for (const [index, reference] of references.entries()) {
+				const button = h(this.element.ownerDocument, 'button');
+				button.type = 'button';
+				button.textContent = `Open memory reference ${index + 1}`;
+				article.append(button);
+				this.renderedItems.add(addDisposableListener(button, 'click', () => this.onDidRequestMemoryReference?.(reference)));
+			}
 		}
 		if (item.detail) {
 			const detail = h(this.element.ownerDocument, "p");

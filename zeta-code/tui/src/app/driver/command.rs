@@ -141,6 +141,20 @@ impl AppDriver {
             AppCommand::Sessions(command) => {
                 self.execute_session_command(request_key, command, origin)
             }
+            AppCommand::Memories(command) => {
+                let mut client = self.client.clone();
+                let thread_id = self
+                    .conversation
+                    .as_ref()
+                    .map(|current| current.conversation.thread_id().clone());
+                self.requests.spawn_presentation(
+                    request_key,
+                    "zeta-tui-memories",
+                    move || crate::memories::execute(&mut client, thread_id.as_ref(), command),
+                    &mut self.app,
+                    origin,
+                );
+            }
             AppCommand::Skills(command) => {
                 let name = command.request_name();
                 let mut client = self.client.clone();

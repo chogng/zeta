@@ -10,6 +10,7 @@ pub(crate) enum AppEvent {
     Issues(crate::issues::Event),
     Keymap(crate::keymap_setup::Event),
     Mcp(crate::mcp::Event),
+    Memories(crate::memories::Event),
     Models(crate::models::Event),
     Sessions(crate::sessions::Event),
     Skills(crate::skills::Event),
@@ -45,3 +46,5 @@ app_event_from!(crate::theme::Event, Theme);
 app_event_from!(crate::thread::Event, Thread);
 
 app_event_from!(crate::issues::Event, Issues);
+
+app_event_from!(crate::memories::Event, Memories);

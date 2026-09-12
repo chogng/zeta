@@ -135,6 +135,7 @@ fn enable(
             scope,
             expected_revision: 0,
             automatic_read: memories::MemoryReadMode::FirstInvocation,
+            model_write: memories::MemoryWriteMode::Disabled,
         })
         .unwrap()
 }
@@ -198,6 +199,7 @@ fn memory_read_consent_is_scoped_persistent_and_cannot_be_reenabled_by_replay() 
         scope: project.clone(),
         expected_revision: 1,
         automatic_read: memories::MemoryReadMode::Disabled,
+        model_write: memories::MemoryWriteMode::Disabled,
     };
     let disabled = reopened.update_policy(request.clone()).unwrap();
     assert_eq!(disabled.policy.revision, 2);
@@ -217,6 +219,7 @@ fn memory_read_consent_is_scoped_persistent_and_cannot_be_reenabled_by_replay() 
             scope: project.clone(),
             expected_revision: 1,
             automatic_read: memories::MemoryReadMode::FirstInvocation,
+            model_write: memories::MemoryWriteMode::Disabled,
         }),
         Err(MemoryError::RevisionConflict {
             expected: 1,
@@ -229,6 +232,7 @@ fn memory_read_consent_is_scoped_persistent_and_cannot_be_reenabled_by_replay() 
             scope: profile.clone(),
             expected_revision: 0,
             automatic_read: memories::MemoryReadMode::FirstInvocation,
+            model_write: memories::MemoryWriteMode::Disabled,
         }),
         Err(MemoryError::CommandConflict)
     ));
@@ -441,6 +445,7 @@ fn context_citation_checks_consent_before_loading_body_and_observes_other_connec
             scope: scope.clone(),
             expected_revision: 1,
             automatic_read: memories::MemoryReadMode::Disabled,
+            model_write: memories::MemoryWriteMode::Disabled,
         })
         .unwrap();
     // If disabled reads loaded the row before checking policy, corrupt content would yield Storage.
@@ -454,4 +459,201 @@ fn context_citation_checks_consent_before_loading_body_and_observes_other_connec
     assert_eq!(read(), Err(MemoryError::ReadDenied));
     cancellation.cancel();
     assert!(matches!(read(), Err(MemoryError::Cancelled(_))));
+}
+
+#[test]
+fn memory_updates_are_versioned_retry_safe_and_never_restore_deleted_text() {
+    let root = tempfile::tempdir().unwrap();
+    let service = Memories::new(Arc::new(
+        SqliteMemoryStore::open(root.path().join("state.sqlite")).unwrap(),
+    ));
+    remember(
+        &service,
+        "decision",
+        MemoryScope::Profile,
+        "Old Rust decision",
+    );
+    let old = service
+        .search(SearchMemoriesRequest {
+            scope: MemoryScope::Profile,
+            query: "Rust".into(),
+            cursor: None,
+            limit: 10,
+        })
+        .unwrap()
+        .matches
+        .remove(0)
+        .citation;
+    let update = memories::UpdateMemoryRequest {
+        command_id: CommandId::new("update").unwrap(),
+        memory_id: MemoryId::new("decision").unwrap(),
+        scope: MemoryScope::Profile,
+        expected_revision: 1,
+        title: "Changed decision".into(),
+        body: "New Rust decision".into(),
+    };
+    let saved = service.update_user_memory(update.clone()).unwrap();
+    assert_eq!(saved.memory.revision, 2);
+    assert_eq!(
+        saved.memory.created_at_unix_ms <= saved.memory.updated_at_unix_ms,
+        true
+    );
+    assert_eq!(
+        service
+            .update_user_memory(update.clone())
+            .unwrap()
+            .disposition,
+        MemoryMutationDisposition::Replayed
+    );
+    assert!(matches!(
+        service.read_citation(old),
+        Err(MemoryError::RevisionConflict {
+            expected: 1,
+            actual: 2
+        })
+    ));
+    assert!(matches!(
+        service.update_user_memory(memories::UpdateMemoryRequest {
+            command_id: CommandId::new("stale").unwrap(),
+            ..update.clone()
+        }),
+        Err(MemoryError::RevisionConflict { .. })
+    ));
+    assert!(matches!(
+        service.update_user_memory(memories::UpdateMemoryRequest {
+            body: "different payload".into(),
+            ..update.clone()
+        }),
+        Err(MemoryError::CommandConflict)
+    ));
+    service
+        .delete(DeleteMemoryRequest {
+            command_id: CommandId::new("delete").unwrap(),
+            memory_id: update.memory_id.clone(),
+            scope: update.scope.clone(),
+            expected_revision: 2,
+        })
+        .unwrap();
+    assert_eq!(
+        service.update_user_memory(update),
+        Err(MemoryError::NotFound)
+    );
+}
+
+#[test]
+fn model_writes_require_consent_and_observed_revision_and_user_edits_take_ownership() {
+    let root = tempfile::tempdir().unwrap();
+    let service = Memories::new(Arc::new(
+        SqliteMemoryStore::open(root.path().join("state.sqlite")).unwrap(),
+    ));
+    let request = memories::SaveModelMemoryRequest {
+        command_id: CommandId::new("model-save").unwrap(),
+        scope: MemoryScope::Profile,
+        expected_revision: 0,
+        title: "Build choice".into(),
+        body: "Use Rust".into(),
+        session_id: zeta_protocol::SessionId::new("session").unwrap(),
+        thread_id: zeta_protocol::ThreadId::new("thread").unwrap(),
+        turn_id: zeta_protocol::TurnId::new("turn").unwrap(),
+    };
+    assert_eq!(
+        service.save_model_memory(request.clone()),
+        Err(MemoryError::WriteDenied)
+    );
+    service
+        .update_policy(memories::UpdateMemoryPolicyRequest {
+            command_id: CommandId::new("enable-save").unwrap(),
+            scope: MemoryScope::Profile,
+            expected_revision: 0,
+            automatic_read: memories::MemoryReadMode::FirstInvocation,
+            model_write: memories::MemoryWriteMode::Enabled,
+        })
+        .unwrap();
+    let first = service.save_model_memory(request.clone()).unwrap();
+    assert!(
+        matches!(&first.memory.source, memories::MemorySource::Model { thread_id, .. } if thread_id.as_str() == "thread")
+    );
+    assert_eq!(
+        service
+            .save_model_memory(request.clone())
+            .unwrap()
+            .disposition,
+        MemoryMutationDisposition::Replayed
+    );
+    let second = service
+        .save_model_memory(memories::SaveModelMemoryRequest {
+            command_id: CommandId::new("merge").unwrap(),
+            expected_revision: 1,
+            body: "Use Rust and verify changes".into(),
+            ..request.clone()
+        })
+        .unwrap();
+    assert_eq!(second.memory.memory_id, first.memory.memory_id);
+    assert_eq!(second.memory.revision, 2);
+    assert!(matches!(
+        service.save_model_memory(request.clone()),
+        Err(MemoryError::RevisionConflict { .. })
+    ));
+    let user = service
+        .update_user_memory(memories::UpdateMemoryRequest {
+            command_id: CommandId::new("user-edit").unwrap(),
+            memory_id: first.memory.memory_id,
+            scope: MemoryScope::Profile,
+            expected_revision: 2,
+            title: "Build choice".into(),
+            body: "User-approved decision".into(),
+        })
+        .unwrap();
+    assert_eq!(user.memory.source, memories::MemorySource::User);
+    assert_eq!(
+        service.save_model_memory(memories::SaveModelMemoryRequest {
+            command_id: CommandId::new("overwrite").unwrap(),
+            expected_revision: 3,
+            ..request.clone()
+        }),
+        Err(MemoryError::WriteDenied)
+    );
+    service
+        .update_policy(memories::UpdateMemoryPolicyRequest {
+            command_id: CommandId::new("disable-save").unwrap(),
+            scope: MemoryScope::Profile,
+            expected_revision: 1,
+            automatic_read: memories::MemoryReadMode::FirstInvocation,
+            model_write: memories::MemoryWriteMode::Disabled,
+        })
+        .unwrap();
+    assert_eq!(
+        service.save_model_memory(request),
+        Err(MemoryError::WriteDenied)
+    );
+}
+
+#[test]
+fn version_two_policy_migration_keeps_model_writes_disabled_and_replays_old_receipts() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("state.sqlite");
+    let service = Memories::new(Arc::new(SqliteMemoryStore::open(&path).unwrap()));
+    let request = memories::UpdateMemoryPolicyRequest {
+        command_id: CommandId::new("enable").unwrap(),
+        scope: MemoryScope::Profile,
+        expected_revision: 0,
+        automatic_read: memories::MemoryReadMode::FirstInvocation,
+        model_write: memories::MemoryWriteMode::Disabled,
+    };
+    service.update_policy(request.clone()).unwrap();
+    drop(service);
+    rusqlite::Connection::open(&path).unwrap().execute_batch(
+        "UPDATE memory_policies SET policy_json = json_remove(policy_json, '$.modelWrite');
+         UPDATE memory_policy_commands SET result_json = json_remove(result_json, '$.policy.modelWrite');
+         UPDATE zeta_schema_migrations SET version = 2 WHERE component = 'memories';"
+    ).unwrap();
+    let service = Memories::new(Arc::new(SqliteMemoryStore::open(&path).unwrap()));
+    assert_eq!(
+        service.policy(&MemoryScope::Profile).unwrap().model_write,
+        memories::MemoryWriteMode::Disabled
+    );
+    assert_eq!(
+        service.update_policy(request).unwrap().disposition,
+        MemoryMutationDisposition::Replayed
+    );
 }

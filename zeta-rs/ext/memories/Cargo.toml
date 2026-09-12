@@ -17,6 +17,7 @@ memories = { workspace = true }
 protocol = { package = "zeta-protocol", path = "../../protocol" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 tools = { package = "zeta-tools", path = "../../tools" }
 
 [dev-dependencies]

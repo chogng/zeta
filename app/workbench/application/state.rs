@@ -4,6 +4,7 @@ use crate::QuickAccess;
 pub(crate) struct WorkbenchApplication {
     pub(super) window: Option<WindowHandle>,
     pub(super) memory: crate::memory::MemoryUi,
+    pub(super) memories: crate::memories::MemoriesUi,
     pub(super) presentation: Option<WorkbenchPresentation>,
     pub(super) frame_scheduler: FrameScheduler,
     pub(super) retained_runtime: RetainedRuntime,
@@ -110,6 +111,7 @@ impl WorkbenchApplication {
         Self {
             window: None,
             memory: crate::memory::MemoryUi::new(&application),
+            memories: crate::memories::MemoriesUi::new(&application),
             presentation: None,
             frame_scheduler: FrameScheduler::default(),
             retained_runtime: RetainedRuntime::default(),

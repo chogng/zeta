@@ -281,6 +281,9 @@ impl TurnExecutor {
         tools: Arc<dyn ToolService>,
         policy: Arc<dyn ActionPolicyService>,
     ) -> Self {
+        self.code_mode = self
+            .code_mode
+            .with_tool_service(Arc::clone(&tools), Arc::clone(&policy));
         self.tools = tools;
         self.policy = policy;
         self

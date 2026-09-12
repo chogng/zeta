@@ -125,9 +125,12 @@ pub trait ReadOnlyToolContributor: Send + Sync {
     fn contribute(&self) -> Result<Vec<Arc<dyn ToolExecutor>>, ExtensionError>;
 }
 
-/// Exact external authority declared by a capability-bearing extension tool.
+/// Exact authority declared by a capability-bearing extension tool.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ExtensionToolAuthority {
+    /// Writes only extension-owned state through a domain API that atomically enforces user consent.
+    /// This never grants filesystem, process, credential, or network authority.
+    ManagedStateWrite { resource: String },
     /// Sends read-only requests to explicit network scopes without mutating the remote service.
     ExternalRead {
         service: String,
@@ -163,9 +166,9 @@ impl CapabilityToolContribution {
     }
 }
 
-/// Contributes tools that need explicit host-reviewed network or credential authority.
+/// Contributes tools that need host-reviewed external access or consent-checked domain writes.
 ///
-/// Implementations must declare every external scope before registration. The host freezes the
+/// Implementations must declare every owned or external scope before registration. The host freezes the
 /// declaration with the Tool Call, asks policy for authority, and only then invokes the executor.
 /// This contract does not itself grant network or credential access.
 pub trait CapabilityToolContributor: Send + Sync {

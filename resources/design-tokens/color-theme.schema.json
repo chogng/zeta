@@ -171,6 +171,8 @@
           "editorMultiCursor.primary.background",
           "editorMultiCursor.secondary.foreground",
           "editorMultiCursor.secondary.background",
+          "editorOverviewRuler.border",
+          "editorOverviewRuler.background",
           "editor.lineHighlightBackground",
           "editor.inactiveLineHighlightBackground",
           "editor.lineHighlightBorder",

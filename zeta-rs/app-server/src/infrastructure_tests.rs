@@ -430,7 +430,7 @@ fn memory_policy_rpc_controls_actual_turn_context_and_citation_access() {
         call(
             &server,
             host,
-            json!({"jsonrpc":"2.0","id":id,"method":"memory/policy/update","params":{"commandId":command,"scope":{"type":"profile"},"expectedRevision":revision,"automaticRead":mode}}),
+            json!({"jsonrpc":"2.0","id":id,"method":"memory/policy/update","params":{"commandId":command,"scope":{"type":"profile"},"expectedRevision":revision,"automaticRead":mode,"modelWrite":"disabled"}}),
         )
     };
     let enabled = update(&mut host, "enable", 0, "firstInvocation");
@@ -467,7 +467,7 @@ fn memory_policy_rpc_controls_actual_turn_context_and_citation_access() {
         ("memory/policy/read", json!({"scope":{"type":"profile"}})),
         (
             "memory/policy/update",
-            json!({"commandId":"unauthorized","scope":{"type":"profile"},"expectedRevision":1,"automaticRead":"disabled"}),
+            json!({"commandId":"unauthorized","scope":{"type":"profile"},"expectedRevision":1,"automaticRead":"disabled","modelWrite":"disabled"}),
         ),
     ].into_iter().enumerate() {
         let denied = call(
@@ -602,7 +602,7 @@ fn memory_extension_tools_execute_in_turns_and_survive_host_composition_order() 
             &server,
             &mut host,
             json!({"jsonrpc":"2.0","id":11,"method":"memory/policy/update","params":{
-                "commandId":"enable","scope":{"type":"profile"},"expectedRevision":0,"automaticRead":"firstInvocation"
+                "commandId":"enable","scope":{"type":"profile"},"expectedRevision":0,"automaticRead":"firstInvocation","modelWrite":"disabled"
             }}),
         );
         assert!(enabled.get("error").is_none(), "{enabled}");
@@ -664,4 +664,155 @@ fn memory_extension_tools_execute_in_turns_and_survive_host_composition_order() 
                 .all(|(text, is_error)| !**is_error && text.contains(body))
         );
     }
+}
+
+struct CodeMemoryModel {
+    reference: String,
+    calls: std::sync::atomic::AtomicUsize,
+}
+impl zeta_core::ModelService for CodeMemoryModel {
+    fn invoke(
+        &self,
+        _: zeta_core::ModelSelection<'_>,
+        _: &zeta_protocol::ModelRequest,
+        _: &zeta_async_utils::CancellationToken,
+    ) -> Result<zeta_protocol::ModelResponse, zeta_core::CoreError> {
+        let first = self
+            .calls
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            == 0;
+        Ok(zeta_protocol::ModelResponse {
+            output: vec![if first {
+                zeta_protocol::ResponseItem::ToolCall(zeta_protocol::ToolCall {
+                    id: zeta_protocol::ToolCallId::new("memory-exec").unwrap(),
+                    name: zeta_protocol::ToolName::new("exec").unwrap(),
+                    arguments: json!({"source":format!("text(await tools.memories__scopes({{}})); text(await tools.memories__save({{scope:'profile',title:'Code Mode choice',body:'Rust Code Mode saved fact',expected_revision:0}})); text(await tools.memories__search({{query:'Rust'}})); text(await tools.memories__read({{reference:{}}}));", serde_json::to_string(&self.reference).unwrap())}),
+                })
+            } else {
+                zeta_protocol::ResponseItem::Text("done".into())
+            }],
+            usage: None,
+            billing: None,
+            stop_reason: if first {
+                zeta_protocol::StopReason::ToolUse
+            } else {
+                zeta_protocol::StopReason::Completed
+            },
+        })
+    }
+}
+
+#[test]
+fn memories_code_mode_calls_share_identity_policy_and_durable_results() {
+    let root = tempfile::tempdir().unwrap();
+    let citation = memories::MemoryCitation {
+        memory_id: memories::MemoryId::new("seed").unwrap(),
+        scope: memories::MemoryScope::Profile,
+        revision: 1,
+        start_byte: 0,
+        end_byte: 9,
+    };
+    let server = super::server_with_model(Arc::new(CodeMemoryModel {
+        reference: citation.reference().unwrap(),
+        calls: Default::default(),
+    }))
+    .with_local_memories(&root.path().join("state.sqlite"))
+    .unwrap();
+    let mut host = server.product_host_connection();
+    let (session, thread) = create(&server, &mut host);
+    for (id, method, params) in [
+        (
+            10,
+            "memory/add",
+            json!({"commandId":"add","memoryId":"seed","scope":{"type":"profile"},"title":"Seed","body":"Rust seed"}),
+        ),
+        (
+            11,
+            "memory/policy/update",
+            json!({"commandId":"consent","scope":{"type":"profile"},"expectedRevision":0,"automaticRead":"firstInvocation","modelWrite":"enabled"}),
+        ),
+    ] {
+        let result = call(
+            &server,
+            &mut host,
+            json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}),
+        );
+        assert!(result.get("error").is_none(), "{result}");
+    }
+    let sequence = server
+        .threads()
+        .read_thread(&zeta_protocol::ThreadId::new(&thread).unwrap())
+        .unwrap()
+        .sequence;
+    let started = call(
+        &server,
+        &mut host,
+        json!({"jsonrpc":"2.0","id":12,"method":"session/request","params":{"commandId":"turn","sessionId":session,"request":{"type":"startTurn","threadId":thread,"expectedSequence":sequence,"input":[{"type":"text","text":"Rust"}],"toolMode":"codeModeOnly"}}}),
+    );
+    assert!(started.get("error").is_none(), "{started}");
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let snapshot = loop {
+        let snapshot = server
+            .threads()
+            .read_thread(&zeta_protocol::ThreadId::new(&thread).unwrap())
+            .unwrap();
+        if snapshot.turns.last().is_some_and(|turn| {
+            matches!(
+                turn.status,
+                zeta_protocol::TurnStatus::Completed
+                    | zeta_protocol::TurnStatus::Failed
+                    | zeta_protocol::TurnStatus::Interrupted
+            )
+        }) {
+            break snapshot;
+        }
+        assert!(Instant::now() < deadline, "Code Mode memory Turn timed out");
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    assert_eq!(
+        snapshot.turns.last().unwrap().status,
+        zeta_protocol::TurnStatus::Completed,
+        "{:?}",
+        snapshot.turns.last().unwrap().failure
+    );
+    let nested = snapshot
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            zeta_protocol::ThreadItem::ToolCall {
+                name,
+                binding: Some(binding),
+                ..
+            } if matches!(
+                binding.caller,
+                zeta_protocol::ToolCallCaller::CodeMode { .. }
+            ) =>
+            {
+                Some(name.as_str())
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        nested,
+        [
+            "memories-scopes",
+            "memories-save",
+            "memories-search",
+            "memories-read"
+        ]
+    );
+    assert!(!snapshot.items.iter().any(|item| matches!(
+        item,
+        zeta_protocol::ThreadItem::ToolResult { is_error: true, .. }
+    )));
+    let found = call(
+        &server,
+        &mut host,
+        json!({"jsonrpc":"2.0","id":13,"method":"memory/search","params":{"scope":{"type":"profile"},"query":"Code Mode saved"}}),
+    );
+    assert_eq!(
+        found["result"]["matches"][0]["source"]["model"]["threadId"],
+        thread
+    );
 }

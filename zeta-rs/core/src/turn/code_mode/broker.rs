@@ -55,12 +55,12 @@ pub const WAIT_TOOL_NAME: &str = "wait";
 #[derive(Clone)]
 pub struct CodeModeBroker {
     inner: Arc<CodeModeBrokerInner>,
+    tools: Arc<dyn ToolService>,
+    policy: Arc<dyn ActionPolicyService>,
 }
 
 pub(super) struct CodeModeBrokerInner {
     pub(super) threads: Arc<ThreadController>,
-    pub(super) tools: Arc<dyn ToolService>,
-    pub(super) policy: Arc<dyn ActionPolicyService>,
     pub(super) runtimes: Mutex<BTreeMap<RuntimeKey, CodeModeRuntime>>,
     pub(super) session_stores: Mutex<BTreeMap<(String, String), CodeModeStore>>,
     pub(super) cell_parents: Mutex<BTreeMap<(RuntimeKey, String), ToolCallId>>,
@@ -111,14 +111,27 @@ impl CodeModeBroker {
         policy: Arc<dyn ActionPolicyService>,
     ) -> Self {
         Self {
+            tools,
+            policy,
             inner: Arc::new(CodeModeBrokerInner {
                 threads,
-                tools,
-                policy,
                 runtimes: Mutex::new(BTreeMap::new()),
                 session_stores: Mutex::new(BTreeMap::new()),
                 cell_parents: Mutex::new(BTreeMap::new()),
             }),
+        }
+    }
+
+    /// Rebinds future execution services while retaining live cells and their frozen invokers.
+    pub(crate) fn with_tool_service(
+        &self,
+        tools: Arc<dyn ToolService>,
+        policy: Arc<dyn ActionPolicyService>,
+    ) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+            tools,
+            policy,
         }
     }
 
@@ -262,7 +275,7 @@ impl CodeModeBroker {
             SandboxCompatibility::NotApplicable {
                 reason: "Code Mode control execution is isolated by the runtime; nested ordinary tools are reviewed separately".into(),
             },
-            ActionPolicyRevision::new(self.inner.policy.revision()),
+            ActionPolicyRevision::new(self.policy.revision()),
         ))
     }
 
@@ -308,14 +321,14 @@ impl CodeModeBroker {
         let snapshot = self.inner.threads.read_thread(&thread_id)?;
         let key = RuntimeKey::new(snapshot.session_id.to_string(), &thread_id, &turn_id);
         let activated = super::super::executor::activated_tool_names(
-            self.inner.tools.as_ref(),
+            self.tools.as_ref(),
             &snapshot.items,
             &turn_id,
         )?;
         // CodeModeOnly hides ordinary tools from the model, but those same tools must remain
         // available through the JavaScript projection. Keep the runtime catalog independent from
         // the model-facing mode filter while retaining the exact activated registry snapshot.
-        let frozen_catalog = self.inner.tools.model_catalog_snapshot(&activated)?;
+        let frozen_catalog = self.tools.model_catalog_snapshot(&activated)?;
         let frozen_catalog = match snapshot.agent_configuration() {
             Some(seed) => frozen_catalog.restrict_to_names(&seed.capability_scope.tools),
             None => frozen_catalog,
@@ -427,6 +440,8 @@ impl CodeModeBroker {
         }
         let invoker = Arc::new(BrokerToolInvoker::new(
             Arc::downgrade(&self.inner),
+            Arc::clone(&self.tools),
+            Arc::clone(&self.policy),
             key.clone(),
             frozen_catalog,
             cancellation,

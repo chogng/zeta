@@ -2,5 +2,6 @@
 import type { CommandId } from './CommandId.js';
 import type { MemoryReadMode } from './MemoryReadMode.js';
 import type { MemoryScope } from './MemoryScope.js';
+import type { MemoryWriteMode } from './MemoryWriteMode.js';
 
-export type MemoryPolicyUpdateParams = { commandId: CommandId, scope: MemoryScope, expectedRevision: number, automaticRead: MemoryReadMode, };
+export type MemoryPolicyUpdateParams = { commandId: CommandId, scope: MemoryScope, expectedRevision: number, automaticRead: MemoryReadMode, modelWrite: MemoryWriteMode, };

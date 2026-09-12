@@ -33,6 +33,13 @@ use tools::ToolRuntimeKey;
 struct Scopes {
     allowed: Mutex<Vec<MemoryScope>>,
     calls: AtomicUsize,
+    changes: AtomicUsize,
+}
+
+impl MemoryEventSink for Scopes {
+    fn changed(&self, _: &MemoryScope, _: u64) {
+        self.changes.fetch_add(1, Ordering::Relaxed);
+    }
 }
 
 impl MemoryScopeProvider for Scopes {
@@ -56,6 +63,7 @@ struct Fixture {
     scopes: Arc<Scopes>,
     registry: ExtensionRegistry,
     cancellation: CancellationSource,
+    next_call: AtomicUsize,
 }
 
 impl Fixture {
@@ -67,13 +75,19 @@ impl Fixture {
         let scopes = Arc::new(Scopes::default());
         scopes.allowed.lock().unwrap().push(MemoryScope::Profile);
         let mut builder = ExtensionRegistryBuilder::new();
-        install(&mut builder, memories.clone(), scopes.clone());
+        install(
+            &mut builder,
+            memories.clone(),
+            scopes.clone(),
+            scopes.clone(),
+        );
         Self {
             _root: root,
             memories,
             scopes,
             registry: builder.build(),
             cancellation: CancellationSource::new(),
+            next_call: AtomicUsize::new(0),
         }
     }
 
@@ -106,6 +120,7 @@ impl Fixture {
                 scope,
                 expected_revision: revision,
                 automatic_read: mode,
+                model_write: memories::MemoryWriteMode::Disabled,
             })
             .unwrap();
     }
@@ -116,6 +131,13 @@ impl Fixture {
             .contribute_read_only_tools()
             .unwrap()
             .into_iter()
+            .chain(
+                self.registry
+                    .contribute_capability_tools()
+                    .unwrap()
+                    .into_iter()
+                    .map(|tool| tool.into_parts().0),
+            )
             .find(|tool| tool.definition().name().as_str() == name)
             .unwrap();
         let definition = executor.definition();
@@ -128,7 +150,11 @@ impl Fixture {
         );
         let invocation = ToolInvocation::new(
             ToolOperationId::new("operation").unwrap(),
-            ToolCallId::new("call").unwrap(),
+            ToolCallId::new(format!(
+                "call-{}",
+                self.next_call.fetch_add(1, Ordering::Relaxed)
+            ))
+            .unwrap(),
             TurnId::new("turn").unwrap(),
             binding,
             ToolPayload::FunctionArguments(arguments),
@@ -336,11 +362,12 @@ fn context_and_tools_share_current_authority_and_reinstallation_replaces_both() 
         &mut builder,
         fixture.memories.clone(),
         Arc::new(Scopes::default()),
+        fixture.scopes.clone(),
     );
     fixture.registry = builder.build();
     assert_eq!(
         fixture.registry.contribute_read_only_tools().unwrap().len(),
-        2
+        3
     );
     assert!(
         fixture
@@ -356,4 +383,133 @@ fn context_and_tools_share_current_authority_and_reinstallation_replaces_both() 
         .unwrap()["matches"],
         json!([])
     );
+}
+
+#[test]
+fn model_save_uses_host_identity_and_publishes_only_committed_changes() {
+    let fixture = Fixture::new();
+    let args = json!({"scope":"profile","title":"Rust choice","body":"Use Rust for this tool","expected_revision":0});
+    let denied = fixture.call("memories-save", args.clone());
+    assert_eq!(denied.status(), tools::ToolOutputStatus::Error);
+    fixture
+        .memories
+        .update_policy(UpdateMemoryPolicyRequest {
+            command_id: CommandId::new("enable-write").unwrap(),
+            scope: MemoryScope::Profile,
+            expected_revision: 0,
+            automatic_read: MemoryReadMode::FirstInvocation,
+            model_write: memories::MemoryWriteMode::Enabled,
+        })
+        .unwrap();
+    let scopes: Value =
+        serde_json::from_str(text(&fixture.call("memories-scopes", json!({})))).unwrap();
+    assert_eq!(scopes["scopes"][0]["policy"]["modelWrite"], "enabled");
+    let (executor, invocation) = fixture.invocation("memories-save", args);
+    let execute = || match pollster::block_on(executor.execute(invocation.clone())) {
+        ToolExecutionOutcome::Returned(output) => output,
+        other => panic!("unexpected outcome: {other:?}"),
+    };
+    let saved: Value = serde_json::from_str(text(&execute())).unwrap();
+    assert_eq!(
+        saved["memory"]["memory"]["source"]["model"]["threadId"],
+        "thread"
+    );
+    assert_eq!(saved["memory"]["disposition"], "committed");
+    let replayed: Value = serde_json::from_str(text(&execute())).unwrap();
+    assert_eq!(replayed["memory"]["disposition"], "replayed");
+    assert_eq!(fixture.scopes.changes.load(Ordering::Relaxed), 1);
+    fixture
+        .memories
+        .update_policy(UpdateMemoryPolicyRequest {
+            command_id: CommandId::new("revoke-write").unwrap(),
+            scope: MemoryScope::Profile,
+            expected_revision: 1,
+            automatic_read: MemoryReadMode::FirstInvocation,
+            model_write: memories::MemoryWriteMode::Disabled,
+        })
+        .unwrap();
+    assert_eq!(execute().status(), tools::ToolOutputStatus::Error);
+    assert_eq!(fixture.scopes.changes.load(Ordering::Relaxed), 1);
+}
+
+#[test]
+fn automatic_saving_instructions_follow_current_consent_without_loading_memory_content() {
+    let mut fixture = Fixture::new();
+    fixture.remember("private", MemoryScope::Profile);
+    let session = SessionId::new("session").unwrap();
+    let thread = ThreadId::new("thread").unwrap();
+    let turn = TurnId::new("turn").unwrap();
+    let collect = |registry: &ExtensionRegistry| {
+        registry
+            .contribute_turn_input(extension_api::TurnInputContext::for_session(
+                &session,
+                &thread,
+                &turn,
+                &[],
+            ))
+            .unwrap()
+    };
+    assert!(collect(&fixture.registry).is_empty());
+    fixture
+        .memories
+        .update_policy(UpdateMemoryPolicyRequest {
+            command_id: CommandId::new("enable-auto-save").unwrap(),
+            scope: MemoryScope::Profile,
+            expected_revision: 0,
+            automatic_read: MemoryReadMode::Disabled,
+            model_write: memories::MemoryWriteMode::Enabled,
+        })
+        .unwrap();
+    let fragments = collect(&fixture.registry);
+    assert_eq!(fragments.len(), 1);
+    assert_eq!(
+        fragments[0].layer(),
+        extension_api::PromptFragmentLayer::Product
+    );
+    assert!(
+        fragments[0]
+            .body()
+            .contains("without waiting for a separate save request")
+    );
+    assert!(!fragments[0].body().contains("先验证"));
+    assert!(
+        fixture
+            .registry
+            .contribute_turn_input(extension_api::TurnInputContext::new(&thread, &turn, &[]))
+            .unwrap()
+            .is_empty()
+    );
+    let other = SessionId::new("other").unwrap();
+    assert!(
+        fixture
+            .registry
+            .contribute_turn_input(extension_api::TurnInputContext::for_session(
+                &other,
+                &thread,
+                &turn,
+                &[]
+            ))
+            .unwrap()
+            .is_empty()
+    );
+    let mut builder = ExtensionRegistryBuilder::from_registry(&fixture.registry);
+    install(
+        &mut builder,
+        fixture.memories.clone(),
+        fixture.scopes.clone(),
+        fixture.scopes.clone(),
+    );
+    fixture.registry = builder.build();
+    assert_eq!(collect(&fixture.registry).len(), 1);
+    fixture
+        .memories
+        .update_policy(UpdateMemoryPolicyRequest {
+            command_id: CommandId::new("disable-auto-save").unwrap(),
+            scope: MemoryScope::Profile,
+            expected_revision: 1,
+            automatic_read: MemoryReadMode::Disabled,
+            model_write: memories::MemoryWriteMode::Disabled,
+        })
+        .unwrap();
+    assert!(collect(&fixture.registry).is_empty());
 }

@@ -11,6 +11,7 @@ pub(crate) enum WorkbenchEvent {
     InputHistoryReady,
     InputClassified(zeta_session::ComposerClassificationResult),
     Memory(crate::memory::MemoryCompletion),
+    Memories(crate::memories::Completion),
     Session(SessionRuntimeEvent),
     Terminal(TerminalSessionEventEnvelope),
     TerminalReady(TerminalSessionReady),
