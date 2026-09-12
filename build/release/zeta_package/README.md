@@ -148,6 +148,10 @@ metadata that does not match the canonical Remote contract. It records compresse
 size and SHA-256 for each deterministic archive. Product packaging, not this canonical package
 builder, authenticates the resulting catalog.
 
+Zeta Code and Remote runtime `.tar.gz` writers share [`archive.py`](../archive.py),
+which sets gzip level 6, clears the original filename, and fixes the gzip timestamp at zero.
+Each builder owns its tar format, member ordering, permissions, and metadata normalization.
+
 | Target | Current sandbox package state |
 | --- | --- |
 | macOS | MXC Seatbelt policy; system launcher |

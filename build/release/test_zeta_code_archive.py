@@ -45,6 +45,8 @@ class ZetaCodeArchiveTests(unittest.TestCase):
 
             with patch.object(archive_builder, "validate_package_directory"):
                 checksum = archive_builder.create_archive(package, first)
+                for path in package.rglob("*"):
+                    os.utime(path, (86400, 86400))
                 archive_builder.create_archive(package, second)
 
             self.assertEqual(first.read_bytes(), second.read_bytes())
@@ -57,6 +59,12 @@ class ZetaCodeArchiveTests(unittest.TestCase):
                     archive.getnames(),
                     ["bin", "bin/zeta", "zeta-package.json"],
                 )
+                self.assertEqual(archive.extractfile("bin/zeta").read(), b"zeta")
+                self.assertEqual(archive.getmember("bin/zeta").mode, 0o755)
+                self.assertEqual(archive.getmember("zeta-package.json").mode, 0o644)
+                for member in archive.getmembers():
+                    self.assertEqual((member.uid, member.gid, member.mtime), (0, 0, 0))
+                    self.assertEqual((member.uname, member.gname), ("", ""))
 
     def test_macos_archive_is_a_deterministic_rootless_zip(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -79,8 +87,9 @@ class ZetaCodeArchiveTests(unittest.TestCase):
             first = root / "first/zeta-code-aarch64-apple-darwin.zip"
             second = root / "second/zeta-code-aarch64-apple-darwin.zip"
 
-            with patch.object(archive_builder, "validate_package_directory"), patch.object(
-                archive_builder, "require_verified_system_signing"
+            with (
+                patch.object(archive_builder, "validate_package_directory"),
+                patch.object(archive_builder, "require_verified_system_signing"),
             ):
                 archive_builder.create_archive(package, first)
                 archive_builder.create_archive(package, second)
@@ -137,7 +146,9 @@ class ZetaCodeArchiveTests(unittest.TestCase):
             fixture = root / "fixture"
             executable = fixture / "bin/zeta"
             executable.parent.mkdir(parents=True)
-            executable.write_text("#!/bin/sh\nprintf 'zeta 1.2.3\\n'\n", encoding="utf-8")
+            executable.write_text(
+                "#!/bin/sh\nprintf 'zeta 1.2.3\\n'\n", encoding="utf-8"
+            )
             executable.chmod(0o755)
             target = {
                 ("Darwin", "arm64"): "aarch64-apple-darwin",
@@ -158,21 +169,19 @@ class ZetaCodeArchiveTests(unittest.TestCase):
                 release_name = f"zeta-code-{target}.tar.gz"
             digest = hashlib.sha256(archive.read_bytes()).hexdigest()
             checksum = root / "package.sha256"
-            checksum.write_text(
-                f"{digest}  {release_name}\n", encoding="ascii"
-            )
+            checksum.write_text(f"{digest}  {release_name}\n", encoding="ascii")
             tools = root / "tools"
             tools.mkdir()
             curl = tools / "curl"
             curl.write_text(
                 "#!/bin/sh\n"
-                "while [ \"$#\" -gt 0 ]; do\n"
-                "  if [ \"$1\" = -o ]; then shift; output=$1; fi\n"
+                'while [ "$#" -gt 0 ]; do\n'
+                '  if [ "$1" = -o ]; then shift; output=$1; fi\n'
                 "  shift\n"
                 "done\n"
-                "case \"$output\" in\n"
-                "  *.sha256) cp \"$ZETA_TEST_CHECKSUM\" \"$output\" ;;\n"
-                "  *) cp \"$ZETA_TEST_ARCHIVE\" \"$output\" ;;\n"
+                'case "$output" in\n'
+                '  *.sha256) cp "$ZETA_TEST_CHECKSUM" "$output" ;;\n'
+                '  *) cp "$ZETA_TEST_ARCHIVE" "$output" ;;\n'
                 "esac\n",
                 encoding="utf-8",
             )

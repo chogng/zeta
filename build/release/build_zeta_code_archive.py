@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import gzip
 import hashlib
 import json
 import os
@@ -19,6 +18,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from build.lib.zeta_build.targets import target_spec  # noqa: E402
+from build.release.archive import open_tar_gz  # noqa: E402
 from build.release.zeta_package.layout import require_verified_system_signing  # noqa: E402
 from build.release.zeta_package.layout import validate_package_directory  # noqa: E402
 
@@ -27,7 +27,9 @@ def create_archive(package: Path, output: Path) -> Path:
     package = package.expanduser().resolve()
     output = output.expanduser().resolve()
     if output.exists() or output.with_suffix(output.suffix + ".sha256").exists():
-        raise RuntimeError(f"Refusing to replace an existing release artifact: {output}")
+        raise RuntimeError(
+            f"Refusing to replace an existing release artifact: {output}"
+        )
     metadata = json.loads((package / "zeta-package.json").read_text(encoding="utf-8"))
     target = metadata.get("target")
     components = metadata.get("components")
@@ -64,16 +66,15 @@ def create_archive(package: Path, output: Path) -> Path:
 
 def create_tar_gz(package: Path, output: Path) -> None:
     with output.open("xb") as raw:
-        with gzip.GzipFile(fileobj=raw, mode="wb", filename="", mtime=0) as compressed:
-            with tarfile.open(fileobj=compressed, mode="w") as archive:
-                for path in package_paths(package):
-                    relative = path.relative_to(package).as_posix()
-                    archive.add(
-                        path,
-                        arcname=relative,
-                        recursive=False,
-                        filter=normalized_tar_info,
-                    )
+        with open_tar_gz(raw, format=tarfile.PAX_FORMAT) as archive:
+            for path in package_paths(package):
+                relative = path.relative_to(package).as_posix()
+                archive.add(
+                    path,
+                    arcname=relative,
+                    recursive=False,
+                    filter=normalized_tar_info,
+                )
 
 
 def create_zip(package: Path, output: Path) -> None:

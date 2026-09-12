@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import gzip
 import hashlib
 import json
 import os
@@ -20,6 +19,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from build.lib.zeta_build.targets import TARGETS
+from build.release.archive import open_tar_gz
 
 CATALOG_FILE = "catalog.json"
 CATALOG_FORMAT_VERSION = 1
@@ -236,32 +236,25 @@ def archive_package_directory(package: Path, output: Path) -> int:
             f"Remote runtime package exceeds {MAX_RUNTIME_UNPACKED_BYTES} unpacked bytes"
         )
     with output.open("wb") as raw:
-        with gzip.GzipFile(
-            filename="", mode="wb", fileobj=raw, compresslevel=9, mtime=0
-        ) as compressed:
-            with tarfile.open(
-                fileobj=compressed, mode="w", format=tarfile.GNU_FORMAT
-            ) as archive:
-                for path in paths:
-                    relative = path.relative_to(package).as_posix()
-                    info = tarfile.TarInfo(relative)
-                    info.uid = 0
-                    info.gid = 0
-                    info.uname = ""
-                    info.gname = ""
-                    info.mtime = 0
-                    if path.is_dir():
-                        info.type = tarfile.DIRTYPE
-                        info.mode = 0o755
-                        archive.addfile(info)
-                    else:
-                        info.type = tarfile.REGTYPE
-                        info.mode = (
-                            0o755 if relative in EXECUTABLE_RUNTIME_FILES else 0o644
-                        )
-                        info.size = path.stat().st_size
-                        with path.open("rb") as source:
-                            archive.addfile(info, source)
+        with open_tar_gz(raw, format=tarfile.GNU_FORMAT) as archive:
+            for path in paths:
+                relative = path.relative_to(package).as_posix()
+                info = tarfile.TarInfo(relative)
+                info.uid = 0
+                info.gid = 0
+                info.uname = ""
+                info.gname = ""
+                info.mtime = 0
+                if path.is_dir():
+                    info.type = tarfile.DIRTYPE
+                    info.mode = 0o755
+                    archive.addfile(info)
+                else:
+                    info.type = tarfile.REGTYPE
+                    info.mode = 0o755 if relative in EXECUTABLE_RUNTIME_FILES else 0o644
+                    info.size = path.stat().st_size
+                    with path.open("rb") as source:
+                        archive.addfile(info, source)
     return unpacked_size
 
 

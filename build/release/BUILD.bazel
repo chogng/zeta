@@ -6,6 +6,7 @@ filegroup(
 )
 
 exports_files([
+    "archive.py",
     "build_remote_runtime_bundle.py",
     "build_zeta_code_archive.py",
     "notarize_release.py",

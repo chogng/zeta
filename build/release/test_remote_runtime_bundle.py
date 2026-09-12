@@ -1,5 +1,7 @@
 import json
+import os
 import sys
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -17,6 +19,8 @@ class RemoteRuntimeBundleTests(unittest.TestCase):
             root = Path(temporary)
             package = create_package(root / "package")
             first = build_remote_runtime_bundle(root / "first", [package])
+            for path in package.rglob("*"):
+                os.utime(path, (86400, 86400))
             second = build_remote_runtime_bundle(root / "second", [package])
 
             first_catalog = json.loads((first.root / "catalog.json").read_text())
@@ -27,6 +31,15 @@ class RemoteRuntimeBundleTests(unittest.TestCase):
             self.assertEqual("x86_64-unknown-linux-gnu", artifact["target"])
             self.assertGreater(artifact["archiveSize"], 0)
             self.assertGreater(artifact["unpackedSize"], 0)
+            with tarfile.open(first.root / artifact["archive"], "r:gz") as archive:
+                self.assertEqual(
+                    archive.extractfile("bin/zeta-app-server").read(), b"zeta"
+                )
+                self.assertEqual(archive.getmember("bin/zeta-app-server").mode, 0o755)
+                self.assertEqual(archive.getmember("zeta-package.json").mode, 0o644)
+                for member in archive.getmembers():
+                    self.assertEqual((member.uid, member.gid, member.mtime), (0, 0, 0))
+                    self.assertEqual((member.uname, member.gname), ("", ""))
 
     def test_validation_rejects_a_tampered_runtime_archive(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
