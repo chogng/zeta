@@ -1,5 +1,5 @@
 `/Volumes/1t/..` or
-- `../vscode` and `../codex` and `../zed` and `../warp` and `../pi`, `../marketplace`, `../deepseek-harness`
+- `../vscode` and `../codex` and `../zed` and `../warp`, `../marketplace`, `../mxc`
 
 # Zeta Agent Instructions
 
