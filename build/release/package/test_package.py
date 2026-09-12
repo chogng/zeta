@@ -15,9 +15,9 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from build.lib.zeta_build.targets import TARGETS
-from zeta_package.cli import generate_protocol_metadata
-from zeta_package.bubblewrap import load_vendored_source, resolve_bubblewrap
-from zeta_package.layout import (
+from build.release.package.build import generate_protocol_metadata
+from build.release.package.bubblewrap import load_vendored_source, resolve_bubblewrap
+from build.release.package.layout import (
     build_package_directory,
     copy_builtin_extensions,
     copy_builtin_skills,
@@ -28,14 +28,14 @@ from zeta_package.layout import (
     require_verified_system_signing,
     system_signing_artifacts,
 )
-from zeta_package.node import (
+from build.release.package.node import (
     NodeResolution,
     artifact_for_target,
     load_node_lock,
     resolve_node,
 )
-from zeta_package.ripgrep import load_lock, resolve_ripgrep
-from zeta_package.version import read_workspace_version
+from build.release.package.ripgrep import load_lock, resolve_ripgrep
+from build.release.package.version import read_workspace_version
 
 
 PRODUCTION_LOCK = REPOSITORY_ROOT / "third_party" / "ripgrep" / "runtime-lock.json"
@@ -136,7 +136,7 @@ class PackageTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-        with patch("zeta_package.cli.subprocess.run", side_effect=run):
+        with patch("build.release.package.build.subprocess.run", side_effect=run):
             metadata = generate_protocol_metadata(REPOSITORY_ROOT, "cargo")
 
         self.assertEqual(

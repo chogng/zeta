@@ -14,13 +14,13 @@ import zipfile
 from pathlib import Path
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from build.lib.zeta_build.targets import target_spec  # noqa: E402
 from build.release.archive import open_tar_gz  # noqa: E402
-from build.release.zeta_package.layout import require_verified_system_signing  # noqa: E402
-from build.release.zeta_package.layout import validate_package_directory  # noqa: E402
+from build.release.package.layout import require_verified_system_signing  # noqa: E402
+from build.release.package.layout import validate_package_directory  # noqa: E402
 
 
 def create_archive(package: Path, output: Path) -> Path:

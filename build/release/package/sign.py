@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from build.lib.zeta_build.targets import TARGETS, target_spec  # noqa: E402
@@ -17,7 +17,7 @@ from build.release.system_signing import run_command  # noqa: E402
 from build.release.system_signing import sha256  # noqa: E402
 from build.release.system_signing import sign_and_verify  # noqa: E402
 from build.release.system_signing import verify_command  # noqa: E402
-from build.release.zeta_package.layout import (  # noqa: E402
+from build.release.package.layout import (  # noqa: E402
     record_system_signing,
     system_signing_artifacts,
     validate_package_directory,

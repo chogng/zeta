@@ -11,16 +11,16 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence
 from urllib.parse import urlsplit
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from build.lib.zeta_build.targets import TargetSpec
 from build.lib.zeta_build.targets import target_spec
-from remote_runtime_bundle import RemoteRuntimeBundle
-from remote_runtime_bundle import validate_remote_runtime_bundle
-from system_signing import run_command
-from system_signing import sign_command as system_sign_command
-from system_signing import verify_command as system_verify_command
+from build.release.remote.bundle import RemoteRuntimeBundle
+from build.release.remote.bundle import validate_remote_runtime_bundle
+from build.release.system_signing import run_command
+from build.release.system_signing import sign_command as system_sign_command
+from build.release.system_signing import verify_command as system_verify_command
 
 
 CommandRunner = Callable[[Sequence[str]], None]

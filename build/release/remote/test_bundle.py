@@ -6,11 +6,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from remote_runtime_bundle import build_remote_runtime_bundle
-from remote_runtime_bundle import MAX_RUNTIME_ARCHIVE_BYTES
-from remote_runtime_bundle import validate_remote_runtime_bundle
+from build.release.remote.bundle import build_remote_runtime_bundle
+from build.release.remote.bundle import MAX_RUNTIME_ARCHIVE_BYTES
+from build.release.remote.bundle import validate_remote_runtime_bundle
 
 
 class RemoteRuntimeBundleTests(unittest.TestCase):

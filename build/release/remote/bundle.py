@@ -1,7 +1,9 @@
-"""Build and validate bundled Remote runtime catalogs for native product hosts."""
+#!/usr/bin/env python3
+"""Build and validate bundled Remote runtime catalogs for product hosts."""
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
@@ -15,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Dict, List, Sequence, Tuple
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from build.lib.zeta_build.targets import TARGETS
@@ -410,3 +412,18 @@ def is_sha256(value: str) -> bool:
     return len(value) == 64 and all(
         character in "0123456789abcdef" for character in value
     )
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--bundle-dir", type=Path, required=True)
+    parser.add_argument("--package-dir", type=Path, action="append", required=True)
+    args = parser.parse_args()
+    bundle = build_remote_runtime_bundle(args.bundle_dir, args.package_dir)
+    print(f"Built Remote runtime bundle at {bundle.root}")
+    print(f"Catalog SHA-256: {bundle.catalog_sha256}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

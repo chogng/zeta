@@ -7,21 +7,18 @@ import os
 import sys
 from pathlib import Path
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-REPO_ROOT = SCRIPT_DIR.parents[1]
-BUILD_LIB_DIR = REPO_ROOT / "build" / "lib"
-if str(BUILD_LIB_DIR) not in sys.path:
-    sys.path.insert(0, str(BUILD_LIB_DIR))
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from app_signing import sign_package, verify_package  # noqa: E402
-from build_app_package import (  # noqa: E402
+from build.release.app.signing import sign_package, verify_package  # noqa: E402
+from build.release.app.build import (  # noqa: E402
     build_package,
     host_target,
     remote_runtime_network_release,
     resolve_binary,
 )
-from remote_runtime_bundle import validate_remote_runtime_bundle  # noqa: E402
-from zeta_package.cargo import resolve_windows_sandbox_binary
+from build.release.remote.bundle import validate_remote_runtime_bundle  # noqa: E402
+from build.release.package.cargo import resolve_windows_sandbox_binary
 from build.lib.zeta_build.targets import target_spec
 
 
@@ -76,7 +73,7 @@ def main() -> int:
         profile,
         remote_runtime_bundle,
         remote_runtime_release,
-        windows_sandbox_binary=resolve_windows_sandbox_binary(REPO_ROOT, target_spec(target), env_path("APP_WINDOWS_SANDBOX_BINARY"), "cargo", profile),
+        windows_sandbox_binary=resolve_windows_sandbox_binary(REPOSITORY_ROOT, target_spec(target), env_path("APP_WINDOWS_SANDBOX_BINARY"), "cargo", profile),
     )
     sign_package(package_dir)
     verify_package(package_dir)

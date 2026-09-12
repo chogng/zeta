@@ -4,9 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
-from system_signing import notarize
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from build.release.system_signing import notarize
 
 
 def main() -> int:

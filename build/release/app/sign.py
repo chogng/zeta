@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
-from app_signing import record_verified_package, sign_package
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from build.release.app.signing import record_verified_package, sign_package
 
 
 def main() -> int:

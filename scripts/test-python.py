@@ -30,10 +30,7 @@ def main(arguments: list[str] | None = None) -> int:
     suites = args.suites or tuple(TEST_SUITES)
 
     environment = os.environ.copy()
-    python_paths = [
-        str(REPOSITORY_ROOT),
-        str(REPOSITORY_ROOT / "build" / "release"),
-    ]
+    python_paths = [str(REPOSITORY_ROOT)]
     if existing := environment.get("PYTHONPATH"):
         python_paths.append(existing)
     environment["PYTHONPATH"] = os.pathsep.join(python_paths)
@@ -51,6 +48,7 @@ def main(arguments: list[str] | None = None) -> int:
                 test_root,
                 "-p",
                 "test_*.py",
+                *(["-t", str(REPOSITORY_ROOT)] if suite == "release" else []),
             ],
             cwd=REPOSITORY_ROOT,
             env=environment,

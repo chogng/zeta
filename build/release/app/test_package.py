@@ -7,14 +7,14 @@ from pathlib import Path
 from subprocess import CompletedProcess
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from build_app_package import build_package
-from build_app_package import remote_runtime_network_release
-from build_app_package import resolve_binary
-from release_app_package import main as release_app_package
-from remote_runtime_bundle import build_remote_runtime_bundle
-from test_remote_runtime_bundle import create_package
+from build.release.app.build import build_package
+from build.release.app.build import remote_runtime_network_release
+from build.release.app.build import resolve_binary
+from build.release.app.release import main as release_app_package
+from build.release.remote.bundle import build_remote_runtime_bundle
+from build.release.remote.test_bundle import create_package
 
 
 class AppPackageTests(unittest.TestCase):
@@ -33,8 +33,8 @@ class AppPackageTests(unittest.TestCase):
 
             with (
                 patch.dict(os.environ, environment, clear=True),
-                patch("release_app_package.sign_package") as sign_package,
-                patch("release_app_package.verify_package") as verify_package,
+                patch("build.release.app.release.sign_package") as sign_package,
+                patch("build.release.app.release.verify_package") as verify_package,
             ):
                 self.assertEqual(0, release_app_package())
 
@@ -44,7 +44,7 @@ class AppPackageTests(unittest.TestCase):
             for name in ("LICENSE-APACHE", "NOTICE"):
                 self.assertEqual(
                     (
-                        Path(__file__).resolve().parents[2] / "zeta-rs" / "uds" / name
+                        Path(__file__).resolve().parents[3] / "zeta-rs" / "uds" / name
                     ).read_bytes(),
                     (package / "licenses" / "uds" / name).read_bytes(),
                 )
@@ -52,7 +52,7 @@ class AppPackageTests(unittest.TestCase):
             self.assertFalse((package / "bin/mxc-user.exe").exists())
             self.assertEqual(
                 (
-                    Path(__file__).resolve().parents[2]
+                    Path(__file__).resolve().parents[3]
                     / "zeta-rs/vendor/mxc/LICENSE.md"
                 ).read_bytes(),
                 (package / "licenses/mxc/LICENSE.md").read_bytes(),
@@ -76,9 +76,9 @@ class AppPackageTests(unittest.TestCase):
         }
         with (
             patch(
-                "build_app_package.cargo_environment", return_value=environment
+                "build.release.app.build.cargo_environment", return_value=environment
             ) as cargo_environment,
-            patch("build_app_package.subprocess.run", return_value=completed) as run,
+            patch("build.release.app.build.subprocess.run", return_value=completed) as run,
         ):
             resolved = resolve_binary(
                 "cargo",

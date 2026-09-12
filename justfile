@@ -1,5 +1,5 @@
 set working-directory := "."
-set positional-arguments
+set positional-arguments := true
 
 export JUST_SHELL := justfile_directory() / "scripts/just-shell.py"
 
@@ -96,15 +96,15 @@ app-test:
 
 # Stage an unsigned app package; release CI signs and verifies the staged binary.
 app-package *args:
-    {{ python }} -B build/release/build_app_package.py {args}
+    {{ python }} -B build/release/app/build.py {args}
 
 # Build, sign, and verify an app package in a platform release job.
 app-release:
-    {{ python }} -B build/release/release_app_package.py
+    {{ python }} -B build/release/app/release.py
 
-# Build a canonical Zeta package; pass normal build_zeta_package.py flags.
+# Build a canonical Zeta package; pass normal package builder flags.
 package *args:
-    {{ python }} -B build/release/build_zeta_package.py {args}
+    {{ python }} -B build/release/package/build.py {args}
 
 [unix]
 install:

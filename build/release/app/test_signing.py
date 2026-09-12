@@ -6,13 +6,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from build_app_package import build_package
-from build_app_package import remote_runtime_network_release
-from remote_runtime_bundle import build_remote_runtime_bundle
-from test_remote_runtime_bundle import create_package
-from app_signing import record_verified_package, sign_package, verify_package
+from build.release.app.build import build_package
+from build.release.app.build import remote_runtime_network_release
+from build.release.remote.bundle import build_remote_runtime_bundle
+from build.release.remote.test_bundle import create_package
+from build.release.app.signing import record_verified_package, sign_package, verify_package
 
 
 class AppSigningTests(unittest.TestCase):

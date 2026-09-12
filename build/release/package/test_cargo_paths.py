@@ -4,11 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from zeta_package.cargo_paths import cargo_profile_directory
-from zeta_package.cargo_paths import cargo_artifact_executable
-from zeta_package.cargo_paths import cargo_rendered_diagnostic
-from zeta_package.cargo_paths import parse_cargo_message
-from zeta_package.cargo_paths import resolve_cargo_target_directory
+from build.release.package.cargo_paths import cargo_profile_directory
+from build.release.package.cargo_paths import cargo_artifact_executable
+from build.release.package.cargo_paths import cargo_rendered_diagnostic
+from build.release.package.cargo_paths import parse_cargo_message
+from build.release.package.cargo_paths import resolve_cargo_target_directory
 
 
 class CargoPathsTests(unittest.TestCase):

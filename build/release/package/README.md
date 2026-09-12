@@ -1,8 +1,13 @@
 # Zeta package builder
 
-This directory owns release staging for the canonical Zeta package layout. It
-does not own runtime discovery, Tool policy, sandbox enforcement, signing,
-notarization, installer formats, or update delivery.
+This directory owns the shared Zeta release package:
+
+- `build.py` resolves binaries and resources, then stages the canonical layout.
+- `layout.py` validates package contents and owns the file digests and `buildId`.
+- `sign.py` signs or verifies staged executables and refreshes package metadata.
+
+Runtime discovery, Tool policy, sandbox enforcement, notarization, installer
+formats, and update delivery belong to their respective owners.
 
 ```text
 <package>/
@@ -38,7 +43,7 @@ notarization, installer formats, or update delivery.
         └── vscode/LICENSE.txt        # built-in Editor Extension resources
 ```
 
-The stable entry point is `build/release/build_zeta_package.py`. Before resolving product binaries, it runs the App Server protocol generator into a temporary directory and binds the current protocol major, revision, and schema hash into `zeta-package.json`; it does not rewrite checked-in fixtures. `verify:protocol` remains an explicit fixture check, while `generate:protocol` refreshes repository fixtures when they are intentionally being reviewed. If `--server-bin` or
+The stable entry point is `build/release/package/build.py`. Before resolving product binaries, it runs the App Server protocol generator into a temporary directory and binds the current protocol major, revision, and schema hash into `zeta-package.json`; it does not rewrite checked-in fixtures. `verify:protocol` remains an explicit fixture check, while `generate:protocol` refreshes repository fixtures when they are intentionally being reviewed. If `--server-bin` or
 `--app-server-daemon-bin` is omitted, `cargo.py` builds the corresponding product-neutral
 `zeta-app-server` or profile-scoped `zeta-app-server-daemon` for the selected target. `ripgrep.py`
 maps the package target through `third_party/ripgrep/runtime-lock.json`,
@@ -92,7 +97,7 @@ and retains its refusal to replace an explicit output directory.
 Windows development and release both call the MXC SDK directly. Linux proxy networking additionally requires the SDK's host dependencies: slirp4netns, util-linux and iptables with the required namespace/kernel support.
 
 ```sh
-python3 -B build/release/build_zeta_package.py \
+python3 -B build/release/package/build.py \
   --target aarch64-apple-darwin \
   --package-dir /absolute/path/to/zeta-package
 ```
@@ -100,7 +105,7 @@ python3 -B build/release/build_zeta_package.py \
 For an Electron-owned package payload:
 
 ```sh
-python3 -B build/release/build_zeta_package.py \
+python3 -B build/release/package/build.py \
   --target aarch64-apple-darwin \
   --javascript-runtime host-provided-node \
   --package-dir dist/zeta-electron
@@ -115,7 +120,7 @@ step. Windows uses the SDK linked into the signed product executables.
 
 Zeta Code release jobs pass `--cli-bin` and `--update-public-key` to include `bin/zeta[.exe]`, its
 digest, and the Ed25519 update trust key. They then run
-`build/release/sign_zeta_package.py`, `build/release/build_zeta_code_archive.py`, and
+`build/release/package/sign.py`, `build/release/code/archive.py`, and
 `zeta-update-sign`. macOS and Windows sign and verify every executable before package hashes and
 `buildId` are recomputed. macOS produces a rootless `.zip` for Apple notarization; Linux and
 Windows produce rootless `.tar.gz` archives. The archives are deterministic; the initial installer checks its named SHA-256 sidecar, while later updates require
@@ -137,7 +142,7 @@ For app Remote delivery, one or more completed packaged-node directories can be 
 deterministic rootless archives and a strict local catalog:
 
 ```sh
-python3 -B build/release/build_remote_runtime_bundle.py \
+python3 -B build/release/remote/bundle.py \
   --bundle-dir /absolute/path/to/remote-runtimes \
   --package-dir /absolute/path/to/x86_64-linux-package \
   --package-dir /absolute/path/to/aarch64-linux-package

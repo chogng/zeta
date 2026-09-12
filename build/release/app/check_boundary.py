@@ -92,7 +92,7 @@ def package_name(manifest_text: str) -> str | None:
 
 def main() -> int:
     if len(sys.argv) != 4:
-        fail("usage: check_app_boundary.py root-Cargo.toml app-Cargo.toml Cargo.lock")
+        fail("usage: check_boundary.py root-Cargo.toml app-Cargo.toml Cargo.lock")
 
     root_manifest_path = Path(sys.argv[1])
     app_manifest_path = Path(sys.argv[2])

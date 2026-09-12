@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib.util
 import hashlib
 import json
 import os
@@ -14,11 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-MODULE_PATH = Path(__file__).with_name("build_zeta_code_archive.py")
-SPEC = importlib.util.spec_from_file_location("build_zeta_code_archive", MODULE_PATH)
-assert SPEC is not None and SPEC.loader is not None
-archive_builder = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(archive_builder)
+from build.release.code import archive as archive_builder
 
 
 class ZetaCodeArchiveTests(unittest.TestCase):

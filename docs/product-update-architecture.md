@@ -115,7 +115,7 @@ Idle
 | 检查 | 用户机器相信什么 | 实现位置 |
 | --- | --- | --- |
 | macOS / Windows 系统签名 | “这个可执行文件确实由 Zeta 发布，且签名证书有效” | `build/release/system_signing.py` |
-| macOS 公证 | “Apple 已扫描并接受这个最终发布包” | `build/release/notarize_release.py` |
+| macOS 公证 | “Apple 已扫描并接受这个最终发布包” | `build/release/notarize.py` |
 | Ed25519 更新描述签名 | “更新器拿到的版本、通道、下载地址和 SHA-256 没被替换” | `zeta-product-update` 与 `zeta-update-sign` |
 
 发布顺序固定为：构建可执行文件 → 组包 → 系统签名并验证所有可执行文件 → 重算包内摘要与

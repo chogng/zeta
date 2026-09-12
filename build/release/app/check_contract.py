@@ -28,7 +28,7 @@ def load(path: Path):
 def main() -> int:
     if len(sys.argv) != 3:
         fail(
-            "usage: check_app_release_contract.py package-contract.json signing-policy.json"
+            "usage: check_contract.py package-contract.json signing-policy.json"
         )
     contract = load(Path(sys.argv[1]))
     policy = load(Path(sys.argv[2]))

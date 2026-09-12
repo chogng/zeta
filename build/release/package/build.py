@@ -1,15 +1,20 @@
-"""Command-line interface for building a canonical Zeta package directory."""
+#!/usr/bin/env python3
+"""Build a canonical Zeta package directory."""
 
 import argparse
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Dict, Optional, Sequence
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPOSITORY_ROOT))
+
 from build.lib.zeta_build.targets import TARGETS, default_target
 
-from .bubblewrap import resolve_bubblewrap
-from .cargo import (
+from build.release.package.bubblewrap import resolve_bubblewrap
+from build.release.package.cargo import (
     resolve_remote_binary,
     resolve_cli_binary,
     resolve_app_server_daemon_binary,
@@ -17,14 +22,12 @@ from .cargo import (
     resolve_server_binary,
     resolve_windows_sandbox_binary,
 )
-from .layout import build_package_directory, load_protocol_metadata
-from .node import resolve_node
-from .ripgrep import resolve_ripgrep
-from .version import read_workspace_version
+from build.release.package.layout import build_package_directory, load_protocol_metadata
+from build.release.package.node import resolve_node
+from build.release.package.ripgrep import resolve_ripgrep
+from build.release.package.version import read_workspace_version
 
 
-SCRIPT_DIRECTORY = Path(__file__).resolve().parents[1]
-REPOSITORY_ROOT = SCRIPT_DIRECTORY.parents[1]
 DEFAULT_LOCK = REPOSITORY_ROOT / "third_party" / "ripgrep" / "runtime-lock.json"
 DEFAULT_CACHE = REPOSITORY_ROOT / "third_party" / ".cache" / "ripgrep"
 DEFAULT_NODE_LOCK = REPOSITORY_ROOT / "third_party" / "node" / "runtime-lock.json"
@@ -253,3 +256,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
     )
     print("Built Zeta {} package at {}".format(target, output))
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -32,7 +32,7 @@ python3 -B scripts/cargo.py test -p zeta-code-mode-runtime
 验证入口：
 
 ```sh
-python3 -B -m unittest build.release.zeta_package.test_v8
+python3 -B -m unittest build.lib.zeta_build.test_v8
 node --test build/zeta-package/prepareDevPackage.test.ts
 python3 -B scripts/cargo.py test -p zeta-v8-poc --features sandbox
 bazel test //zeta-rs/v8-poc:v8-poc-unit-tests

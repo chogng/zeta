@@ -15,21 +15,21 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlsplit
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from build.lib.zeta_build.targets import TARGETS
 from build.lib.zeta_build.targets import target_spec
-from remote_runtime_bundle import RemoteRuntimeBundle
-from remote_runtime_bundle import validate_remote_runtime_bundle
-from zeta_package.cargo import cargo_environment
-from zeta_package.cargo import resolve_windows_sandbox_binary
-from zeta_package.cargo_paths import cargo_artifact_executable
-from zeta_package.cargo_paths import cargo_rendered_diagnostic
-from zeta_package.cargo_paths import parse_cargo_message
-from zeta_package.cargo_paths import resolve_cargo_target_directory
-from zeta_package.layout import copy_uds_notices
-from zeta_package.layout import copy_windows_sandbox_notices
+from build.release.remote.bundle import RemoteRuntimeBundle
+from build.release.remote.bundle import validate_remote_runtime_bundle
+from build.release.package.cargo import cargo_environment
+from build.release.package.cargo import resolve_windows_sandbox_binary
+from build.release.package.cargo_paths import cargo_artifact_executable
+from build.release.package.cargo_paths import cargo_rendered_diagnostic
+from build.release.package.cargo_paths import parse_cargo_message
+from build.release.package.cargo_paths import resolve_cargo_target_directory
+from build.release.package.layout import copy_uds_notices
+from build.release.package.layout import copy_windows_sandbox_notices
 
 APP_ROOT = REPOSITORY_ROOT / "app"
 

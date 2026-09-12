@@ -7,11 +7,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from sign_zeta_package import sign_package
-from system_signing import sha256
-from system_signing import notarize, sign_and_verify
+from build.release.package.sign import sign_package
+from build.release.system_signing import sha256
+from build.release.system_signing import notarize, sign_and_verify
 
 
 class SystemSigningTests(unittest.TestCase):
@@ -102,9 +102,9 @@ class SystemSigningTests(unittest.TestCase):
             )
             commands = []
             with patch(
-                "sign_zeta_package.system_signing_artifacts",
+                "build.release.package.sign.system_signing_artifacts",
                 return_value={"cli": artifact},
-            ), patch("sign_zeta_package.record_system_signing") as record:
+            ), patch("build.release.package.sign.record_system_signing") as record:
                 sign_package(
                     package,
                     "x86_64-pc-windows-msvc",
