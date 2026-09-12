@@ -34,13 +34,15 @@ REMOTE_RUNTIME_TARGETS = frozenset(
 REQUIRED_RUNTIME_FILES = {
     "zeta-package.json",
     "bin/zeta-app-server-daemon",
-    "bin/zeta-server",
+    "bin/zeta-app-server",
+    "bin/zeta-remote-server",
     "zeta-path/rg",
     "zeta-resources/node/bin/node",
 }
 EXECUTABLE_RUNTIME_FILES = {
     "bin/zeta-app-server-daemon",
-    "bin/zeta-server",
+    "bin/zeta-app-server",
+    "bin/zeta-remote-server",
     "zeta-path/rg",
     "zeta-resources/node/bin/node",
 }
@@ -324,7 +326,7 @@ def validate_package_metadata(metadata: Dict[str, object]) -> Tuple[str, str]:
     target = required_string(metadata, "target")
     expected = {
         "layoutVersion": 2,
-        "entrypoint": "bin/zeta-server",
+        "entrypoint": "bin/zeta-app-server",
         "pathDir": "zeta-path",
         "resourcesDir": "zeta-resources",
         "javascriptRuntime": {"kind": "packagedNode"},

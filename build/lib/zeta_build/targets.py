@@ -74,8 +74,16 @@ class TargetSpec:
         return "zeta" + self.executable_suffix
 
     @property
+    def remote_name(self) -> str:
+        return "zeta-remote" + self.executable_suffix
+
+    @property
+    def remote_server_name(self) -> str:
+        return "zeta-remote-server" + self.executable_suffix
+
+    @property
     def server_name(self) -> str:
-        return "zeta-server" + self.executable_suffix
+        return "zeta-app-server" + self.executable_suffix
 
     @property
     def app_server_daemon_name(self) -> str:

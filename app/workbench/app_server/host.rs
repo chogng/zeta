@@ -3,9 +3,9 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use anyhow::anyhow;
+use zeta_app_server::local_profile_root;
 use zeta_app_server_client::AppServerSession;
 use zeta_app_server_client::StdioAppServerCommand;
-use zeta_app_server_client::local_profile_root;
 use zeta_app_server_daemon::DAEMON_PATH_ENV;
 use zeta_app_server_protocol::protocol::common::ClientCapabilities;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
@@ -178,7 +178,7 @@ pub(crate) fn local_app_server_command(
     daemon_executable: Option<PathBuf>,
 ) -> StdioAppServerCommand {
     let command = StdioAppServerCommand::new(executable)
-        .with_argument("app-server")
+        .with_argument("app-server-daemon")
         .with_argument("connect")
         .with_environment_variable("ZETA_PROFILE_ROOT", profile_root.into_os_string())
         .with_environment_variable("ZETA_WORKSPACE_ROOT", dir_root.as_os_str().to_os_string());

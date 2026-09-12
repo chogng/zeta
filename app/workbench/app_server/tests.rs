@@ -47,11 +47,14 @@ fn local_app_server_host_connects_through_the_profile_dir_broker() {
     );
 
     assert_eq!(command.executable(), executable);
-    assert_eq!(command.arguments_as_strings(), ["app-server", "connect"]);
+    assert_eq!(
+        command.arguments_as_strings(),
+        ["app-server-daemon", "connect"]
+    );
     assert_eq!(
         command,
         StdioAppServerCommand::new("/opt/zeta/app")
-            .with_argument("app-server")
+            .with_argument("app-server-daemon")
             .with_argument("connect")
             .with_environment_variable("ZETA_PROFILE_ROOT", profile.into_os_string())
             .with_environment_variable("ZETA_WORKSPACE_ROOT", "/dirs/project")

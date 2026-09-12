@@ -15,6 +15,9 @@ name = "zeta_remote_server"
 path = "src/lib.rs"
 
 [dependencies]
+serde_json = { workspace = true }
+zeta-package-store = { workspace = true }
+arg0 = { workspace = true }
 process-hardening = { workspace = true }
 build-info = { workspace = true }
 libc = { workspace = true }
@@ -24,6 +27,8 @@ zeta-app-server = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
 
 [dev-dependencies]
+zeta-file-access = { workspace = true }
+zeta-fast-regex-search = { workspace = true }
 base64 = { workspace = true }
 tempfile = { workspace = true }
 zeta-app-server-client = { workspace = true }

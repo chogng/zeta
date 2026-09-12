@@ -1,6 +1,15 @@
 use super::*;
 
 pub fn run() -> ExitCode {
+    if let Some(result) = arg0::dispatch(std::env::args_os().skip(1)) {
+        return match result {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("app helper: {error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
     if arguments
         .first()
@@ -16,9 +25,11 @@ pub fn run() -> ExitCode {
     }
     if arguments
         .first()
-        .is_some_and(|command| command == "app-server")
+        .is_some_and(|command| command == "app-server-daemon")
     {
-        return match zeta_server_host::run_app_server(arguments.into_iter().skip(1)) {
+        return match zeta_app_server_daemon::executable_path().and_then(|executable| {
+            zeta_app_server_daemon::run_command(arguments.into_iter().skip(1), &executable)
+        }) {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => {
                 eprintln!("app App Server host: {error}");

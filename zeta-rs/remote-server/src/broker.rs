@@ -349,7 +349,7 @@ mod unix {
         let error_log = log.try_clone().map_err(RemoteServerError::from_io)?;
         let mut command = Command::new(executable);
         command
-            .args(["remote-server", "daemon"])
+            .arg("daemon")
             .process_group(0)
             .stdin(Stdio::null())
             .stdout(Stdio::from(log))

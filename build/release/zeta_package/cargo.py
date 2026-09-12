@@ -38,9 +38,9 @@ def resolve_server_binary(
         "--manifest-path",
         str(repository_root / "Cargo.toml"),
         "--package",
-        "zeta-server-host",
+        "zeta-app-server",
         "--bin",
-        "zeta-server",
+        "zeta-app-server",
         "--profile",
         cargo_profile,
         "--target",
@@ -54,7 +54,7 @@ def resolve_server_binary(
         target_directory
         / spec.target
         / profile_directory
-        / ("zeta-server" + spec.executable_suffix)
+        / ("zeta-app-server" + spec.executable_suffix)
     )
     return validate_input_binary(
         binary, "built Zeta server executable", cargo, spec.is_windows
@@ -202,3 +202,16 @@ def is_executable(path: Path) -> bool:
     return bool(mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)) and os.access(
         str(path), os.X_OK
     )
+
+
+def resolve_remote_binary(repository_root, spec, explicit_binary, cargo, cargo_profile, *, server):
+    package, name = ("zeta-remote-server", spec.remote_server_name) if server else ("zeta-remote-connections", spec.remote_name)
+    if explicit_binary is not None:
+        return validate_input_binary(explicit_binary, name, "--remote-server-bin" if server else "--remote-bin", spec.is_windows)
+    target_directory = resolve_cargo_target_directory(repository_root)
+    subprocess.run([
+        cargo, "build", "--manifest-path", str(repository_root / "Cargo.toml"),
+        "--package", package, "--bin", "zeta-remote-server" if server else "zeta-remote",
+        "--profile", cargo_profile, "--target", spec.target, "--target-dir", str(target_directory),
+    ], check=True, env=cargo_environment(spec))
+    return validate_input_binary(target_directory / spec.target / cargo_profile_directory(cargo_profile) / name, name, cargo, spec.is_windows)

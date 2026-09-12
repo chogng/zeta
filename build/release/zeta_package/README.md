@@ -10,7 +10,9 @@ notarization, installer formats, or update delivery.
 ├── bin/
 │   ├── zeta[.exe]                   # Zeta Code release variant only
 │   ├── zeta-app-server-daemon[.exe]
-│   └── zeta-server[.exe]
+│   ├── zeta-app-server[.exe]
+│   ├── zeta-remote[.exe]
+│   └── zeta-remote-server[.exe]
 ├── zeta-path/
 │   └── rg[.exe]
 └── zeta-resources/
@@ -38,7 +40,7 @@ notarization, installer formats, or update delivery.
 
 The stable entry point is `build/release/build_zeta_package.py`. Before resolving product binaries, it runs the App Server protocol generator into a temporary directory and binds the current protocol major, revision, and schema hash into `zeta-package.json`; it does not rewrite checked-in fixtures. `verify:protocol` remains an explicit fixture check, while `generate:protocol` refreshes repository fixtures when they are intentionally being reviewed. If `--server-bin` or
 `--app-server-daemon-bin` is omitted, `cargo.py` builds the corresponding product-neutral
-`zeta-server-host` or profile-scoped `zeta-app-server-daemon` for the selected target. `ripgrep.py`
+`zeta-app-server` or profile-scoped `zeta-app-server-daemon` for the selected target. `ripgrep.py`
 maps the package target through `third_party/ripgrep/runtime-lock.json`,
 validates archive size and SHA-256 on every use, extracts only the locked
 member, and rejects non-regular archive members. `node.py` applies the same
@@ -105,7 +107,7 @@ python3 -B build/release/build_zeta_package.py \
 ```
 
 Release jobs that already built or signed binaries should use `--server-bin` and
-`--app-server-daemon-bin`, and
+`--app-server-daemon-bin`, `--remote-bin`, `--remote-server-bin`, and
 optionally `--rg-bin` or, for the `packaged-node` variant, `--node-bin`; those overrides are copied verbatim and their binary
 digest is recorded in `zeta-package.json`. `buildId` covers the sorted digest manifest of every package file together with all identity metadata except `buildId` and the file manifest itself; it is not a mutable release selector. Linux jobs can likewise pass
 `--bwrap-bin`. Signing and archive serialization must happen after this staging

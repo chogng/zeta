@@ -20,7 +20,7 @@
 > Remote 启动。正式生产发布 feed/publisher 自动化、缓存 GC、远程多根 Workspace 和跨重启 Terminal 持久化尚未实现。
 > 本文是 Desktop Remote 开发行为、进程边界和演进状态的 canonical 系统文档。
 
-runtime 内的 `zeta-server app-server daemon start|restart|stop|version` 提供单行 JSON 生命周期
+runtime 内的 `zeta-app-server-daemon start|restart|stop|version` 提供单行 JSON 生命周期
 控制，但不自行下载或替换 runtime。它只管理当前精确 runtime 的 App Server process generation；
 下载、校验、激活和回滚仍由 host-owned catalog/installer 完成。
 
@@ -95,7 +95,7 @@ app remote connect work
 ```
 
 默认远端 runtime 是 `zeta`，也就是 `zeta code` CLI 的可执行入口；如安装路径不同，可以追加
-`--runtime /opt/zeta/bin/zeta-server`。`--ssh` 只选择本机 OpenSSH 可执行文件。两条参数都由 Native
+`--runtime /opt/zeta/bin/zeta-remote-server`。`--ssh` 只选择本机 OpenSSH 可执行文件。两条参数都由 Native
 host 解析，不能由 Renderer 提供凭据或私钥。
 
 如远端 `zeta` 不在默认 `PATH`，主进程可以通过 `ZETA_REMOTE_ZETA_PATH` 指定远端可执行文件；
@@ -268,7 +268,7 @@ SSH launcher 使用 `BatchMode=yes`，不会在后台窗口等待密码输入。
 ## 运行时安装、升级与回滚
 
 Remote runtime artifact 必须是 canonical layout version 2 的 rootless `tar.gz`，并使用
-`javascriptRuntime.kind=packagedNode`。它包含 `bin/zeta-server`、`bin/zeta-app-server-daemon`、`zeta-path/rg`、Node、Skills、Extensions、
+`javascriptRuntime.kind=packagedNode`。它包含 `bin/zeta-app-server`、`bin/zeta-remote-server`、`bin/zeta-app-server-daemon`、`zeta-path/rg`、Node、Skills、Extensions、
 product services 与平台 sandbox 资源；安装器不会用裸二进制伪装成完整 `zeta code` runtime。
 daemon 不运行独立 updater，也不能绕过内容寻址 artifact 与 active/previous profile 的条件交换。
 

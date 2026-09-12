@@ -64,6 +64,14 @@ pub fn run_from_environment_with_product_services(
     product_services_path: Option<PathBuf>,
 ) -> Result<(), RemoteServerError> {
     let arguments = arguments.into_iter().collect::<Vec<_>>();
+    if arguments.as_slice() == ["--version"] {
+        println!(
+            "{}",
+            serde_json::to_string(&build_info::BuildInfo::current())
+                .map_err(|error| RemoteServerError::new(error.to_string()))?
+        );
+        return Ok(());
+    }
     let options = || {
         options_from_environment().map(|options| match &product_services_path {
             Some(path) => options.with_product_services_path(path),
@@ -78,12 +86,6 @@ pub fn run_from_environment_with_product_services(
         }
         [command] if command == "connect" => crate::broker::connect(options()?),
         [command] if command == "daemon" => crate::broker::serve(options()?),
-        [namespace, command] if namespace == "remote-server" && command == "connect" => {
-            crate::broker::connect(options()?)
-        }
-        [namespace, command] if namespace == "remote-server" && command == "daemon" => {
-            crate::broker::serve(options()?)
-        }
         _ => Err(RemoteServerError::new(
             "usage: zeta-remote-server connect | app-server --listen stdio://",
         )),
@@ -98,8 +100,11 @@ pub fn serve_stdio(options: RemoteServerOptions) -> Result<(), RemoteServerError
 }
 
 pub(crate) fn open_server(options: &RemoteServerOptions) -> Result<AppServer, RemoteServerError> {
-    let mut local_options =
-        LocalAppServerOptions::new(options.profile_root.clone()).with_dir_root(&options.dir_root);
+    let mut local_options = LocalAppServerOptions::new(options.profile_root.clone())
+        .with_dir_root(&options.dir_root)
+        .with_fast_regex_worker_command(arg0::fast_regex_worker_command(
+            std::env::current_exe().map_err(RemoteServerError::from_io)?,
+        ));
     if let Some(path) = &options.product_services_path {
         let services = LocalProductServicesConfig::load(path, &options.profile_root)
             .map_err(|error| RemoteServerError::new(error.to_string()))?;

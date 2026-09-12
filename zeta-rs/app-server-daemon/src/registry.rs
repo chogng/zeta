@@ -11,7 +11,6 @@ use zeta_app_server::LocalAppServerOptions;
 use zeta_app_server::LocalProductServicesConfig;
 use zeta_app_server::LocalProfileRuntime;
 use zeta_app_server::open_local_app_server;
-use zeta_fast_regex_search::FastRegexWorkerCommand;
 
 use crate::ConnectionOptions;
 use crate::wire::ConnectionGrantSource;
@@ -176,9 +175,8 @@ fn open_server_with_profile_runtime(
 ) -> Result<AppServer, String> {
     let mut options =
         LocalAppServerOptions::new(host.profile_root()).with_profile_runtime(profile_runtime);
-    options = options.with_fast_regex_worker_command(FastRegexWorkerCommand::new(
+    options = options.with_fast_regex_worker_command(arg0::fast_regex_worker_command(
         std::env::current_exe().map_err(|error| error.to_string())?,
-        [crate::FAST_REGEX_WORKER_PROCESS_ARGUMENT],
     ));
     if let Some(dir_root) = host.dir_root() {
         options = match host.dir_grant_source() {

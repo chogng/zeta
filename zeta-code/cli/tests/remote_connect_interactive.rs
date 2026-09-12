@@ -1,5 +1,8 @@
 #![cfg(unix)]
 
+#[path = "support/remote.rs"]
+mod remote;
+
 use std::fs;
 use std::io::ErrorKind;
 use std::io::Read;
@@ -77,7 +80,7 @@ fn interactive_remote_tui_recovers_the_durable_session_after_transport_loss() {
         "--dir",
         dir.to_str().unwrap(),
         "--runtime",
-        env!("CARGO_BIN_EXE_zeta"),
+        remote::executable(),
         "--ssh",
         fake_ssh.to_str().unwrap(),
     ]);
@@ -193,7 +196,7 @@ fn write_reconnecting_fake_ssh(
         &first_requests,
         &request_fifo,
         &response_fifo,
-        Path::new(env!("CARGO_BIN_EXE_zeta")),
+        Path::new(remote::executable()),
     ] {
         assert!(!value.to_string_lossy().contains('\''));
     }
@@ -201,10 +204,10 @@ fn write_reconnecting_fake_ssh(
         path,
         format!(
             "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\ncase \"$command\" in\n  *__ZETA_REMOTE_RUNTIME_FOUND__*) printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:{runtime}' ;;
-  *\"'remote-server' 'connect'\"*)\n    export ZETA_PROFILE_ROOT='{profile}'\n    count=0\n    if [ -f '{count}' ]; then count=$(cat '{count}'); fi\n    count=$((count + 1))\n    printf '%s\\n' \"$count\" > '{count}'\n    if [ \"$count\" -eq 1 ]; then\n      rm -f '{request_fifo}' '{response_fifo}' '{first_requests}'\n      mkfifo '{request_fifo}' '{response_fifo}'\n      exec 3<&0\n      /bin/sh -c \"$command\" < '{request_fifo}' > '{response_fifo}' &\n      server=$!\n      tee -a '{first_requests}' <&3 > '{request_fifo}' &\n      request_relay=$!\n      cat '{response_fifo}' &\n      response_relay=$!\n      attempt=0\n      while [ \"$attempt\" -lt 30 ]; do\n        if grep -q '\"method\":\"git/status\"' '{first_requests}' 2>/dev/null; then break; fi\n        sleep 1\n        attempt=$((attempt + 1))\n      done\n      sleep 1\n      kill \"$server\" \"$request_relay\" \"$response_relay\" 2>/dev/null || true\n      wait \"$server\" 2>/dev/null\n      rm -f '{request_fifo}' '{response_fifo}'\n      exit 255\n    fi\n    tee -a '{requests}' | /bin/sh -c \"$command\"\n    ;;
+  *\"'connect'\"*)\n    export ZETA_PROFILE_ROOT='{profile}'\n    count=0\n    if [ -f '{count}' ]; then count=$(cat '{count}'); fi\n    count=$((count + 1))\n    printf '%s\\n' \"$count\" > '{count}'\n    if [ \"$count\" -eq 1 ]; then\n      rm -f '{request_fifo}' '{response_fifo}' '{first_requests}'\n      mkfifo '{request_fifo}' '{response_fifo}'\n      exec 3<&0\n      /bin/sh -c \"$command\" < '{request_fifo}' > '{response_fifo}' &\n      server=$!\n      tee -a '{first_requests}' <&3 > '{request_fifo}' &\n      request_relay=$!\n      cat '{response_fifo}' &\n      response_relay=$!\n      attempt=0\n      while [ \"$attempt\" -lt 30 ]; do\n        if grep -q '\"method\":\"git/status\"' '{first_requests}' 2>/dev/null; then break; fi\n        sleep 1\n        attempt=$((attempt + 1))\n      done\n      sleep 1\n      kill \"$server\" \"$request_relay\" \"$response_relay\" 2>/dev/null || true\n      wait \"$server\" 2>/dev/null\n      rm -f '{request_fifo}' '{response_fifo}'\n      exit 255\n    fi\n    tee -a '{requests}' | /bin/sh -c \"$command\"\n    ;;
   *) exit 64 ;;
 esac\n",
-            runtime = env!("CARGO_BIN_EXE_zeta"),
+            runtime = remote::executable(),
             profile = profile_root.display(),
             count = connection_count.display(),
             requests = recovered_requests.display(),

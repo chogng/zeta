@@ -5,7 +5,7 @@
 stdio backend，并提供 POSIX 平台探测、
 不可变完整包安装、发布认证后的网络制品物化、无凭据运行时代际存储和命名目标目录。它不负责
 Renderer 状态、SSH 凭据、发布频道/签名策略、产品配置档案位置、激活时机或远端领域服务。Electron Main 通过本机
-`zeta remote install` 命令委托安装，同时保留自己的窗口和进程协调器。
+`zeta-remote install` 命令委托安装，同时保留自己的窗口和进程协调器。
 
 跨产品行为与当前阶段以 [`docs/remote-development.md`](../../docs/remote-development.md) 为准；本文只
 拥有该 crate 的精确实现契约。
@@ -20,11 +20,10 @@ ssh -T -o BatchMode=yes -o ConnectTimeout=<seconds> <host> <remote command>
 ```
 
 `remote_app_server_command` 独立引用每个 POSIX shell 参数，只传递 `ZETA_WORKSPACE_ROOT`、选中的运行时
-可执行文件和 `remote-server connect`。该命令把标准输入输出代理到按工作区复用的远端守护进程；SSH
+可执行文件和 `connect`。该命令把标准输入输出代理到按工作区复用的远端守护进程；SSH
 仍由本机产品宿主持有，可在不替换远端 App Server 的情况下替换传输连接。
 
-选中的运行时可以是 `zeta code` CLI 提供的既有 `zeta` 可执行文件，也可以是较窄的独立
-`zeta-remote-server`。连接层不会推断或修改这一选择。产品协调器可另行调用
+选中的运行时提供 `zeta-remote-server` 的命令契约。连接层使用产品指定的精确可执行路径。产品协调器可另行调用
 `SshRemoteRuntimeInstaller` 安装完整的 packaged-node Zeta 分发包，再用返回的精确可执行路径创建新
 配置档案。
 
@@ -57,7 +56,7 @@ Internet，拒绝重定向、URL 凭据、query、fragment 和私网解析；cat
 测试，不减弱上述摘要、路径和 archive 检查。
 
 SSH 启动前，`open_and_validate_artifact` 检查本机精确大小和摘要，拒绝绝对路径、非规范路径、重复
-entry、链接和特殊文件，并验证声明的展开大小。制品必须采用 layout version 2，包含 `bin/zeta-server`、
+entry、链接和特殊文件，并验证声明的展开大小。制品必须采用 layout version 2，包含 `bin/zeta-app-server`、`bin/zeta-remote-server`、`bin/zeta-app-server-daemon`、
 `zeta-path/rg` 和 packaged Node。远端脚本在解压前再次检查压缩大小和 SHA-256，在最终目录的同级
 staging 中工作，可恢复陈旧 PID 锁，最后提交到：
 
@@ -73,7 +72,7 @@ staging 中工作，可恢复陈旧 PID 锁，最后提交到：
 `SshRemoteRuntimeInstaller::install_with_progress` 与私有函数 `progress::upload_archive` 在宿主线程上
 同步报告本机校验、平台探测、上传字节数、远端提交和 installed/reused 结果。`install` 是不带观察者
 的便捷入口。回调不拥有策略且必须保持非阻塞；Electron Main 使用
-`zeta remote install --progress json-lines` 作为进程边界。Desktop Main 把该进程绑定到自己的
+`zeta-remote install --progress json-lines` 作为进程边界。Desktop Main 把该进程绑定到自己的
 `AbortSignal` 和 Workbench 前准备窗口；取消由产品宿主终止本机 CLI/SSH 生命周期。本 crate 的远端
 脚本以 `trap` 清理未提交 staging 和安装 lease，且只有最后一次原子 `mv` 会发布 runtime，因此取消
 不能让不完整对象成为可选 runtime。
@@ -209,3 +208,10 @@ cargo test -p zeta-remote-connections
 `src/runtime_updater_tests.rs`；canonical archive 验证继续由 `install/artifact_validation.rs` 承担，
 不得在产品 adapter 中复制一套较弱的下载后校验。`src/tunnel_tests.rs` 使用真实 loopback listener
 覆盖 pending、稳定 ready 和 OpenSSH 提前退出。
+
+## 本机管理入口
+
+- 本 crate 提供 `zeta-remote`，供 Desktop 与脚本调用。
+- `probe`、`fetch-runtime`、`install`、`profile` 和 `connections` 由 `src/command.rs` 及其子模块适配。
+- Zeta Code 的 `zeta remote` 子命令调用同一 `run_command`；交互式 `connect` 由 CLI 负责。
+- 安装成功返回不可变包内 `bin/zeta-remote-server` 的绝对路径。

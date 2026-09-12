@@ -98,7 +98,8 @@ impl InProcessClientOptions {
     pub fn with_discovered_product_services(
         self,
     ) -> Result<Self, zeta_app_server::OpenAppServerError> {
-        let Some(services) = crate::load_discovered_product_services(&self.profile_root)? else {
+        let Some(services) = zeta_app_server::load_discovered_product_services(&self.profile_root)?
+        else {
             return Ok(self);
         };
         Ok(self.with_product_services(services))

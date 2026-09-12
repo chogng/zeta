@@ -41,7 +41,7 @@ fn runtime_selection_flags_are_complete_and_unambiguous() {
             "--dir".into(),
             "/srv/project".into(),
             "--runtime".into(),
-            "/opt/zeta/bin/zeta-server".into(),
+            "/opt/zeta/bin/zeta-remote-server".into(),
             "--runtime-catalog".into(),
             "/opt/app/catalog.json".into(),
             "--runtime-catalog-sha256".into(),
@@ -88,7 +88,7 @@ fn runtime_selection_flags_are_complete_and_unambiguous() {
             "/srv/project".into(),
             "--rollback-runtime".into(),
             "--runtime".into(),
-            "/runtime/one/bin/zeta-server".into(),
+            "/runtime/one/bin/zeta-remote-server".into(),
         ]),
         Err(LaunchParseError::RollbackRuntimeConflictsWithSelection)
     );
@@ -162,8 +162,8 @@ fn rollback_is_compatibility_checked_before_the_stored_generations_swap() {
     let directory = tempfile::tempdir().unwrap();
     let store = profile_store(&directory);
     let target = target();
-    let previous = profile(target.clone(), "/runtime/one/bin/zeta-server");
-    let active = profile(target.clone(), "/runtime/two/bin/zeta-server");
+    let previous = profile(target.clone(), "/runtime/one/bin/zeta-remote-server");
+    let active = profile(target.clone(), "/runtime/two/bin/zeta-remote-server");
     store.activate(&previous).unwrap();
     store.activate(&active).unwrap();
     let fake_ssh = directory.path().join("fake-ssh");
@@ -171,7 +171,7 @@ fn rollback_is_compatibility_checked_before_the_stored_generations_swap() {
     write_runtime_fake_ssh(
         &fake_ssh,
         &log,
-        "/runtime/one/bin/zeta-server",
+        "/runtime/one/bin/zeta-remote-server",
         incompatible_initialize_response("obsolete-schema"),
     );
 
@@ -188,7 +188,7 @@ fn rollback_is_compatibility_checked_before_the_stored_generations_swap() {
     write_runtime_fake_ssh(
         &fake_ssh,
         &log,
-        "/runtime/one/bin/zeta-server",
+        "/runtime/one/bin/zeta-remote-server",
         initialize_response(&schema_hash()),
     );
     let mut accepted = rollback_launch(&fake_ssh);
@@ -202,8 +202,8 @@ fn rollback_is_compatibility_checked_before_the_stored_generations_swap() {
     assert_eq!(stored.active_runtime(), previous.runtime());
     assert_eq!(stored.previous_runtime(), Some(active.runtime()));
     let commands = fs::read_to_string(log).unwrap();
-    assert!(commands.contains("/runtime/one/bin/zeta-server"));
-    assert!(!commands.contains("/runtime/two/bin/zeta-server"));
+    assert!(commands.contains("/runtime/one/bin/zeta-remote-server"));
+    assert!(!commands.contains("/runtime/two/bin/zeta-remote-server"));
 }
 
 #[cfg(unix)]
@@ -262,7 +262,7 @@ fn write_runtime_fake_ssh(path: &Path, log: &Path, runtime: &str, response: Stri
     fs::write(
         path,
         format!(
-            "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\nprintf '%s\\n' \"$command\" >> '{}'\ncase \"$command\" in\n  *\"'remote-server' 'connect'\"*) IFS= read -r request || exit 65; printf '%s\\n' '{}' ;;\n  *) printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:{}' ;;\nesac\n",
+            "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\nprintf '%s\\n' \"$command\" >> '{}'\ncase \"$command\" in\n  *\"'connect'\"*) IFS= read -r request || exit 65; printf '%s\\n' '{}' ;;\n  *) printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:{}' ;;\nesac\n",
             log.display(),
             response,
             runtime,

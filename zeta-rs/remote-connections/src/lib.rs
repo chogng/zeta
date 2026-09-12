@@ -85,3 +85,6 @@ mod profile_store_tests;
 #[cfg(test)]
 #[path = "runtime_updater_tests.rs"]
 mod runtime_updater_tests;
+
+mod command;
+pub use command::run_command;

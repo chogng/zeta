@@ -227,7 +227,7 @@ CLI 使用版本目录和稳定启动入口切换完整包；当前进程继续�
 产品更新不是 Agent 业务 API，不加入普通 Session/Thread App Server connection。原因是：
 
 - Electron、Rust Desktop 和 CLI 更新的是本机外层产品，不是当前 Environment；
-- TUI 连接 Remote App Server 时仍应更新本机 CLI，不能更新远端 `zeta-server`；
+- TUI 连接 Remote App Server 时仍应更新本机 CLI，不能更新远端 `zeta-remote-server`；
 - app-server daemon 的存活时间可能长于窗口，不能自行决定关闭和替换产品；
 - Renderer connection、Remote connection 和产品安装身份不是同一个生命周期。
 

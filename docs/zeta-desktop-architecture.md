@@ -11,7 +11,7 @@
 > 外部 Agent Skill 来源与加载边界：[`skills.md`](skills.md)
 > Agent 自定义对象、`.zeta` 与外部导入边界：[`agent-customizations.md`](agent-customizations.md)
 > 三条公开产品线与宿主边界：[`product-lines.md`](product-lines.md)
-> 共享 Rust 进程入口实现：[`zeta-server-host`](../zeta-rs/server-host/README.md)
+> 共享 Rust 进程入口实现：[`zeta-app-server`](../zeta-rs/app-server/README.md)
 
 ## 快速理解
 
@@ -39,7 +39,7 @@ Renderer
   → typed Preload API
   → Electron Main
   → JSON-RPC / JSONL / stdio
-  → zeta-server app-server
+  → zeta-app-server
 ```
 
 Desktop 禁止执行 `zeta ask ...` 后解析终端输出，也禁止直接链接 `zeta-core`。
@@ -214,8 +214,8 @@ package；Rust package store 在完整文件清单校验通过后发布编号 ma
 使用的同一份 runtime lock、校验 archive digest。它不安装或调用 Python；
 Python builder 只属于显式 release packaging。`appServerExecutablePath()` 在开发态选择该
 package root，在发布态选择 Electron `resourcesPath`，两者都只启动
-`<package>/bin/zeta-server[.exe]`，并把同一 package 中
-`<package>/bin/zeta-app-server-daemon[.exe]` 的绝对路径加入受控环境。两者都由开发与发布组装器
+`<package>/bin/zeta-app-server-daemon[.exe]`，其 `connect` 命令负责取得共享服务连接。独立监听使用同包的
+`<package>/bin/zeta-app-server[.exe]`。两者都由开发与发布组装器
 显式构建和校验。因此 ripgrep、sandbox helper 与 built-in Skills 不依赖开发机
 `PATH`，缺失或 digest 不匹配会在 package preparation 阶段失败，而不是推迟到 App Server
 initialize gate。
@@ -224,10 +224,9 @@ initialize gate。
 
 Main 必须：
 
-1. 从应用包内确定的绝对路径启动 `zeta-server app-server connect`；`server-host` 调用
-   `zeta-app-server-daemon` crate 串行化 start、连接或选举 profile-scoped local authority，以
+1. 从应用包内确定的绝对路径启动 `zeta-app-server-daemon connect`；`zeta-app-server-daemon` crate 串行化 start、连接或选举 profile-scoped local authority，以
    connection prelude 用 `dir_root`、`dir_grant_source` 与产品服务身份选择隔离的 App Server 组合，并在交付 stdio 前完成真实 initialize/schema
-   readiness probe；显式诊断和恢复使用 `app-server daemon start|restart|stop|version` 的单行 JSON
+   readiness probe；显式诊断和恢复使用 `zeta-app-server-daemon start|restart|stop|version` 的单行 JSON
    控制面；
 2. 使用 `shell: false`，只传递环境变量 allowlist；
 3. 在创建业务 UI 前完成 `initialize`；
@@ -757,7 +756,7 @@ TypeScript 生成。进程内 CLI client 与 Desktop stdio client 必须经过�
 每次协议交付至少包含：
 
 - 可运行的 `zeta` 二进制；
-- `zeta-server app-server connect`（共享 local authority）与 `--listen stdio://`（direct compatibility）；
+- `zeta-app-server-daemon connect`（共享 local authority）与 `--listen stdio://`（direct compatibility）；
 - 独立的 `zeta-app-server-daemon` binary（profile authority、process-generation record、真实
   initialize readiness、协作停止、socket 与 idle lifecycle）；
 - `zeta-rs/app-server-protocol/schema/typescript/index.ts` 与 `types/` 类型目录；

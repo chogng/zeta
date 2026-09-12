@@ -11,3 +11,12 @@
 ```text
 just test zeta-app-server-daemon
 ```
+
+## 命令入口
+
+- `zeta-app-server-daemon connect` 连接或启动共享 profile 服务，并代理 stdio。
+- `zeta-app-server-daemon start|restart|stop|version` 管理服务并输出单行 JSON。
+- `--product-services PATH` 显式选择产品服务配置；目录与 grant 来源通过宿主环境传入。
+- 独立 daemon 命令始终启动当前可执行文件，支持带摘要的开发 generation。
+- CLI 等嵌入宿主通过 `executable_path` 选择 daemon；`ZETA_APP_SERVER_DAEMON_PATH` 必须是绝对路径，未配置时选择宿主同目录的 daemon。
+- 内部 FastRegex worker 统一由 `arg0` 分发。

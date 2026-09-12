@@ -18,25 +18,25 @@ fn activation_is_atomic_idempotent_and_retains_one_previous_runtime() {
     let store = store(&directory);
     let target = target();
     let system = profile(target.clone(), "zeta");
-    let first = profile(target.clone(), "/runtime/one/bin/zeta-server");
-    let second = profile(target.clone(), "/runtime/two/bin/zeta-server");
+    let first = profile(target.clone(), "/runtime/one/bin/zeta-remote-server");
+    let second = profile(target.clone(), "/runtime/two/bin/zeta-remote-server");
 
     store.activate(&system).unwrap();
     let activated = store.activate(&first).unwrap();
     assert_eq!(
         activated.active_runtime().executable(),
-        "/runtime/one/bin/zeta-server"
+        "/runtime/one/bin/zeta-remote-server"
     );
     assert_eq!(activated.previous_runtime().unwrap().executable(), "zeta");
     store.activate(&first).unwrap();
     let activated = store.activate(&second).unwrap();
     assert_eq!(
         activated.active_runtime().executable(),
-        "/runtime/two/bin/zeta-server"
+        "/runtime/two/bin/zeta-remote-server"
     );
     assert_eq!(
         activated.previous_runtime().unwrap().executable(),
-        "/runtime/one/bin/zeta-server"
+        "/runtime/one/bin/zeta-remote-server"
     );
 
     let reopened = RemoteConnectionProfileStore::new(store.path());
@@ -73,24 +73,30 @@ fn rollback_swaps_generations_and_persists_the_result() {
     let store = store(&directory);
     let target = target();
     store
-        .activate(&profile(target.clone(), "/runtime/one/bin/zeta-server"))
+        .activate(&profile(
+            target.clone(),
+            "/runtime/one/bin/zeta-remote-server",
+        ))
         .unwrap();
     store
-        .activate(&profile(target.clone(), "/runtime/two/bin/zeta-server"))
+        .activate(&profile(
+            target.clone(),
+            "/runtime/two/bin/zeta-remote-server",
+        ))
         .unwrap();
 
-    let previous = profile(target.clone(), "/runtime/one/bin/zeta-server");
+    let previous = profile(target.clone(), "/runtime/one/bin/zeta-remote-server");
     let rolled_back = store
         .rollback_to_verified(&previous, &previous)
         .unwrap()
         .unwrap();
     assert_eq!(
         rolled_back.active_runtime().executable(),
-        "/runtime/one/bin/zeta-server"
+        "/runtime/one/bin/zeta-remote-server"
     );
     assert_eq!(
         rolled_back.previous_runtime().unwrap().executable(),
-        "/runtime/two/bin/zeta-server"
+        "/runtime/two/bin/zeta-remote-server"
     );
     assert_eq!(
         store
@@ -99,7 +105,7 @@ fn rollback_swaps_generations_and_persists_the_result() {
             .unwrap()
             .active_runtime()
             .executable(),
-        "/runtime/one/bin/zeta-server"
+        "/runtime/one/bin/zeta-remote-server"
     );
 }
 
@@ -108,9 +114,9 @@ fn rollback_does_not_swap_a_generation_that_changed_after_validation() {
     let directory = TempDir::new().unwrap();
     let store = store(&directory);
     let target = target();
-    let first = profile(target.clone(), "/runtime/one/bin/zeta-server");
-    let second = profile(target.clone(), "/runtime/two/bin/zeta-server");
-    let third = profile(target.clone(), "/runtime/three/bin/zeta-server");
+    let first = profile(target.clone(), "/runtime/one/bin/zeta-remote-server");
+    let second = profile(target.clone(), "/runtime/two/bin/zeta-remote-server");
+    let third = profile(target.clone(), "/runtime/three/bin/zeta-remote-server");
     store.activate(&first).unwrap();
     store.activate(&second).unwrap();
 
@@ -131,8 +137,8 @@ fn invalid_or_duplicate_records_are_rejected_as_a_complete_document() {
         serde_json::to_vec(&json!({
             "formatVersion": 1,
             "connections": [
-                record("/runtime/one/bin/zeta-server"),
-                record("/runtime/two/bin/zeta-server")
+                record("/runtime/one/bin/zeta-remote-server"),
+                record("/runtime/two/bin/zeta-remote-server")
             ]
         }))
         .unwrap(),
@@ -162,7 +168,7 @@ fn invalid_or_duplicate_records_are_rejected_as_a_complete_document() {
 fn advisory_lease_prevents_a_lost_update_and_releases_on_drop() {
     let directory = TempDir::new().unwrap();
     let store = store(&directory);
-    let first = profile(target(), "/runtime/one/bin/zeta-server");
+    let first = profile(target(), "/runtime/one/bin/zeta-remote-server");
     store.activate(&first).unwrap();
     let lease = OpenOptions::new()
         .read(true)
@@ -172,7 +178,7 @@ fn advisory_lease_prevents_a_lost_update_and_releases_on_drop() {
     lease.try_lock().unwrap();
 
     let error = store
-        .activate(&profile(target(), "/runtime/two/bin/zeta-server"))
+        .activate(&profile(target(), "/runtime/two/bin/zeta-remote-server"))
         .unwrap_err();
     assert_eq!(error.kind(), RemoteConnectionProfileStoreFailureKind::Busy);
     drop(lease);
@@ -183,7 +189,7 @@ fn advisory_lease_prevents_a_lost_update_and_releases_on_drop() {
             .unwrap()
             .active_runtime()
             .executable(),
-        "/runtime/one/bin/zeta-server"
+        "/runtime/one/bin/zeta-remote-server"
     );
 }
 

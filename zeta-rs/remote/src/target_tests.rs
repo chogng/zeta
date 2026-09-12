@@ -47,10 +47,10 @@ fn dir_path_requires_a_canonical_posix_path() {
 #[test]
 fn exact_runtime_requires_a_canonical_absolute_posix_executable() {
     assert_eq!(
-        RemoteRuntime::new_exact_executable("/srv/zeta/runtime/bin/zeta-server")
+        RemoteRuntime::new_exact_executable("/srv/zeta/runtime/bin/zeta-remote-server")
             .unwrap()
             .executable(),
-        "/srv/zeta/runtime/bin/zeta-server"
+        "/srv/zeta/runtime/bin/zeta-remote-server"
     );
     for invalid in ["zeta", "/", "/srv//zeta", "/srv/../zeta", "/srv/zeta/"] {
         assert_eq!(

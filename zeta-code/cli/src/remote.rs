@@ -6,6 +6,6 @@ pub(crate) fn run(arguments: Vec<String>) -> Result<(), String> {
         Some((command, arguments)) if command == "connect" => {
             connect_command::parse(arguments).and_then(connect_command::run)
         }
-        _ => zeta_server_host::run_remote(arguments),
+        _ => zeta_remote_connections::run_command(arguments),
     }
 }

@@ -192,7 +192,7 @@ class PackageTests(unittest.TestCase):
     def test_local_overrides_build_canonical_package(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            server_binary = executable_file(root / "zeta-source", b"zeta-server")
+            server_binary = executable_file(root / "zeta-source", b"zeta-app-server")
             daemon_binary = executable_file(
                 root / "daemon-source", b"zeta-app-server-daemon"
             )
@@ -217,6 +217,8 @@ class PackageTests(unittest.TestCase):
                 read_workspace_version(REPOSITORY_ROOT / "Cargo.toml"),
                 spec,
                 server_binary,
+                executable_file(root / "remote-source", b"remote"),
+                executable_file(root / "remote-server-source", b"remote-server"),
                 daemon_binary,
                 code_mode_host_binary,
                 ripgrep,
@@ -226,7 +228,7 @@ class PackageTests(unittest.TestCase):
             )
 
             self.assertEqual(
-                b"zeta-server", (output / "bin" / "zeta-server").read_bytes()
+                b"zeta-app-server", (output / "bin" / "zeta-app-server").read_bytes()
             )
             self.assertEqual(
                 b"zeta-app-server-daemon",
@@ -249,7 +251,7 @@ class PackageTests(unittest.TestCase):
                 b"node",
                 (output / "zeta-resources" / "node" / "bin" / "node").read_bytes(),
             )
-            self.assertTrue(os.access(str(output / "bin" / "zeta-server"), os.X_OK))
+            self.assertTrue(os.access(str(output / "bin" / "zeta-app-server"), os.X_OK))
             self.assertTrue(os.access(str(output / "zeta-path" / "rg"), os.X_OK))
             self.assertTrue(
                 (
@@ -332,8 +334,8 @@ class PackageTests(unittest.TestCase):
             self.assertEqual(2, metadata["layoutVersion"])
             self.assertEqual("release", metadata["buildProfile"])
             self.assertEqual(
-                hashlib.sha256(b"zeta-server").hexdigest(),
-                metadata["files"]["bin/zeta-server"],
+                hashlib.sha256(b"zeta-app-server").hexdigest(),
+                metadata["files"]["bin/zeta-app-server"],
             )
             self.assertEqual({"kind": "packagedNode"}, metadata["javascriptRuntime"])
             self.assertEqual("aarch64-apple-darwin", metadata["target"])
@@ -347,8 +349,8 @@ class PackageTests(unittest.TestCase):
                 metadata["protocol"],
             )
             self.assertEqual(
-                hashlib.sha256(b"zeta-server").hexdigest(),
-                metadata["components"]["serverHost"]["binarySha256"],
+                hashlib.sha256(b"zeta-app-server").hexdigest(),
+                metadata["components"]["appServer"]["binarySha256"],
             )
             self.assertEqual(
                 hashlib.sha256(b"zeta-app-server-daemon").hexdigest(),
@@ -378,6 +380,8 @@ class PackageTests(unittest.TestCase):
                     "0.1.0",
                     spec,
                     server_binary,
+                    executable_file(root / "remote-source", b"remote"),
+                    executable_file(root / "remote-server-source", b"remote-server"),
                     daemon_binary,
                     code_mode_host_binary,
                     ripgrep,
@@ -392,6 +396,8 @@ class PackageTests(unittest.TestCase):
                     "0.1.0",
                     spec,
                     server_binary,
+                    executable_file(root / "remote-source", b"remote"),
+                    executable_file(root / "remote-server-source", b"remote-server"),
                     daemon_binary,
                     code_mode_host_binary,
                     ripgrep,
@@ -413,7 +419,9 @@ class PackageTests(unittest.TestCase):
                 REPOSITORY_ROOT,
                 read_workspace_version(REPOSITORY_ROOT / "Cargo.toml"),
                 spec,
-                executable_file(root / "zeta-source", b"zeta-server"),
+                executable_file(root / "zeta-source", b"zeta-app-server"),
+                executable_file(root / "remote-source", b"remote"),
+                executable_file(root / "remote-server-source", b"remote-server"),
                 executable_file(root / "daemon-source", b"zeta-app-server-daemon"),
                 executable_file(root / "code-mode-host-source", b"zeta-code-mode-host"),
                 resolve_ripgrep(
@@ -454,7 +462,7 @@ class PackageTests(unittest.TestCase):
             self.assertEqual(generated_protocol, signed_metadata["protocol"])
             self.assertEqual(
                 file_sha256(output / "bin" / spec.server_name),
-                signed_metadata["components"]["serverHost"]["binarySha256"],
+                signed_metadata["components"]["appServer"]["binarySha256"],
             )
 
     def assert_extension_resources(self, extensions: Path) -> None:
@@ -523,7 +531,7 @@ class PackageTests(unittest.TestCase):
     def test_linux_package_contains_built_sandbox_resource_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            server_binary = executable_file(root / "zeta-source", b"zeta-server")
+            server_binary = executable_file(root / "zeta-source", b"zeta-app-server")
             daemon_binary = executable_file(
                 root / "daemon-source", b"zeta-app-server-daemon"
             )
@@ -556,6 +564,8 @@ class PackageTests(unittest.TestCase):
                 "0.1.0",
                 spec,
                 server_binary,
+                executable_file(root / "remote-source", b"remote"),
+                executable_file(root / "remote-server-source", b"remote-server"),
                 daemon_binary,
                 code_mode_host_binary,
                 ripgrep,
@@ -587,8 +597,8 @@ class PackageTests(unittest.TestCase):
     def test_windows_package_excludes_retired_account_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            server_binary = root / "zeta-server.exe"
-            server_binary.write_bytes(b"zeta-server")
+            server_binary = root / "zeta-app-server.exe"
+            server_binary.write_bytes(b"zeta-app-server")
             daemon_binary = root / "zeta-app-server-daemon.exe"
             daemon_binary.write_bytes(b"zeta-app-server-daemon")
             code_mode_host_binary = root / "zeta-code-mode-host.exe"
@@ -611,6 +621,8 @@ class PackageTests(unittest.TestCase):
                 "0.1.0",
                 spec,
                 server_binary,
+                executable_file(root / "remote-source", b"remote"),
+                executable_file(root / "remote-server-source", b"remote-server"),
                 daemon_binary,
                 code_mode_host_binary,
                 ripgrep,

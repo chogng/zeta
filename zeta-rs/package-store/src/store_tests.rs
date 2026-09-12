@@ -127,7 +127,7 @@ fn packaged_executable_holds_a_shared_package_lease() {
     let bin = package.join("bin");
     fs::create_dir_all(&bin).unwrap();
     fs::write(package.join(".lease"), []).unwrap();
-    let executable = bin.join("zeta-server.exe");
+    let executable = bin.join("zeta-app-server.exe");
     fs::copy(std::env::current_exe().unwrap(), &executable).unwrap();
 
     let _lease = acquire_package_lease_for_executable(&executable)

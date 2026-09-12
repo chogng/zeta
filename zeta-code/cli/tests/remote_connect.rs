@@ -1,5 +1,8 @@
 #![cfg(unix)]
 
+#[path = "support/remote.rs"]
+mod remote;
+
 use std::fs;
 use std::fs::File;
 use std::os::unix::fs::PermissionsExt;
@@ -64,7 +67,7 @@ fn resolves_a_saved_target_and_checks_the_real_broker() {
             "--name",
             "local-build",
             "--runtime",
-            env!("CARGO_BIN_EXE_zeta"),
+            remote::executable(),
             "--ssh",
             fake_ssh.to_str().unwrap(),
             "--check",
@@ -83,7 +86,7 @@ fn resolves_a_saved_target_and_checks_the_real_broker() {
         json!({
             "host": "local-ssh-double",
             "dir": dir.to_str().unwrap(),
-            "activeRuntime": env!("CARGO_BIN_EXE_zeta"),
+            "activeRuntime": remote::executable(),
         })
     );
     assert!(profile_root.join("remote/connections.json").is_file());
@@ -196,7 +199,7 @@ fn run_install_case(
         json!({
             "host": "install-double",
             "dir": dir.to_str().unwrap(),
-            "activeRuntime": env!("CARGO_BIN_EXE_zeta"),
+            "activeRuntime": remote::executable(),
         })
     );
     assert_eq!(fs::read_to_string(&installed_state).unwrap(), "install\n");
@@ -268,7 +271,7 @@ fn write_installing_fake_ssh(
         path,
         installed_state,
         profile_root,
-        Path::new(env!("CARGO_BIN_EXE_zeta")),
+        Path::new(remote::executable()),
     ] {
         assert!(!value.to_string_lossy().contains('\''));
     }
@@ -277,20 +280,20 @@ fn write_installing_fake_ssh(
             "printf '%s\\n' '__ZETA_REMOTE_RUNTIME_MISSING__'; exit 127"
         }
         InitialRemoteRuntime::Incompatible => {
-            "printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:/legacy/bin/zeta-server'"
+            "printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:/legacy/bin/zeta-remote-server'"
         }
     };
     let incompatible_response = incompatible_initialize_response();
     let receipt_runtime = format!(
-        "/srv/zeta/remote/runtimes/x86_64-unknown-linux-gnu/0.1.0/{artifact_sha256}/bin/zeta-server"
+        "/srv/zeta/remote/runtimes/x86_64-unknown-linux-gnu/0.1.0/{artifact_sha256}/bin/zeta-remote-server"
     );
     fs::write(
         path,
         format!(
-            "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\ncase \"$command\" in\n  *\"'remote-server' 'connect'\"*) if [ -f '{installed}' ]; then export ZETA_PROFILE_ROOT='{profile}'; exec /bin/sh -c \"$command\"; else IFS= read -r request || exit 65; printf '%s\\n' '{incompatible_response}'; fi ;;\n  *__ZETA_REMOTE_PLATFORM__*) printf '%s\\n' '__ZETA_REMOTE_PLATFORM__:linux:x86_64:gnu' ;;\n  *__ZETA_REMOTE_RUNTIME_INSTALLED__*) cat >/dev/null; printf '%s\\n' install >> '{installed}'; printf '%s\\n' '__ZETA_REMOTE_RUNTIME_INSTALLED__:{artifact_sha256}:{receipt_runtime}' ;;\n  *__ZETA_REMOTE_RUNTIME_FOUND__*) if [ -f '{installed}' ]; then printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:{actual_runtime}'; else {initial_probe}; fi ;;\n  *) exit 64 ;;\nesac\n",
+            "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\ncase \"$command\" in\n  *\"'connect'\"*) if [ -f '{installed}' ]; then export ZETA_PROFILE_ROOT='{profile}'; exec /bin/sh -c \"$command\"; else IFS= read -r request || exit 65; printf '%s\\n' '{incompatible_response}'; fi ;;\n  *__ZETA_REMOTE_PLATFORM__*) printf '%s\\n' '__ZETA_REMOTE_PLATFORM__:linux:x86_64:gnu' ;;\n  *__ZETA_REMOTE_RUNTIME_INSTALLED__*) cat >/dev/null; printf '%s\\n' install >> '{installed}'; printf '%s\\n' '__ZETA_REMOTE_RUNTIME_INSTALLED__:{artifact_sha256}:{receipt_runtime}' ;;\n  *__ZETA_REMOTE_RUNTIME_FOUND__*) if [ -f '{installed}' ]; then printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:{actual_runtime}'; else {initial_probe}; fi ;;\n  *) exit 64 ;;\nesac\n",
             installed = installed_state.display(),
             profile = profile_root.display(),
-            actual_runtime = env!("CARGO_BIN_EXE_zeta"),
+            actual_runtime = remote::executable(),
         ),
     )
     .unwrap();
@@ -311,7 +314,7 @@ fn create_runtime_archive(directory: &Path) -> TestRuntimeArtifact {
         "layoutVersion": 2,
         "version": "0.1.0",
         "target": "x86_64-unknown-linux-gnu",
-        "entrypoint": "bin/zeta-server",
+        "entrypoint": "bin/zeta-app-server",
         "pathDir": "zeta-path",
         "resourcesDir": "zeta-resources",
         "javascriptRuntime": { "kind": "packagedNode" },
@@ -320,9 +323,10 @@ fn create_runtime_archive(directory: &Path) -> TestRuntimeArtifact {
     .unwrap();
     let mut unpacked_size =
         append_archive_file(&mut builder, "zeta-package.json", &metadata, 0o644);
-    unpacked_size += append_archive_file(&mut builder, "bin/zeta-server", b"zeta", 0o755);
+    unpacked_size += append_archive_file(&mut builder, "bin/zeta-remote-server", b"zeta", 0o755);
     unpacked_size +=
         append_archive_file(&mut builder, "bin/zeta-app-server-daemon", b"daemon", 0o755);
+    unpacked_size += append_archive_file(&mut builder, "bin/zeta-app-server", b"app-server", 0o755);
     unpacked_size += append_archive_file(&mut builder, "zeta-path/rg", b"rg", 0o755);
     unpacked_size +=
         append_archive_file(&mut builder, "zeta-resources/node/bin/node", b"node", 0o755);
@@ -367,6 +371,8 @@ fn incompatible_initialize_response() -> String {
                 "sessions": true,
                 "threads": true,
                 "turns": true,
+                "projects": false,
+                "memories": false,
                 "resources": false,
                 "attachments": false,
                 "fileSystem": false,

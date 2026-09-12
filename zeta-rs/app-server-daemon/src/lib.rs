@@ -11,16 +11,13 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use serde::Serialize;
-use zeta_app_server_client::local_profile_root;
+use zeta_app_server::local_profile_root;
 
 /// Environment variable that selects the daemon executable used by a client host.
 pub const DAEMON_PATH_ENV: &str = "ZETA_APP_SERVER_DAEMON_PATH";
 
 /// Internal argument that selects the daemon role in a product executable that embeds this crate.
 pub const DAEMON_PROCESS_ARGUMENT: &str = "--zeta-app-server-daemon-process";
-
-/// Internal argument that selects the private Fast Regex worker role.
-pub const FAST_REGEX_WORKER_PROCESS_ARGUMENT: &str = "--zeta-fast-regex-worker-process";
 
 /// directory grant source attached to one daemon connection.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -170,10 +167,6 @@ pub fn daemon_endpoint_path(profile_root: &Path) -> Result<PathBuf, String> {
 /// Runs the daemon process entrypoint using the local profile selected by the environment.
 pub fn run_from_environment(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
     let arguments = arguments.into_iter().collect::<Vec<_>>();
-    if arguments.as_slice() == [FAST_REGEX_WORKER_PROCESS_ARGUMENT] {
-        return zeta_fast_regex_search::serve_worker_from_environment()
-            .map_err(|error| error.to_string());
-    }
     if !arguments.is_empty() && arguments.as_slice() != [DAEMON_PROCESS_ARGUMENT] {
         return Err("usage: zeta-app-server-daemon".into());
     }
@@ -208,3 +201,7 @@ pub fn daemon_endpoint_path(_profile_root: &Path) -> Result<PathBuf, String> {
 #[cfg(test)]
 #[path = "app_server_daemon_tests.rs"]
 mod tests;
+
+mod command;
+pub use command::executable_path;
+pub use command::run_command;

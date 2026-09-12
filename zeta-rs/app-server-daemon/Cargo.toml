@@ -15,6 +15,7 @@ name = "zeta_app_server_daemon"
 path = "src/lib.rs"
 
 [dependencies]
+arg0 = { workspace = true }
 queue = { workspace = true }
 process-hardening = { workspace = true }
 build-info = { workspace = true }
@@ -39,6 +40,7 @@ zeta-uds = { workspace = true }
 windows-sys = { workspace = true, features = ["Win32_System_Threading"] }
 
 [dev-dependencies]
+zeta-file-access = { workspace = true }
 tempfile = { workspace = true }
 
 [lints]

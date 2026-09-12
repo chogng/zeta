@@ -56,7 +56,7 @@ if (profileDirectory && languageServerExecutable) {
 	);
 }
 if (productServicesPath) {
-	await writeFile(productServicesPath, '{"schemaVersion":1}\n', 'utf8');
+	await writeFile(productServicesPath, '{"schemaVersion":2}\n', 'utf8');
 }
 const testEnvironment = workspaceDirectory ? {
 	...process.env,

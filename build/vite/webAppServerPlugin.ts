@@ -49,7 +49,7 @@ export function webAppServerVitePlugin(options: WebAppServerPluginOptions = {}):
   const executable = resolve(options.executable ?? join(
     developmentPackage(),
     "bin",
-    process.platform === "win32" ? "zeta-server.exe" : "zeta-server",
+    process.platform === "win32" ? "zeta-app-server-daemon.exe" : "zeta-app-server-daemon",
   ));
   const ripgrep = resolve(options.ripgrep ?? process.env.ZETA_RG_PATH ?? join(
     developmentPackage(),
@@ -117,7 +117,7 @@ export function webAppServerVitePlugin(options: WebAppServerPluginOptions = {}):
           throw new Error(`Packaged ripgrep binary is missing: ${ripgrep}`);
         }
         await mkdir(profileRoot, { recursive: true });
-        const child = spawn(executable, ["app-server", "connect"], {
+        const child = spawn(executable, ["connect"], {
           cwd: workspaceRoot,
           env: { ...appServerEnvironment({ profileRoot, ripgrep, workspaceRoot }), ZETA_APP_SERVER_DAEMON_PATH: join(dirname(executable), process.platform === 'win32' ? 'zeta-app-server-daemon.exe' : 'zeta-app-server-daemon') },
           shell: false,

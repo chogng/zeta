@@ -3,7 +3,7 @@ import type { URI } from "../../../base/common/uri.js";
 import { AppServerProtocolIncompatibleError } from "../../app-server/common/appServerProtocolCompatibility.js";
 import type { IAppServerProcessLauncher } from "../../app-server/electron-main/appServerProcessLauncher.js";
 import { createSshRemoteWorkspaceUri, getRemoteAuthority, getRemoteWorkspacePath } from "../common/remote.js";
-import { isCanonicalAbsolutePosixPath, validLocalCommand } from "./serverHostRemoteCommand.js";
+import { isCanonicalAbsolutePosixPath, validLocalCommand } from "./remoteCommand.js";
 
 export interface SpawnSshAppServerOptions {
 	readonly environment: NodeJS.ProcessEnv;
@@ -135,7 +135,7 @@ export class SshAppServerProcessLauncher implements IAppServerProcessLauncher {
 	}
 
 	launch(): ChildProcessWithoutNullStreams {
-		const remoteCommand = remoteAppServerCommand(this.remoteExecutable, this.workspacePath);
+		const remoteCommand = remoteRemoteCommand(this.remoteExecutable, this.workspacePath);
 		return this.spawnProcess(this.options.sshExecutable, ["-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", this.host, remoteCommand], { environment: this.options.localEnvironment });
 	}
 
@@ -173,8 +173,8 @@ export class SshAppServerProcessLauncher implements IAppServerProcessLauncher {
 	}
 }
 
-export function remoteAppServerCommand(executable: string, workspacePath: string): string {
-	return ["env", `ZETA_WORKSPACE_ROOT=${workspacePath}`, executable, "remote-server", "connect"].map(quotePosixShellArgument).join(" ");
+export function remoteRemoteCommand(executable: string, workspacePath: string): string {
+	return ["env", `ZETA_WORKSPACE_ROOT=${workspacePath}`, executable, "connect"].map(quotePosixShellArgument).join(" ");
 }
 
 const RUNTIME_FOUND_MARKER = "__ZETA_REMOTE_RUNTIME_FOUND__:";

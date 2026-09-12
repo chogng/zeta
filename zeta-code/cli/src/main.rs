@@ -4,7 +4,7 @@ use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use zeta_app_server_client::local_profile_root;
+use zeta_app_server::local_profile_root;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::turn::InputItem;
 use zeta_exec::AppServerTarget;
@@ -32,6 +32,13 @@ fn main() {
         std::process::exit(1);
     }
 
+    if let Some(result) = arg0::dispatch(env::args_os().skip(1)) {
+        if let Err(error) = result {
+            eprintln!("zeta: {error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     let mut arguments = env::args().skip(1);
     let outcome = match arguments.next() {
         None => interactive().map_err(CliError::failure),
@@ -45,10 +52,6 @@ fn main() {
             "resume" => resume(arguments.collect()),
             "app-server" => app_server_command(arguments.collect()).map_err(CliError::failure),
             "remote" => remote::run(arguments.collect()).map_err(CliError::failure),
-            "remote-server" => {
-                zeta_server_host::run(std::iter::once("remote-server".to_owned()).chain(arguments))
-                    .map_err(CliError::failure)
-            }
             "update" => update::run_manual(arguments.collect()).map_err(CliError::failure),
             _ => Err(CliError::usage(format!("unknown command: {command}"))),
         },
@@ -93,7 +96,17 @@ fn parse_resume_arguments(arguments: Vec<String>) -> Result<zeta_tui::TuiRecover
 }
 
 fn run_app_server(arguments: Vec<String>) -> Result<(), String> {
-    zeta_server_host::run_app_server(arguments)
+    match arguments.first().map(String::as_str) {
+        Some("connect") => zeta_app_server_daemon::run_command(
+            arguments,
+            &zeta_app_server_daemon::executable_path()?,
+        ),
+        Some("daemon") => zeta_app_server_daemon::run_command(
+            arguments.into_iter().skip(1),
+            &zeta_app_server_daemon::executable_path()?,
+        ),
+        _ => zeta_app_server::run(arguments),
+    }
 }
 
 fn app_server_command(arguments: Vec<String>) -> Result<(), String> {

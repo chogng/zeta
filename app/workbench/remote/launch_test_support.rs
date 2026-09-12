@@ -41,6 +41,7 @@ fn initialize_response_with_protocol(server_schema_hash: &str, protocol_major: u
                 "threads": true,
                 "turns": true,
                 "projects": false,
+                "memories": false,
                 "resources": false,
                 "attachments": false,
                 "fileSystem": false,

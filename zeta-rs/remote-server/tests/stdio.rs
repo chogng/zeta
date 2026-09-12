@@ -155,7 +155,6 @@ fn broker_preserves_a_reconnectable_terminal_between_stdio_clients() {
 
     let command = || {
         StdioAppServerCommand::new(env!("CARGO_BIN_EXE_zeta-remote-server"))
-            .with_argument("remote-server")
             .with_argument("connect")
             .with_environment_variable("ZETA_WORKSPACE_ROOT", dir.clone().into_os_string())
             .with_environment_variable("ZETA_PROFILE_ROOT", profile.clone().into_os_string())

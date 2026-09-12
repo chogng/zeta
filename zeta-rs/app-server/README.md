@@ -1,6 +1,6 @@
 # `zeta-app-server`
 
-`zeta-app-server` 组合一个环境中的服务并实现 App Server 协议，具体职责只有三项：
+`zeta-app-server` 组合一个环境中的服务并实现 App Server 协议，具体职责如下：
 
 1. 在每条已建立的连接上执行类型化协议分发，并编排请求取消、Thread、Turn、Project 与通知生命周期；连接建立、鉴权和消息队列由 `zeta-app-server-transport` 负责。
 2. 在文件、搜索、Git、Terminal、语言服务和目录贡献入口检查对应 Permission，并只把有效 `Authorization` 交给执行服务。
@@ -12,3 +12,14 @@
 ```text
 just test zeta-app-server
 ```
+
+## 进程入口
+
+- `zeta-app-server --listen stdio://` 提供直接连接；未设置 `ZETA_WORKSPACE_ROOT` 时不继承当前目录授权。
+- WebSocket 使用 `--listen ws://127.0.0.1:0 --ws-auth capability-token --ws-token-sha256 HEX --emit-listen-info stdout-json`，监听成功后输出一条启动记录。
+- `src/startup.rs` 负责参数、环境绑定和服务启动；CLI 调用同一 `run`。
+- profile 路径和随包产品服务发现由本 crate 提供，客户端消费相同契约。
+- `arg0` 在普通参数解析前分发内部 worker；启动命令绑定实际宿主可执行路径。
+- daemon 的连接和生命周期命令由 [`app-server-daemon`](../app-server-daemon/README.md) 提供。
+
+验证：`just test zeta-app-server --test stdio --test websocket --test worker`。

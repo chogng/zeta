@@ -4,8 +4,8 @@ import { lstat, readFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { isRecord } from "../../../base/common/types.js";
 import { developmentZetaPackagePath } from "../../environment/node/developmentArtifacts.js";
-import { validLocalCommand } from "./serverHostRemoteCommand.js";
-import { type TrustedRemoteRuntimeArtifact, validateTrustedRemoteRuntimeArtifact } from "./serverHostRemoteRuntimeInstaller.js";
+import { validLocalCommand } from "./remoteCommand.js";
+import { type TrustedRemoteRuntimeArtifact, validateTrustedRemoteRuntimeArtifact } from "./remoteRuntimeInstaller.js";
 
 const CATALOG_FORMAT_VERSION = 1;
 const MAX_CATALOG_BYTES = 1024 * 1024;

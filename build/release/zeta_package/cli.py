@@ -10,6 +10,7 @@ from build.lib.zeta_build.targets import TARGETS, default_target
 
 from .bubblewrap import resolve_bubblewrap
 from .cargo import (
+    resolve_remote_binary,
     resolve_cli_binary,
     resolve_app_server_daemon_binary,
     resolve_code_mode_host_binary,
@@ -66,6 +67,8 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    parser.add_argument("--remote-bin", type=Path, help="Prebuilt local Remote management executable.")
+    parser.add_argument("--remote-server-bin", type=Path, help="Prebuilt remote runtime executable.")
     parser.add_argument("--windows-sandbox-bin", type=Path, help="Prebuilt Windows sandbox installation and execution helper.")
     parser.add_argument(
         "--target",
@@ -235,6 +238,8 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         version,
         spec,
         server_binary,
+        resolve_remote_binary(REPOSITORY_ROOT, spec, args.remote_bin, args.cargo, args.cargo_profile, server=False),
+        resolve_remote_binary(REPOSITORY_ROOT, spec, args.remote_server_bin, args.cargo, args.cargo_profile, server=True),
         app_server_daemon_binary,
         code_mode_host_binary,
         ripgrep,

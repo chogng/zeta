@@ -11,6 +11,7 @@ name = "zeta_workbench"
 path = "lib.rs"
 
 [dependencies]
+zeta-app-server = { workspace = true }
 memories = { workspace = true }
 message-history = { workspace = true }
 state = { package = "zeta-state", path = "../../zeta-rs/state" }
@@ -40,7 +41,7 @@ zeta-remote-host = { workspace = true }
 zeta-session = { workspace = true }
 zeta-settings = { workspace = true }
 zeta-scm = { workspace = true }
-zeta-server-host = { workspace = true }
+arg0 = { workspace = true }
 zeta-slash-commands = { workspace = true }
 zeta-terminal = { workspace = true }
 zeta-terminal-runtime = { workspace = true }

@@ -54,7 +54,7 @@ fn remote_arguments_build_one_credential_free_profile() {
         "--dir".to_owned(),
         "/srv/project".to_owned(),
         "--runtime".to_owned(),
-        "/opt/zeta/bin/zeta-server".to_owned(),
+        "/opt/zeta/bin/zeta-remote-server".to_owned(),
         "--ssh".to_owned(),
         "/usr/local/bin/ssh".to_owned(),
     ])
@@ -67,7 +67,7 @@ fn remote_arguments_build_one_credential_free_profile() {
                     SshHost::parse("build.example").unwrap(),
                     RemoteDirPath::parse("/srv/project").unwrap(),
                 ),
-                RemoteRuntime::new("/opt/zeta/bin/zeta-server").unwrap(),
+                RemoteRuntime::new("/opt/zeta/bin/zeta-remote-server").unwrap(),
             ),
             ssh_executable: Some("/usr/local/bin/ssh".into()),
             runtime_source: RemoteRuntimeSource::ExplicitRuntime,
@@ -76,7 +76,7 @@ fn remote_arguments_build_one_credential_free_profile() {
 }
 
 #[test]
-fn remote_arguments_default_to_the_application_neutral_server_host() {
+fn remote_arguments_default_to_the_remote_runtime() {
     let launch = AppLaunch::parse([
         "--remote".to_owned(),
         "build.example".to_owned(),
@@ -92,7 +92,7 @@ fn remote_arguments_default_to_the_application_neutral_server_host() {
     else {
         panic!("expected Remote launch");
     };
-    assert_eq!(profile.runtime().executable(), "zeta-server");
+    assert_eq!(profile.runtime().executable(), "zeta-remote-server");
     assert_eq!(
         runtime_source,
         RemoteRuntimeSource::DefaultRuntime { catalog: None }
@@ -129,7 +129,7 @@ fn remote_launch_checks_runtime_readiness_before_starting_the_ui() {
     fs::write(
         &fake_ssh,
         format!(
-            "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\ncase \"$command\" in\n  *\"'remote-server' 'connect'\"*) IFS= read -r request || exit 65; printf '%s\\n' '{response}' ;;\n  *missing*) printf '%s\\n' '__ZETA_REMOTE_RUNTIME_MISSING__'; exit 127 ;;\n  *) printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:/srv/zeta/bin/zeta-server' ;;\nesac\n"
+            "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\ncase \"$command\" in\n  *\"'connect'\"*) IFS= read -r request || exit 65; printf '%s\\n' '{response}' ;;\n  *missing*) printf '%s\\n' '__ZETA_REMOTE_RUNTIME_MISSING__'; exit 127 ;;\n  *) printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:/srv/zeta/bin/zeta-remote-server' ;;\nesac\n"
         ),
     )
     .unwrap();
@@ -177,7 +177,7 @@ fn explicit_incompatible_runtime_is_not_replaced_and_transport_failure_never_ins
     fs::write(
         &incompatible_ssh,
         format!(
-            "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\ncase \"$command\" in\n  *\"'remote-server' 'connect'\"*) IFS= read -r request || exit 65; printf '%s\\n' '{obsolete_response}' ;;\n  *__ZETA_REMOTE_RUNTIME_FOUND__*) printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:/opt/zeta/bin/zeta-server' ;;\n  *) exit 64 ;;\nesac\n"
+            "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\ncase \"$command\" in\n  *\"'connect'\"*) IFS= read -r request || exit 65; printf '%s\\n' '{obsolete_response}' ;;\n  *__ZETA_REMOTE_RUNTIME_FOUND__*) printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:/opt/zeta/bin/zeta-remote-server' ;;\n  *) exit 64 ;;\nesac\n"
         ),
     )
     .unwrap();
@@ -188,7 +188,7 @@ fn explicit_incompatible_runtime_is_not_replaced_and_transport_failure_never_ins
         "--dir".into(),
         "/srv/project".into(),
         "--runtime".into(),
-        "/opt/zeta/bin/zeta-server".into(),
+        "/opt/zeta/bin/zeta-remote-server".into(),
         "--ssh".into(),
         incompatible_ssh.to_string_lossy().into_owned(),
     ])
@@ -249,7 +249,7 @@ fn missing_default_runtime_is_installed_from_the_authenticated_catalog() {
     fs::write(&catalog_path, &catalog_bytes).unwrap();
     let catalog_sha256 = format!("{:x}", Sha256::digest(&catalog_bytes));
     let installed_runtime = format!(
-        "/srv/zeta/runtimes/x86_64-unknown-linux-gnu/0.1.0/{}/bin/zeta-server",
+        "/srv/zeta/runtimes/x86_64-unknown-linux-gnu/0.1.0/{}/bin/zeta-remote-server",
         artifact.sha256
     );
     let state = directory.path().join("installed");
@@ -332,7 +332,7 @@ fn incompatible_default_runtime_is_replaced_from_the_authenticated_catalog() {
     fs::write(&catalog_path, &catalog_bytes).unwrap();
     let catalog_sha256 = format!("{:x}", Sha256::digest(&catalog_bytes));
     let installed_runtime = format!(
-        "/srv/zeta/runtimes/x86_64-unknown-linux-gnu/0.1.0/{}/bin/zeta-server",
+        "/srv/zeta/runtimes/x86_64-unknown-linux-gnu/0.1.0/{}/bin/zeta-remote-server",
         artifact.sha256
     );
     let state = directory.path().join("installed");
@@ -390,7 +390,7 @@ fn write_installing_fake_ssh(
             "printf '%s\\n' '__ZETA_REMOTE_RUNTIME_MISSING__'; exit 127"
         }
         InitialRemoteRuntime::Incompatible => {
-            "printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:/usr/bin/zeta-server'"
+            "printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:/usr/bin/zeta-remote-server'"
         }
     };
     let current_response = initialize_response(&schema_hash());
@@ -398,7 +398,7 @@ fn write_installing_fake_ssh(
     fs::write(
         path,
         format!(
-            "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\ncase \"$command\" in\n  *\"'remote-server' 'connect'\"*) IFS= read -r request || exit 65; if [ -f '{}' ]; then printf '%s\\n' '{}'; else printf '%s\\n' '{}'; fi ;;\n  *__ZETA_REMOTE_PLATFORM__*) printf '%s\\n' '__ZETA_REMOTE_PLATFORM__:linux:x86_64:gnu' ;;\n  *__ZETA_REMOTE_RUNTIME_INSTALLED__*) cat >/dev/null; printf '%s\\n' install >> '{}'; printf '%s\\n' '__ZETA_REMOTE_RUNTIME_INSTALLED__:{}:{}' ;;\n  *__ZETA_REMOTE_RUNTIME_FOUND__*) if [ -f '{}' ]; then printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:{}'; else {}; fi ;;\n  *) exit 64 ;;\nesac\n",
+            "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\ncase \"$command\" in\n  *\"'connect'\"*) IFS= read -r request || exit 65; if [ -f '{}' ]; then printf '%s\\n' '{}'; else printf '%s\\n' '{}'; fi ;;\n  *__ZETA_REMOTE_PLATFORM__*) printf '%s\\n' '__ZETA_REMOTE_PLATFORM__:linux:x86_64:gnu' ;;\n  *__ZETA_REMOTE_RUNTIME_INSTALLED__*) cat >/dev/null; printf '%s\\n' install >> '{}'; printf '%s\\n' '__ZETA_REMOTE_RUNTIME_INSTALLED__:{}:{}' ;;\n  *__ZETA_REMOTE_RUNTIME_FOUND__*) if [ -f '{}' ]; then printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:{}'; else {}; fi ;;\n  *) exit 64 ;;\nesac\n",
             state.display(),
             current_response,
             obsolete_response,
@@ -430,7 +430,7 @@ fn create_runtime_archive(directory: &Path) -> TestRuntimeArtifact {
         "layoutVersion": 2,
         "version": "0.1.0",
         "target": "x86_64-unknown-linux-gnu",
-        "entrypoint": "bin/zeta-server",
+        "entrypoint": "bin/zeta-app-server",
         "pathDir": "zeta-path",
         "resourcesDir": "zeta-resources",
         "javascriptRuntime": { "kind": "packagedNode" },
@@ -439,9 +439,15 @@ fn create_runtime_archive(directory: &Path) -> TestRuntimeArtifact {
     .unwrap();
     let mut unpacked_size =
         append_archive_file(&mut builder, "zeta-package.json", &metadata, 0o644);
-    unpacked_size += append_archive_file(&mut builder, "bin/zeta-server", b"zeta-server", 0o755);
+    unpacked_size += append_archive_file(
+        &mut builder,
+        "bin/zeta-remote-server",
+        b"zeta-remote-server",
+        0o755,
+    );
     unpacked_size +=
         append_archive_file(&mut builder, "bin/zeta-app-server-daemon", b"daemon", 0o755);
+    unpacked_size += append_archive_file(&mut builder, "bin/zeta-app-server", b"app-server", 0o755);
     unpacked_size += append_archive_file(&mut builder, "zeta-path/rg", b"rg", 0o755);
     unpacked_size +=
         append_archive_file(&mut builder, "zeta-resources/node/bin/node", b"node", 0o755);

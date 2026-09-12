@@ -25,7 +25,7 @@ use zeta_remote_connections::SshRemoteRuntimeInstaller;
 
 use crate::app_server::{AppServerHost, local_profile_root};
 
-const DEFAULT_REMOTE_RUNTIME: &str = "zeta-server";
+const DEFAULT_REMOTE_RUNTIME: &str = "zeta-remote-server";
 const BUNDLED_REMOTE_RUNTIME_CATALOG: &str = "zeta-remote-runtimes/catalog.json";
 const BUNDLED_REMOTE_RUNTIME_CATALOG_SHA256: Option<&str> =
     option_env!("APP_REMOTE_RUNTIME_CATALOG_SHA256");

@@ -116,7 +116,9 @@ interface FirstPartyExecutables {
   readonly appServerDaemon: string;
   readonly bubblewrap?: ResolvedBubblewrap;
   readonly packageStore: string;
-  readonly serverHost: string;
+  readonly appServer: string;
+  readonly remote: string;
+  readonly remoteServer: string;
   readonly codeModeHost: string;
   readonly windowsSandbox?: string;
 }
@@ -510,11 +512,13 @@ async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<Fi
   const cargoEnvironment = await v8CargoEnvironment(hostTarget(platform));
   const binaryArgs = [
     "--bin", "zeta-package-store",
-    "--bin", "zeta-server",
+    "--bin", "zeta-app-server",
+    "--bin", "zeta-remote",
+    "--bin", "zeta-remote-server",
     "--bin", "zeta-app-server-daemon",
     "--bin", "zeta-code-mode-host",
   ];
-  const expectedTargets = ["zeta-package-store", "zeta-server", "zeta-app-server-daemon", "zeta-code-mode-host"];
+  const expectedTargets = ["zeta-package-store", "zeta-app-server", "zeta-remote", "zeta-remote-server", "zeta-app-server-daemon", "zeta-code-mode-host"];
   if (platform === "win32") {
     binaryArgs.push("--bin", "zeta-windows-sandbox");
     expectedTargets.push("zeta-windows-sandbox");
@@ -528,14 +532,18 @@ async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<Fi
     appServerDaemon: string;
     bubblewrap?: ResolvedBubblewrap;
     packageStore: string;
-    serverHost: string;
+    appServer: string;
+    remote: string;
+    remoteServer: string;
     codeModeHost: string;
     windowsSandbox?: string;
   } = {
     appServerDaemon: requiredExecutable(artifacts, "zeta-app-server-daemon"),
     codeModeHost: requiredExecutable(artifacts, "zeta-code-mode-host"),
     packageStore: requiredExecutable(artifacts, "zeta-package-store"),
-    serverHost: requiredExecutable(artifacts, "zeta-server"),
+    appServer: requiredExecutable(artifacts, "zeta-app-server"),
+    remote: requiredExecutable(artifacts, "zeta-remote"),
+    remoteServer: requiredExecutable(artifacts, "zeta-remote-server"),
   };
   if (platform === "win32") {
     executables.windowsSandbox = requiredExecutable(artifacts, "zeta-windows-sandbox");
@@ -693,7 +701,7 @@ export async function assemblePackage(
   const isWindows = platform === "win32";
   const appServerDaemonName = isWindows ? "zeta-app-server-daemon.exe" : "zeta-app-server-daemon";
   const codeModeHostName = isWindows ? "zeta-code-mode-host.exe" : "zeta-code-mode-host";
-  const serverHostName = isWindows ? "zeta-server.exe" : "zeta-server";
+  const appServerName = isWindows ? "zeta-app-server.exe" : "zeta-app-server";
   const rgName = isWindows ? "rg.exe" : "rg";
   const binDirectory = join(staging, "bin");
   const pathDirectory = join(staging, "zeta-path");
@@ -710,7 +718,9 @@ export async function assemblePackage(
   if (remoteRuntimeBundle) {
     await copyRegularTree(remoteRuntimeBundle, join(staging, "zeta-remote-runtimes"), "Remote runtime bundle");
   }
-  await copyExecutable(executables.serverHost, join(binDirectory, serverHostName), isWindows);
+  await copyExecutable(executables.appServer, join(binDirectory, appServerName), isWindows);
+  await copyExecutable(executables.remote, join(binDirectory, isWindows ? "zeta-remote.exe" : "zeta-remote"), isWindows);
+  await copyExecutable(executables.remoteServer, join(binDirectory, isWindows ? "zeta-remote-server.exe" : "zeta-remote-server"), isWindows);
   await copyExecutable(executables.appServerDaemon, join(binDirectory, appServerDaemonName), isWindows);
   await copyExecutable(executables.codeModeHost, join(binDirectory, codeModeHostName), isWindows);
   if (isWindows) {
@@ -754,8 +764,10 @@ export async function assemblePackage(
       source: ripgrep.source,
       version: ripgrep.version,
     },
-    serverHost: {
-      binarySha256: await sha256(join(binDirectory, serverHostName)),
+    remote: { binarySha256: await sha256(join(binDirectory, isWindows ? "zeta-remote.exe" : "zeta-remote")), source: "cargo-build" },
+    remoteServer: { binarySha256: await sha256(join(binDirectory, isWindows ? "zeta-remote-server.exe" : "zeta-remote-server")), source: "cargo-build" },
+    appServer: {
+      binarySha256: await sha256(join(binDirectory, appServerName)),
       source: "cargo-build",
     },
   };
@@ -804,7 +816,7 @@ export async function assemblePackage(
   const identity: PackageIdentityMetadata = {
     buildProfile: developmentBuildProfile,
     components,
-    entrypoint: `bin/${serverHostName}`,
+    entrypoint: `bin/${appServerName}`,
     javascriptRuntime: { kind: runtimeKind },
     layoutVersion: 2,
     pathDir: "zeta-path",
@@ -850,10 +862,12 @@ async function validatePackage(packageRoot: string, platform: NodeJS.Platform): 
   if (metadata.layoutVersion !== 2 || typeof metadata.components !== "object" || metadata.components === null) {
     throw new Error("Invalid package metadata");
   }
-  await requireFile(join(packageRoot, "bin", isWindows ? "zeta-server.exe" : "zeta-server"));
+  await requireFile(join(packageRoot, "bin", isWindows ? "zeta-app-server.exe" : "zeta-app-server"));
+  await requireComponentDigest(metadata, "remote", join(packageRoot, "bin", isWindows ? "zeta-remote.exe" : "zeta-remote"));
+  await requireComponentDigest(metadata, "remoteServer", join(packageRoot, "bin", isWindows ? "zeta-remote-server.exe" : "zeta-remote-server"));
   await requireFile(join(packageRoot, "bin", isWindows ? "zeta-app-server-daemon.exe" : "zeta-app-server-daemon"));
   await requireFile(join(packageRoot, "bin", isWindows ? "zeta-code-mode-host.exe" : "zeta-code-mode-host"));
-  await requireComponentDigest(metadata, "serverHost", join(packageRoot, "bin", isWindows ? "zeta-server.exe" : "zeta-server"));
+  await requireComponentDigest(metadata, "appServer", join(packageRoot, "bin", isWindows ? "zeta-app-server.exe" : "zeta-app-server"));
   await requireComponentDigest(metadata, "appServerDaemon", join(packageRoot, "bin", isWindows ? "zeta-app-server-daemon.exe" : "zeta-app-server-daemon"));
   await requireComponentDigest(metadata, "codeModeHost", join(packageRoot, "bin", isWindows ? "zeta-code-mode-host.exe" : "zeta-code-mode-host"));
   if (isWindows) {

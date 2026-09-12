@@ -89,7 +89,7 @@ zeta-rs/
 ├── http-client/           # shared outbound network policy + unary/streaming HTTP substrate
 ├── websocket-client/      # provider-neutral WebSocket handshake/message transport
 ├── zeta-client/           # API operation retry 与 SSE framing layer
-├── server-host/           # product-neutral App Server / Remote process entrypoint
+├── arg0/                  # shared internal helper dispatch
 ├── exec/                  # target headless Agent runner
 ├── tool-executor/         # target local process execution boundary
 ```

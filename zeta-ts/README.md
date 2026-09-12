@@ -57,16 +57,16 @@ corepack pnpm dev:web:full
 ```
 
 完整模式监听 `127.0.0.1:5174`，根地址同样会进入当前产品版本。Browser 通过 Vite 已认证的 HMR WebSocket 连接本地开发
-桥接器；桥接器当前仍为每个浏览器连接启动 direct `zeta-server app-server --listen stdio://`
+桥接器；桥接器为每个浏览器连接启动 `zeta-app-server-daemon connect`
 子进程，浏览器连接关闭时对应子进程也会被回收。Electron 产品改用 `app-server connect`，与
 TUI、app 连接同一 profile-scoped local App Server。Browser 命令同样通过设置或 URL 参数选择内置模式；`ZETA_WORKBENCH_MODE` 只覆盖开发进程的初始模式，不维护模式后缀命令。
 
 `dev:desktop` 与 `dev:web:full` 会先通过 Node 开发组装器生成
-`.build/zeta-package/dev/store-v1/<target>/<javascript-runtime>/dev-small/packages/<version>/<build-id>`；其中包含 product-neutral `zeta-server` backend host、锁定版本的
+`.build/zeta-package/dev/store-v1/<target>/<javascript-runtime>/dev-small/packages/<version>/<build-id>`；其中包含 product-neutral `zeta-app-server` backend host、锁定版本的
 ripgrep 与平台 sandbox helper。编号清单选择当前包，进程租约保护正在运行的包，存储固定保留当前与回滚包。Electron 默认生成 `hostProvidedNode` variant，
 不再下载或复制 standalone Node；`dev:web:full` 显式生成 `packagedNode` variant，因为 Browser bridge
 没有 Electron runtime。开发态和发布态 Electron 都从相同的
-`<package>/bin/zeta-server[.exe]` 入口启动 App Server，区别仅在编译 profile 和 package root。
+`<package>/bin/zeta-app-server-daemon[.exe] connect` 入口连接共享 App Server，区别仅在编译 profile 和 package root。
 准备流程只使用仓库已要求的 Node、Rust 和 host archive utility，不安装或调用
 Python。`dev:desktop` 随后启动 Vite、主进程、预加载脚本和 Electron；`dev:web:full` 只启动
 Vite，并按浏览器连接管理 App Server。启动后不要关闭终端，停止服务可以按 `Ctrl+C`。
@@ -92,8 +92,8 @@ Vite 插件会在模块执行前比较 TypeScript 语法结构。只有普通实
 watch program，但只在两边都完成当前编译且为 0 errors 后重启 Electron；任何编译失败都会保留当前
 进程，避免加载同一轮增量编译中的半成品模块图。
 
-完整 Electron 开发命令还会运行 `build/lib/watch/watchServerHost.ts`。Rust 源码或 Cargo manifest 变化后，它先完成
-`zeta-server-host` 的 `dev-small` profile 构建，再发布一个不可变 generation；每个本地 Workbench window 随后通过现有 App
+完整 Electron 开发命令还会运行 `build/lib/watch/watchAppServer.ts`。Rust 源码或 Cargo manifest 变化后，它先完成
+`zeta-app-server-daemon` 的 `dev-small` profile 构建，再发布一个不可变 generation；每个本地 Workbench window 随后通过现有 App
 Server supervisor 停止旧连接并启动新 generation。构建失败时当前 App Server 继续运行，初始化失败
 时自动回滚到上一 generation。Host 构建遵循 `CARGO_TARGET_DIR`，并直接读取 Cargo JSON artifact 报告的
 executable 路径，不依赖默认 target layout；generation 以 executable 内容摘要命名，内容未变化时不会重复发布，只保留当前版本

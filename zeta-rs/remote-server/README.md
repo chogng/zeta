@@ -10,10 +10,9 @@ The normal connection command is:
 
 ```bash
 ZETA_WORKSPACE_ROOT=/absolute/remote/dir \
-zeta-remote-server remote-server connect
+zeta-remote-server connect
 ```
 
-An installed full `zeta code` runtime exposes the same boundary as `zeta remote-server connect`.
 The direct `app-server --listen stdio://` command remains available for diagnostics and
 compatibility, but it is process-scoped and cannot preserve a PTY after its stdio process exits.
 
@@ -21,15 +20,14 @@ compatibility, but it is process-scoped and cannot preserve a PTY after its stdi
 state; otherwise the runtime uses a per-user `remote-server` state directory under the host's
 normal platform state location.
 
-This binary is optional. A Remote host may instead use the `zeta` executable from an installed
-`zeta code` CLI. The host-side connection layer selects the executable and does not require both
-binaries to be installed.
+The canonical runtime package includes this binary. The connection layer selects its exact
+immutable path and invokes `connect`; the broker re-enters the same binary with `daemon`.
 
 ## Execution path
 
 ```text
 Remote connection host
-  -> ssh … zeta-remote-server remote-server connect
+  -> ssh … zeta-remote-server connect
   -> private Unix socket lookup / guarded daemon start
   -> stdio proxy
   -> shared RemoteServerOptions + AppServer daemon
@@ -50,8 +48,8 @@ connection closes, accepts only its 256-bit bearer token, and rotates that token
 attach.
 
 `RemoteServerOptions` owns the remote profile and Directory roots plus an optional manifest path
-selected by the executable host. The full `zeta` host supplies its packaged product-services
-manifest; the standalone binary supplies none by default. Manifest discovery, runtime download,
+selected by the executable host. The executable discovers its packaged product-services
+manifest through `zeta-app-server` and retains a package lease for its lifetime. Manifest discovery, runtime download,
 activation, rollback, SSH retry, and tunnel policy stay outside this crate.
 
 ## Failure semantics
@@ -72,7 +70,7 @@ and UI/product composition in the product host.
 ## Verification
 
 ```bash
-cargo test -p zeta-remote-server
+just test zeta-remote-server
 ```
 
 The integration tests start the binary and connect through `AppServerSession::start_stdio` to

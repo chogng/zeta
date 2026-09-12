@@ -175,7 +175,6 @@ pub fn remote_app_server_command(profile: &RemoteProfile) -> String {
         "env".to_owned(),
         format!("ZETA_WORKSPACE_ROOT={}", profile.target().dir().as_str()),
         profile.runtime().executable().to_owned(),
-        "remote-server".to_owned(),
         "connect".to_owned(),
     ]
     .into_iter()

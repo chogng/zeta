@@ -5,12 +5,19 @@ edition.workspace = true
 license-file.workspace = true
 publish.workspace = true
 
+[[bin]]
+name = "zeta-app-server"
+path = "src/main.rs"
+
 [lib]
 doctest = false
 name = "zeta_app_server"
 path = "src/lib.rs"
 
 [dependencies]
+arg0 = { workspace = true }
+zeta-package-store = { workspace = true }
+process-hardening = { workspace = true }
 memories = { workspace = true }
 memories-extension = { workspace = true }
 extension-items = { workspace = true }
@@ -35,7 +42,7 @@ semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time", "signal"] }
 zeroize = { workspace = true }
 url = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
@@ -109,6 +116,9 @@ zeta-utils-pty = { workspace = true }
 worktree = { workspace = true }
 
 [dev-dependencies]
+zeta-app-server-client = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures = { workspace = true }
 zeta-context-engine = { workspace = true }
 image = { workspace = true, features = ["png"] }
 tempfile = { workspace = true }

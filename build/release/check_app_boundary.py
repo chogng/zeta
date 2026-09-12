@@ -126,8 +126,8 @@ def main() -> int:
             fail(f"shared zeta-keybinding depends on platform/UI crate: {dependency}")
     launch_path = repository_root / "app" / "workbench" / "remote" / "launch.rs"
     launch_text = launch_path.read_text(encoding="utf-8")
-    if 'const DEFAULT_REMOTE_RUNTIME: &str = "zeta-server";' not in launch_text:
-        fail("app Remote must default to the product-neutral zeta-server host")
+    if 'const DEFAULT_REMOTE_RUNTIME: &str = "zeta-remote-server";' not in launch_text:
+        fail("app Remote must default to the product-neutral zeta-remote-server runtime")
 
     product_host_references = ("zeta-cli", "zeta-code/cli")
     boundary_sources = [

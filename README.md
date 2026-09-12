@@ -9,7 +9,7 @@ Zeta is a Rust-first agent workspace with three product lines sharing one App Se
 | `app` | Native Rust Desktop terminal | [`app`](app) | `just app` |
 
 `zeta-rs` contains the shared Rust backend. The product-neutral backend executable is
-`zeta-server`, owned by [`zeta-server-host`](zeta-rs/server-host/README.md). Electron's `code` and
+`zeta-app-server`, owned by [`zeta-app-server`](zeta-rs/app-server/README.md). Electron's `code` and
 `academic` builds are internal variants, not additional product lines; see
 [`docs/product-lines.md`](docs/product-lines.md) and [`docs/workbench-modes.md`](docs/workbench-modes.md).
 

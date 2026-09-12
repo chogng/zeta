@@ -42,6 +42,8 @@ def build_package_directory(
     version: str,
     spec: TargetSpec,
     server_binary: Path,
+    remote_binary: Path,
+    remote_server_binary: Path,
     app_server_daemon_binary: Path,
     code_mode_host_binary: Path,
     ripgrep: RipgrepResolution,
@@ -98,6 +100,8 @@ def build_package_directory(
             binary_directory / spec.server_name,
             is_windows=spec.is_windows,
         )
+        copy_executable(remote_binary, binary_directory / spec.remote_name, is_windows=spec.is_windows)
+        copy_executable(remote_server_binary, binary_directory / spec.remote_server_name, is_windows=spec.is_windows)
         if cli_binary is not None:
             copy_executable(
                 cli_binary,
@@ -194,7 +198,9 @@ def build_package_directory(
                 ),
             },
             "ripgrep": ripgrep_metadata,
-            "serverHost": {
+            "remote": {"source": "cargo-build", "binarySha256": file_sha256(binary_directory / spec.remote_name)},
+            "remoteServer": {"source": "cargo-build", "binarySha256": file_sha256(binary_directory / spec.remote_server_name)},
+            "appServer": {
                 "source": "cargo-build",
                 "binarySha256": file_sha256(binary_directory / spec.server_name),
             },
@@ -291,6 +297,8 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
 
     executables = [
         package / "bin" / spec.server_name,
+        package / "bin" / spec.remote_name,
+        package / "bin" / spec.remote_server_name,
         package / "bin" / spec.app_server_daemon_name,
         package / "bin" / spec.code_mode_host_name,
         package / "zeta-path" / spec.ripgrep_name,
@@ -301,7 +309,9 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
     first_party_artifacts = {
         "appServerDaemon": package / "bin" / spec.app_server_daemon_name,
         "codeModeHost": package / "bin" / spec.code_mode_host_name,
-        "serverHost": package / "bin" / spec.server_name,
+        "appServer": package / "bin" / spec.server_name,
+        "remote": package / "bin" / spec.remote_name,
+        "remoteServer": package / "bin" / spec.remote_server_name,
     }
     if spec.is_windows:
         first_party_artifacts["windowsSandbox"] = package / "bin/zeta-windows-sandbox.exe"
@@ -412,7 +422,9 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
         "appServerDaemon": package / "bin" / spec.app_server_daemon_name,
         "codeModeHost": package / "bin" / spec.code_mode_host_name,
         "ripgrep": package / "zeta-path" / spec.ripgrep_name,
-        "serverHost": package / "bin" / spec.server_name,
+        "appServer": package / "bin" / spec.server_name,
+        "remote": package / "bin" / spec.remote_name,
+        "remoteServer": package / "bin" / spec.remote_server_name,
     }
     if spec.is_windows:
         artifacts["windowsSandbox"] = package / "bin/zeta-windows-sandbox.exe"
@@ -468,7 +480,9 @@ def record_system_signing(
             "codeModeHost",
             "node",
             "ripgrep",
-            "serverHost",
+            "appServer",
+            "remote",
+            "remoteServer",
             "windowsSandbox",
         }:
             component = components.get(name)

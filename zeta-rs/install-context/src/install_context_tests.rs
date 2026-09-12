@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 #[test]
 fn windows_sandbox_uses_the_product_binary_directory_without_searching_path() {
     let directory = TestDirectory::new();
-    let binary = directory.path().join("bin/zeta-server.exe");
+    let binary = directory.path().join("bin/zeta-app-server.exe");
     let context = InstallContext::detect(
         Some(&binary),
         None,

@@ -5,12 +5,20 @@ edition.workspace = true
 license-file.workspace = true
 publish.workspace = true
 
+[[bin]]
+name = "zeta-remote"
+path = "src/main.rs"
+
 [lib]
 doctest = false
 name = "zeta_remote_connections"
 path = "src/lib.rs"
 
 [dependencies]
+zeta-app-server = { workspace = true }
+build-info = { workspace = true }
+zeta-package-store = { workspace = true }
+process-hardening = { workspace = true }
 flate2 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -17,7 +17,7 @@ fn remote_recovery_command_preserves_the_verified_connection() {
             SshHost::parse("build-linux").unwrap(),
             RemoteDirPath::parse("/srv/project with spaces").unwrap(),
         ),
-        RemoteRuntime::new_exact_executable("/srv/zeta/runtime/bin/zeta-server").unwrap(),
+        RemoteRuntime::new_exact_executable("/srv/zeta/runtime/bin/zeta-remote-server").unwrap(),
     );
     let recovery = zeta_tui::TuiRecoveryState::new(
         SessionId::new("session-1").unwrap(),
@@ -39,7 +39,7 @@ fn remote_recovery_command_preserves_the_verified_connection() {
             "--dir",
             "/srv/project with spaces",
             "--runtime",
-            "/srv/zeta/runtime/bin/zeta-server",
+            "/srv/zeta/runtime/bin/zeta-remote-server",
             "--ssh",
             "/opt/ssh client",
             "--resume",
@@ -58,7 +58,7 @@ fn remote_recovery_command_preserves_the_verified_connection() {
             "--dir",
             "/srv/project with spaces",
             "--runtime",
-            "/srv/zeta/runtime/bin/zeta-server",
+            "/srv/zeta/runtime/bin/zeta-remote-server",
             "--ssh",
             "/opt/ssh client"
         ]

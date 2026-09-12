@@ -145,7 +145,7 @@ members = [
     "zeta-rs/file-access",
     "zeta-rs/worktree",
     "zeta-rs/content-search",
-    "zeta-rs/server-host",
+    "zeta-rs/arg0",
     "zeta-rs/user-verification",
     "zeta-rs/zeta-api",
     "zeta-rs/zeta-client",
@@ -431,7 +431,7 @@ zeta-rmcp-client = { path = "zeta-rs/rmcp-client" }
 zeta-sandboxing = { path = "zeta-rs/sandboxing" }
 zeta-scm = { path = "app/scm" }
 zeta-content-search = { path = "zeta-rs/content-search" }
-zeta-server-host = { path = "zeta-rs/server-host" }
+arg0 = { package = "zeta-arg0", path = "zeta-rs/arg0" }
 zeta-secrets = { path = "zeta-rs/secrets" }
 zeta-session = { path = "app/session" }
 zeta-settings = { path = "app/settings" }

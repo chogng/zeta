@@ -52,7 +52,7 @@ flowchart TD
 | `zeta-rs/app-server` | 请求分派、订阅、协调 automation 与 Agent 执行 | 不保存第二份计划状态，不自行计算日历规则 |
 | `zeta-rs/core` | 执行 Thread、Turn、模型调用和工具操作 | 不计算“下一次周一几点运行” |
 | `zeta-rs/app-server-daemon` | 每个 profile 的后台进程生命周期与保活 | 不解释计划规则；不得因窗口连接清空而丢失调度能力 |
-| `zeta-rs/server-host` | 产品无关的后端命令入口和进程装配 | 不依赖 `zeta-code` 的产品入口 |
+| `zeta-rs/app-server` | 产品无关的后端命令入口和进程装配 | 不依赖 `zeta-code` 的产品入口 |
 | `zeta-ts/src/zeta/workbench/contrib/automation/` | 创建、编辑、暂停、立即运行、运行历史和可访问交互 | 不持久化权威计划，不持有执行计时器 |
 | `zeta-ts/src/zeta/platform/automation/` | 前端领域接口、订阅通知和 App Server adapter | 生成协议类型止于 adapter，不传入普通界面代码 |
 | `app`、`zeta-code` 的对应产品界面 | 消费同一后端能力并呈现产品交互 | 不另建调度器或计划存储 |

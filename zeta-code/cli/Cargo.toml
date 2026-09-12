@@ -10,6 +10,8 @@ name = "zeta"
 path = "src/main.rs"
 
 [dependencies]
+zeta-app-server-daemon = { workspace = true }
+zeta-app-server = { workspace = true }
 process-hardening = { workspace = true }
 build-info = { workspace = true }
 flate2 = { workspace = true }
@@ -30,10 +32,12 @@ zeta-protocol = { workspace = true }
 zeta-product-update = { workspace = true }
 zeta-remote = { workspace = true }
 zeta-remote-connections = { workspace = true }
-zeta-server-host = { workspace = true }
+arg0 = { workspace = true }
 zeta-tui = { workspace = true }
 
 [dev-dependencies]
+zeta-file-access = { workspace = true }
+zeta-fast-regex-search = { workspace = true }
 ed25519-dalek = { workspace = true }
 insta = { workspace = true }
 portable-pty = { workspace = true }

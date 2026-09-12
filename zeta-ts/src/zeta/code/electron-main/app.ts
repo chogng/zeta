@@ -15,8 +15,8 @@ import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry, WorkbenchRenderer
 import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/contextmenu.js";
 import { buildAppServerEnvironment } from "../../platform/app-server/common/appServerEnvironment.js";
 import { AppServerConnectionRelay } from "../../platform/app-server/electron-main/appServerConnectionRelay.js";
-import { appServerDaemonExecutablePath, developmentServerHostGenerationPath, packagedServerHostSha256, serverHostExecutablePath } from "../../platform/server-host/electron-main/serverHostPackage.js";
-import { DevelopmentServerHostReloader, readDevelopmentServerHostGenerationSync, selectDevelopmentServerHostExecutable } from "../../platform/server-host/electron-main/developmentServerHostReloader.js";
+import { appServerDaemonExecutablePath, developmentAppServerGenerationPath, packagedAppServerDaemonSha256, remoteExecutablePath } from "../../platform/app-server/electron-main/appServerPackage.js";
+import { DevelopmentAppServerReloader, readDevelopmentAppServerGenerationSync, selectDevelopmentAppServerExecutable } from "../../platform/app-server/electron-main/developmentAppServerReloader.js";
 import { LocalAppServerProcessLauncher } from "../../platform/app-server/electron-main/localAppServerProcessLauncher.js";
 import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from "../../platform/ipc/electron-main/trustedIpcRouter.js";
 import { BROWSER_VIEW_EVENT_CHANNEL } from "../../platform/browser/common/browserView.js";
@@ -51,10 +51,10 @@ import { WindowMode } from "../../platform/window/electron-main/window.js";
 import { WindowsStateHandler } from "../../platform/windows/electron-main/windowsStateHandler.js";
 import { type IAnyWorkspaceIdentifier, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE } from "../../platform/workspace/common/workspace.js";
 import { packagedRemoteRuntimeCatalogSource } from "../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js";
-import { ServerHostRemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "../../platform/remote/electron-main/serverHostRemoteRuntimeInstaller.js";
-import { ServerHostRemoteRuntimeProvisioner } from "../../platform/remote/electron-main/serverHostRemoteRuntimeProvisioner.js";
-import { ServerHostRemoteConnectionProfiles } from "../../platform/remote/electron-main/serverHostRemoteConnectionProfiles.js";
-import { ServerHostRemoteConnections } from "../../platform/remote/electron-main/serverHostRemoteConnections.js";
+import { RemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "../../platform/remote/electron-main/remoteRuntimeInstaller.js";
+import { RemoteRuntimeProvisioner } from "../../platform/remote/electron-main/remoteRuntimeProvisioner.js";
+import { RemoteConnectionProfiles } from "../../platform/remote/electron-main/remoteConnectionProfiles.js";
+import { RemoteConnections } from "../../platform/remote/electron-main/remoteConnections.js";
 import type { RemoteConnectionDefinition } from "../../platform/remote/common/remoteConnectionService.js";
 import { getRemoteAuthority, isRemoteResource } from "../../platform/remote/common/remote.js";
 import { RemoteBrowserViewNavigationResolver } from "../../platform/remote/electron-main/remoteBrowserViewNavigationResolver.js";
@@ -359,25 +359,25 @@ export class ZetaApplication extends Disposable {
 			platform: process.platform,
 			resourcesPath: process.resourcesPath,
 		};
-		const packagedExecutable = serverHostExecutablePath(packageLocation);
-		const expectedPackagedSha256 = packagedServerHostSha256(packageLocation);
-		const generationFile = !app.isPackaged && process.env.ZETA_DEV_SERVER_HOST_RELOAD === "1"
-			? developmentServerHostGenerationPath(app.getAppPath())
+		const packagedExecutable = appServerDaemonExecutablePath(packageLocation);
+		const expectedPackagedSha256 = packagedAppServerDaemonSha256(packageLocation);
+		const generationFile = !app.isPackaged && process.env.ZETA_DEV_APP_SERVER_RELOAD === "1"
+			? developmentAppServerGenerationPath(app.getAppPath())
 			: undefined;
 		let developmentExecutable: string | undefined;
 		if (generationFile) {
 			try {
-				developmentExecutable = readDevelopmentServerHostGenerationSync(generationFile);
+				developmentExecutable = readDevelopmentAppServerGenerationSync(generationFile);
 			} catch (error) {
-				console.error("[server-host] Ignoring invalid development generation", error);
+				console.error("[app-server] Ignoring invalid development generation", error);
 			}
 		}
 		const processLauncher = isRemoteWorkspaceIdentifier(workspace)
 			? this.createSshAppServerProcessLauncher(workspace, resources)
 			: new LocalAppServerProcessLauncher({
-				executable: selectDevelopmentServerHostExecutable(packagedExecutable, developmentExecutable),
+				executable: selectDevelopmentAppServerExecutable(packagedExecutable, developmentExecutable),
 				expectedSha256: expectedPackagedSha256,
-				args: ["app-server", "connect"],
+				args: ["connect"],
 				environment: this.appServerEnvironment(workspace),
 			});
 		const supervisor = new AppServerConnectionRelay({
@@ -385,7 +385,7 @@ export class ZetaApplication extends Disposable {
 
 		});
 		if (generationFile && processLauncher instanceof LocalAppServerProcessLauncher) {
-			resources.add(new DevelopmentServerHostReloader({ generationFile, launcher: processLauncher, supervisor }));
+			resources.add(new DevelopmentAppServerReloader({ generationFile, launcher: processLauncher, supervisor }));
 		}
 		return supervisor;
 	}
@@ -393,7 +393,7 @@ export class ZetaApplication extends Disposable {
 	private createSshAppServerProcessLauncher(workspace: IAnyWorkspaceIdentifier, resources: DisposableStore) {
 		if (!isRemoteWorkspaceIdentifier(workspace)) throw new Error("SSH App Server launcher requires a Remote workspace");
 		const sshExecutable = process.env.ZETA_SSH_PATH ?? "ssh";
-		const serverHostExecutable = serverHostExecutablePath({
+		const remoteExecutable = remoteExecutablePath({
 			appPath: app.getAppPath(),
 			isPackaged: app.isPackaged,
 			platform: process.platform,
@@ -401,32 +401,32 @@ export class ZetaApplication extends Disposable {
 		});
 		const artifact = remoteRuntimeArtifactFromEnvironment(process.env);
 		const runtimeInstaller = artifact === undefined
-			? new ServerHostRemoteRuntimeProvisioner({
+			? new RemoteRuntimeProvisioner({
 				source: packagedRemoteRuntimeCatalogSource(
 					{ appPath: app.getAppPath(), isPackaged: app.isPackaged, resourcesPath: process.resourcesPath },
 					join(app.getPath("userData"), "remote-runtime-downloads"),
 				),
-				serverHostExecutable,
+				remoteExecutable,
 				sshExecutable,
 				environment: process.env,
 				installRoot: process.env.ZETA_REMOTE_RUNTIME_INSTALL_ROOT,
 			})
-			: new ServerHostRemoteRuntimeInstaller({
-				serverHostExecutable,
+			: new RemoteRuntimeInstaller({
+				remoteExecutable,
 				sshExecutable,
 				environment: process.env,
 				artifact,
 				installRoot: process.env.ZETA_REMOTE_RUNTIME_INSTALL_ROOT,
 			});
 		const configuredRuntime = process.env.ZETA_REMOTE_ZETA_PATH;
-		const connectionProfiles = configuredRuntime === undefined ? new ServerHostRemoteConnectionProfiles({
-			serverHostExecutable,
+		const connectionProfiles = configuredRuntime === undefined ? new RemoteConnectionProfiles({
+			remoteExecutable,
 			environment: { ...process.env, ZETA_PROFILE_ROOT: this.profileRoot },
 		}) : undefined;
 		const bootstrap = resources.add(new RemoteRuntimeBootstrapMainService({
 			workspace: workspace.uri,
 			sshExecutable,
-			remoteExecutable: configuredRuntime ?? "zeta",
+			remoteExecutable: configuredRuntime ?? "zeta-remote-server",
 			localEnvironment: process.env,
 			runtimeInstaller,
 			connectionProfiles,
@@ -584,8 +584,8 @@ export class ZetaApplication extends Disposable {
 			context: workspaceContext,
 			...this.createWorkspaceTransitionRuntime(supervisor, workspaceHost),
 		}));
-		const remoteConnections = new ServerHostRemoteConnections({
-			serverHostExecutable: serverHostExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath }),
+		const remoteConnections = new RemoteConnections({
+			remoteExecutable: remoteExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath }),
 			environment: { ...process.env, ZETA_PROFILE_ROOT: this.profileRoot },
 			scheduleConnect: connection => this.openRemoteConnection(connection, workspaces),
 		});

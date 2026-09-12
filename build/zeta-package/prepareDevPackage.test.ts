@@ -149,7 +149,9 @@ test("assembles and validates the canonical Windows development layout", async (
     appServerDaemon: join(root, "zeta-app-server-daemon.exe"),
     codeModeHost: join(root, "zeta-code-mode-host.exe"),
     windowsSandbox: join(root, "zeta-windows-sandbox.exe"),
-    serverHost: join(root, "zeta-server.exe"),
+    appServer: join(root, "zeta-app-server.exe"),
+    remote: join(root, "zeta-remote.exe"),
+    remoteServer: join(root, "zeta-remote-server.exe"),
   };
   const ripgrepExecutable = join(root, "rg.exe");
   const nodeExecutable = join(root, "node.exe");
@@ -161,7 +163,9 @@ test("assembles and validates the canonical Windows development layout", async (
       writeFile(executables.appServerDaemon, "zeta-app-server-daemon"),
       writeFile(executables.codeModeHost, "zeta-code-mode-host"),
       writeFile(executables.windowsSandbox, "windows-sandbox"),
-      writeFile(executables.serverHost, "zeta-server"),
+      writeFile(executables.appServer, "zeta-app-server"),
+      writeFile(executables.remote, "zeta-remote"),
+      writeFile(executables.remoteServer, "zeta-remote-server"),
       writeFile(ripgrepExecutable, "ripgrep"),
       writeFile(nodeExecutable, "node"),
       writeFile(nodeLicense, "node license"),
@@ -195,11 +199,11 @@ test("assembles and validates the canonical Windows development layout", async (
     const metadata = JSON.parse(await readFile(join(staging, "zeta-package.json"), "utf8"));
     assert.equal(metadata.layoutVersion, 2);
     assert.equal(metadata.buildProfile, "dev-small");
-    assert.equal(metadata.files["bin/zeta-server.exe"], createHash("sha256").update("zeta-server").digest("hex"));
+    assert.equal(metadata.files["bin/zeta-app-server.exe"], createHash("sha256").update("zeta-app-server").digest("hex"));
     assert.deepEqual(metadata.javascriptRuntime, { kind: "packagedNode" });
-    assert.equal(metadata.entrypoint, "bin/zeta-server.exe");
+    assert.equal(metadata.entrypoint, "bin/zeta-app-server.exe");
     assert.equal(metadata.target, "x86_64-pc-windows-msvc");
-    assert.equal(metadata.components.serverHost.binarySha256, createHash("sha256").update("zeta-server").digest("hex"));
+    assert.equal(metadata.components.appServer.binarySha256, createHash("sha256").update("zeta-app-server").digest("hex"));
     assert.equal(metadata.components.appServerDaemon.binarySha256, createHash("sha256").update("zeta-app-server-daemon").digest("hex"));
     assert.match(metadata.buildId, /^sha256:[a-f0-9]{64}$/);
     assert.deepEqual(metadata.protocol, {
@@ -271,7 +275,9 @@ test("host-provided runtime package omits the standalone Node payload", async ()
     appServerDaemon: join(root, "zeta-app-server-daemon.exe"),
     codeModeHost: join(root, "zeta-code-mode-host.exe"),
     windowsSandbox: join(root, "zeta-windows-sandbox.exe"),
-    serverHost: join(root, "zeta-server.exe"),
+    appServer: join(root, "zeta-app-server.exe"),
+    remote: join(root, "zeta-remote.exe"),
+    remoteServer: join(root, "zeta-remote-server.exe"),
   };
   const ripgrepExecutable = join(root, "rg.exe");
   try {
@@ -279,7 +285,9 @@ test("host-provided runtime package omits the standalone Node payload", async ()
       writeFile(executables.appServerDaemon, "zeta-app-server-daemon"),
       writeFile(executables.codeModeHost, "zeta-code-mode-host"),
       writeFile(executables.windowsSandbox, "windows-sandbox"),
-      writeFile(executables.serverHost, "zeta-server"),
+      writeFile(executables.appServer, "zeta-app-server"),
+      writeFile(executables.remote, "zeta-remote"),
+      writeFile(executables.remoteServer, "zeta-remote-server"),
       writeFile(ripgrepExecutable, "ripgrep"),
     ]);
     await assemblePackage(
@@ -318,11 +326,12 @@ test("host-provided runtime package omits the standalone Node payload", async ()
 test("Linux development packages retain Bubblewrap without a Zeta namespace helper", async () => {
   const root = await mkdtemp(join(tmpdir(), "zeta-linux-network-package-"));
   try {
-    const names = ["zeta-server", "zeta-app-server-daemon", "zeta-code-mode-host", "bwrap", "COPYING", "rg"];
+    const names = ["zeta-remote", "zeta-remote-server", "zeta-app-server", "zeta-app-server-daemon", "zeta-code-mode-host", "bwrap", "COPYING", "rg"];
     await Promise.all(names.map((name) => writeFile(join(root, name), name)));
     const staging = join(root, "package");
     await assemblePackage(staging, "x86_64-unknown-linux-gnu", "linux", {
-      serverHost: join(root, "zeta-server"), appServerDaemon: join(root, "zeta-app-server-daemon"),
+      remote: join(root, "zeta-remote"), remoteServer: join(root, "zeta-remote-server"),
+      appServer: join(root, "zeta-app-server"), appServerDaemon: join(root, "zeta-app-server-daemon"),
       codeModeHost: join(root, "zeta-code-mode-host"), packageStore: join(root, "unused-store"),
       bubblewrap: { binary: join(root, "bwrap"), license: join(root, "COPYING"), version: "0.11.2", archive: "bwrap.tar", archiveSha256: "a".repeat(64) },
     }, { executable: join(root, "rg"), archive: "rg.tar", archiveSha256: "b".repeat(64), binarySha256: "c".repeat(64), source: "upstream-release", version: "1" }, undefined);

@@ -41,7 +41,7 @@ Desktop frontend paths below are relative to `zeta-ts/`.
 
 Preserve the frontend dependency direction `base → platform → editor → workbench`. Lower layers must not import, specialize for, or copy state from higher layers. Multiple callers do not justify moving a domain concept into `base`; the abstraction must be domain-neutral and have a complete current consumer contract.
 
-`zeta-ts` and `app` must not execute, package, import, or depend on `zeta-cli`, `zeta-tui`, `zeta-code/cli`, or the `zeta app-server` product command. Shared backend process entrypoints belong to `zeta-rs/server-host`.
+`zeta-ts` and `app` must not execute, package, import, or depend on `zeta-cli`, `zeta-tui`, `zeta-code/cli`, or the `zeta app-server` product command. App Server listening entrypoints belong to `zeta-rs/app-server`; daemon lifecycle commands belong to `zeta-rs/app-server-daemon`; local Remote management belongs to `zeta-rs/remote-connections`; the remote runtime belongs to `zeta-rs/remote-server`. Shared internal helper dispatch belongs to `zeta-rs/arg0`.
 
 `zeta-rs`, `app`, and `zeta-code` may remain in the same root Cargo workspace; workspace membership does not change implementation ownership.
 
