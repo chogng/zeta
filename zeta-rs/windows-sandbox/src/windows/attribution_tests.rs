@@ -61,10 +61,12 @@ fn resolves_loopback_connection_to_current_process() -> io::Result<()> {
     let peer_addr = accepted.peer_addr()?;
 
     let process_id = owning_process_id(socket_addr_v4(local_addr)?, socket_addr_v4(peer_addr)?)?;
-    let restricting_sids = restricting_sids_for_tcp_connection(local_addr, peer_addr)?;
+    let identity = connection_identity_for_tcp_connection(local_addr, peer_addr)?;
 
     assert_eq!(process_id, std::process::id());
-    assert!(restricting_sids.iter().all(|sid| sid.starts_with("S-")));
+    let current_user = super::super::win::current_user().expect("query current user SID");
+    assert_eq!(identity.user_sid, current_user);
+    assert!(identity.restricting_sids.iter().all(|sid| sid.starts_with("S-")));
     drop(client);
     Ok(())
 }

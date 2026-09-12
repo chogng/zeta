@@ -22,7 +22,12 @@ pub(super) struct Proxy {
 }
 
 impl Proxy {
-    pub(super) fn start(port: u16, destination: u16, capability: String) -> Result<Self> {
+    pub(super) fn start(
+        port: u16,
+        destination: u16,
+        account: String,
+        capability: String,
+    ) -> Result<Self> {
         let socket = socket2::Socket::new(
             socket2::Domain::IPV4,
             socket2::Type::STREAM,
@@ -62,9 +67,14 @@ impl Proxy {
                         let authorized = incoming
                             .local_addr()
                             .and_then(|local| {
-                                super::attribution::restricting_sids_for_tcp_connection(local, peer)
+                                super::attribution::connection_identity_for_tcp_connection(
+                                    local, peer,
+                                )
                             })
-                            .is_ok_and(|sids| sids.contains(&capability));
+                            .is_ok_and(|identity| {
+                                identity.user_sid == account
+                                    && identity.restricting_sids.contains(&capability)
+                            });
                         if !authorized {
                             continue;
                         }

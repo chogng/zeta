@@ -17,10 +17,7 @@ fn installation_requires_approval_of_the_current_complete_plan() {
     );
     assert_eq!(one["accounts"]["total"], 3);
     assert_eq!(one["network"]["persistentFilters"], 13);
-    assert_eq!(
-        one["deviceAclChanges"]["paths"].as_array().unwrap().len(),
-        3
-    );
+    assert!(one.get("deviceAclChanges").is_none());
 }
 
 fn layout() -> (tempfile::TempDir, String) {

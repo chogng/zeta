@@ -10,6 +10,7 @@ mod model;
 mod process;
 mod scope;
 pub use backends::SandboxBackends;
+pub use model::FileSystemIsolation;
 pub use model::HostAclChanges;
 pub use model::SandboxLaunch;
 pub use process::ProcessHandle;

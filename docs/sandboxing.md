@@ -9,6 +9,7 @@ flowchart TD
     core["Core / action-policy：授权与审批"] --> executor["tool-executor：执行作用域与预算"]
     executor --> contract["sandboxing：统一契约与 SandboxBackends"]
     contract --> adapter["mxc-sandbox：MXC 适配"]
+    contract --> account["windows-sandbox：Windows 账户隔离"]
     adapter --> sdk["Microsoft MXC SDK"]
     sdk --> windows["Windows：PSEC"]
     sdk --> linux["Linux：Bubblewrap"]
@@ -17,7 +18,7 @@ flowchart TD
     proxy --> core
 ```
 
-非 Windows 构建只注册 MXC；Windows 构建按 `mxc` → `windows` 顺序注册 MXC 与 Zeta Windows 后端。Windows 回退已有接线，但完整平台验收仍未完成。
+产品在 Windows 上注册 MXC 和独立的 `windows-sandbox` 账户候选，其他平台保留 MXC。账户后端已接入安装身份、授权、运行器和打包，并在本机 23H2 通过 PowerShell、目录、网络及进程回收用例。它实施显式选择的 WindowsAccount 模型，不提供 Strict 所要求的宿主整体只读保证。
 
 | Owner | 职责 |
 | --- | --- |
@@ -47,11 +48,13 @@ flowchart TD
 
 ## 权限契约
 
-- `ReadOnly` 保持宿主文件只读；`DirectoryWrite` 开放授予的可写目录，并保护已存在的目录元数据。
+- `ReadOnly` 将授权目录设为只读；`DirectoryWrite` 开放授予的可写目录，并保护已存在的目录元数据。
+- `FileSystemIsolation::Strict` 另要求授权目录外不可写，是构造策略的默认值；`WindowsAccount` 显式接受账户、ACL 和有预算限制的审计模型。账户后端拒绝 Strict，不在准备阶段改变策略。
 - `FullAccess` 扩大文件权限，但不清除明确的隐藏、只读或网络要求。
 - `Denied` 禁止外部网络；`Managed` 只允许通过本次执行的代理；`Allowed` 允许网络。
 - `SandboxScope` 隐藏共享存储并开放本次 Grant，拒绝重复、重叠或跨 Environment 的目录集合。
-- `HostAclChanges::Scoped` 单独授权 Grant 与隐藏目录内的 ACL 配置；宿主可读范围不能扩大这份修改授权。
+- `HostAclChanges::Scoped` 只授权 Grant 与隐藏目录内的 ACL 配置；`ScopedWithTraversal` 另允许必要祖先目录的非继承属性查询与遍历权限（0xa0），不允许枚举目录或读取其文件内容。Windows 本地工具显式使用后者。
+- 祖先属性 ACL 的写入和恢复只作用于当前目录，保留原始继承标记；不使用会重算整个子树的写回接口。
 - 账户、服务、持久网络规则与设备 ACL 的安装授权必须独立处理，不能隐含在普通命令准备中。
 - 子进程输出只是可能已有副作用的诊断，不能据此声称用户代码没有执行。
 
@@ -88,7 +91,15 @@ Codex 的 Windows 实现是候选基线，不能未经核对直接注册：
 
 这里的宿主安装授权与 `HostAclChanges::Scoped` 不同：后者仍只覆盖 Grant 与隐藏目录，不能批准账户创建、持久网络规则、NUL 或其他宿主路径的修改。接入后也必须保留这一区别。
 
-这不是已经完成验收的第二后端，也没有因此取得 Windows 23H2 支持。兼容实现未完成验收时，能力不足的系统明确拒绝受限执行。
+独立实现位于 [`windows-sandbox`](../zeta-rs/windows-sandbox/README.md)，不复用 Codex 的账户、服务、管道或包身份。它从冻结的 InstallContext 获取 Zeta helper，使用路径和文件摘要绑定已授权的安装；安装和修复不进入普通执行路径。
+
+2026-09-11 实机追踪确认：移除限制 SID 中的 Everyone 后，Windows PowerShell 的 CLR 调用 `NtCreatePrivateNamespace` 返回 `STATUS_ACCESS_DENIED`。该调用的边界描述符包含 Everyone。增加 `BaseNamedObjects` 目录权限不能替代这项检查；相关试验权限已撤销，产品安装清单不保留这些目录授权。
+
+用户随后明确采用 Codex 的 Windows 安全模型。令牌保留文件 SID、登录 SID 和 Everyone；可信登录进程使用默认登录桌面，退出后才恢复私有桌面上的受限命令。普通执行不再配置设备或命名对象目录权限。
+
+WindowsAccount 在执行前检查工作目录、Grant、临时目录、用户目录、PATH 和系统目录的候选路径及直接子项。每目录最多 1000 项，总计最多 50000 项、2 秒；重解析路径不纳入这项审计，读取失败和截断会报告。审计发现授权 ACL 范围外的 Everyone 可写路径时，拒绝启动并列出需要另行处理的路径；范围内的只读和隐藏项使用明确拒绝 ACE。该扫描不证明整个宿主只读。
+
+每次执行独占账户租约，ACL 日志位于安装根下按账户隔离的私有目录，不放进子进程可写的运行目录。结束后先回收进程树，再恢复 ACL；未完成的执行阻止账户复用，显式删除安装时恢复遗留日志。FullAccess 与受限网络的组合仍不由此账户后端提供。
 
 ## 当前验证范围
 
@@ -99,6 +110,9 @@ Codex 的 Windows 实现是候选基线，不能未经核对直接注册：
 | Linux MXC 受管网络 | 保留实机入口；依赖相应内核与隔离工具 |
 | Windows MXC PSEC | 当前 23H2 本机不具备相应能力，不能据此宣布端到端通过 |
 | 已退出的账户原型 | 曾完成 2 项完整用例、4 项失败；测试账户、网络对象和运行时目录已清理 |
-| Codex Windows 候选、IPv6、完整并发/崩溃恢复、WSL | 尚未完成接入或验收 |
+| 独立 Windows 账户后端 | 23H2 本机 21 项单测与 9 项完整执行用例通过 |
+| IPv6 断网、双账户并发 | 实机通过 |
+| 崩溃恢复 | 已验证准备期间进程被终止后的日志恢复；运行中全部崩溃组合未穷尽 |
+| WSL、其他 Windows 系统 | 本轮未验证 |
 
 固定 MXC 版本仍为早期预览。统一接口、编译和部分测试不能替代系统隔离验收。

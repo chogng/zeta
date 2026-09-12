@@ -27,19 +27,28 @@ use windows_sys::Win32::Security::SID_AND_ATTRIBUTES;
 use windows_sys::Win32::Security::TOKEN_GROUPS;
 use windows_sys::Win32::Security::TOKEN_QUERY;
 use windows_sys::Win32::Security::TokenRestrictedSids;
+use windows_sys::Win32::Security::TokenUser;
+use windows_sys::Win32::Security::TOKEN_USER;
 use windows_sys::Win32::System::Threading::OpenProcess;
 use windows_sys::Win32::System::Threading::OpenProcessToken;
 use windows_sys::Win32::System::Threading::PROCESS_QUERY_LIMITED_INFORMATION;
 
-/// Returns the restricting SIDs on the process that opened an accepted loopback connection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ConnectionIdentity {
+    pub(crate) user_sid: String,
+    pub(crate) restricting_sids: Vec<String>,
+}
+
+/// Returns the connection identity (Windows account SID and restricting SIDs) on the process
+/// that opened an accepted loopback connection.
 ///
 /// `accepted_local_addr` and `accepted_peer_addr` must come from the accepted server socket. The
 /// owning-PID table describes the client side in the opposite direction, so the lookup matches the
 /// exact reversed four-tuple.
-pub(crate) fn restricting_sids_for_tcp_connection(
+pub(crate) fn connection_identity_for_tcp_connection(
     accepted_local_addr: SocketAddr,
     accepted_peer_addr: SocketAddr,
-) -> io::Result<Vec<String>> {
+) -> io::Result<ConnectionIdentity> {
     let (SocketAddr::V4(accepted_local_addr), SocketAddr::V4(accepted_peer_addr)) =
         (accepted_local_addr, accepted_peer_addr)
     else {
@@ -50,14 +59,14 @@ pub(crate) fn restricting_sids_for_tcp_connection(
     };
 
     let process_id = owning_process_id(accepted_local_addr, accepted_peer_addr)?;
-    let (_process, sids) = restricting_sids_for_process(process_id)?;
+    let (_process, identity) = attribution_for_process(process_id)?;
     if owning_process_id(accepted_local_addr, accepted_peer_addr)? != process_id {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
             "proxy connection owner changed",
         ));
     }
-    Ok(sids)
+    Ok(identity)
 }
 
 fn owning_process_id(
@@ -182,7 +191,7 @@ fn tcp_port(table_port: u32) -> u16 {
     u16::from_be(table_port as u16)
 }
 
-fn restricting_sids_for_process(process_id: u32) -> io::Result<(OwnedHandle, Vec<String>)> {
+fn attribution_for_process(process_id: u32) -> io::Result<(OwnedHandle, ConnectionIdentity)> {
     let process_handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, process_id) };
     let process = owned_handle(process_handle, "open proxy client process")?;
 
@@ -199,10 +208,61 @@ fn restricting_sids_for_process(process_id: u32) -> io::Result<(OwnedHandle, Vec
     }
     let token = owned_handle(token_handle, "open proxy client process token")?;
 
+    let user_sid = token_user(token.as_raw_handle() as HANDLE)?;
+    let restricting_sids = restricting_sids_from_token(token.as_raw_handle() as HANDLE)?;
+    Ok((
+        process,
+        ConnectionIdentity {
+            user_sid,
+            restricting_sids,
+        },
+    ))
+}
+
+fn token_user(token: HANDLE) -> io::Result<String> {
     let mut byte_len = 0_u32;
     let queried = unsafe {
         GetTokenInformation(
-            token.as_raw_handle() as HANDLE,
+            token,
+            TokenUser,
+            std::ptr::null_mut(),
+            0,
+            &mut byte_len,
+        )
+    };
+    if queried != 0 || unsafe { GetLastError() } != ERROR_INSUFFICIENT_BUFFER {
+        return Err(last_error("query proxy client user SID buffer size"));
+    }
+
+    let mut buffer = aligned_buffer(byte_len as usize)?;
+    let queried = unsafe {
+        GetTokenInformation(
+            token,
+            TokenUser,
+            buffer.as_mut_ptr().cast::<c_void>(),
+            byte_len,
+            &mut byte_len,
+        )
+    };
+    if queried == 0 {
+        return Err(last_error("read proxy client user SID"));
+    }
+
+    if (byte_len as usize) < size_of::<TOKEN_USER>() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "truncated proxy client user SID buffer",
+        ));
+    }
+    let user = unsafe { &*buffer.as_ptr().cast::<TOKEN_USER>() };
+    sid_to_string(user.User.Sid)
+}
+
+fn restricting_sids_from_token(token: HANDLE) -> io::Result<Vec<String>> {
+    let mut byte_len = 0_u32;
+    let queried = unsafe {
+        GetTokenInformation(
+            token,
             TokenRestrictedSids,
             std::ptr::null_mut(),
             0,
@@ -216,7 +276,7 @@ fn restricting_sids_for_process(process_id: u32) -> io::Result<(OwnedHandle, Vec
     let mut buffer = aligned_buffer(byte_len as usize)?;
     let queried = unsafe {
         GetTokenInformation(
-            token.as_raw_handle() as HANDLE,
+            token,
             TokenRestrictedSids,
             buffer.as_mut_ptr().cast::<c_void>(),
             byte_len,
@@ -227,11 +287,10 @@ fn restricting_sids_for_process(process_id: u32) -> io::Result<(OwnedHandle, Vec
         return Err(last_error("read proxy client restricting SIDs"));
     }
 
-    let sids = parse_token_groups(&buffer, byte_len as usize)?
+    parse_token_groups(&buffer, byte_len as usize)?
         .iter()
         .map(|entry| sid_to_string(entry.Sid))
-        .collect::<io::Result<Vec<_>>>()?;
-    Ok((process, sids))
+        .collect::<io::Result<Vec<_>>>()
 }
 
 fn parse_token_groups(buffer: &[usize], byte_len: usize) -> io::Result<&[SID_AND_ATTRIBUTES]> {
@@ -274,7 +333,7 @@ fn parse_token_groups(buffer: &[usize], byte_len: usize) -> io::Result<&[SID_AND
 fn sid_to_string(sid: *mut c_void) -> io::Result<String> {
     let mut string_sid = std::ptr::null_mut();
     if unsafe { ConvertSidToStringSidW(sid, &mut string_sid) } == 0 {
-        return Err(last_error("convert proxy client restricting SID to string"));
+        return Err(last_error("convert proxy client SID to string"));
     }
 
     let value = unsafe {

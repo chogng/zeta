@@ -90,7 +90,7 @@ pub(crate) use agent_grep::AgentGrepService;
 pub(crate) use suite::LocalToolSuite;
 
 const LOCAL_GRANT_SNAPSHOT_REVISION: &str = "local-static-grants-v1";
-const LOCAL_REVIEWER_POLICY_REVISION: &str = "local-network-review-v5";
+const LOCAL_REVIEWER_POLICY_REVISION: &str = "local-network-review-v6";
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 const DEFAULT_OUTPUT_BYTES: usize = 256 * 1024;
 
@@ -1498,15 +1498,33 @@ fn shell_capabilities() -> CapabilitySet {
     ])
 }
 
+fn local_acl_changes() -> zeta_sandboxing::HostAclChanges {
+    if cfg!(windows) {
+        zeta_sandboxing::HostAclChanges::ScopedWithTraversal
+    } else {
+        zeta_sandboxing::HostAclChanges::Scoped
+    }
+}
+
+fn local_isolation() -> zeta_sandboxing::FileSystemIsolation {
+    if cfg!(windows) {
+        zeta_sandboxing::FileSystemIsolation::WindowsAccount
+    } else {
+        zeta_sandboxing::FileSystemIsolation::Strict
+    }
+}
+
 fn read_only_sandbox() -> SandboxPolicy {
     SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Denied)
-        .with_host_acl_changes(zeta_sandboxing::HostAclChanges::Scoped)
+        .with_host_acl_changes(local_acl_changes())
+        .with_file_system_isolation(local_isolation())
 }
 
 #[cfg(test)]
 fn shell_sandbox() -> SandboxPolicy {
     SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied)
-        .with_host_acl_changes(zeta_sandboxing::HostAclChanges::Scoped)
+        .with_host_acl_changes(local_acl_changes())
+        .with_file_system_isolation(local_isolation())
 }
 
 fn configured_shell_policy(policy: &ExecPolicySnapshot) -> SandboxPolicy {
@@ -1521,7 +1539,8 @@ fn configured_shell_policy(policy: &ExecPolicySnapshot) -> SandboxPolicy {
         NetworkAccess::Denied
     };
     SandboxPolicy::new(FileSystemAccess::DirectoryWrite, network)
-        .with_host_acl_changes(zeta_sandboxing::HostAclChanges::Scoped)
+        .with_host_acl_changes(local_acl_changes())
+        .with_file_system_isolation(local_isolation())
 }
 
 fn validate_dir_arguments(
@@ -1604,3 +1623,7 @@ impl std::error::Error for LocalToolError {}
 #[cfg(test)]
 #[path = "local_tools_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "local_tools_policy_tests.rs"]
+mod policy_tests;

@@ -70,7 +70,7 @@ pub(super) fn request(
         HostAclChanges::Denied => {
             request.forbid_host_acl_changes();
         }
-        HostAclChanges::Scoped => {
+        HostAclChanges::Scoped | HostAclChanges::ScopedWithTraversal => {
             let roots = scope
                 .grants()
                 .iter()

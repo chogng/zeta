@@ -1,7 +1,7 @@
 mod account;
 mod attribution;
+mod audit;
 mod desktop;
-mod devices;
 mod filesystem;
 mod job;
 mod network;
@@ -45,6 +45,7 @@ struct Execution {
     runner_hash: String,
     files: ContainerPolicy,
     host_acl_scope: Option<HostAclScope>,
+    acl_changes: HostAclChanges,
     command: String,
     working_directory: String,
     env: Vec<String>,
@@ -78,7 +79,12 @@ pub(super) fn prepare(
             "Windows account execution requires a restricted filesystem policy".into(),
         ));
     }
-    if policy.host_acl_changes() != HostAclChanges::Scoped {
+    if policy.file_system_isolation() != zeta_sandboxing::FileSystemIsolation::WindowsAccount {
+        return Err(SandboxError::UnsupportedPolicy(
+            "Windows account isolation requires explicit acceptance of bounded ACL auditing; it cannot satisfy strict host filesystem isolation".into(),
+        ));
+    }
+    if policy.host_acl_changes() == HostAclChanges::Denied {
         return Err(SandboxError::UnsupportedPolicy(
             "Windows account execution requires scoped filesystem ACL authorization".into(),
         ));
@@ -198,6 +204,7 @@ pub(super) fn prepare(
             runner_hash,
             files,
             host_acl_scope: Some(authority),
+            acl_changes: policy.host_acl_changes(),
             command: command_line,
             working_directory: command
                 .working_directory()
@@ -313,10 +320,17 @@ fn spawn(request: &Execution) -> Result<Process, String> {
         request,
         &lease.account.sid,
         &capability,
-        &lease.root.join("acl"),
+        &lease.root.join("acl").join(&lease.account.sid),
     )?;
     let proxy = destination
-        .map(|port| proxy::Proxy::start(lease.account.proxy_port, port, capability.clone()))
+        .map(|port| {
+            proxy::Proxy::start(
+                lease.account.proxy_port,
+                port,
+                lease.account.sid.clone(),
+                capability.clone(),
+            )
+        })
         .transpose()?;
     let job = job::Job::new(&lease.account.name)?;
     let pipes = process::Pipes::new(&owner, &lease.account.sid)?;
@@ -350,12 +364,10 @@ fn spawn(request: &Execution) -> Result<Process, String> {
         environment.insert("NO_PROXY".into(), String::new());
     }
     let worker = process::Request {
-        version: 1,
+        version: 3,
         owner,
         account: lease.account.sid.clone(),
         capability,
-        device_capability: lease.device_sid.clone(),
-        parent_logon: win::current_logon()?,
         command: request.command.clone(),
         cwd: request.working_directory.clone(),
         environment: environment

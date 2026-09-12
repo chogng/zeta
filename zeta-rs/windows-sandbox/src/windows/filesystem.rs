@@ -76,6 +76,9 @@ impl Filesystem {
         capability: &str,
         journal: &Path,
     ) -> Result<Self> {
+        // Audit before any ACL mutation. Findings outside the granted ACL scope
+        // require a separate explicit host change, never an implicit elevation.
+        super::audit::check(request)?;
         validate(&request.files)?;
         let authority = request
             .host_acl_scope
@@ -111,20 +114,35 @@ impl Filesystem {
             .chain(&readonly)
             .cloned()
             .collect::<Vec<_>>();
-        let carveouts = readonly
-            .iter()
-            .filter(|path| writable.iter().any(|root| path.starts_with(root)))
-            .cloned()
-            .collect::<Vec<_>>();
+        let mut traversal = BTreeSet::new();
+        for grant in &grants {
+            for ancestor in grant.ancestors().skip(1) {
+                if !super::audit::directory_traversable(ancestor)? {
+                    if authority.check(ancestor).is_err()
+                        && request.acl_changes
+                            != zeta_sandboxing::HostAclChanges::ScopedWithTraversal
+                    {
+                        return Err(format!(
+                            "directory traversal needs separate ACL authorization: '{}'",
+                            ancestor.display()
+                        ));
+                    }
+                    traversal.insert(ancestor.to_owned());
+                }
+            }
+        }
         let mut denied = BTreeSet::new();
         for root in &request.files.denied_paths {
             hidden_objects(&canonical(root)?, &grants, &mut denied)?;
         }
         let mut paths = denied.clone();
         paths.extend(grants.iter().cloned());
+        paths.extend(traversal.iter().cloned());
         let mut pins = Vec::new();
         for path in &paths {
-            authority.check(path).map_err(|error| error.to_string())?;
+            if !traversal.contains(path) {
+                authority.check(path).map_err(|error| error.to_string())?;
+            }
             let handle = pin(path)?;
             if canonical(path)? != *path {
                 return Err("filesystem path changed during preparation".into());
@@ -141,9 +159,22 @@ impl Filesystem {
             return Err("orphaned Windows ACL state must be recovered before execution".into());
         }
         let mut manager = DaclManager::in_directory(journal).map_err(|error| error.to_string())?;
+        let (ancestors, hidden): (Vec<_>, Vec<_>) = denied
+            .into_iter()
+            .partition(|path| grants.iter().any(|grant| grant.starts_with(path)));
         manager
-            .add_deny_aces(account, &denied.into_iter().collect::<Vec<_>>())
+            .add_deny_aces(account, &hidden)
             .map_err(|error| error.to_string())?;
+        for ancestor in ancestors {
+            manager
+                .deny_directory_contents(account, &ancestor)
+                .map_err(|error| error.to_string())?;
+        }
+        for ancestor in traversal {
+            manager
+                .grant_directory_traversal(account, &ancestor)
+                .map_err(|error| error.to_string())?;
+        }
         manager
             .grant_appcontainer_access(account, &writable, &readonly)
             .map_err(|error| error.to_string())?;
@@ -151,7 +182,7 @@ impl Filesystem {
             .grant_appcontainer_access(capability, &writable, &[])
             .map_err(|error| error.to_string())?;
         manager
-            .deny_write_access(capability, &carveouts)
+            .deny_write_access(capability, &readonly)
             .map_err(|error| error.to_string())?;
         Ok(Self {
             manager,

@@ -1,26 +1,63 @@
 use super::*;
 use std::io::Read;
 
-#[path = "trace.rs"]
-mod trace;
+#[test]
+fn audited_world_writable_files_are_denied_by_the_execution_acl() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("outside-scope");
+    std::fs::write(&path, "unchanged").unwrap();
+    let owner = win::current_user().unwrap();
+    let sd = win::descriptor(&format!("D:P(A;;GA;;;{owner})(A;;GA;;;WD)")).unwrap();
+    assert_ne!(
+        unsafe {
+            SetFileSecurityW(
+                win::wide(&path).as_ptr(),
+                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                sd.0,
+            )
+        },
+        0
+    );
+    assert!(super::super::audit::world_writable(&path).unwrap());
+    let mut acl =
+        wxc_common::filesystem_dacl::DaclManager::in_directory(&temp.path().join("journal"))
+            .unwrap();
+    acl.deny_write_access("S-1-5-21-411-412-413-414", std::slice::from_ref(&path))
+        .unwrap();
+    let token = restricted_token(&owner, &owner, "S-1-5-21-411-412-413-414").unwrap();
+    assert_ne!(unsafe { ImpersonateLoggedOnUser(token.0) }, 0);
+    struct Revert;
+    impl Drop for Revert {
+        fn drop(&mut self) {
+            if unsafe { RevertToSelf() } == 0 {
+                std::process::abort();
+            }
+        }
+    }
+    let revert = Revert;
+    let result = std::fs::OpenOptions::new().write(true).open(&path);
+    drop(revert);
+    assert_eq!(
+        result.unwrap_err().kind(),
+        std::io::ErrorKind::PermissionDenied
+    );
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "unchanged");
+    acl.restore_strict().unwrap();
+}
 
 #[test]
 #[ignore = "requires explicitly provisioned Zeta accounts"]
-fn provisioned_logon_starts_on_its_private_desktop() {
+fn provisioned_logon_starts_windows_libraries() {
     let lease = super::super::runtime::lease(super::super::account::NetworkMode::Denied).unwrap();
-    let owner = win::current_user().unwrap();
-    let desktop =
-        super::super::desktop::Desktop::new(&owner, &lease.account.sid, "S-1-5-21-911-912-913-914")
-            .unwrap();
-    let mut desktop_name = win::wide(&desktop.name);
     let startup = STARTUPINFOW {
         cb: size_of::<STARTUPINFOW>() as u32,
-        lpDesktop: desktop_name.as_mut_ptr(),
         ..unsafe { std::mem::zeroed() }
     };
     let system = std::env::var("SystemRoot").unwrap();
-    let executable = format!("{system}\\System32\\cmd.exe");
-    let mut command = win::wide(format!("\"{executable}\" /d /c exit 0"));
+    let executable = format!("{system}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+    let mut command = win::wide(format!(
+        "\"{executable}\" -NoProfile -NonInteractive -Command exit 0"
+    ));
     let mut password = win::wide(&lease.account.password);
     let mut info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
     let result = unsafe {
@@ -144,7 +181,6 @@ fn restricted_child_uses_private_desktop_pipes_and_preserves_exit_code() {
 }
 
 #[test]
-#[ignore = "requires explicitly installed CNG, KsecDD and Null device capability"]
 fn powershell_initializes_and_runs_a_pipeline_with_the_restricted_token() {
     let system = std::env::var("SystemRoot").unwrap();
     check_child(format!(
@@ -164,12 +200,10 @@ fn check_child(command: String) {
     let pipes = Pipes::new(&owner, &owner).unwrap();
     let system = std::env::var("SystemRoot").unwrap();
     let request = Request {
-        version: 1,
+        version: 3,
         owner: owner.clone(),
         account: owner,
         capability: capability.into(),
-        device_capability: super::super::runtime::device_sid().unwrap(),
-        parent_logon: win::current_logon().unwrap(),
         command,
         cwd: directory.to_str().unwrap().into(),
         environment: vec![
@@ -193,13 +227,11 @@ fn check_child(command: String) {
     let _cleanup = Cleanup(process.0);
     let job = super::super::job::Job::new(&win::random_hex(16).unwrap()).unwrap();
     job.assign_process(process.0).unwrap();
+    job.set_ui_limits().unwrap();
     pipes.connect(unsafe { GetCurrentProcess() }).unwrap();
     let [stdin, mut stdout, mut stderr] = pipes.files();
     drop(stdin);
     assert_eq!(unsafe { ResumeThread(thread.0) }, 1);
-    if std::env::var_os("ZETA_TRACE_DENIALS").is_some() {
-        trace::run(process.0);
-    }
     assert_eq!(
         unsafe { WaitForSingleObject(process.0, 10000) },
         WAIT_OBJECT_0

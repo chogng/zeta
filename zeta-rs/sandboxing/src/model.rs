@@ -12,6 +12,16 @@ pub enum FileSystemAccess {
     FullAccess,
 }
 
+/// Minimum filesystem isolation accepted by the caller, independent of write grants.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FileSystemIsolation {
+    /// Deny host writes outside the explicitly granted directories.
+    Strict,
+    /// Windows restricted account, scoped ACLs and bounded writable-path auditing.
+    /// This does not establish a host-wide read-only filesystem boundary.
+    WindowsAccount,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NetworkAccess {
     Denied,
@@ -45,6 +55,9 @@ impl ManagedNetworkAccess {
 pub enum HostAclChanges {
     Denied,
     Scoped,
+    /// Also permit non-inherited attribute-query and traversal ACEs on ancestors
+    /// needed to reach the scope. Does not authorize enumeration or file reads.
+    ScopedWithTraversal,
 }
 
 /// Immutable filesystem and network authority for one local process.
@@ -53,6 +66,7 @@ pub struct SandboxPolicy {
     file_system: FileSystemAccess,
     network: NetworkAccess,
     host_acl_changes: HostAclChanges,
+    file_system_isolation: FileSystemIsolation,
 }
 
 impl SandboxPolicy {
@@ -61,11 +75,21 @@ impl SandboxPolicy {
             file_system,
             network,
             host_acl_changes: HostAclChanges::Denied,
+            file_system_isolation: FileSystemIsolation::Strict,
         }
     }
 
     pub fn file_system(self) -> FileSystemAccess {
         self.file_system
+    }
+
+    pub fn with_file_system_isolation(mut self, isolation: FileSystemIsolation) -> Self {
+        self.file_system_isolation = isolation;
+        self
+    }
+
+    pub fn file_system_isolation(self) -> FileSystemIsolation {
+        self.file_system_isolation
     }
 
     pub fn network(self) -> NetworkAccess {

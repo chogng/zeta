@@ -115,14 +115,6 @@ pub(super) fn current_user() -> Result<String> {
     token_user(token.0)
 }
 
-pub(super) fn current_logon() -> Result<String> {
-    let mut raw = std::ptr::null_mut();
-    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut raw) } == 0 {
-        return Err(error("OpenProcessToken(logon)"));
-    }
-    logon_sid(Handle::new(raw, "logon token")?.0)
-}
-
 pub(super) fn logon_sid(token: HANDLE) -> Result<String> {
     use windows_sys::Win32::Security::SID_AND_ATTRIBUTES;
     use windows_sys::Win32::Security::TOKEN_GROUPS;

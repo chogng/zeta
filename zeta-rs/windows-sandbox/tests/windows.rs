@@ -59,7 +59,8 @@ fn executor(dir: &Dir, timeout: Duration) -> CommandExecutor<Approved, WindowsSa
 
 fn sandbox_policy(files: FileSystemAccess, network: NetworkAccess) -> SandboxPolicy {
     SandboxPolicy::new(files, network)
-        .with_host_acl_changes(zeta_sandboxing::HostAclChanges::Scoped)
+        .with_host_acl_changes(zeta_sandboxing::HostAclChanges::ScopedWithTraversal)
+        .with_file_system_isolation(zeta_sandboxing::FileSystemIsolation::WindowsAccount)
 }
 
 fn powershell(script: String) -> CommandRequest {
@@ -151,6 +152,122 @@ fn scoped_execution_preserves_grants_metadata_and_exit_code_authenticity() {
     for name in [".agents", ".codex", ".zeta"] {
         assert!(!work.canonical_path().join(name).exists());
     }
+}
+
+#[test]
+fn strict_isolation_is_rejected_before_installation_or_process_creation() {
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let command = zeta_sandboxing::SandboxCommand::new(
+        "cmd.exe",
+        ["/c", "echo started>started"],
+        dir.canonical_path(),
+    );
+    let result = WindowsSandbox::new(zeta_install_context::InstallContext::current()).prepare(
+        &command,
+        SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied)
+            .with_host_acl_changes(zeta_sandboxing::HostAclChanges::Scoped),
+        &dir,
+    );
+    assert!(
+        matches!(result, Err(zeta_sandboxing::SandboxError::UnsupportedPolicy(ref reason)) if reason.contains("strict host filesystem isolation"))
+    );
+    assert!(!temp.path().join("started").exists());
+}
+
+#[test]
+#[ignore = "requires explicitly provisioned Windows sandbox"]
+fn denied_network_blocks_ipv6_connections_datagrams_and_listeners() {
+    let tcp = TcpListener::bind((std::net::Ipv6Addr::LOCALHOST, 0)).unwrap();
+    tcp.set_nonblocking(true).unwrap();
+    let port = tcp.local_addr().unwrap().port();
+    let udp = std::net::UdpSocket::bind((std::net::Ipv6Addr::LOCALHOST, port)).unwrap();
+    udp.set_nonblocking(true).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let script = format!(
+        "$ErrorActionPreference='Stop'; function MustDeny([scriptblock]$a) {{ try {{ & $a }} catch {{ return }}; throw 'network restriction missing' }}; \
+         MustDeny {{ $c=[Net.Sockets.TcpClient]::new([Net.Sockets.AddressFamily]::InterNetworkV6); try {{ $c.Connect('::1',{port}) }} finally {{ $c.Dispose() }} }}; \
+         MustDeny {{ $l=[Net.Sockets.TcpListener]::new([Net.IPAddress]::IPv6Any,0); try {{ $l.Start() }} finally {{ $l.Stop() }} }}; \
+         $u=[Net.Sockets.UdpClient]::new([Net.Sockets.AddressFamily]::InterNetworkV6); try {{ $null=$u.Send([byte[]](1,2,3),3,[Net.IPEndPoint]::new([Net.IPAddress]::IPv6Loopback,{port})) }} catch {{ }} finally {{ $u.Dispose() }}; Write-Output 'ipv6-denied'"
+    );
+    let result = executor(&dir, Duration::from_secs(15))
+        .execute(
+            powershell(script),
+            CommandExecutionAuthority::Sandboxed(sandbox_policy(
+                FileSystemAccess::DirectoryWrite,
+                NetworkAccess::Denied,
+            )),
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    let CommandExecutionOutcome::Completed(output) = result else {
+        panic!("{result:?}")
+    };
+    assert_eq!(output.exit_code, Some(0), "{output:?}");
+    assert!(output.stdout.contains("ipv6-denied"), "{output:?}");
+    assert_eq!(
+        tcp.accept().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+    assert_eq!(
+        udp.recv(&mut [0; 64]).unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+}
+
+#[test]
+#[ignore = "requires explicitly provisioned Windows sandbox"]
+fn concurrent_accounts_keep_their_own_acl_lifetimes() {
+    let temp = tempfile::tempdir().unwrap();
+    let first_path = temp.path().join("one");
+    let second_path = temp.path().join("two");
+    std::fs::create_dir(&first_path).unwrap();
+    std::fs::create_dir(&second_path).unwrap();
+    let first = Dir::open_local(&first_path).unwrap();
+    let second = Dir::open_local(&second_path).unwrap();
+    std::thread::scope(|threads| {
+        let running = threads.spawn(|| executor(&first, Duration::from_secs(20)).execute(
+            powershell("$ErrorActionPreference='Stop'; Set-Content ready 'yes'; while (!(Test-Path release)) { Start-Sleep -Milliseconds 20 }; Set-Content completed 'one'".into()),
+            CommandExecutionAuthority::Sandboxed(sandbox_policy(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied)),
+            &CancellationSource::new().token(),
+        ));
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while !first_path.join("ready").exists() && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            first_path.join("ready").exists(),
+            "first account did not start"
+        );
+        let result = executor(&second, Duration::from_secs(15)).execute(
+            powershell("$ErrorActionPreference='Stop'; Set-Content completed 'two'".into()),
+            CommandExecutionAuthority::Sandboxed(sandbox_policy(
+                FileSystemAccess::DirectoryWrite,
+                NetworkAccess::Allowed,
+            )),
+            &CancellationSource::new().token(),
+        );
+        std::fs::write(first_path.join("release"), "release").unwrap();
+        for result in [result, running.join().unwrap()] {
+            let CommandExecutionOutcome::Completed(output) = result.unwrap() else {
+                panic!("execution did not complete")
+            };
+            assert_eq!(output.exit_code, Some(0), "{output:?}");
+        }
+    });
+    assert_eq!(
+        std::fs::read_to_string(first_path.join("completed"))
+            .unwrap()
+            .trim(),
+        "one"
+    );
+    assert_eq!(
+        std::fs::read_to_string(second_path.join("completed"))
+            .unwrap()
+            .trim(),
+        "two"
+    );
 }
 
 #[test]
@@ -371,6 +488,87 @@ fn managed_execution_allows_the_proxy_and_blocks_direct_traffic_and_listeners() 
         udp.recv(&mut [0; 64]).unwrap_err().kind(),
         std::io::ErrorKind::WouldBlock
     );
+}
+
+#[test]
+#[ignore = "requires explicitly provisioned Windows sandbox"]
+fn managed_execution_proxy_rejects_unauthorized_external_connections() {
+    let origin = Origin::start();
+    let target = origin.port;
+    let policy = NetworkPolicyHandle::new(
+        move |request: network_proxy::NetworkRequest, _| async move {
+            if request.port() == target {
+                NetworkDecision::Allow
+            } else {
+                NetworkDecision::Deny("blocked".into())
+            }
+        },
+    );
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let proxy_file = dir.canonical_path().join("proxy.txt");
+    let release_file = dir.canonical_path().join("release");
+    let script = format!(
+        "$ErrorActionPreference='Stop'; Set-Content -LiteralPath {} -Value $env:HTTP_PROXY; while (!(Test-Path -LiteralPath {})) {{ Start-Sleep -Milliseconds 20 }}; exit 0",
+        literal(&proxy_file),
+        literal(&release_file)
+    );
+    std::thread::scope(|threads| {
+        let execution = threads.spawn(|| {
+            executor(&dir, Duration::from_secs(20)).execute_scoped_with_network(
+                powershell(script),
+                CommandExecutionAuthority::Sandboxed(sandbox_policy(
+                    FileSystemAccess::DirectoryWrite,
+                    NetworkAccess::Managed,
+                )),
+                &CancellationSource::new().token(),
+                None,
+                Some(&policy),
+            )
+        });
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while !proxy_file.exists() && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(
+            proxy_file.exists(),
+            "managed command did not record its proxy endpoint"
+        );
+        let proxy_url = std::fs::read_to_string(&proxy_file).unwrap();
+        let proxy_addr: std::net::SocketAddr = proxy_url
+            .trim()
+            .strip_prefix("http://")
+            .unwrap()
+            .parse()
+            .unwrap();
+
+        // An unauthorized external connection (e.g. current host test runner process)
+        // must be rejected because its token user SID and restricting SIDs do not match
+        // the leased sandbox account.
+        let mut stream =
+            std::net::TcpStream::connect_timeout(&proxy_addr, Duration::from_secs(2)).unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let _ = stream.write_all(
+            format!(
+                "GET http://127.0.0.1:{target}/ HTTP/1.1\r\nHost: 127.0.0.1:{target}\r\nConnection: close\r\n\r\n"
+            )
+            .as_bytes(),
+        );
+        let mut response = Vec::new();
+        let _ = stream.read_to_end(&mut response);
+        assert!(
+            response.is_empty(),
+            "proxy must not forward unauthorized external traffic: {response:?}"
+        );
+
+        std::fs::write(&release_file, "release").unwrap();
+        let CommandExecutionOutcome::Completed(output) = execution.join().unwrap().unwrap() else {
+            panic!("execution did not complete")
+        };
+        assert_eq!(output.exit_code, Some(0), "{output:?}");
+    });
 }
 
 #[test]

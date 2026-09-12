@@ -9,7 +9,7 @@ use std::sync::Arc;
 use zeta_file_access::Dir;
 
 /// Selects an implementation before execution. Each registered implementation
-/// must enforce the complete contract; registration never authorizes weaker policy.
+/// must enforce the requested isolation model; registration never changes it.
 pub struct SandboxBackends {
     backends: Vec<(&'static str, Arc<dyn SandboxBackend>)>,
 }

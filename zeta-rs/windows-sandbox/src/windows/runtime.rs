@@ -19,19 +19,7 @@ use windows_sys::Win32::Security::DACL_SECURITY_INFORMATION;
 use windows_sys::Win32::Security::PROTECTED_DACL_SECURITY_INFORMATION;
 use windows_sys::Win32::Security::SetFileSecurityW;
 
-const VERSION: u32 = 1;
-
-pub(super) fn device_sid() -> Result<String> {
-    let digest = sha2::Sha256::digest(format!(
-        "zeta-windows-device-v{VERSION}:{}",
-        win::current_user()?
-    ));
-    let parts = digest[..16]
-        .chunks_exact(4)
-        .map(|bytes| u32::from_le_bytes(bytes.try_into().unwrap()).to_string())
-        .collect::<Vec<_>>();
-    Ok(format!("S-1-5-21-{}", parts.join("-")))
-}
+const VERSION: u32 = 3;
 
 #[derive(Clone, Copy, Deserialize, Serialize, Eq, PartialEq)]
 enum Status {
@@ -46,8 +34,6 @@ struct State {
     owner: String,
     status: Status,
     runner_hash: String,
-    device_sid: String,
-    devices: Vec<String>,
     accounts: Vec<Account>,
     rules: Option<Rules>,
 }
@@ -69,7 +55,6 @@ pub(super) struct Lease {
     pub(super) account: Account,
     pub(super) root: PathBuf,
     pub(super) runner: PathBuf,
-    pub(super) device_sid: String,
     pub(super) runner_hash: String,
     _lock: File,
     _pins: Vec<win::Handle>,
@@ -111,7 +96,6 @@ fn checked_state() -> Result<(PathBuf, State, Vec<win::Handle>)> {
     if state.status != Status::Ready {
         return Err("runtime provisioning is incomplete; run explicit removal before setup".into());
     }
-    super::devices::verify(&state.device_sid)?;
     let runner = root.join("bin").join("zeta-windows-sandbox.exe");
     let pins = win::pin_executable(&runner)?;
     if hash(&runner)? != state.runner_hash {
@@ -171,7 +155,6 @@ pub(super) fn lease(mode: NetworkMode) -> Result<Lease> {
         return Ok(Lease {
             account,
             runner: root.join("bin").join("zeta-windows-sandbox.exe"),
-            device_sid: state.device_sid.clone(),
             runner_hash: state.runner_hash.clone(),
             root,
             _lock: lock,
@@ -192,7 +175,6 @@ pub(super) fn setup_plan(slots: usize) -> Result<serde_json::Value> {
         "accounts": { "namePrefix": "zeta", "slotsPerNetworkMode": slots, "total": slots * 3 },
         "network": { "modes": ["denied", "managed", "allowed"], "persistentFilters": slots * 13, "managedEndpoint": "one exclusive IPv4 loopback TCP port per managed account" },
         "filesystemAclChanges": "new runtime directory and its contents only",
-        "deviceAclChanges": { "paths": super::devices::PATHS, "access": "read and write for the installation's device SID only" },
         "executionAclAuthority": "separate scoped authorization required for each command"
     }))
 }
@@ -203,7 +185,7 @@ pub(super) fn removal_plan() -> Result<serde_json::Value> {
         "operation": "remove", "version": VERSION, "ownerSid": state.owner,
         "runtimeDirectory": root, "runnerSha256": state.runner_hash,
         "accounts": state.accounts.iter().map(|account| serde_json::json!({ "name": account.name, "sid": account.sid, "ownershipTag": account.tag })).collect::<Vec<_>>(),
-        "networkObjects": state.rules, "deviceSid": state.device_sid, "devices": super::devices::PATHS,
+        "networkObjects": state.rules,
         "filesystemAclChanges": "restore this installation's recorded execution ACL changes before deleting its runtime"
     }))
 }
@@ -232,7 +214,7 @@ pub(super) fn setup(slots: usize, approved: &str) -> Result<()> {
     let root = root()?;
     let owner = win::current_user()?;
     if root.try_exists().map_err(|error| error.to_string())? {
-        let (_, mut state) = read_state()?;
+        let (_, state) = read_state()?;
         if state.status != Status::Ready {
             return Err(
                 "an incomplete setup journal exists; remove its recorded objects before setup"
@@ -244,7 +226,6 @@ pub(super) fn setup(slots: usize, approved: &str) -> Result<()> {
         {
             return Err("remove the previous installation with its approved plan before installing this executable".into());
         }
-        install_devices(&mut state, &root)?;
         available(NetworkMode::Denied)?;
         println!("Zeta user runtime is already provisioned.");
         return Ok(());
@@ -287,15 +268,11 @@ pub(super) fn setup(slots: usize, approved: &str) -> Result<()> {
         owner,
         status: Status::Preparing,
         runner_hash: hash(&runner)?,
-        device_sid: device_sid()?,
-        devices: Vec::new(),
         accounts,
         rules: None,
     };
     // Persist names, passwords, and unique ownership tags before NetUserAdd.
     state.save(&root)?;
-    install_devices(&mut state, &root)?;
-    super::devices::verify(&state.device_sid)?;
     for index in 0..state.accounts.len() {
         account::create(&mut state.accounts[index])?;
         state.save(&root)?;
@@ -387,10 +364,14 @@ pub(super) fn remove(approved: &str) -> Result<()> {
     for account in &state.accounts {
         super::job::Job::recover(&account.name)?;
     }
-    let recovery = wxc_common::filesystem_dacl::recover_orphaned_state_in(&root.join("acl"))
-        .map_err(|error| error.to_string())?;
-    if !recovery.errors.is_empty() {
-        return Err("ACL recovery is incomplete; keep the runtime journal for recovery".into());
+    for account in &state.accounts {
+        let journal = root.join("acl").join(&account.sid);
+        let recovery = wxc_common::filesystem_dacl::recover_orphaned_state_in(&journal)
+            .map_err(|error| error.to_string())?;
+        if !recovery.errors.is_empty() {
+            return Err("ACL recovery is incomplete; keep the runtime journal for recovery".into());
+        }
+        remove_empty_directory(&journal)?;
     }
     for account in &state.accounts {
         let path = root.join("runs").join(&account.sid);
@@ -406,7 +387,6 @@ pub(super) fn remove(approved: &str) -> Result<()> {
             std::fs::remove_dir_all(&path).map_err(|error| error.to_string())?;
         }
     }
-    super::devices::remove(&state.device_sid, &state.devices)?;
     for account in &state.accounts {
         account::remove(account)?;
     }
@@ -426,16 +406,6 @@ pub(super) fn remove(approved: &str) -> Result<()> {
     }
     println!("Verified removal of the Zeta execution accounts, network rules, and runtime files.");
     Ok(())
-}
-
-fn install_devices(state: &mut State, root: &Path) -> Result<()> {
-    let sid = state.device_sid.clone();
-    super::devices::install(&sid, |path| {
-        if !state.devices.iter().any(|value| value == path) {
-            state.devices.push(path.to_owned());
-        }
-        state.save(root)
-    })
 }
 
 fn remove_file(path: &Path) -> Result<()> {

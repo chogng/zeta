@@ -26,8 +26,6 @@ pub(super) struct Request {
     pub(super) owner: String,
     pub(super) account: String,
     pub(super) capability: String,
-    pub(super) device_capability: String,
-    pub(super) parent_logon: String,
     pub(super) command: String,
     pub(super) cwd: String,
     pub(super) environment: Vec<String>,
@@ -90,7 +88,7 @@ impl Pipes {
         Ok(Self { names, handles })
     }
 
-    fn connect(&self, worker: HANDLE) -> Result<()> {
+    pub(super) fn connect(&self, worker: HANDLE) -> Result<()> {
         let deadline = Instant::now() + Duration::from_secs(15);
         for handle in &self.handles {
             loop {
@@ -122,7 +120,7 @@ impl Pipes {
         Ok(())
     }
 
-    fn files(mut self) -> [File; 3] {
+    pub(super) fn files(mut self) -> [File; 3] {
         std::array::from_fn(|_| {
             let handle = self.handles.remove(0);
             let file = unsafe { File::from_raw_handle(handle.0) };
@@ -158,10 +156,10 @@ pub(super) fn spawn(
     .map_err(|error| error.to_string())?;
     let mut command = win::wide(command);
     let mut password = win::wide(&account.password);
-    let mut desktop = win::wide(&request.desktop);
+    // As in Codex, the trusted logon worker uses the default logon desktop.
+    // Only the restricted command is attached to the execution-owned desktop.
     let startup = STARTUPINFOW {
         cb: size_of::<STARTUPINFOW>() as u32,
-        lpDesktop: desktop.as_mut_ptr(),
         ..unsafe { std::mem::zeroed() }
     };
     let mut process: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
@@ -278,7 +276,7 @@ pub(super) fn spawn(
     if win::token_user(token.0)? != account.sid || unsafe { IsTokenRestricted(token.0) } == 0 {
         return Err("prepared child does not have the expected restricted account identity".into());
     }
-    verify_capability(token.0, &request.capability, &request.device_capability)?;
+    verify_capability(token.0, &request.capability)?;
     // The bootstrap must initialize Windows libraries before preparing the
     // restricted child. Apply UI limits only after it exits, while the user
     // command is still suspended and cannot execute a single instruction.
@@ -299,7 +297,7 @@ pub(super) fn spawn(
     })
 }
 
-fn verify_capability(token: HANDLE, expected: &str, device: &str) -> Result<()> {
+fn verify_capability(token: HANDLE, expected: &str) -> Result<()> {
     let mut size = 0;
     unsafe {
         GetTokenInformation(
@@ -337,7 +335,7 @@ fn verify_capability(token: HANDLE, expected: &str, device: &str) -> Result<()> 
     let mut wanted = vec![
         expected.to_owned(),
         win::logon_sid(token)?,
-        device.to_owned(),
+        "S-1-1-0".to_owned(),
     ];
     actual.sort();
     wanted.sort();
@@ -353,11 +351,11 @@ pub(super) fn run(path: &Path) -> Result<()> {
         return Err("worker request exceeds 1 MiB".into());
     }
     let request: Request = serde_json::from_slice(&data).map_err(|_| "invalid worker request")?;
-    if request.version != 1 || win::current_user()? != request.account {
+    if request.version != 3 || win::current_user()? != request.account {
         return Err("worker request identity or protocol mismatch".into());
     }
-    if request.account == request.owner || win::current_logon()? == request.parent_logon {
-        return Err("the worker must use a dedicated account and a fresh logon session".into());
+    if request.account == request.owner {
+        return Err("the worker must use a dedicated account".into());
     }
     let desktop_suffix = request
         .desktop
@@ -404,14 +402,8 @@ pub(super) fn run(path: &Path) -> Result<()> {
     Err("failed to prepare restricted child".into())
 }
 
-pub(super) fn restricted_token(
-    owner: &str,
-    account: &str,
-    capability: &str,
-    device: &str,
-) -> Result<Handle> {
+pub(super) fn restricted_token(owner: &str, account: &str, capability: &str) -> Result<Handle> {
     let sid = win::sid(capability)?;
-    let _owner = win::sid(owner)?;
     let mut base = std::ptr::null_mut();
     if unsafe {
         OpenProcessToken(
@@ -430,7 +422,7 @@ pub(super) fn restricted_token(
     }
     let base = Handle::new(base, "worker token")?;
     let logon = win::sid(&win::logon_sid(base.0)?)?;
-    let device = win::sid(device)?;
+    let everyone = win::sid("S-1-1-0")?;
     let restricting = [
         SID_AND_ATTRIBUTES {
             Sid: sid.0,
@@ -441,7 +433,7 @@ pub(super) fn restricted_token(
             Attributes: 0,
         },
         SID_AND_ATTRIBUTES {
-            Sid: device.0,
+            Sid: everyone.0,
             Attributes: 0,
         },
     ];
@@ -489,6 +481,9 @@ pub(super) fn restricted_token(
     {
         return Err(win::error("AdjustTokenPrivileges(SeChangeNotifyPrivilege)"));
     }
+    if unsafe { GetLastError() } == ERROR_NOT_ALL_ASSIGNED {
+        return Err("the restricted token lacks SeChangeNotifyPrivilege".into());
+    }
     let token_sd = win::descriptor(&format!(
         "D:P(A;;GA;;;SY)(A;;0x8;;;{})(A;;GA;;;{})(A;;GA;;;{})",
         owner, account, capability
@@ -496,12 +491,13 @@ pub(super) fn restricted_token(
     if unsafe { SetKernelObjectSecurity(token.0, DACL_SECURITY_INFORMATION, token_sd.0) } == 0 {
         return Err(win::error("SetKernelObjectSecurity(restricted token)"));
     }
-    // New kernel objects are usable by this execution. The fresh account logon
-    // SID admits Windows session objects; Everyone and the account SID are not
-    // included in the restricting set, so old filesystem grants do not add writes.
+    // Codex's capability + logon + Everyone token supports Windows CLR
+    // private namespaces. Filesystem ACLs and the preflight audit implement the
+    // account isolation contract; this token does not promise host-wide read-only.
     let default_sd = win::descriptor(&format!(
-        "D:(A;;GA;;;SY)(A;;GA;;;{})(A;;GA;;;{})(A;;GA;;;{})",
-        owner, account, capability
+        "D:(A;;GA;;;WD)(A;;GA;;;{})(A;;GA;;;{})",
+        win::logon_sid(base.0)?,
+        capability
     ))?;
     let mut dacl = std::ptr::null_mut();
     let mut present = 0;
@@ -527,13 +523,8 @@ pub(super) fn restricted_token(
     Ok(token)
 }
 
-fn prepare_child(request: &Request) -> Result<(Handle, Handle, u32, u32)> {
-    let token = restricted_token(
-        &request.owner,
-        &request.account,
-        &request.capability,
-        &request.device_capability,
-    )?;
+pub(super) fn prepare_child(request: &Request) -> Result<(Handle, Handle, u32, u32)> {
+    let token = restricted_token(&request.owner, &request.account, &request.capability)?;
     let mut handles = Vec::new();
     for (index, pipe) in request.pipes.iter().enumerate() {
         let access = if index == 0 {
@@ -642,11 +633,6 @@ fn prepare_child(request: &Request) -> Result<(Handle, Handle, u32, u32)> {
             CREATE_SUSPENDED
                 | CREATE_NO_WINDOW
                 | CREATE_UNICODE_ENVIRONMENT
-                | if cfg!(test) && std::env::var_os("ZETA_TRACE_DENIALS").is_some() {
-                    DEBUG_ONLY_THIS_PROCESS
-                } else {
-                    0
-                }
                 | EXTENDED_STARTUPINFO_PRESENT,
             environment.as_ptr().cast(),
             win::wide(&request.cwd).as_ptr(),

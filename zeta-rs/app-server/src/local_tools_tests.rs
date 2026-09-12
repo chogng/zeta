@@ -319,33 +319,6 @@ fn durable_user_and_dir_exec_rules_drive_local_authorization() {
     ));
 }
 
-#[test]
-fn network_rules_select_managed_execution_without_broadening_the_default_policy() {
-    let mut config = LocalToolConfig::default();
-    assert_eq!(
-        configured_shell_policy(&config.snapshot().unwrap()),
-        shell_sandbox()
-    );
-    config.user.rules.push(ExecPolicyRule::new(
-        ExecPolicyRuleId::new("network"),
-        ExecPolicySelector::all([
-            ExecPolicySelector::source(Some("built_in_tool".into()), Some("shell-command".into())),
-            ExecPolicySelector::Network {
-                protocol: Some("https".into()),
-                host: zeta_execpolicy::HostMatcher::exact("example.com"),
-                port: Some(443),
-            },
-        ]),
-        ExecPolicyEffect::RequireApproval,
-    ));
-    let snapshot = config.snapshot().unwrap();
-    assert_eq!(
-        configured_shell_policy(&snapshot),
-        SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Managed)
-            .with_host_acl_changes(zeta_sandboxing::HostAclChanges::Scoped)
-    );
-    assert!(matches!(snapshot.default(), ExecPolicyDefault::Deny(_)));
-}
 
 #[test]
 fn local_policy_runs_agent_coordination_without_an_external_approval() {

@@ -1,12 +1,11 @@
-# Windows MXC 验收手册
+# Windows 沙箱验收手册
 
-本手册验证 `CommandExecutor → mxc-sandbox → Microsoft MXC SDK → ProcessContainer`。
-优先在普通权限本机运行。2026-09-10 的旧实现失败记录保留在文末；新的 MXC 账户实现已在 23H2 本机运行：完整用例 2 项通过、4 项失败，尚未取得 Windows 整体验收资格。
-实现契约见 [mxc-sandbox](../zeta-rs/mxc-sandbox/README.md)。
+本手册分别验证 MXC PSEC 路径和独立 Windows 账户候选，保留各轮实机证据。WindowsAccount 模型已在 23H2 通过当前完整执行用例；同机仍缺少完整 PSEC 能力。旧 SDK 继承重算的副作用与恢复边界见文末记录。
+实现契约见 [mxc-sandbox](../zeta-rs/mxc-sandbox/README.md) 与 [windows-sandbox](../zeta-rs/windows-sandbox/README.md)。历史账户原型的结果不能作为当前候选的通过证据。
 
 ## 当前入口
 
-当前 MXC Windows 后端只接受完整 PSEC 能力。此前的账户原型已退出源码和产品包，不能再通过 `mxc-user` 或 `tests/local.ps1` 安装它。历史结果保留在下文。
+当前 MXC Windows 后端只接受完整 PSEC 能力。此前的账户原型已退出源码和产品包，不能再通过 `mxc-user` 或 `tests/local.ps1` 安装它。独立候选使用 `zeta-windows-sandbox`，仍需单独授权和验收，不能沿用旧原型的通过结论。
 
 ```powershell
 just test zeta-sandboxing --lib
@@ -241,3 +240,64 @@ PowerShell 未完成初始化的根因仍需定位。没有放宽文件、网络
 - Platform checks 增加上述 Rust fixture 一致性检查，避免 Python 打包测试通过却携带过期协议。
 
 本次 Windows 工作是 Codex 源码核对，具体接入差异见 [Windows 候选评估](sandboxing.md#windows-候选评估)。没有注册第二后端、安装账户或修改宿主 ACL、网络规则；Windows 23H2 的执行兼容问题仍未解决。
+
+### 2026-09-11 独立候选接入与 CLR 边界定位
+
+后续按用户“去补”的指令实现独立 `zeta-windows-sandbox`，接入 App Server、冻结的安装上下文、产品 helper、签名摘要和许可证清单。普通执行不安装账户或修复宿主权限；每次执行使用独立租约、文件 SID、代理归属和 ACL 日志。
+
+用户先授权每轮 3 个测试账户、13 条 WFP 规则、3 个设备 SID 授权和专用 ProgramData 目录；随后单独授权两个 BaseNamedObjects 目录的非继承权限。按此范围执行 3 轮安装与清理，未将实验中的 Everyone 限制 SID 带入产品。
+
+| 实机证据 | 结果与边界 |
+| --- | --- |
+| CNG、KsecDD、Null 设备授权 | PowerShell 越过 bcrypt 初始化失败，随后 CLR 返回 `HRESULT 80070005` |
+| BaseNamedObjects 目录授权 | 越过全局共享内存的目录权限拒绝，未解决 CLR 初始化 |
+| 完整系统调用追踪 | `NtCreatePrivateNamespace` 返回 `STATUS_ACCESS_DENIED`；边界名称为 `Cor_CLR_IPCBlock_<pid>`，边界 SID 为 Everyone |
+| 仅加入账户 SID 的诊断对照 | CLR 仍失败 |
+| 加入 Everyone 的诊断对照 | PowerShell 管道成功，但令牌不再满足宿主只读要求，未采用 |
+| 私有桌面、标准流与退出码单测 | `cmd.exe` 经实际受限创建路径成功退出 `125` |
+| 普通 lib 测试 | 14 项通过，3 项需要安装的用例忽略；另新增 Everyone 可写宿主文件仍须拒绝写入的回归并通过 |
+| `just check zeta-windows-sandbox --tests --locked` | 通过 |
+| `just rust-warnings zeta-windows-sandbox --locked` | 通过，未报告编译 warning |
+| `bazel build //zeta-rs/windows-sandbox:zeta-windows-sandbox` | 通过；修正别名误带入测试依赖造成的循环 |
+
+私有命名空间的调用者必须满足边界描述符，见 [Microsoft CreatePrivateNamespace 文档](https://learn.microsoft.com/en-us/windows/win32/api/namespaceapi/nf-namespaceapi-createprivatenamespacew)。目录 ACL 与该边界检查是两项不同要求。额外目录授权已从候选的安装清单移除；诊断用 syscall 跟踪和 AppContainer 实验代码已移出产品源码。
+
+三轮清理均返回成功，并在普通权限下独立复查：9 个记录的账户、39 个过滤器、3 个 provider、3 个 sublayer 均不存在；3 个设备上的两代测试 SID 条目均已撤销；两个命名对象目录上的测试 SID 条目已撤销；ProgramData 运行时目录不存在。没有把删除 API 返回成功当作唯一证据。
+
+本机证据位于 `.build/acceptance/windows-sandbox/round-1` 至 `round-3`；最终独立核验为 `cleanup-verification.json`。第三轮完整追踪保存为 `round-3/private-namespace.log`，诊断源码归档为同证据目录的 `trace.rs`。这些本机日志不随 Git 提交。
+
+系统 Windows PowerShell 和依赖它的完整执行用例仍未通过，IPv6、完整并发/崩溃恢复及 WSL 也未取得资格。后续必须确定兼容平台和隔离机制，不能继续靠扩大宿主 ACL 或限制 SID 取得表面通过。
+
+### 2026-09-11 WindowsAccount 模型验收
+
+用户明确选择采用 Codex 的 Windows 账户与 ACL 模型，接受其与严格宿主只读模型的区别。`SandboxPolicy` 增加显式隔离要求：默认 `Strict`；Windows 本地工具选择 `WindowsAccount`。账户后端在准备阶段拒绝 Strict，其他平台保持原有要求。
+
+本轮完成：
+
+- 保留文件 SID、登录 SID 和 Everyone，恢复 CLR 私有命名空间兼容性。
+- 可信登录工作进程使用默认登录桌面；用户命令在独立桌面创建，验证身份和 Job 后才启动。登录工作进程先退出，用户命令不能借用其不受限令牌。
+- 工作目录和已有元数据分别授权；隐藏存储的必要祖先允许查询属性，但不允许枚举其内容，其他隐藏对象继续拒绝访问。
+- 增加有预算限制的 Everyone 可写路径审计。审计外的宿主整体只读不属于此模型的保证；发现未授权的可写路径时报告并拒绝启动。
+- ACL 日志按独占账户分开保存，避免并发执行恢复其他执行的权限。
+- 移除设备与命名对象目录配置和诊断代码。安装仅创建独立账户、WFP 对象及专用运行时目录。
+
+用户另行批准了 `C:\Users\lanxi`、`AppData`、`AppData\Local` 和 `AppData\Local\Temp` 的临时属性查询与遍历 ACE（0xa0、无继承）。只有缺少相关权限的必要祖先才调整，并由每次执行的日志恢复。
+
+| 验证 | 实际结果 |
+| --- | --- |
+| Windows lib 全部用例，包含真实登录 | 21 项通过、0 忽略 |
+| 原有完整执行用例 | 7 项通过、0 忽略 |
+| IPv6 TCP、UDP、监听拒绝 | 新增实机用例通过 |
+| 双账户并发、独立 ACL 生命周期 | 新增实机用例通过 |
+| 祖先权限不允许枚举、不继承到子项、恢复标记 | 回归通过；包含与父目录不同的历史继承 ACE |
+| 沙箱选择与作用域契约 | 10 项通过 |
+| Python release 套件 | 55 项：50 通过、5 平台条件跳过 |
+| Node 开发包套件 | 15 项通过 |
+
+本机六轮安装的 18 个账户、78 个过滤器及对应 provider/sublayer 已逐项查询确认不存在，运行时目录已删除；早期设备及命名对象目录授权也已撤销。最终清理结果见本机 `.build/acceptance/windows-sandbox/cleanup-verification.json`。当前四个祖先目录的 SDDL 与执行前快照逐字相同，见 `traversal-restored.json`。
+
+**第五轮继承重算副作用：** 旧 SDK 在添加非继承 ACE 时仍调用 `SetNamedSecurityInfoW`，触发用户目录子树的继承重算。测试进程已停止，按日志恢复并清理安装；四个有快照目录已按对象恢复原始 DACL 与继承标记。未采样子目录没有完整执行前快照，不能保证逐项原样恢复，不能将最终清理结果扩写为整个用户目录从未发生权限变化。差异记录为本机 `inheritance-recalculation.json`。
+
+已修正 SDK 的非继承写入和恢复路径：只更新当前对象，并保留继承控制标记；回归确认不会重算子文件的历史继承 ACE。第六轮目录、网络、进程用例及新增 IPv6、并发用例均在此实现上通过。
+
+Windows CI 改为执行当前产品选择的账户模型，通过 `scripts/test-windows-sandbox.ps1` 完成构建、清单安装、全部实机用例和 finally 清理。MXC 库测试与 PSEC 专用用例保留；PSEC 完整执行须在具备相应能力的主机单独运行。没有把当前账户模型当作 PSEC 的通过证明，也没有验证 WSL 或其他 Windows 系统。
