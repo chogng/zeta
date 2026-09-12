@@ -58,8 +58,9 @@ use zeta_app_server_protocol::protocol::diff::DiffComputeParams;
 use zeta_app_server_protocol::protocol::diff::DiffComputeResult;
 use zeta_app_server_protocol::protocol::document::{TypstCompileParams, TypstCompileResult};
 use zeta_app_server_protocol::protocol::environment::{
-    EnvCwdSetParams, EnvCwdSetResult, EnvDirsSetParams, EnvDirsSetResult, SessionDirAddParams,
-    SessionDirAddResult, SessionDirListParams, SessionDirListResult, SessionDirMutationResult,
+    DirPermissionsReadParams, DirPermissionsReadResult, EnvCwdSetParams, EnvCwdSetResult,
+    EnvDirsSetParams, EnvDirsSetResult, SessionDirAddParams, SessionDirAddResult,
+    SessionDirListParams, SessionDirListResult, SessionDirMutationResult,
     SessionDirPermissionsSetParams, SessionDirRemoveParams,
 };
 use zeta_app_server_protocol::protocol::fs::{
@@ -102,6 +103,14 @@ use zeta_app_server_protocol::protocol::model::ModelListResult;
 use zeta_app_server_protocol::protocol::plugins::PluginCommandResultDto;
 use zeta_app_server_protocol::protocol::plugins::PluginListResult;
 use zeta_app_server_protocol::protocol::plugins::PluginPackageCommandParams;
+use zeta_app_server_protocol::protocol::projects::ProjectCreateParams;
+use zeta_app_server_protocol::protocol::projects::ProjectListParams;
+use zeta_app_server_protocol::protocol::projects::ProjectListResult;
+use zeta_app_server_protocol::protocol::projects::ProjectMutationResult;
+use zeta_app_server_protocol::protocol::projects::ProjectReadParams;
+use zeta_app_server_protocol::protocol::projects::ProjectReadResult;
+use zeta_app_server_protocol::protocol::projects::ProjectRootAddParams;
+use zeta_app_server_protocol::protocol::projects::ProjectSessionMutationParams;
 use zeta_app_server_protocol::protocol::provider::{ProviderApiKeySetResult, ProviderListResult};
 use zeta_app_server_protocol::protocol::registry::ClientMethod;
 use zeta_app_server_protocol::protocol::resources::{
@@ -585,6 +594,45 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: GitBranchSwitchParams,
     ) -> Result<GitOperationResult, ClientError> {
         self.call(ClientMethod::GitBranchSwitch, params)
+    }
+
+    pub fn list_projects(&mut self) -> Result<ProjectListResult, ClientError> {
+        self.call(ClientMethod::ProjectList, ProjectListParams::default())
+    }
+
+    pub fn read_dir_permissions(
+        &mut self,
+        params: DirPermissionsReadParams,
+    ) -> Result<DirPermissionsReadResult, ClientError> {
+        self.call(ClientMethod::DirPermissionsRead, params)
+    }
+
+    pub fn read_project(
+        &mut self,
+        params: ProjectReadParams,
+    ) -> Result<ProjectReadResult, ClientError> {
+        self.call(ClientMethod::ProjectRead, params)
+    }
+
+    pub fn create_project(
+        &mut self,
+        params: ProjectCreateParams,
+    ) -> Result<ProjectMutationResult, ClientError> {
+        self.call(ClientMethod::ProjectCreate, params)
+    }
+
+    pub fn add_project_root(
+        &mut self,
+        params: ProjectRootAddParams,
+    ) -> Result<ProjectMutationResult, ClientError> {
+        self.call(ClientMethod::ProjectRootAdd, params)
+    }
+
+    pub fn link_project_session(
+        &mut self,
+        params: ProjectSessionMutationParams,
+    ) -> Result<ProjectMutationResult, ClientError> {
+        self.call(ClientMethod::ProjectSessionLink, params)
     }
 
     pub fn stage_git_paths(

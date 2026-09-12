@@ -8,6 +8,7 @@ use crate::connectors::Command as ConnectorCommand;
 use crate::dirs::Command as DirCommand;
 use crate::host::Command as HostCommand;
 use crate::keymap_setup::Command as KeymapCommand;
+use crate::projects::Command as ProjectCommand;
 use crate::sessions::Command as SessionCommand;
 use crate::status::Command as StatusCommand;
 use crate::theme::Command as ThemeCommand;
@@ -26,6 +27,7 @@ pub(super) enum RequestKey {
     StatusLine,
     Connectors,
     Directories,
+    Projects,
     Sessions,
     Preview,
     SessionDetails,
@@ -165,6 +167,7 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         AppCommand::Host(HostCommand::ExportTranscript { .. }) => Some(RequestKey::FileExport),
         AppCommand::Quit
         | AppCommand::Suspend
+        | AppCommand::SwitchWorkspace(_)
         | AppCommand::Thread(ThreadCommand::CycleNextApprovalMode) => None,
         AppCommand::Config(
             ConfigCommand::SetIssues(_)
@@ -185,6 +188,7 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         AppCommand::Keymap(KeymapCommand::OpenEditor | KeymapCommand::Edit(_)) => {
             Some(RequestKey::Keymap)
         }
+        AppCommand::Status(StatusCommand::OpenPanel) => Some(RequestKey::Thread),
         AppCommand::Status(StatusCommand::OpenLineEditor | StatusCommand::EditLine(_)) => {
             Some(RequestKey::StatusLine)
         }
@@ -194,6 +198,12 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         AppCommand::Dirs(
             DirCommand::Add { .. } | DirCommand::Remove { .. } | DirCommand::SetPermissions(_),
         ) => Some(RequestKey::Directories),
+        AppCommand::Projects(
+            ProjectCommand::OpenRoots
+            | ProjectCommand::OpenAddRoot
+            | ProjectCommand::AddRoot { .. },
+        ) => Some(RequestKey::Projects),
+        AppCommand::Git(_) => Some(RequestKey::Git),
         AppCommand::Sessions(SessionCommand::Preview { .. }) => Some(RequestKey::Preview),
         AppCommand::Sessions(
             SessionCommand::Restore { .. }

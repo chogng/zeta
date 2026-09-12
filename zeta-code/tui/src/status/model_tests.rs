@@ -468,6 +468,20 @@ fn context_progress_requires_matching_model_and_clears_on_thread_switch() {
         },
     )));
     assert_eq!(
+        line.context_header_segments(false)
+            .iter()
+            .map(|segment| segment.text())
+            .collect::<String>(),
+        "[~40 / 100]"
+    );
+    assert_eq!(
+        line.context_header_segments(true)
+            .iter()
+            .map(|segment| segment.text())
+            .collect::<String>(),
+        "[████░░░░░░ ~40%]"
+    );
+    assert_eq!(
         line.top_text_for_width(80, Default::default()),
         "🧠 context ████░░░░░░ ~40%"
     );

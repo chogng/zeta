@@ -55,9 +55,21 @@ use zeta_protocol::SessionId;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum DirSelectionAction {
-    Add { request_id: u64, path: PathBuf },
-    Remove { path: PathBuf },
+    Add {
+        request_id: u64,
+        path: PathBuf,
+        target: DirAddTarget,
+    },
+    Remove {
+        path: PathBuf,
+    },
     SetPermissions(SessionDirPermissionsSetParams),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum DirAddTarget {
+    Session,
+    Project,
 }
 
 pub(crate) type DirChoices = ListSelectionSpec<DirSelectionAction>;
@@ -191,6 +203,18 @@ where
 }
 
 pub(crate) fn choices(session_id: &SessionId, result: SessionDirListResult) -> DirChoices {
+    choices_with_title(session_id, result, "Directories")
+}
+
+pub(crate) fn project_choices(session_id: &SessionId, result: SessionDirListResult) -> DirChoices {
+    choices_with_title(session_id, result, "Add project folder")
+}
+
+fn choices_with_title(
+    session_id: &SessionId,
+    result: SessionDirListResult,
+    title: &str,
+) -> DirChoices {
     let mut actions = BTreeMap::new();
     let mut groups = result
         .dirs
@@ -241,7 +265,7 @@ pub(crate) fn choices(session_id: &SessionId, result: SessionDirListResult) -> D
         groups.push(ListSelectionGroup::new("Directories", Vec::new()));
     }
     let show_tabs = groups.len() > 1;
-    let model = ListSelectionModel::new("Directories", groups)
+    let model = ListSelectionModel::new(title, groups)
         .with_activation(bindings::DIR_CHANGE)
         .with_input(SearchBoxModel::new("Enter directory path"))
         .with_empty_message("No directories");

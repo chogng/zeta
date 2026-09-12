@@ -2,11 +2,7 @@
 source: zeta-code/tui/src/app/session_manager_tests.rs
 expression: render(&app)
 ---
-  ≡ .
-
-  Idle (1)
-  ○ Snapshot session
-  Archived (0)
+  ≡ .                                           [+]                            [— / —] [Dashboard]
 
 
 
@@ -29,8 +25,12 @@ expression: render(&app)
 
 
 
+
+
+  ────────────────────────────────────────────────────────────────────────────────────────────────
+  /dashboard                 open Dashboard
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
-  │ >                                                                                            │
+  │ > /dashboard                                                                                 │
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯
 
-  Enter to return
+  Enter send  ·  shift+tab permissions  ·  /home

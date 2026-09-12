@@ -2,7 +2,7 @@
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
 expression: "render(&app, terminal_area.width, terminal_area.height)"
 ---
-  ≡ .                                                                           
+  ≡ .                       [+]                            [— / —] [Dashboard]  
                                                                                 
 ● Model invocation failed 8 underlying transcript content underlying transcript 
 content underlying transcript content underlying transcript content             
@@ -14,9 +14,9 @@ content underlying transcript content underlying transcript content
   /status                    show the active session, thread, and model         
   /statusline                choose the items shown in the status line          
   /skills                    browse configured skill sources                    
+  /memories                  manage memories, reading consent and model saving  
   /mcp                       list configured MCP tools                          
   /resume                    list or resume a saved session                     
-  /archive                   archive the current session and start a new chat   
   ╭──────────────────────────────────────────────────────────────────────────╮  
   │ > /                                                                      │  
   ╰─────────────────────────────────────────────────── Claude Sonnet (high) ─╯  

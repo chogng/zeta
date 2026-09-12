@@ -19,9 +19,12 @@ use crate::connectors::ConnectorChoices;
 use crate::connectors::ConnectorSelectionAction;
 use crate::connectors::Event as ConnectorEvent;
 use crate::dirs::Command as DirCommand;
+use crate::dirs::DirAddTarget;
 use crate::dirs::DirChoices;
 use crate::dirs::DirSelectionAction;
 use crate::dirs::Event as DirEvent;
+use crate::git::Command as GitCommand;
+use crate::git::Event as GitEvent;
 use crate::host::Command as HostCommand;
 use crate::host::Event as HostEvent;
 use crate::host::clipboard::ClipboardImage;
@@ -42,6 +45,8 @@ use crate::models::Command as ModelCommand;
 use crate::models::Event as ModelEvent;
 use crate::models::ModelChoices;
 use crate::models::ModelSelectionAction;
+use crate::projects::Command as ProjectCommand;
+use crate::projects::Event as ProjectEvent;
 use crate::render::RenderContext;
 use crate::render::RenderTheme;
 use crate::sessions::Command as SessionCommand;
@@ -414,9 +419,16 @@ impl App {
         outcome: CommandPanelOutcome,
     ) -> Option<AppCommand> {
         match outcome {
-            CommandPanelOutcome::Dirs(DirSelectionAction::Add { request_id, path }) => {
-                Some(DirCommand::Add { request_id, path }.into())
-            }
+            CommandPanelOutcome::Dirs(DirSelectionAction::Add {
+                request_id,
+                path,
+                target: DirAddTarget::Session,
+            }) => Some(DirCommand::Add { request_id, path }.into()),
+            CommandPanelOutcome::Dirs(DirSelectionAction::Add {
+                request_id,
+                path,
+                target: DirAddTarget::Project,
+            }) => Some(ProjectCommand::AddRoot { request_id, path }.into()),
             CommandPanelOutcome::Dirs(DirSelectionAction::Remove { path }) => {
                 Some(DirCommand::Remove { path }.into())
             }
@@ -460,6 +472,29 @@ impl App {
             }
             CommandPanelOutcome::Model(ModelSelectionAction::Pin { preference, pinned }) => {
                 Some(ModelCommand::Pin { preference, pinned }.into())
+            }
+            CommandPanelOutcome::GitBranch(action) => {
+                if action.current {
+                    self.close_command_panel();
+                    None
+                } else {
+                    Some(GitCommand::Switch { name: action.name }.into())
+                }
+            }
+            CommandPanelOutcome::ProjectRoot(action) => {
+                if action.current {
+                    self.close_command_panel();
+                    return None;
+                }
+                if !self.input().is_empty() {
+                    self.close_command_panel();
+                    self.thread.update(ThreadPresentationEvent::FailureReported(
+                        "Clear the current draft before switching Project folders".into(),
+                    ));
+                    return None;
+                }
+                self.close_command_panel();
+                Some(AppCommand::SwitchWorkspace(action.path))
             }
             CommandPanelOutcome::Rewind(RewindSelectionAction::Rewind {
                 before_turn_id,
@@ -1387,6 +1422,16 @@ impl App {
         &self.welcome
     }
 
+    pub(crate) fn workspace_switch_available(&self) -> bool {
+        self.startup_context.connection == crate::TuiConnectionKind::Local
+    }
+
+    pub(crate) fn workspace_mutation_available(&self) -> bool {
+        self.active_turn().is_none()
+            && self.sessions.pending_submission.is_none()
+            && matches!(self.status, Status::Ready | Status::Error)
+    }
+
     pub(crate) fn memory_object_count(&self) -> usize {
         self.thread.cells().len()
     }
@@ -1788,9 +1833,32 @@ impl App {
         match event {
             AppEvent::Issues(event) => self.issues_mut().update(event),
             AppEvent::Dirs(event) => self.apply_dir_event(event),
+            AppEvent::Git(event) => match event {
+                GitEvent::PickerOpened(choices) => {
+                    self.open_command_panel(CommandPanel::git_branches(choices))
+                }
+                GitEvent::SwitchFinished(Ok(status)) => {
+                    self.close_command_panel();
+                    self.apply_status_event(StatusEvent::GitStatusReceived(status));
+                }
+                GitEvent::SwitchFinished(Err(error)) => {
+                    self.panels_mut().set_command_message(error)
+                }
+            },
             AppEvent::Host(event) => self.apply_host_event(event),
             AppEvent::Config(event) => self.apply_config_event(event),
             AppEvent::Models(event) => self.apply_model_event(event),
+            AppEvent::Projects(event) => match event {
+                ProjectEvent::RootsOpened(choices) => {
+                    self.open_command_panel(CommandPanel::project_roots(choices))
+                }
+                ProjectEvent::AddRootOpened(choices) => {
+                    self.open_command_panel(CommandPanel::project_dirs(choices))
+                }
+                ProjectEvent::AddRootFinished { request_id, result } => {
+                    self.panels_mut().finish_dir_add(request_id, result)
+                }
+            },
             AppEvent::Thread(event) => self.apply_thread_event(event),
             AppEvent::Keymap(event) => self.apply_keymap_event(event),
             AppEvent::Status(event) => self.apply_status_event(event),
@@ -1842,6 +1910,10 @@ impl App {
         } else {
             origin.mode
         }
+    }
+
+    pub(crate) fn startup_context(&self) -> &TuiStartupContext {
+        &self.startup_context
     }
 
     pub(super) fn update_from_origin(
@@ -2514,7 +2586,7 @@ impl App {
                     );
                 }
                 Some(TuiSlashCommandAction::Issue) => return self.open_issues(),
-                Some(TuiSlashCommandAction::Sessions | TuiSlashCommandAction::Agents) => {
+                Some(TuiSlashCommandAction::Dashboard) => {
                     self.show_session_manager();
                     return None;
                 }

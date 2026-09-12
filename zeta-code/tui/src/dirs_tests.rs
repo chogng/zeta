@@ -41,6 +41,7 @@ fn submit(panel: &mut super::DirPanel, path: &str) -> u64 {
     let crate::widgets::list_selection::ListSelectionOutcome::Activate(DirSelectionAction::Add {
         request_id,
         path: submitted,
+        target: super::DirAddTarget::Session,
     }) = panel.handle_key(key(KeyCode::Enter))
     else {
         panic!("Enter must submit the directory path");
@@ -82,6 +83,30 @@ fn adding_keeps_existing_items_visible_and_focuses_the_confirmed_directory() {
     assert!(
         matches!(panel.handle_key(key(KeyCode::Enter)), ListSelectionOutcome::Activate(DirSelectionAction::SetPermissions(params)) if params.path == PathBuf::from("/dir/new  folder"))
     );
+}
+
+#[test]
+fn project_folder_panel_starts_in_path_input_and_emits_a_project_add() {
+    let choices = super::project_choices(
+        &zeta_protocol::SessionId::new("session").unwrap(),
+        SessionDirListResult {
+            revision: 0,
+            dirs: Vec::new(),
+        },
+    );
+    let mut panel = super::DirPanel::for_target(choices, super::DirAddTarget::Project);
+    assert!(panel.state().search().unwrap().input_active());
+    panel.handle_paste("/work/extra".into());
+    assert!(matches!(
+        panel.handle_key(key(KeyCode::Enter)),
+        crate::widgets::list_selection::ListSelectionOutcome::Activate(
+            DirSelectionAction::Add {
+                path,
+                target: super::DirAddTarget::Project,
+                ..
+            }
+        ) if path == PathBuf::from("/work/extra")
+    ));
 }
 
 #[test]

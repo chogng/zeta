@@ -5,9 +5,12 @@ use crate::config::ConfigEditorOutcome;
 use crate::config::ConfigEditorPage;
 use crate::connectors::ConnectorChoices;
 use crate::connectors::ConnectorSelectionAction;
+use crate::dirs::DirAddTarget;
 use crate::dirs::DirChoices;
 use crate::dirs::DirPanel;
 use crate::dirs::DirSelectionAction;
+use crate::git::BranchChoices;
+use crate::git::BranchSelectionAction;
 use crate::keymap_setup::KeymapChoices;
 use crate::keymap_setup::KeymapEditor;
 use crate::keymap_setup::KeymapEditorOutcome;
@@ -16,6 +19,8 @@ use crate::mcp::McpChoices;
 use crate::mcp::McpSelectionAction;
 use crate::models::ModelChoices;
 use crate::models::ModelSelectionAction;
+use crate::projects::RootChoices;
+use crate::projects::RootSelectionAction;
 use crate::sessions::SessionChoices;
 use crate::sessions::SessionSelectionAction;
 use crate::skills::SkillChoices;
@@ -59,12 +64,14 @@ pub(crate) enum CommandPanel {
     Loading(ListSelection<()>),
     Help(ListSelection<()>),
     Dirs(DirPanel),
+    GitBranches(ListSelection<BranchSelectionAction>),
     Config(ConfigEditor),
     Connectors(ListSelection<ConnectorSelectionAction>),
     Keymap(KeymapEditor),
     Mcp(ListSelection<McpSelectionAction>),
     Memories(crate::memories::Panel),
     Model(ListSelection<ModelSelectionAction>),
+    ProjectRoots(ListSelection<RootSelectionAction>),
     Rewind(ListSelection<RewindSelectionAction>),
     Sessions(ListSelection<SessionSelectionAction>),
     Skills(ListSelection<SkillSelectionAction>),
@@ -77,12 +84,14 @@ pub(crate) enum CommandPanel {
 #[derive(Debug)]
 pub(crate) enum CommandPanelOutcome {
     Dirs(DirSelectionAction),
+    GitBranch(BranchSelectionAction),
     Config(ConfigEditorOutcome),
     Connectors(ConnectorSelectionAction),
     Keymap(KeymapEditorOutcome),
     Mcp(McpSelectionAction),
     Memories(crate::memories::Command),
     Model(ModelSelectionAction),
+    ProjectRoot(RootSelectionAction),
     Rewind(RewindSelectionAction),
     Sessions(SessionSelectionAction),
     Skills(SkillSelectionAction),
@@ -115,6 +124,18 @@ impl CommandPanel {
 
     pub(crate) fn dirs(spec: DirChoices) -> Self {
         Self::Dirs(DirPanel::new(spec))
+    }
+
+    pub(crate) fn project_dirs(spec: DirChoices) -> Self {
+        Self::Dirs(DirPanel::for_target(spec, DirAddTarget::Project))
+    }
+
+    pub(crate) fn git_branches(spec: BranchChoices) -> Self {
+        Self::GitBranches(ListSelection::new(spec.model, spec.actions))
+    }
+
+    pub(crate) fn project_roots(spec: RootChoices) -> Self {
+        Self::ProjectRoots(ListSelection::new(spec.model, spec.actions))
     }
 
     pub(crate) fn config(spec: ConfigChoices) -> Self {
@@ -197,6 +218,9 @@ impl CommandPanel {
             Self::Dirs(content) => {
                 map_selection(content.handle_key(key), CommandPanelOutcome::Dirs)
             }
+            Self::GitBranches(content) => {
+                map_selection(content.handle_key(key), CommandPanelOutcome::GitBranch)
+            }
             Self::Config(content) => CommandPanelOutcome::Config(content.handle_key(key)),
             Self::Connectors(content) => {
                 map_selection(content.handle_key(key), CommandPanelOutcome::Connectors)
@@ -226,6 +250,9 @@ impl CommandPanel {
                 }
                 map_selection(content.handle_key(key), CommandPanelOutcome::Model)
             }
+            Self::ProjectRoots(content) => {
+                map_selection(content.handle_key(key), CommandPanelOutcome::ProjectRoot)
+            }
             Self::Rewind(content) => {
                 map_selection(content.handle_key(key), CommandPanelOutcome::Rewind)
             }
@@ -251,12 +278,14 @@ impl CommandPanel {
         match self {
             Self::Help(content) | Self::Loading(content) => content.handle_paste(pasted),
             Self::Dirs(content) => content.handle_paste(pasted),
+            Self::GitBranches(content) => content.handle_paste(pasted),
             Self::Config(content) => content.handle_paste(pasted),
             Self::Connectors(content) => content.handle_paste(pasted),
             Self::Keymap(content) => content.handle_paste(pasted),
             Self::Memories(content) => content.paste(pasted),
             Self::Mcp(content) => content.handle_paste(pasted),
             Self::Model(content) => content.handle_paste(pasted),
+            Self::ProjectRoots(content) => content.handle_paste(pasted),
             Self::Rewind(content) => content.handle_paste(pasted),
             Self::Sessions(content) => content.handle_paste(pasted),
             Self::Skills(content) => content.handle_paste(pasted),
@@ -271,12 +300,14 @@ impl CommandPanel {
         match self {
             Self::Help(selection) | Self::Loading(selection) => Some(selection.state()),
             Self::Dirs(selection) => Some(selection.state()),
+            Self::GitBranches(selection) => Some(selection.state()),
             Self::Config(editor) => editor.selection(),
             Self::Connectors(selection) => Some(selection.state()),
             Self::Keymap(editor) => editor.selection(),
             Self::Memories(panel) => panel.selection(),
             Self::Mcp(selection) => Some(selection.state()),
             Self::Model(selection) => Some(selection.state()),
+            Self::ProjectRoots(selection) => Some(selection.state()),
             Self::Rewind(selection) => Some(selection.state()),
             Self::Sessions(selection) => Some(selection.state()),
             Self::Skills(selection) => Some(selection.state()),
@@ -295,12 +326,14 @@ impl CommandPanel {
         let selection = match self {
             Self::Help(s) | Self::Startup(s) | Self::Loading(s) => Some(s.state_mut()),
             Self::Dirs(s) => s.selection_mut(),
+            Self::GitBranches(s) => Some(s.state_mut()),
             Self::Config(s) => s.selection_mut(),
             Self::Connectors(s) => Some(s.state_mut()),
             Self::Keymap(s) => s.selection_mut(),
             Self::Memories(panel) => panel.selection_mut(),
             Self::Mcp(s) => Some(s.state_mut()),
             Self::Model(s) => Some(s.state_mut()),
+            Self::ProjectRoots(s) => Some(s.state_mut()),
             Self::Rewind(s) => Some(s.state_mut()),
             Self::Sessions(s) => Some(s.state_mut()),
             Self::Skills(s) => Some(s.state_mut()),
@@ -329,6 +362,7 @@ impl CommandPanel {
                 CommandPanelBody::Selection(selection.state())
             }
             Self::Dirs(selection) => CommandPanelBody::Selection(selection.state()),
+            Self::GitBranches(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Config(editor) => match editor.page() {
                 ConfigEditorPage::Selection(selection) => CommandPanelBody::Selection(selection),
                 ConfigEditorPage::Prompt(prompt) => CommandPanelBody::Prompt(prompt),
@@ -345,6 +379,7 @@ impl CommandPanel {
             },
             Self::Mcp(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Model(selection) => CommandPanelBody::Selection(selection.state()),
+            Self::ProjectRoots(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Rewind(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Sessions(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Skills(selection) => CommandPanelBody::Selection(selection.state()),
@@ -359,12 +394,14 @@ impl CommandPanel {
         match self {
             Self::Help(content) | Self::Loading(content) => content.key_hints(),
             Self::Dirs(content) => content.key_hints(),
+            Self::GitBranches(content) => content.key_hints(),
             Self::Config(content) => content.key_hints(),
             Self::Connectors(content) => content.key_hints(),
             Self::Keymap(content) => content.key_hints(),
             Self::Memories(panel) => panel.key_hints(),
             Self::Mcp(content) => content.key_hints(),
             Self::Model(content) => content.key_hints(),
+            Self::ProjectRoots(content) => content.key_hints(),
             Self::Rewind(content) => content.key_hints(),
             Self::Sessions(content) => content.key_hints(),
             Self::Skills(content) => content.key_hints(),
@@ -403,6 +440,14 @@ impl CommandPanel {
     ) {
         if let Self::Dirs(content) = self {
             content.finish_add(request_id, result);
+        }
+    }
+
+    pub(crate) fn set_message(&mut self, message: String) {
+        match self {
+            Self::GitBranches(selection) => selection.state_mut().set_message(Some(message)),
+            Self::ProjectRoots(selection) => selection.state_mut().set_message(Some(message)),
+            _ => {}
         }
     }
 
@@ -703,6 +748,12 @@ impl Panels {
     ) {
         if let Some(command) = self.command.as_mut() {
             command.finish_dir_add(request_id, result);
+        }
+    }
+
+    pub(crate) fn set_command_message(&mut self, message: String) {
+        if let Some(command) = self.command.as_mut() {
+            command.set_message(message);
         }
     }
 

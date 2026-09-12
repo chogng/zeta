@@ -19,6 +19,7 @@ enum Focus {
     #[default]
     Input,
     Page,
+    Header,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -43,6 +44,7 @@ use selection::ScreenSelection;
 /// Owns interaction state that exists only while the full-screen page is active.
 #[derive(Debug)]
 pub(super) struct Fullscreen {
+    pub(super) header: header::State,
     pub(super) sessions: crate::sessions::SessionNavigation,
     pub(super) issues: crate::issues::Manager,
     pub(super) agent_thread_switcher: crate::thread::AgentThreadSwitcher,
@@ -60,6 +62,7 @@ pub(super) struct Fullscreen {
 impl Fullscreen {
     pub(super) fn new(thread: zeta_protocol::ThreadId) -> Self {
         Self {
+            header: Default::default(),
             sessions: Default::default(),
             issues: Default::default(),
             agent_thread_switcher: Default::default(),
@@ -96,14 +99,25 @@ impl Fullscreen {
 
     pub(super) fn focus_input(&mut self) {
         self.focus = Focus::Input;
+        self.header.clear();
     }
 
     pub(super) fn focus_page(&mut self) {
         self.focus = Focus::Page;
+        self.header.clear();
+    }
+
+    pub(super) fn focus_header(&mut self, target: header::Target) {
+        self.focus = Focus::Header;
+        self.header.select(target);
     }
 
     pub(super) fn input_focused(&self) -> bool {
         self.focus == Focus::Input
+    }
+
+    pub(super) fn header_focused(&self) -> bool {
+        self.focus == Focus::Header
     }
 }
 

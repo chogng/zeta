@@ -2135,8 +2135,8 @@ fn queue_focus_keeps_global_interrupt_available() {
 }
 
 #[test]
-fn sessions_and_agents_commands_open_the_manager_screen() {
-    for command in ["/sessions", "/agents"] {
+fn dashboard_command_opens_the_manager_screen() {
+    for command in ["/dashboard"] {
         let mut app = App::new();
         app.insert_text(command);
 
@@ -2149,13 +2149,78 @@ fn sessions_and_agents_commands_open_the_manager_screen() {
 }
 
 #[test]
+fn project_folder_picker_switches_only_to_a_non_current_root_without_a_draft() {
+    use zeta_app_server_protocol::protocol::projects::ProjectDto;
+    use zeta_app_server_protocol::protocol::projects::ProjectRootDto;
+    use zeta_app_server_protocol::protocol::projects::ProjectStatusDto;
+    use zeta_file_access::DirId;
+    use zeta_file_access::EnvId;
+    let mut app = App::for_dir(std::path::Path::new("/work/current"));
+    let dir_id = |seed: char| {
+        format!("sha256:{}", seed.to_string().repeat(64))
+            .parse::<DirId>()
+            .unwrap()
+    };
+    let project = ProjectDto {
+        project_id: zeta_protocol::ProjectId::new("project").unwrap(),
+        revision: 1,
+        status: ProjectStatusDto::Active,
+        name: "Project".into(),
+        description: String::new(),
+        roots: vec![
+            ProjectRootDto {
+                environment_id: EnvId::local(),
+                dir_id: dir_id('a'),
+                path: "/work/current".into(),
+                name: "current".into(),
+                purpose: String::new(),
+            },
+            ProjectRootDto {
+                environment_id: EnvId::local(),
+                dir_id: dir_id('b'),
+                path: "/work/other".into(),
+                name: "other".into(),
+                purpose: String::new(),
+            },
+        ],
+        session_ids: Vec::new(),
+    };
+    app.update(crate::projects::Event::RootsOpened(
+        crate::projects::root_choices(&project, std::path::Path::new("/work/current")),
+    ));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::SwitchWorkspace(path)) if path == std::path::Path::new("/work/other")
+    ));
+    assert!(app.command_panel().is_none());
+
+    let mut app = App::for_dir(std::path::Path::new("/work/current"));
+    app.insert_text("keep this draft");
+    app.update(crate::projects::Event::RootsOpened(
+        crate::projects::root_choices(&project, std::path::Path::new("/work/current")),
+    ));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        None
+    );
+    assert_eq!(app.input(), "keep this draft");
+    assert!(app.command_panel().is_none());
+    assert_eq!(
+        app.messages().last().unwrap().text(),
+        "Clear the current draft before switching Project folders"
+    );
+}
+
+#[test]
 fn manager_session_keys_archive_show_details_and_open_the_selected_session() {
     let mut app = App::new();
     app.update(SessionEvent::CatalogReceived(vec![
         manager_state_session("one"),
         manager_state_session("two"),
     ]));
-    app.insert_text("/sessions");
+    app.insert_text("/dashboard");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
 

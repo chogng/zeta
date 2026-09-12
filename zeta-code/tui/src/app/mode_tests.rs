@@ -319,7 +319,7 @@ fn inline_navigation_does_not_replace_the_fullscreen_home() {
     let mut app = navigation_app();
     app.open_home();
     switch(&mut app, ScreenMode::Inline);
-    app.insert_text("/agents");
+    app.insert_text("/dashboard");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     assert!(app.session_manager_focused());

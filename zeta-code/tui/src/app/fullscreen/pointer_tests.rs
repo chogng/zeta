@@ -347,7 +347,7 @@ fn assert_base_pointer_targets(app: &mut App, area: Rect) {
                 ratatui::layout::Position::new(column, row)
             ));
             match super::target_at(app, area, column, row) {
-                Some(PointerTarget::Home)
+                Some(PointerTarget::Header(_))
                 | Some(PointerTarget::Composer(ChatComposerPointerTarget::Input)) => {}
                 None => assert_eq!(activate_pointer_item(app, area, column, row), None),
                 target => panic!("unexpected base pointer target: {target:?}"),
@@ -488,7 +488,7 @@ fn session_manager_items_hover_and_activate_without_changing_the_draft() {
         session_id,
         thread_id,
     });
-    app.insert_text("/sessions");
+    app.insert_text("/dashboard");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     let area = Rect::new(0, 0, 80, 24);
     app.insert_text("keep this draft");

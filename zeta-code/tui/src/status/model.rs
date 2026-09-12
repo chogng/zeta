@@ -403,7 +403,10 @@ impl StatusLineModel {
         let mut values = Vec::new();
         for item in self.settings.items() {
             if matches!(location, StatusLineLocation::Header)
-                && matches!(item, StatusLineItem::Model | StatusLineItem::GitBranch)
+                && matches!(
+                    item,
+                    StatusLineItem::Model | StatusLineItem::GitBranch | StatusLineItem::Context
+                )
             {
                 continue;
             }
@@ -449,13 +452,45 @@ impl StatusLineModel {
     }
 
     fn context_display(&self) -> DisplayValue {
+        let (text, percentage, _, _) = self.context_measurement();
+        if self.settings.style() == StatusLineStyle::Rich {
+            progress_value("🧠", "context", &text, percentage)
+        } else {
+            DisplayValue::plain(format!("context {text}"), format!("context {text}"))
+        }
+    }
+
+    pub(super) fn context_header_segments(&self, progress: bool) -> Vec<StatusLineSegment> {
+        let (text, percentage, used, capacity) = self.context_measurement();
+        let mut segments = vec![StatusLineSegment::chrome("[")];
+        if progress {
+            segments.extend(progress_segments(&text, percentage));
+        } else {
+            let ratio = match (used, capacity) {
+                (Some(used), Some(capacity)) => {
+                    let prefix = if text.starts_with('~') { "~" } else { "" };
+                    format!(
+                        "{prefix}{} / {}",
+                        compact_tokens(used),
+                        compact_tokens(capacity)
+                    )
+                }
+                _ => "— / —".into(),
+            };
+            segments.push(StatusLineSegment::chrome(ratio));
+        }
+        segments.push(StatusLineSegment::chrome("]"));
+        segments
+    }
+
+    fn context_measurement(&self) -> (String, Option<usize>, Option<u64>, Option<u64>) {
         let usage = self.context_usage.as_ref().filter(|(model, _)| {
             self.context_model.as_ref().is_some_and(|selected| {
                 selected.provider == model.provider.as_str()
                     && selected.model == model.model.as_str()
             })
         });
-        let (text, percentage) = match (usage, self.context_capacity) {
+        match (usage, self.context_capacity) {
             (Some((_, usage)), Some(capacity)) => {
                 let percentage =
                     (u128::from(usage.used_tokens) * 100 / u128::from(capacity)).min(100) as usize;
@@ -464,14 +499,14 @@ impl StatusLineModel {
                 } else {
                     ""
                 };
-                (format!("{prefix}{percentage}%"), Some(percentage))
+                (
+                    format!("{prefix}{percentage}%"),
+                    Some(percentage),
+                    Some(usage.used_tokens),
+                    Some(capacity),
+                )
             }
-            _ => ("unknown".into(), None),
-        };
-        if self.settings.style() == StatusLineStyle::Rich {
-            progress_value("🧠", "context", &text, percentage)
-        } else {
-            DisplayValue::plain(format!("context {text}"), format!("context {text}"))
+            _ => ("unknown".into(), None, None, self.context_capacity),
         }
     }
 
@@ -508,23 +543,41 @@ impl StatusLineModel {
 fn progress_value(icon: &str, label: &str, text: &str, percentage: Option<usize>) -> DisplayValue {
     let compact = vec![StatusLineSegment::chrome(format!("{label} {text}"))];
     let mut full = vec![StatusLineSegment::chrome(format!("{icon} {label} "))];
-    if let Some(percentage) = percentage {
-        let filled = percentage.min(100) / 10;
-        full.push(StatusLineSegment {
-            text: "█".repeat(filled),
-            kind: StatusLineSegmentKind::Progress,
-        });
-        full.push(StatusLineSegment::chrome(format!(
-            "{} ",
-            "░".repeat(10 - filled)
-        )));
-    }
-    full.push(StatusLineSegment::chrome(text));
+    full.extend(progress_segments(text, percentage));
     DisplayValue {
         full,
         compact,
         process_resources: None,
     }
+}
+
+fn progress_segments(text: &str, percentage: Option<usize>) -> Vec<StatusLineSegment> {
+    let mut segments = Vec::new();
+    if let Some(percentage) = percentage {
+        let filled = percentage.min(100) / 10;
+        segments.push(StatusLineSegment {
+            text: "█".repeat(filled),
+            kind: StatusLineSegmentKind::Progress,
+        });
+        segments.push(StatusLineSegment::chrome(format!(
+            "{} ",
+            "░".repeat(10 - filled)
+        )));
+    }
+    segments.push(StatusLineSegment::chrome(text));
+    segments
+}
+
+fn compact_tokens(tokens: u64) -> String {
+    let (value, suffix) = if tokens >= 1_000_000 {
+        (tokens as f64 / 1_000_000.0, "m")
+    } else if tokens >= 1_000 {
+        (tokens as f64 / 1_000.0, "k")
+    } else {
+        return tokens.to_string();
+    };
+    let value = format!("{value:.1}");
+    format!("{}{suffix}", value.strip_suffix(".0").unwrap_or(&value))
 }
 
 fn git_status_cursor(status: &GitStatusResult) -> GitStatusCursor {

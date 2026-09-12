@@ -98,6 +98,17 @@ impl AppDriver {
                     origin,
                 );
             }
+            AppCommand::Git(command) => {
+                let name = command.request_name();
+                let mut client = self.client.clone();
+                self.requests.spawn_presentation(
+                    request_key,
+                    name,
+                    move || crate::git::execute(&mut client, command),
+                    &mut self.app,
+                    origin,
+                );
+            }
             AppCommand::Host(command) => self.execute_host_command(request_key, command, origin),
             AppCommand::Keymap(command) => {
                 let name = command.request_name();
@@ -138,6 +149,29 @@ impl AppDriver {
                     origin,
                 );
             }
+            AppCommand::Projects(command) => {
+                let name = command.request_name();
+                let mut client = self.client.clone();
+                let workspace = self.app.startup_context().workspace.clone();
+                let session_id = self
+                    .conversation
+                    .as_ref()
+                    .map(|current| current.conversation.session_id().clone());
+                self.requests.spawn_presentation(
+                    request_key,
+                    name,
+                    move || {
+                        crate::projects::execute(
+                            &mut client,
+                            &workspace,
+                            session_id.as_ref(),
+                            command,
+                        )
+                    },
+                    &mut self.app,
+                    origin,
+                );
+            }
             AppCommand::Sessions(command) => {
                 self.execute_session_command(request_key, command, origin)
             }
@@ -173,6 +207,32 @@ impl AppDriver {
             AppCommand::Status(command) => {
                 let name = command.request_name();
                 let mut client = self.client.clone();
+                if matches!(command, status_line::Command::OpenPanel) {
+                    let scope = self.conversation.as_ref().map(|current| {
+                        (
+                            current.conversation.session_id().clone(),
+                            current.conversation.thread_id().clone(),
+                        )
+                    });
+                    self.requests.spawn_presentation(
+                        request_key,
+                        name,
+                        move || {
+                            let scope = scope.as_ref().map(|(session_id, thread_id)| {
+                                status_line::StatusRequestScope {
+                                    session_id,
+                                    thread_id,
+                                }
+                            });
+                            status_line::load_status_panel(&mut client, scope)
+                                .map(status_line::Event::PanelOpened)
+                                .map_err(|error| error.to_string())
+                        },
+                        &mut self.app,
+                        origin,
+                    );
+                    return CommandEffect::None;
+                }
                 self.requests.spawn_presentation(
                     request_key,
                     name,
@@ -216,6 +276,7 @@ impl AppDriver {
             }
             AppCommand::Quit => return CommandEffect::Quit,
             AppCommand::Suspend => return CommandEffect::Suspend,
+            AppCommand::SwitchWorkspace(path) => return CommandEffect::SwitchWorkspace(path),
         }
         CommandEffect::None
     }

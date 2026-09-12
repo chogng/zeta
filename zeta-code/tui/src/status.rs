@@ -23,6 +23,7 @@ pub(crate) enum Event {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
+    OpenPanel,
     OpenLineEditor,
     EditLine(StatusLineEdit),
 }
@@ -66,6 +67,7 @@ pub(crate) use setup::StatusLineChoices;
 pub(crate) use setup::StatusLineSelectionAction;
 #[cfg(test)]
 pub(crate) use setup::list_selection as status_line_choices;
+pub(crate) use view::context_header_line;
 pub(crate) use view::draw;
 pub(crate) use view::header_line;
 pub(crate) use view::policy_line;

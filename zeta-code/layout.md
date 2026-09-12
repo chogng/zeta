@@ -8,7 +8,7 @@
 
 ```text
 ┌────────────────────────────────────────────────────────────┐
-│ 顶部工作区栏 header：≡  分支 / 工作目录          状态摘要 │
+│ 顶部工作区栏 header：≡ 分支 工作目录 [+]  上下文 Dashboard │
 ├────────────────────────────────────────────────────────────┤
 │ 消息区 transcript                                          │
 │ 用户消息、助手回复、工具执行记录                            │
@@ -40,7 +40,7 @@
 
 | 中文叫法 | 代码名称 | 看到的内容 / 边界 | 定位入口 |
 | --- | --- | --- | --- |
-| 顶部工作区栏 | `header` | 左边 `≡` 首页入口，中间分支和目录，右边状态摘要；正常高度下其后留一空行 | [header.rs](tui/src/app/fullscreen/header.rs) |
+| 顶部工作区栏 | `header` | 左边 `≡` 首页入口、分支、当前 Project 工作目录和 `[+]`；右边状态摘要、上下文用量与 `[Dashboard]`；正常高度下其后留一空行 | [header.rs](tui/src/app/fullscreen/header.rs) |
 | 消息区 | `transcript` | 会话内容与滚动视口，占据上方剩余空间 | [conversation.rs](tui/src/app/fullscreen/conversation.rs)、[transcript/view.rs](tui/src/thread/transcript/view.rs) |
 | 目标区 | `goal` | 当前目标信息 | [goal.rs](tui/src/thread/goal.rs) |
 | 计划区 | `plan` | 当前计划及步骤 | [plan.rs](tui/src/thread/plan.rs) |
@@ -54,6 +54,10 @@
 | Agent 切换栏 | `agent_thread_switcher` | Main / Subagent 会话切换，位于快捷键区下方 | [thread.rs](tui/src/thread.rs) 的 `draw_agent_thread_switcher` 入口 |
 
 三个容易混淆的“状态”：顶部右侧是工作区/会话状态摘要；`status_indicator` 是输入框上方的运行状态；`top_tip` 是更靠近输入框的提示行。输入框右下边框上的模型名称由 [fullscreen/composer.rs](tui/src/app/fullscreen/composer.rs) 绘制。
+
+顶部工作区栏的分支、工作目录、`[+]`、上下文和 Dashboard 是彼此独立的交互项。点击分支打开本地分支选择；点击工作目录打开同一 Project、同一 Environment 下的根目录选择并由 CLI host 重建 workspace 连接；`[+]` 先把目录加入 Project，再在目录面板中明确设置当前 Session 的权限，不自动授予能力。上下文静止时显示 `已用 / 容量`，hover 或键盘焦点时复用 StatusLine 的 Context 进度条；Dashboard 打开 Session 管理页。空输入时按 `F6` 聚焦标题栏，左右键移动，`Enter` 激活，`Esc` 返回输入。
+
+标题栏交互项是轻量文字入口：hover 和按下只改变前景色与文字强调，不绘制背景色；键盘焦点额外使用下划线，不能与鼠标 hover 混为同一状态。弹窗、列表和输入控件仍使用各自的共享 hover surface。
 
 审批区使用 `session.composer`，入口是 [interaction/approval.rs](tui/src/thread/interaction/approval.rs)；它与上方的提问区 `session.request` 是两个不同区域。
 

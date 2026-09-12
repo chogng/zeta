@@ -2,7 +2,7 @@
 source: zeta-code/tui/src/app/conversation_flow_tests.rs
 expression: render(&app)
 ---
-  ≡ .
+  ≡ .                                           [+]                            [— / —] [Dashboard]
 
 > 请 正 常 回 复 ， 并 展 示 多 行 输 出 。
 
@@ -28,9 +28,9 @@ expression: render(&app)
 
 
 ⠋ Working · 0m 00s total · ctrl+c to interrupt
-                                                                         shift+tab to cycle policy
+  ⏸ ask permissions on                                                   shift+tab to cycle policy
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
   │ >                                                                                            │
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯
 
-  Enter queue  ·  shift+tab permissions  ·  /home                             ⏸ ask permissions on
+  Enter queue  ·  shift+tab permissions  ·  /home

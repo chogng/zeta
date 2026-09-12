@@ -2,7 +2,7 @@
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
 expression: rendered_after_paste
 ---
-  ≡ .                                                                           
+  ≡ .                       [+]                            [— / —] [Dashboard]  
                                                                                 
                                                                                 
                                                                                 
@@ -16,9 +16,9 @@ expression: rendered_after_paste
                                                                                 
                                                                                 
                                                                                 
-                                                                                
+  ⏸ ask permissions on                                                          
   ╭──────────────────────────────────────────────────────────────────────────╮  
   │ > [Image #1]                                                             │  
   ╰──────────────────────────────────────────────────────── Automatic model ─╯  
                                                                                 
-  Enter send  ·  shift+tab permissions  ·  /home          ⏸ ask permissions on
+  Enter send  ·  shift+tab permissions  ·  /home

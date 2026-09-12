@@ -2,12 +2,12 @@
 source: zeta-code/tui/src/app/fullscreen/home_tests.rs
 expression: "text(&render(&app, 40, 16))"
 ---
-  ≡ .                                   
+  ≡ .               [+]    [Dashboard]  
                                         
   ╭──────────────────────────────────╮  
   │                                  │  
   │  Zeta Code v0.1.0                │  
-  │  Manage sessions                 │  
+  │  Dashboard                       │  
   │  Settings                        │  
   │  Help and shortcuts              │  
   │> Quit                            │  

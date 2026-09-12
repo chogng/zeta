@@ -572,7 +572,7 @@ fn manager_keeps_overflow_text_out_of_the_fixed_top_tip_row() {
             })
             .collect(),
     ));
-    app.insert_text("/sessions");
+    app.insert_text("/dashboard");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.update(HostEvent::TopTipNoticeShown(
         "Copied 246 chars to clipboard".into(),
@@ -608,7 +608,7 @@ fn empty_session_input_offers_manager_navigation() {
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert!(rows[top_tip_row].contains("← for agents"));
+    assert!(rows[top_tip_row].contains("← Dashboard"));
     assert!(!rows[top_tip_row].contains("shift+tab"));
     assert!(!rows[19].contains("permissions on"));
     assert!(
@@ -627,10 +627,10 @@ fn empty_session_input_offers_manager_navigation() {
     let rows = rendered.lines().collect::<Vec<_>>();
     let status_line = rendered.lines().last().unwrap();
 
-    assert!(!rows[top_tip_row].contains("← for agents"));
+    assert!(!rows[top_tip_row].contains("← Dashboard"));
     assert!(!rows[top_tip_row].contains("shift+tab"));
     assert!(!status_line.contains("permissions on"));
-    assert!(!status_line.contains("← for agents"));
+    assert!(!status_line.contains("← Dashboard"));
 }
 
 #[test]
@@ -661,7 +661,7 @@ fn left_from_a_session_opens_the_manager() {
         vec![manager_session("current", SessionManagerStatus::Idle, None)],
     );
 
-    assert!(render(&app, 80, 20).contains("← for agents"));
+    assert!(render(&app, 80, 20).contains("← Dashboard"));
     assert!(
         app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE))
             .is_none()
@@ -694,7 +694,7 @@ fn manager_uses_the_page_body_for_grouped_three_column_status_rows() {
         ),
         manager_session("done", SessionManagerStatus::Completed, None),
     ]));
-    app.insert_text("/sessions");
+    app.insert_text("/dashboard");
     assert!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
             .is_none()
@@ -1009,7 +1009,7 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
             .lines()
             .nth(usize::from(top_tip_row))
             .unwrap()
-            .contains("← for agents")
+            .contains("← Dashboard")
     );
 
     app.insert_text("hello");
@@ -1041,7 +1041,7 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
     assert!(app.handle_tick(first_tip_expired));
     let after = render(&app, 80, 20);
     let after_tip = after.lines().nth(usize::from(top_tip_row)).unwrap();
-    assert!(!after_tip.contains("← for agents"));
+    assert!(!after_tip.contains("← Dashboard"));
     assert!(!after_tip.contains("shift+tab"));
 
     let policy_changed = first_tip_expired + Duration::from_secs(1);
@@ -1270,7 +1270,7 @@ fn policy_change_shows_the_new_mode_before_the_first_submission() {
     app.cycle_next_approval_mode(Instant::now());
 
     let rendered = render(&app, 80, 20);
-    assert!(!rendered.contains("← for agents"));
+    assert!(!rendered.contains("← Dashboard"));
     assert!(rendered.contains("auto review on"));
     assert!(rendered.contains("shift+tab to cycle policy"));
 }
@@ -1610,9 +1610,9 @@ fn bare_slash_renders_the_first_command_window() {
     assert!(rendered.contains("/status"));
     assert!(rendered.contains("/statusline"));
     assert!(rendered.contains("/skills"));
+    assert!(rendered.contains("/memories"));
     assert!(rendered.contains("/mcp"));
     assert!(rendered.contains("/resume"));
-    assert!(rendered.contains("/archive"));
     assert!(!rendered.contains("/archive-thread"));
     assert!(!rendered.contains("/archive-session"));
     assert!(!rendered.contains("/thread "));

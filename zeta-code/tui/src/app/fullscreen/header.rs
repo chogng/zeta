@@ -1,94 +1,356 @@
 use crate::app::App;
 use crate::render::RenderContext;
-use crate::render::interaction_style;
 use ratatui::Frame;
 use ratatui::layout::Position;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
-use ratatui::text::Line;
-use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
+use unicode_width::UnicodeWidthStr;
 use zeta_memory_diagnostics::ProcessResourceDemand;
 
+const DASHBOARD: &str = "[Dashboard]";
+const ADD_ROOT: &str = "[+]";
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub(in crate::app) enum Target {
+    Home,
+    Branch,
+    Workspace,
+    AddRoot,
+    Context,
+    Dashboard,
+}
+
+impl Target {
+    pub(super) const fn label(self) -> &'static str {
+        match self {
+            Self::Home => "Home",
+            Self::Branch => "Switch branch",
+            Self::Workspace => "Switch project folder",
+            Self::AddRoot => "Add project folder",
+            Self::Context => "Context usage",
+            Self::Dashboard => "Dashboard",
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub(in crate::app) struct State {
+    selected: Option<Target>,
+}
+
+impl State {
+    pub(super) fn selected(&self) -> Option<Target> {
+        self.selected
+    }
+
+    pub(super) fn select(&mut self, target: Target) {
+        self.selected = Some(target);
+    }
+
+    pub(super) fn clear(&mut self) {
+        self.selected = None;
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct HeaderLayout {
+    home: Rect,
+    branch: Rect,
+    workspace: Rect,
+    add_root: Rect,
+    status: Rect,
+    context: Rect,
+    dashboard: Rect,
+}
+
 pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, context: RenderContext<'_>) {
-    let home = super::pointer::PointerTarget::Home;
-    frame.render_widget(
-        Paragraph::new("≡").style(interaction_style(
-            context,
-            app.fullscreen.pointer.interaction_state(&home),
-        )),
-        menu_area(area),
-    );
-    let status = crate::status::header_line(
-        app.status_line(),
-        usize::from(status_width(area)),
-        app.status_line_runtime(),
+    let areas = header_layout(area, app, context);
+    draw_action(frame, areas.home, "≡", app, Target::Home, true, context);
+
+    if !areas.branch.is_empty()
+        && let Some(branch) = app.status_line().branch_label()
+    {
+        let line = crate::render::truncate_with_ellipsis(branch, usize::from(areas.branch.width));
+        let style = Style::default()
+            .fg(context.foreground())
+            .add_modifier(Modifier::BOLD)
+            .patch(action_surface(
+                app,
+                Target::Branch,
+                branch_enabled(app),
+                context,
+            ));
+        frame.render_widget(Paragraph::new(line).style(style), areas.branch);
+    }
+
+    if !areas.workspace.is_empty() {
+        let path = crate::render::truncate_with_ellipsis(
+            app.welcome().directory(),
+            usize::from(areas.workspace.width),
+        );
+        frame.render_widget(
+            Paragraph::new(path).style(Style::default().fg(context.muted()).patch(action_surface(
+                app,
+                Target::Workspace,
+                workspace_enabled(app),
+                context,
+            ))),
+            areas.workspace,
+        );
+    }
+
+    draw_action(
+        frame,
+        areas.add_root,
+        ADD_ROOT,
+        app,
+        Target::AddRoot,
+        add_root_enabled(app),
         context,
     );
-    let width = status.width() as u16;
-    let gap = if width > 0 { 2 } else { 0 };
-    let workspace = Rect::new(
-        area.x + 2.min(area.width),
-        area.y,
-        area.width.saturating_sub(2 + width + gap),
-        area.height,
-    );
-    let mut spans = Vec::new();
-    let mut path_width = usize::from(workspace.width);
-    if let Some(branch) = app.status_line().branch_label() {
-        let branch = crate::render::truncate_with_ellipsis(branch, path_width / 2);
-        path_width =
-            path_width.saturating_sub(unicode_width::UnicodeWidthStr::width(branch.as_str()) + 1);
-        spans.push(Span::styled(
-            branch,
-            Style::default()
-                .fg(context.foreground())
-                .add_modifier(Modifier::BOLD),
-        ));
-        spans.push(Span::raw(" "));
+
+    if !areas.status.is_empty() {
+        let status = crate::status::header_line(
+            app.status_line(),
+            usize::from(areas.status.width),
+            app.status_line_runtime(),
+            context,
+        );
+        frame.render_widget(Paragraph::new(status), areas.status);
     }
-    spans.push(Span::raw(crate::render::truncate_with_ellipsis(
-        app.welcome().directory(),
-        path_width,
-    )));
-    frame.render_widget(
-        Paragraph::new(Line::from(spans)).style(Style::default().fg(context.muted())),
-        workspace,
-    );
-    frame.render_widget(
-        Paragraph::new(status),
-        Rect::new(
-            area.right().saturating_sub(width),
-            area.y,
-            width,
-            area.height,
-        ),
+
+    if !areas.context.is_empty() {
+        let selected = app.fullscreen.header.selected() == Some(Target::Context);
+        let hovered = app.fullscreen.pointer.hovered()
+            == Some(&super::pointer::PointerTarget::Header(Target::Context));
+        let line = crate::status::context_header_line(
+            app.status_line(),
+            selected || hovered,
+            context,
+            action_surface(app, Target::Context, true, context),
+        );
+        frame.render_widget(Paragraph::new(line), areas.context);
+    }
+
+    draw_action(
+        frame,
+        areas.dashboard,
+        DASHBOARD,
+        app,
+        Target::Dashboard,
+        true,
+        context,
     );
 }
 
-fn menu_area(area: Rect) -> Rect {
-    Rect {
-        width: area.width.min(2),
-        ..area
+fn draw_action(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    label: &str,
+    app: &App,
+    target: Target,
+    enabled: bool,
+    context: RenderContext<'_>,
+) {
+    if !area.is_empty() {
+        frame.render_widget(
+            Paragraph::new(label).style(action_surface(app, target, enabled, context)),
+            area,
+        );
     }
 }
 
-pub(super) fn home_at(area: Rect, position: Position) -> bool {
-    menu_area(area).contains(position)
+fn action_surface(app: &App, target: Target, enabled: bool, context: RenderContext<'_>) -> Style {
+    let pointer = super::pointer::PointerTarget::Header(target);
+    let state = app.fullscreen.pointer.interaction_state(&pointer);
+    if !enabled {
+        return Style::default()
+            .fg(context.disabled_foreground())
+            .add_modifier(Modifier::DIM);
+    }
+    if state.pressed {
+        return Style::default()
+            .fg(context.pressed_foreground())
+            .add_modifier(Modifier::BOLD);
+    }
+    if app.fullscreen.header.selected() == Some(target) {
+        return Style::default()
+            .fg(context.focus())
+            .add_modifier(Modifier::BOLD | Modifier::UNDERLINED);
+    }
+    if state.hovered {
+        return Style::default().fg(context.hover_foreground());
+    }
+    Style::default()
 }
 
-fn status_width(area: Rect) -> u16 {
+pub(super) fn target_at(app: &App, area: Rect, position: Position) -> Option<Target> {
+    let areas = header_layout(area, app, app.render_context());
+    [
+        (Target::Home, areas.home, true),
+        (Target::Branch, areas.branch, branch_enabled(app)),
+        (Target::Workspace, areas.workspace, workspace_enabled(app)),
+        (Target::AddRoot, areas.add_root, add_root_enabled(app)),
+        (Target::Context, areas.context, true),
+        (Target::Dashboard, areas.dashboard, true),
+    ]
+    .into_iter()
+    .find_map(|(target, area, enabled)| (enabled && area.contains(position)).then_some(target))
+}
+
+pub(super) fn keyboard_targets(app: &App) -> Vec<Target> {
+    [
+        (Target::Home, true),
+        (Target::Branch, branch_enabled(app)),
+        (Target::Workspace, workspace_enabled(app)),
+        (Target::AddRoot, add_root_enabled(app)),
+        (Target::Context, true),
+        (Target::Dashboard, true),
+    ]
+    .into_iter()
+    .filter_map(|(target, enabled)| enabled.then_some(target))
+    .collect()
+}
+
+fn branch_enabled(app: &App) -> bool {
+    app.workspace_mutation_available() && app.status_line().branch_label().is_some()
+}
+
+fn workspace_enabled(app: &App) -> bool {
+    app.workspace_mutation_available() && app.workspace_switch_available()
+}
+
+fn add_root_enabled(app: &App) -> bool {
+    app.workspace_mutation_available() && app.sessions.active_session_id().is_some()
+}
+
+fn header_layout(area: Rect, app: &App, context: RenderContext<'_>) -> HeaderLayout {
     if area.is_empty() {
+        return HeaderLayout::default();
+    }
+    let home = Rect::new(area.x, area.y, area.width.min(2), area.height.min(1));
+    let dashboard_width = DASHBOARD.width() as u16;
+    let show_dashboard = area.width >= 24;
+    let dashboard = show_dashboard
+        .then(|| {
+            Rect::new(
+                area.right().saturating_sub(dashboard_width),
+                area.y,
+                dashboard_width,
+                1,
+            )
+        })
+        .unwrap_or_default();
+    let right_before_dashboard = if dashboard.is_empty() {
+        area.right()
+    } else {
+        dashboard.x.saturating_sub(1)
+    };
+
+    let ratio =
+        crate::status::context_header_line(app.status_line(), false, context, Style::default());
+    let progress =
+        crate::status::context_header_line(app.status_line(), true, context, Style::default());
+    let context_slot_width = ratio.width().max(progress.width()) as u16;
+    let show_context = show_dashboard
+        && right_before_dashboard.saturating_sub(home.right()) >= context_slot_width + 18;
+    let context_width = if show_context
+        && (app.fullscreen.header.selected() == Some(Target::Context)
+            || app.fullscreen.pointer.hovered()
+                == Some(&super::pointer::PointerTarget::Header(Target::Context)))
+    {
+        progress.width() as u16
+    } else if show_context {
+        ratio.width() as u16
+    } else {
+        0
+    };
+    let context = if show_context {
+        Rect::new(
+            right_before_dashboard.saturating_sub(context_width),
+            area.y,
+            context_width,
+            1,
+        )
+    } else {
+        Rect::default()
+    };
+    let context_slot_left = if show_context {
+        right_before_dashboard.saturating_sub(context_slot_width)
+    } else {
+        right_before_dashboard
+    };
+    let left_right = context_slot_left.saturating_sub(u16::from(show_context));
+    let available = left_right.saturating_sub(home.right());
+    let status_width = available.saturating_sub(20).min(24);
+    let status = if status_width > 0 {
+        Rect::new(
+            left_right.saturating_sub(status_width),
+            area.y,
+            status_width,
+            1,
+        )
+    } else {
+        Rect::default()
+    };
+    let workspace_right = if status.is_empty() {
+        left_right
+    } else {
+        status.x.saturating_sub(1)
+    };
+    let workspace_start = home.right();
+    let add_width = if workspace_right.saturating_sub(workspace_start) >= 8 {
+        ADD_ROOT.width() as u16
+    } else {
+        0
+    };
+    let add_root = if add_width > 0 {
+        Rect::new(
+            workspace_right.saturating_sub(add_width),
+            area.y,
+            add_width,
+            1,
+        )
+    } else {
+        Rect::default()
+    };
+    let identity_right = if add_root.is_empty() {
+        workspace_right
+    } else {
+        add_root.x.saturating_sub(1)
+    };
+    let identity_width = identity_right.saturating_sub(workspace_start);
+    let branch_text = app.status_line().branch_label().unwrap_or_default();
+    let branch_width = if branch_text.is_empty() {
         0
     } else {
-        area.width.saturating_sub(16) / 2
+        (branch_text.width() as u16).min(identity_width / 2)
+    };
+    let branch = Rect::new(workspace_start, area.y, branch_width, 1);
+    let path_start = branch.right().saturating_add(u16::from(branch_width > 0));
+    let workspace = Rect::new(
+        path_start,
+        area.y,
+        identity_right.saturating_sub(path_start),
+        1,
+    );
+    HeaderLayout {
+        home,
+        branch,
+        workspace,
+        add_root,
+        status,
+        context,
+        dashboard,
     }
 }
 
 pub(super) fn process_resource_demand(app: &App, area: Rect) -> ProcessResourceDemand {
+    let status = header_layout(area, app, app.render_context()).status;
     app.status_line()
-        .header_process_resources(usize::from(status_width(area)), app.status_line_runtime())
+        .header_process_resources(usize::from(status.width), app.status_line_runtime())
         .map_or(
             ProcessResourceDemand::Disabled,
             ProcessResourceDemand::Summary,

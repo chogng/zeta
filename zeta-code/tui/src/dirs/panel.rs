@@ -1,4 +1,5 @@
 use super::AddedDir;
+use super::DirAddTarget;
 use super::DirChoices;
 use super::DirSelectionAction;
 use crate::keymap::bindings;
@@ -20,13 +21,23 @@ static NEXT_REQUEST: AtomicU64 = AtomicU64::new(1);
 pub(crate) struct DirPanel {
     selection: ListSelection<DirSelectionAction>,
     pending: Option<u64>,
+    add_target: DirAddTarget,
 }
 
 impl DirPanel {
     pub(crate) fn new(choices: DirChoices) -> Self {
+        Self::for_target(choices, DirAddTarget::Session)
+    }
+
+    pub(crate) fn for_target(choices: DirChoices, add_target: DirAddTarget) -> Self {
+        let mut selection = ListSelection::new(choices.model, choices.actions);
+        if add_target == DirAddTarget::Project {
+            selection.state_mut().focus_search();
+        }
         Self {
-            selection: ListSelection::new(choices.model, choices.actions),
+            selection,
             pending: None,
+            add_target,
         }
     }
 
@@ -83,7 +94,11 @@ impl DirPanel {
             self.selection
                 .state_mut()
                 .set_message(Some("Adding directory…".into()));
-            return ListSelectionOutcome::Activate(DirSelectionAction::Add { request_id, path });
+            return ListSelectionOutcome::Activate(DirSelectionAction::Add {
+                request_id,
+                path,
+                target: self.add_target,
+            });
         }
         self.selection.handle_key(key)
     }
@@ -122,10 +137,11 @@ impl DirPanel {
                     // Start at Read files, so another Enter cannot remove the directory.
                     self.selection.state_mut().select_visible_item(1);
                 }
-                let message = if added.already_present {
-                    "Directory already added"
-                } else {
-                    "Added directory"
+                let message = match (self.add_target, added.already_present) {
+                    (DirAddTarget::Session, true) => "Directory already added",
+                    (DirAddTarget::Session, false) => "Added directory",
+                    (DirAddTarget::Project, true) => "Project folder already added",
+                    (DirAddTarget::Project, false) => "Added project folder",
                 };
                 self.selection
                     .state_mut()

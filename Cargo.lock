@@ -13367,6 +13367,7 @@ dependencies = [
  "zeta-app-server-protocol",
  "zeta-client",
  "zeta-diff",
+ "zeta-file-access",
  "zeta-file-search",
  "zeta-install-context",
  "zeta-keybinding",

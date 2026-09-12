@@ -4,12 +4,14 @@ pub(crate) enum AppCommand {
     Config(crate::config::Command),
     Connectors(crate::connectors::Command),
     Dirs(crate::dirs::Command),
+    Git(crate::git::Command),
     Host(crate::host::Command),
     Issues(crate::issues::Command),
     Keymap(crate::keymap_setup::Command),
     Mcp(crate::mcp::Command),
     Memories(crate::memories::Command),
     Models(crate::models::Command),
+    Projects(crate::projects::Command),
     Sessions(crate::sessions::Command),
     Skills(crate::skills::Command),
     Status(crate::status::Command),
@@ -17,12 +19,17 @@ pub(crate) enum AppCommand {
     Thread(crate::thread::Command),
     Quit,
     Suspend,
+    SwitchWorkspace(std::path::PathBuf),
 }
 
 impl AppCommand {
     pub(super) fn panel_title(&self) -> Option<&'static str> {
         match self {
             Self::Config(crate::config::Command::OpenEditor) => Some("Settings"),
+            Self::Git(crate::git::Command::OpenPicker) => Some("Switch branch"),
+            Self::Projects(crate::projects::Command::OpenRoots) => Some("Switch project folder"),
+            Self::Projects(crate::projects::Command::OpenAddRoot) => Some("Add project folder"),
+            Self::Status(crate::status::Command::OpenPanel) => Some("Status"),
             Self::Keymap(crate::keymap_setup::Command::OpenEditor) => Some("Shortcuts"),
             Self::Status(crate::status::Command::OpenLineEditor) => Some("Status line"),
             Self::Theme(crate::theme::Command::OpenPicker) => Some("Theme"),
@@ -61,10 +68,12 @@ macro_rules! app_command_from {
 app_command_from!(crate::config::Command, Config);
 app_command_from!(crate::connectors::Command, Connectors);
 app_command_from!(crate::dirs::Command, Dirs);
+app_command_from!(crate::git::Command, Git);
 app_command_from!(crate::host::Command, Host);
 app_command_from!(crate::keymap_setup::Command, Keymap);
 app_command_from!(crate::mcp::Command, Mcp);
 app_command_from!(crate::models::Command, Models);
+app_command_from!(crate::projects::Command, Projects);
 app_command_from!(crate::sessions::Command, Sessions);
 app_command_from!(crate::skills::Command, Skills);
 app_command_from!(crate::status::Command, Status);

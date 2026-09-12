@@ -45,6 +45,14 @@ pub(crate) fn draw(
 }
 
 fn top_line(segments: Vec<StatusLineSegment>, context: RenderContext<'_>) -> Line<'static> {
+    styled_segments(segments, context, Style::default())
+}
+
+fn styled_segments(
+    segments: Vec<StatusLineSegment>,
+    context: RenderContext<'_>,
+    surface: Style,
+) -> Line<'static> {
     Line::from(
         segments
             .into_iter()
@@ -56,9 +64,22 @@ fn top_line(segments: Vec<StatusLineSegment>, context: RenderContext<'_>) -> Lin
                     StatusLineSegmentKind::Removed => context.removed_marker(),
                     StatusLineSegmentKind::Progress => context.accent(),
                 };
-                Span::styled(text, Style::default().fg(color))
+                Span::styled(text, surface.patch(Style::default().fg(color)))
             })
             .collect::<Vec<_>>(),
+    )
+}
+
+pub(crate) fn context_header_line(
+    status_line: &StatusLineModel,
+    progress: bool,
+    context: RenderContext<'_>,
+    surface: Style,
+) -> Line<'static> {
+    styled_segments(
+        status_line.context_header_segments(progress),
+        context,
+        surface,
     )
 }
 

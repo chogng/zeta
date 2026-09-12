@@ -52,6 +52,17 @@ pub(super) fn draw(
 }
 
 fn input_hints(app: &App) -> KeyHints {
+    if app.fullscreen.header_focused() {
+        let hints = KeyHints::new()
+            .with_compact_action("←→", "select")
+            .with_compact_action("Enter", "open")
+            .with_compact_action("Esc", "input");
+        return app
+            .fullscreen
+            .header
+            .selected()
+            .map_or(hints.clone(), |target| hints.with_note(target.label()));
+    }
     if app.fullscreen_home_visible() {
         if app.fullscreen_welcome_visible() && !app.fullscreen.input_focused() {
             return KeyHints::new()

@@ -80,7 +80,7 @@ fn agents_manager_simulates_navigation_and_transient_details() {
     assert!(!app.session_manager_focused());
     assert_eq!(app.handle_key(key(KeyCode::Right)), None);
     assert!(app.session_manager_view().is_none());
-    assert_eq!(app.screen_navigation_tip(), Some("← for agents"));
+    assert_eq!(app.screen_navigation_tip(), Some("← Dashboard"));
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn resuming_selected_session_restores_manager_navigation() {
 
     app.show_conversation();
     assert!(!app.session_manager_focused());
-    assert_eq!(app.screen_navigation_tip(), Some("← for agents"));
+    assert_eq!(app.screen_navigation_tip(), Some("← Dashboard"));
     crate::tui_assert_snapshot!(
         "agents_session_after_resume_restores_manager_tip",
         render(&app)
@@ -114,20 +114,20 @@ fn resuming_selected_session_restores_manager_navigation() {
 }
 
 #[test]
-fn agents_command_opens_the_manager() {
+fn dashboard_command_opens_the_manager() {
     let mut app = active_session_app();
-    app.insert_text("/agents");
+    app.insert_text("/dashboard");
 
     assert!(app.completion().is_some());
-    crate::tui_assert_snapshot!("agents_command_completion", render(&app));
+    crate::tui_assert_snapshot!("dashboard_command_completion", render(&app));
 
     assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
     assert!(app.session_manager_view().is_some());
-    crate::tui_assert_snapshot!("agents_command_opened_manager", render(&app));
+    crate::tui_assert_snapshot!("dashboard_command_opened_manager", render(&app));
 
     assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
     assert!(app.session_manager_view().is_none());
-    assert_eq!(app.screen_navigation_tip(), Some("← for agents"));
+    assert_eq!(app.screen_navigation_tip(), Some("← Dashboard"));
 }
 
 #[test]

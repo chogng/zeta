@@ -580,7 +580,7 @@ pub(in crate::app) fn screen_navigation_tip(app: &App) -> Option<&'static str> {
         return None;
     }
     match app.inline.sessions.previous_screen()? {
-        SessionScreen::Manager => Some("← for agents"),
+        SessionScreen::Manager => Some("← Dashboard"),
         SessionScreen::Session(_) => None,
     }
 }

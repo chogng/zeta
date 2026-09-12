@@ -6,12 +6,14 @@ pub(crate) enum AppEvent {
     Config(crate::config::Event),
     Connectors(crate::connectors::Event),
     Dirs(crate::dirs::Event),
+    Git(crate::git::Event),
     Host(crate::host::Event),
     Issues(crate::issues::Event),
     Keymap(crate::keymap_setup::Event),
     Mcp(crate::mcp::Event),
     Memories(crate::memories::Event),
     Models(crate::models::Event),
+    Projects(crate::projects::Event),
     Sessions(crate::sessions::Event),
     Skills(crate::skills::Event),
     Status(crate::status::Event),
@@ -35,10 +37,12 @@ macro_rules! app_event_from {
 app_event_from!(crate::config::Event, Config);
 app_event_from!(crate::connectors::Event, Connectors);
 app_event_from!(crate::dirs::Event, Dirs);
+app_event_from!(crate::git::Event, Git);
 app_event_from!(crate::host::Event, Host);
 app_event_from!(crate::keymap_setup::Event, Keymap);
 app_event_from!(crate::mcp::Event, Mcp);
 app_event_from!(crate::models::Event, Models);
+app_event_from!(crate::projects::Event, Projects);
 app_event_from!(crate::sessions::Event, Sessions);
 app_event_from!(crate::skills::Event, Skills);
 app_event_from!(crate::status::Event, Status);

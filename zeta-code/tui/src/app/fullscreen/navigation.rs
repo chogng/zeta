@@ -42,6 +42,22 @@ pub(in crate::app) fn handle_key(
         focus_input(app);
         return None;
     }
+    if app.fullscreen.header_focused() {
+        return handle_header_key(app, key).flatten();
+    }
+    if key.kind == KeyEventKind::Press
+        && key.code == KeyCode::F(6)
+        && app.fullscreen.input_focused()
+        && app.approval_view().is_none()
+        && app.query_view().is_none()
+        && app.command_panel().is_none()
+    {
+        let targets = super::header::keyboard_targets(app);
+        if let Some(target) = targets.last().copied() {
+            app.fullscreen.focus_header(target);
+        }
+        return None;
+    }
     if app.fullscreen.home_visible() {
         if let Some(command) = super::home::handle_key(app, key) {
             return command;
@@ -184,6 +200,77 @@ pub(in crate::app) fn handle_key(
         return handle_app_key(app, key, now, terminal_area);
     }
     app.handle_chat_composer_outcome(outcome, now)
+}
+
+fn handle_header_key(app: &mut App, key: KeyEvent) -> Option<Option<AppCommand>> {
+    if key.kind != KeyEventKind::Press {
+        return Some(None);
+    }
+    let targets = super::header::keyboard_targets(app);
+    let selected = app.fullscreen.header.selected()?;
+    let index = targets
+        .iter()
+        .position(|target| *target == selected)
+        .unwrap_or(0);
+    match key.code {
+        KeyCode::Left => {
+            let next = index
+                .checked_sub(1)
+                .unwrap_or(targets.len().saturating_sub(1));
+            app.fullscreen.focus_header(targets[next]);
+            Some(None)
+        }
+        KeyCode::Right => {
+            app.fullscreen
+                .focus_header(targets[(index + 1) % targets.len()]);
+            Some(None)
+        }
+        KeyCode::Enter => Some(activate_header_target(app, selected)),
+        KeyCode::Tab | KeyCode::BackTab => {
+            focus_input(app);
+            Some(None)
+        }
+        _ => Some(None),
+    }
+}
+
+pub(super) fn activate_header_target(
+    app: &mut App,
+    target: super::header::Target,
+) -> Option<AppCommand> {
+    use super::header::Target;
+    match target {
+        Target::Home => {
+            app.open_home();
+            None
+        }
+        Target::Branch => {
+            app.open_command_panel(CommandPanel::loading("Switch branch", "Loading branches…"));
+            Some(crate::git::Command::OpenPicker.into())
+        }
+        Target::Workspace => {
+            app.open_command_panel(CommandPanel::loading(
+                "Switch project folder",
+                "Loading Project folders…",
+            ));
+            Some(crate::projects::Command::OpenRoots.into())
+        }
+        Target::AddRoot => {
+            app.open_command_panel(CommandPanel::loading(
+                "Add project folder",
+                "Loading directory permissions…",
+            ));
+            Some(crate::projects::Command::OpenAddRoot.into())
+        }
+        Target::Context => {
+            app.open_command_panel(CommandPanel::loading("Status", "Loading context…"));
+            Some(crate::status::Command::OpenPanel.into())
+        }
+        Target::Dashboard => {
+            show_manager(app);
+            None
+        }
+    }
 }
 
 pub(in crate::app) fn handle_queue_key(app: &mut App, key: KeyEvent) -> Option<Option<AppCommand>> {
@@ -628,7 +715,7 @@ pub(in crate::app) fn screen_navigation_tip(app: &App) -> Option<&'static str> {
         return None;
     }
     match app.fullscreen.sessions.previous_screen()? {
-        SessionScreen::Manager => Some("← for agents"),
+        SessionScreen::Manager => Some("← Dashboard"),
         SessionScreen::Session(_) => None,
     }
 }

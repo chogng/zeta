@@ -1,4 +1,8 @@
 use crate::app::App;
+use crate::app::AppCommand;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Position;
@@ -6,6 +10,21 @@ use ratatui::layout::Rect;
 use ratatui::style::Modifier;
 use zeta_app_server_protocol::protocol::git::GitHeadDto;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
+
+fn app_with_branch() -> App {
+    let mut app = App::for_dir(std::path::Path::new("/work/zeta"));
+    app.update(crate::status::Event::GitStatusReceived(GitStatusResult {
+        repository_id: "repository".into(),
+        stream_instance_id: zeta_protocol::StreamInstanceId::new("git-stream").unwrap(),
+        revision: 1,
+        path: "/work/zeta".into(),
+        head: GitHeadDto::Unborn {
+            name: "main".into(),
+        },
+        changes: vec![],
+    }));
+    app
+}
 
 #[test]
 fn header_keeps_workspace_visible_outside_the_transcript() {
@@ -24,17 +43,7 @@ fn header_keeps_workspace_visible_outside_the_transcript() {
 
 #[test]
 fn header_places_branch_and_path_beside_the_menu_without_repeating_them_below() {
-    let mut app = App::for_dir(std::path::Path::new("/work/zeta"));
-    app.update(crate::status::Event::GitStatusReceived(GitStatusResult {
-        repository_id: "repository".into(),
-        stream_instance_id: zeta_protocol::StreamInstanceId::new("git-stream").unwrap(),
-        revision: 1,
-        path: "/work/zeta".into(),
-        head: GitHeadDto::Unborn {
-            name: "main".into(),
-        },
-        changes: vec![],
-    }));
+    let mut app = app_with_branch();
     let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
     terminal
         .draw(|frame| crate::app::frame::draw(frame, &app))
@@ -61,8 +70,184 @@ fn header_places_branch_and_path_beside_the_menu_without_repeating_them_below() 
 
     let area = Rect::new(0, 0, 80, 20);
     let header = super::super::layout(&app, area).header;
-    assert!(super::home_at(header, Position::new(2, 0)));
-    assert!(!super::home_at(header, Position::new(4, 0)));
+    assert_eq!(
+        super::target_at(&app, header, Position::new(2, 0)),
+        Some(super::Target::Home)
+    );
+    assert_ne!(
+        super::target_at(&app, header, Position::new(4, 0)),
+        Some(super::Target::Home)
+    );
     super::super::pointer::activate_pointer_item(&mut app, area, 2, 0);
     assert!(app.fullscreen_home_visible());
+}
+
+#[test]
+fn every_header_action_has_its_own_hit_target_and_activation() {
+    let area = Rect::new(0, 0, 100, 20);
+    let positions = |app: &App| {
+        let header = super::super::layout(app, area).header;
+        (0..area.width)
+            .filter_map(|column| {
+                let position = Position::new(column, header.y);
+                super::target_at(app, header, position).map(|target| (target, position))
+            })
+            .fold(std::collections::BTreeMap::new(), |mut positions, pair| {
+                positions.entry(pair.0).or_insert(pair.1);
+                positions
+            })
+    };
+    let app = app_with_branch();
+    let targets = positions(&app);
+    for target in [
+        super::Target::Home,
+        super::Target::Branch,
+        super::Target::Workspace,
+        super::Target::AddRoot,
+        super::Target::Context,
+        super::Target::Dashboard,
+    ] {
+        assert!(targets.contains_key(&target), "missing {target:?}");
+    }
+
+    let activate = |target| {
+        let mut app = app_with_branch();
+        let position = positions(&app)[&target];
+        let command =
+            super::super::pointer::activate_pointer_item(&mut app, area, position.x, position.y);
+        (app, command)
+    };
+    assert!(matches!(
+        activate(super::Target::Branch).1,
+        Some(AppCommand::Git(crate::git::Command::OpenPicker))
+    ));
+    assert!(matches!(
+        activate(super::Target::Workspace).1,
+        Some(AppCommand::Projects(crate::projects::Command::OpenRoots))
+    ));
+    assert!(matches!(
+        activate(super::Target::AddRoot).1,
+        Some(AppCommand::Projects(crate::projects::Command::OpenAddRoot))
+    ));
+    assert!(matches!(
+        activate(super::Target::Context).1,
+        Some(AppCommand::Status(crate::status::Command::OpenPanel))
+    ));
+    let (app, command) = activate(super::Target::Dashboard);
+    assert!(command.is_none());
+    assert!(app.session_manager_view().is_some());
+}
+
+#[test]
+fn keyboard_focus_reaches_header_and_context_uses_the_existing_progress_bar() {
+    use zeta_app_server_protocol::protocol::config::ModelRefDto;
+    use zeta_protocol::ModelContextUsage;
+    use zeta_protocol::ModelContextUsageSource;
+    let mut app = app_with_branch();
+    let selected = ModelRefDto {
+        provider: "provider".into(),
+        model: "model".into(),
+    };
+    app.chat_panel
+        .status_line_mut()
+        .apply_context_capacity(Some(&selected), Some(100));
+    app.chat_panel.status_line_mut().apply_context_usage(Some((
+        zeta_protocol::ModelRef::new(
+            zeta_protocol::ProviderId::new("provider").unwrap(),
+            zeta_protocol::ModelId::new("model").unwrap(),
+        ),
+        ModelContextUsage {
+            used_tokens: 40,
+            source: ModelContextUsageSource::ProviderReported,
+        },
+    )));
+
+    app.handle_key(KeyEvent::new(KeyCode::F(6), KeyModifiers::NONE));
+    assert!(app.fullscreen.header_focused());
+    assert_eq!(
+        app.fullscreen.header.selected(),
+        Some(super::Target::Dashboard)
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    assert_eq!(
+        app.fullscreen.header.selected(),
+        Some(super::Target::Context)
+    );
+
+    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    let row = terminal.backend().buffer().content[..100]
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(row.contains("[████░░░░░░ 40%] [Dashboard]"));
+    let header = super::super::layout(&app, Rect::new(0, 0, 100, 20)).header;
+    let context_position = (0..100)
+        .map(|column| Position::new(column, header.y))
+        .find(|position| super::target_at(&app, header, *position) == Some(super::Target::Context))
+        .unwrap();
+    let context_cell = &terminal.backend().buffer()[(context_position.x, context_position.y)];
+    assert_eq!(context_cell.bg, app.render_context().background());
+    assert!(context_cell.modifier.contains(Modifier::UNDERLINED));
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Status(crate::status::Command::OpenPanel))
+    ));
+}
+
+#[test]
+fn header_hovers_never_paint_a_background_or_move_keyboard_selection() {
+    let area = Rect::new(0, 0, 100, 20);
+    for target in [
+        super::Target::Home,
+        super::Target::Branch,
+        super::Target::Workspace,
+        super::Target::AddRoot,
+        super::Target::Context,
+        super::Target::Dashboard,
+    ] {
+        let mut app = app_with_branch();
+        let header = super::super::layout(&app, area).header;
+        let position = (0..area.width)
+            .map(|column| Position::new(column, header.y))
+            .find(|position| super::target_at(&app, header, *position) == Some(target))
+            .unwrap();
+        app.fullscreen
+            .pointer
+            .update_hover(Some(super::super::pointer::PointerTarget::Header(target)));
+        let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
+        terminal
+            .draw(|frame| crate::app::frame::draw(frame, &app))
+            .unwrap();
+        let cell = &terminal.backend().buffer()[(position.x, position.y)];
+        if target != super::Target::Context {
+            assert_eq!(cell.fg, app.render_context().hover_foreground());
+        }
+        assert_eq!(cell.bg, app.render_context().background());
+        assert_eq!(app.fullscreen.header.selected(), None);
+    }
+}
+
+#[test]
+fn workspace_mutations_are_not_pointer_targets_while_a_turn_is_starting() {
+    let mut app = app_with_branch();
+    app.insert_text("start work");
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Thread(
+            crate::thread::Command::SubmitTurn { .. }
+        ))
+    ));
+    let area = Rect::new(0, 0, 100, 20);
+    let header = super::super::layout(&app, area).header;
+    let visible = (0..area.width)
+        .filter_map(|column| super::target_at(&app, header, Position::new(column, header.y)))
+        .collect::<std::collections::BTreeSet<_>>();
+    assert!(!visible.contains(&super::Target::Branch));
+    assert!(!visible.contains(&super::Target::Workspace));
+    assert!(!visible.contains(&super::Target::AddRoot));
+    assert!(visible.contains(&super::Target::Context));
+    assert!(visible.contains(&super::Target::Dashboard));
 }

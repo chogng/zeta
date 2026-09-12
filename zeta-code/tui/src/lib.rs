@@ -5,6 +5,7 @@ mod client;
 mod config;
 mod connectors;
 mod dirs;
+mod git;
 mod host;
 mod issues;
 mod keymap;
@@ -14,6 +15,7 @@ mod memories;
 mod memory;
 mod models;
 mod nls;
+mod projects;
 mod render;
 mod sessions;
 mod skills;
@@ -333,6 +335,8 @@ pub enum TuiExit {
     UserRequested,
     /// The host process received an operating-system termination request.
     TerminationRequested,
+    /// The local host should reopen the product at another Project root.
+    SwitchWorkspace { path: PathBuf },
     /// The initialized App Server connection ended; a home page may have no durable conversation.
     ConnectionLost {
         kind: TuiConnectionLossKind,

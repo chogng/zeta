@@ -79,7 +79,7 @@ impl<T: PartialEq> PointerInteraction<T> {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum PointerTarget {
-    Home,
+    Header(super::header::Target),
     HomeAction(super::home::Action),
     Issues(crate::issues::PointerTarget),
     SessionManager(crate::sessions::SessionManagerPointerTarget),
@@ -145,9 +145,9 @@ pub(crate) fn target_at(
     }
     if app.approval_view().is_none()
         && app.query_view().is_none()
-        && super::header::home_at(areas.header, position)
+        && let Some(target) = super::header::target_at(app, areas.header, position)
     {
-        return Some(PointerTarget::Home);
+        return Some(PointerTarget::Header(target));
     }
     if app.completion_visible() && overlay_contains(app, terminal_area, position) {
         return chat_composer::pointer_target_at(
@@ -332,6 +332,7 @@ pub(in crate::app) fn handle_mouse(
         if !input.is_empty() && app.approval_view().is_none() && app.query_view().is_none() {
             match target_at(app, area, mouse.column, mouse.row) {
                 Some(PointerTarget::Composer(_)) => super::navigation::focus_input(app),
+                Some(PointerTarget::Header(target)) => app.fullscreen.focus_header(target),
                 Some(_) => app.fullscreen.focus_page(),
                 None => super::navigation::focus_page(app),
             }
@@ -393,10 +394,7 @@ pub(super) fn activate_pointer_item(
 ) -> Option<AppCommand> {
     let target = target_at(app, area, column, row)?;
     match target {
-        PointerTarget::Home => {
-            app.open_home();
-            None
-        }
+        PointerTarget::Header(target) => super::navigation::activate_header_target(app, target),
         PointerTarget::HomeAction(action) => super::home::activate(app, action),
         PointerTarget::Issues(target) => app
             .fullscreen

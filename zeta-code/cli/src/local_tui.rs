@@ -29,7 +29,7 @@ enum Entry {
     Resume(zeta_tui::TuiRecoveryState),
 }
 
-fn run_entry(dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(), String> {
+fn run_entry(mut dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(), String> {
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
         return Err(
             "interactive mode requires a TTY; use `zeta ask` or `zeta exec` instead".into(),
@@ -63,6 +63,15 @@ fn run_entry(dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(
         match zeta_tui::run(session, options).map_err(|error| error.to_string())? {
             zeta_tui::TuiExit::UserRequested | zeta_tui::TuiExit::TerminationRequested => {
                 return Ok(());
+            }
+            zeta_tui::TuiExit::SwitchWorkspace { path } => {
+                dir_root = path;
+                session = connect(&executable, &dir_root, &profile_root)
+                    .map_err(|error| error.to_string())?;
+                if let Some(updater) = &updater {
+                    updater.replace_client(session.client());
+                }
+                recovery = None;
             }
             zeta_tui::TuiExit::ConnectionLost {
                 kind: zeta_tui::TuiConnectionLossKind::Transport,

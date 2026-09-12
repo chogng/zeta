@@ -49,7 +49,7 @@ impl Home {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) enum Action {
     Resume,
-    Sessions,
+    Dashboard,
     Settings,
     Help,
     Quit,
@@ -57,7 +57,7 @@ pub(in crate::app) enum Action {
 
 const ACTIONS: [(Action, &str); 5] = [
     (Action::Resume, "Resume session"),
-    (Action::Sessions, "Manage sessions"),
+    (Action::Dashboard, "Dashboard"),
     (Action::Settings, "Settings"),
     (Action::Help, "Help and shortcuts"),
     (Action::Quit, "Quit"),
@@ -242,7 +242,7 @@ pub(super) fn activate(app: &mut App, action: Action) -> Option<AppCommand> {
             app.open_command_panel(CommandPanel::sessions(choices));
             None
         }
-        Action::Sessions => {
+        Action::Dashboard => {
             super::navigation::show_manager(app);
             None
         }

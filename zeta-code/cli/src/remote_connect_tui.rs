@@ -34,6 +34,11 @@ pub(super) fn run(
             zeta_tui::TuiExit::UserRequested | zeta_tui::TuiExit::TerminationRequested => {
                 return Ok(());
             }
+            zeta_tui::TuiExit::SwitchWorkspace { .. } => {
+                return Err(
+                    "Remote Project folder switching requires a new connection target".into(),
+                );
+            }
             zeta_tui::TuiExit::ConnectionLost {
                 kind: zeta_tui::TuiConnectionLossKind::Transport,
                 recovery: next_recovery,

@@ -67,8 +67,7 @@ where
     match command {
         TuiSlashCommandAction::Pr
         | TuiSlashCommandAction::Issue
-        | TuiSlashCommandAction::Sessions
-        | TuiSlashCommandAction::Agents
+        | TuiSlashCommandAction::Dashboard
         | TuiSlashCommandAction::Subagents => {
             return Err(CommandExecutionError(format!(
                 "/{} must be handled by the TUI navigation layer",
