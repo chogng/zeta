@@ -20,9 +20,9 @@ use mxc_sdk::policy::UiSection;
 use std::path::Path;
 use zeta_sandboxing::FileSystemAccess;
 use zeta_sandboxing::HostAclChanges;
+use zeta_sandboxing::HostReadScope;
 use zeta_sandboxing::NetworkAccess;
 use zeta_sandboxing::SandboxCommand;
-use zeta_sandboxing::SandboxDirAccess;
 use zeta_sandboxing::SandboxError;
 use zeta_sandboxing::SandboxPolicy;
 use zeta_sandboxing::SandboxScope;
@@ -33,7 +33,8 @@ pub(super) fn request(
     scope: &SandboxScope,
 ) -> Result<mxc_sdk::SandboxRequest, SandboxError> {
     validate_paths(command.working_directory(), scope)?;
-    let filesystem = filesystem(policy.file_system(), scope)?;
+    let resolved_filesystem = scope.resolve_filesystem(policy.file_system())?;
+    let filesystem = with_sensitive_ipc_paths(filesystem_from_resolved(&resolved_filesystem)?);
     let action = if policy.network() == NetworkAccess::Allowed {
         NetworkAction::Allow
     } else {
@@ -70,13 +71,17 @@ pub(super) fn request(
         timeout_ms: None,
     };
     let mut request = build_request(&policy_input)?;
-    request
-        .set_host_filesystem(if policy.file_system() == FileSystemAccess::FullAccess {
-            HostFilesystemAccess::ReadWrite
-        } else {
-            HostFilesystemAccess::ReadOnly
-        })
-        .map_err(|error| unavailable(error.to_string()))?;
+    if resolved_filesystem.host_read() == HostReadScope::Host {
+        request
+            .set_host_filesystem(if policy.file_system() == FileSystemAccess::FullAccess {
+                HostFilesystemAccess::ReadWrite
+            } else {
+                HostFilesystemAccess::ReadOnly
+            })
+            .map_err(|error| unavailable(error.to_string()))?;
+    }
+    #[cfg(target_os = "windows")]
+    request.require_process_security_environment();
     match policy.host_acl_changes() {
         HostAclChanges::Denied => {
             request.forbid_host_acl_changes();
@@ -99,9 +104,13 @@ pub(super) fn request(
         }
     }
     #[cfg(target_os = "macos")]
-    if policy.network() != NetworkAccess::Allowed {
-        request.deny_seatbelt_unix_sockets();
-    }
+    request.restrict_seatbelt_unix_sockets(
+        scope
+            .private_ipc_dirs()
+            .iter()
+            .map(|dir| text(dir.canonical_path()))
+            .collect::<Result<Vec<_>, _>>()?,
+    );
     let argv = std::iter::once(command.program())
         .chain(command.arguments().iter().map(|arg| arg.as_os_str()))
         .map(|arg| {
@@ -149,38 +158,24 @@ fn build_request(policy: &mxc_sdk::SandboxPolicy) -> Result<mxc_sdk::SandboxRequ
     mxc_sdk::build_request(policy, None).map_err(|error| unavailable(error.to_string()))
 }
 
-fn filesystem(
-    access: FileSystemAccess,
-    scope: &SandboxScope,
+fn filesystem_from_resolved(
+    resolved: &zeta_sandboxing::ResolvedFileSystem,
 ) -> Result<FilesystemSection, SandboxError> {
     let mut filesystem = FilesystemSection::default();
-    for grant in scope.grants() {
-        let root = text(grant.dir().canonical_path())?;
-        if access != FileSystemAccess::ReadOnly && grant.access() == SandboxDirAccess::ReadWrite {
-            filesystem.readwrite_paths.push(root);
-            for name in zeta_sandboxing::PROTECTED_DIR_METADATA_NAMES {
-                let path = grant.dir().canonical_path().join(name);
-                // The contract protects existing metadata. Do not ask an ACL
-                // backend to open absent paths, or hide inspection failures.
-                match std::fs::symlink_metadata(&path) {
-                    Ok(_) => filesystem.readonly_paths.push(text(&path)?),
-                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                    Err(error) => {
-                        return Err(unavailable(format!(
-                            "cannot inspect protected path '{}': {error}",
-                            path.display()
-                        )));
-                    }
-                }
-            }
-        } else {
-            filesystem.readonly_paths.push(root);
-        }
-    }
-    filesystem.denied_paths = scope
-        .hidden_dirs()
+    filesystem.readwrite_paths = resolved
+        .readwrite_paths()
         .iter()
-        .map(|dir| text(dir.canonical_path()))
+        .map(|path| text(path))
+        .collect::<Result<_, _>>()?;
+    filesystem.readonly_paths = resolved
+        .readonly_paths()
+        .iter()
+        .map(|path| text(path))
+        .collect::<Result<_, _>>()?;
+    filesystem.denied_paths = resolved
+        .denied_paths()
+        .iter()
+        .map(|path| text(path))
         .collect::<Result<_, _>>()?;
     filesystem.clear_policy_on_exit = Some(true);
     Ok(filesystem)
@@ -207,6 +202,42 @@ fn text(path: &Path) -> Result<String, SandboxError> {
         .filter(|value| !value.contains('\0'))
         .map(str::to_owned)
         .ok_or_else(|| unavailable("MXC requires Unicode filesystem paths without NUL"))
+}
+
+#[cfg(unix)]
+fn sensitive_ipc_paths() -> Vec<String> {
+    let mut paths = vec![
+        std::path::PathBuf::from("/var/run/docker.sock"),
+        std::path::PathBuf::from("/run/docker.sock"),
+    ];
+    if let Some(path) = std::env::var_os("SSH_AUTH_SOCK") {
+        paths.push(path.into());
+    }
+    if let Ok(value) = std::env::var("GPG_AGENT_INFO")
+        && let Some(path) = value.split(':').next()
+        && !path.is_empty()
+    {
+        paths.push(path.into());
+    }
+    paths.sort();
+    paths.dedup();
+    paths
+        .into_iter()
+        .filter(|path| path.exists())
+        .filter_map(|path| std::fs::canonicalize(path).ok())
+        .filter_map(|path| path.to_str().map(str::to_owned))
+        .collect()
+}
+
+#[cfg(unix)]
+fn with_sensitive_ipc_paths(mut filesystem: FilesystemSection) -> FilesystemSection {
+    filesystem.denied_paths.extend(sensitive_ipc_paths());
+    filesystem
+}
+
+#[cfg(not(unix))]
+fn with_sensitive_ipc_paths(filesystem: FilesystemSection) -> FilesystemSection {
+    filesystem
 }
 
 #[cfg(test)]

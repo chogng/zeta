@@ -48,12 +48,7 @@ impl SandboxBackend for SandboxBackends {
         policy: SandboxPolicy,
         scope: &SandboxScope,
     ) -> Result<PreparedCommand, SandboxError> {
-        if !policy.requires_platform_sandbox() {
-            if !scope.is_single_unhidden() {
-                return Err(SandboxError::InvalidScope(
-                    "unrestricted execution cannot carry an isolated directory scope".into(),
-                ));
-            }
+        if !policy.requires_platform_sandbox() && scope.is_single_unhidden() {
             return Ok(PreparedCommand::unrestricted(command));
         }
         let mut unsupported = Vec::new();

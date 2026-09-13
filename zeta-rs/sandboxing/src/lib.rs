@@ -1,10 +1,13 @@
 //! Cross-platform sandbox policy and backend coordination.
 //!
-//! Owns policy, directory scopes and process lifecycle. Implementations are injected by the host.
+//! Owns policy, directory scopes, process lifecycle, and the resolution of a
+//! scope into the concrete filesystem view shared by every backend and file
+//! tool. Canonical path handling delegates to the file-access layer.
 
 mod backends;
 mod dir;
 mod error;
+mod filesystem;
 mod manager;
 mod model;
 mod process;
@@ -18,10 +21,16 @@ pub use process::SandboxProcess;
 
 pub use dir::PROTECTED_DIR_METADATA_NAMES;
 pub use error::SandboxError;
+pub use filesystem::HostReadScope;
+pub use filesystem::MissingPathBehavior;
+pub use filesystem::PatternMatchTiming;
+pub use filesystem::ResolvedFileSystem;
+pub use filesystem::SandboxPathAccess;
+pub use filesystem::SandboxPathRule;
 pub use manager::{SandboxBackend, SandboxManager};
 pub use model::{
-    FileSystemAccess, ManagedNetworkAccess, NetworkAccess, PreparedCommand, SandboxCommand,
-    SandboxDenialTiming, SandboxKind, SandboxPolicy, SandboxProcessDenial,
+    FileSystemAccess, ManagedNetworkAccess, NetworkAccess, PreparedCommand, ProcessIo,
+    SandboxCommand, SandboxDenialTiming, SandboxKind, SandboxPolicy, SandboxProcessDenial,
     SandboxProcessExitStatus,
 };
 pub use scope::SandboxDirAccess;

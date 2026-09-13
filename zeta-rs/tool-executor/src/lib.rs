@@ -1,5 +1,16 @@
 //! The single process-execution boundary used by Zeta tools.
 
+mod session;
+
+pub use session::CommandSessionCursor;
+pub use session::CommandSessionId;
+pub use session::CommandSessionOutput;
+pub use session::CommandSessionOwner;
+pub use session::CommandSessionStart;
+pub use session::CommandSessionStatus;
+pub use session::CommandSessionUpdate;
+pub use zeta_utils_pty::TerminalSize as CommandTerminalSize;
+
 use std::io::Read;
 use std::io::Write;
 use std::path::PathBuf;
@@ -53,6 +64,8 @@ pub struct CommandRequest {
 pub enum CommandInput {
     Closed,
     Bytes(Vec<u8>),
+    /// Keep stdin open for subsequent writes through a command session.
+    Open,
 }
 
 /// Exact process authority selected before execution reaches the host spawn boundary.
@@ -114,6 +127,7 @@ pub struct CommandExecutor<P, B> {
     sandbox: SandboxManager<B>,
     approval_policy: P,
     limits: ExecutionLimits,
+    sessions: session::CommandSessions,
 }
 
 impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
@@ -122,6 +136,7 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             sandbox: SandboxManager::new(dir, backend),
             approval_policy,
             limits,
+            sessions: session::CommandSessions::default(),
         }
     }
 
@@ -164,114 +179,33 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
         scope: Option<&SandboxScope>,
         network_policy: Option<&network_proxy::NetworkPolicyHandle>,
     ) -> Result<CommandExecutionOutcome, ExecutionError> {
-        check_cancellation_before_start(cancellation)?;
-        let action_digest = format!("{}:{}", request.program, request.arguments.join("\u{1f}"));
-        match self.approval_policy.requirement_for(&action_digest) {
-            ApprovalRequirement::NotRequired => {}
-            ApprovalRequirement::Required => return Err(ExecutionError::ApprovalRequired),
-            ApprovalRequirement::Denied => return Err(ExecutionError::Denied),
+        if matches!(request.input, CommandInput::Open) {
+            return Err(ExecutionError::Spawn(
+                "open command input requires the session API".into(),
+            ));
         }
-        let CommandRequest {
-            program,
-            arguments,
-            working_directory,
+        let started = self.start_scoped_with_network(
+            request,
+            authority,
+            cancellation,
+            scope,
+            network_policy,
+            zeta_sandboxing::ProcessIo::Pipes,
+        )?;
+        let StartResult::Started(StartedCommand {
+            mut child,
             input,
-        } = request;
-        let mut command = SandboxCommand::new(program, arguments, working_directory);
-        let network = if authority.sandbox_policy().network() == NetworkAccess::Managed {
-            let policy = network_policy.ok_or_else(|| {
-                ExecutionError::Network(
-                    "managed networking has no request authorization authority".into(),
-                )
-            })?;
-            let proxy = if self.sandbox.requires_shared_network_proxy() {
-                network_proxy::NetworkProxy::start_shared(policy.clone(), cancellation)
-            } else {
-                network_proxy::NetworkProxy::start(policy.clone(), cancellation)
-            }
-            .map_err(|error| ExecutionError::Network(error.to_string()))?;
-            command = command.with_network_proxy(zeta_sandboxing::ManagedNetworkAccess::new(
-                std::num::NonZeroU16::new(proxy.http_port()).expect("bound port"),
-                std::num::NonZeroU16::new(proxy.socks_port()).expect("bound port"),
-            ));
-            Some(proxy)
-        } else {
-            None
+            authority,
+            _runtime_dir,
+            _network,
+        }) = started
+        else {
+            let StartResult::Finished(outcome) = started else {
+                unreachable!()
+            };
+            return Ok(outcome);
         };
-        let prepared = match scope.map_or_else(
-            || self.sandbox.prepare(&command, authority.sandbox_policy()),
-            |scope| {
-                self.sandbox
-                    .prepare_scoped(&command, authority.sandbox_policy(), scope)
-            },
-        ) {
-            Ok(prepared) => prepared,
-            Err(error @ SandboxError::BackendUnavailable { .. })
-                if matches!(authority, CommandExecutionAuthority::Sandboxed(_))
-                    && authority.sandbox_policy().network() != NetworkAccess::Managed =>
-            {
-                return Ok(CommandExecutionOutcome::SandboxDenied(
-                    SandboxDenialOutput::safe_to_retry(
-                        error.to_string(),
-                        ProcessExecutionOutput::from_captured_streams(
-                            ProcessExitStatus::Terminated,
-                            "",
-                            "",
-                        ),
-                    ),
-                ));
-            }
-            Err(error) => return Err(ExecutionError::Sandbox(error)),
-        };
-        check_cancellation_before_start(cancellation)?;
-        let prepared_kind = prepared.kind();
-        if authority.sandbox_policy().network() == NetworkAccess::Managed
-            && prepared_kind == zeta_sandboxing::SandboxKind::Unrestricted
-        {
-            return Err(ExecutionError::Network(
-                "the backend did not enforce managed network access".into(),
-            ));
-        }
-        let mut environment = execution_environment();
-        environment.extend(
-            network
-                .as_ref()
-                .map(|proxy| {
-                    network_proxy::ProxyEnvironment::new(
-                        proxy.http_port().try_into().expect("bound port"),
-                        proxy.socks_port().try_into().expect("bound port"),
-                    )
-                    .variables()
-                    .into_iter()
-                    .map(|(name, value)| (name.to_owned(), value))
-                    .collect::<Vec<_>>()
-                })
-                .unwrap_or_default(),
-        );
-        let mut child = match prepared.spawn(&environment) {
-            Ok(child) => child,
-            Err(
-                error @ SandboxError::StartFailed {
-                    timing: SandboxDenialTiming::BeforeProcessStart,
-                    ..
-                },
-            ) if matches!(authority, CommandExecutionAuthority::Sandboxed(_))
-                && prepared_kind != zeta_sandboxing::SandboxKind::Unrestricted
-                && authority.sandbox_policy().network() != NetworkAccess::Managed =>
-            {
-                return Ok(CommandExecutionOutcome::SandboxDenied(
-                    SandboxDenialOutput::safe_to_retry(
-                        format!("sandbox launcher could not start: {error}"),
-                        ProcessExecutionOutput::from_captured_streams(
-                            ProcessExitStatus::Terminated,
-                            "",
-                            "",
-                        ),
-                    ),
-                ));
-            }
-            Err(error) => return Err(ExecutionError::Sandbox(error)),
-        };
+        let input = input.expect("synchronous execution always supplies an input mode");
         let stdin_writer = match input {
             CommandInput::Closed => {
                 drop(child.take_stdin());
@@ -283,6 +217,7 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
                     stdin.write_all(&bytes).map_err(|error| error.to_string())
                 }))
             }
+            CommandInput::Open => unreachable!("open input was rejected before process start"),
         };
         let stdout = child.take_stdout().expect("stdout was piped");
         let stderr = child.take_stderr().expect("stderr was piped");
@@ -364,6 +299,189 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
         }
         Ok(CommandExecutionOutcome::Completed(output))
     }
+
+    fn start_scoped_with_network(
+        &self,
+        request: CommandRequest,
+        authority: CommandExecutionAuthority,
+        cancellation: &CancellationToken,
+        scope: Option<&SandboxScope>,
+        network_policy: Option<&network_proxy::NetworkPolicyHandle>,
+        io: zeta_sandboxing::ProcessIo,
+    ) -> Result<StartResult, ExecutionError> {
+        check_cancellation_before_start(cancellation)?;
+        let action_digest = format!("{}:{}", request.program, request.arguments.join("\u{1f}"));
+        match self.approval_policy.requirement_for(&action_digest) {
+            ApprovalRequirement::NotRequired => {}
+            ApprovalRequirement::Required => return Err(ExecutionError::ApprovalRequired),
+            ApprovalRequirement::Denied => return Err(ExecutionError::Denied),
+        }
+        let CommandRequest {
+            program,
+            arguments,
+            working_directory,
+            input,
+        } = request;
+        let mut command = SandboxCommand::new(program, arguments, working_directory);
+        if let zeta_sandboxing::ProcessIo::Pty(size) = io {
+            command = command.with_pty(size);
+        }
+        let (runtime_dir, runtime_scope) =
+            if matches!(authority, CommandExecutionAuthority::Sandboxed(_)) {
+                prepare_runtime_scope(scope, self.sandbox.dir())?
+            } else {
+                (None, scope.cloned())
+            };
+        let scope = runtime_scope.as_ref();
+        let network = if authority.sandbox_policy().network() == NetworkAccess::Managed {
+            let policy = network_policy.ok_or_else(|| {
+                ExecutionError::Network(
+                    "managed networking has no request authorization authority".into(),
+                )
+            })?;
+            let proxy = if self.sandbox.requires_shared_network_proxy() {
+                network_proxy::NetworkProxy::start_shared(policy.clone(), cancellation)
+            } else {
+                network_proxy::NetworkProxy::start(policy.clone(), cancellation)
+            }
+            .map_err(|error| ExecutionError::Network(error.to_string()))?;
+            command = command.with_network_proxy(zeta_sandboxing::ManagedNetworkAccess::new(
+                std::num::NonZeroU16::new(proxy.http_port()).expect("bound port"),
+                std::num::NonZeroU16::new(proxy.socks_port()).expect("bound port"),
+            ));
+            Some(proxy)
+        } else {
+            None
+        };
+        let prepared = match scope.map_or_else(
+            || self.sandbox.prepare(&command, authority.sandbox_policy()),
+            |scope| {
+                self.sandbox
+                    .prepare_scoped(&command, authority.sandbox_policy(), scope)
+            },
+        ) {
+            Ok(prepared) => prepared,
+            Err(error @ SandboxError::BackendUnavailable { .. })
+                if matches!(authority, CommandExecutionAuthority::Sandboxed(_))
+                    && authority.sandbox_policy().network() != NetworkAccess::Managed =>
+            {
+                return Ok(StartResult::Finished(
+                    CommandExecutionOutcome::SandboxDenied(SandboxDenialOutput::safe_to_retry(
+                        error.to_string(),
+                        ProcessExecutionOutput::from_captured_streams(
+                            ProcessExitStatus::Terminated,
+                            "",
+                            "",
+                        ),
+                    )),
+                ));
+            }
+            Err(error) => return Err(ExecutionError::Sandbox(error)),
+        };
+        check_cancellation_before_start(cancellation)?;
+        let prepared_kind = prepared.kind();
+        if authority.sandbox_policy().network() == NetworkAccess::Managed
+            && prepared_kind == zeta_sandboxing::SandboxKind::Unrestricted
+        {
+            return Err(ExecutionError::Network(
+                "the backend did not enforce managed network access".into(),
+            ));
+        }
+        let mut environment = execution_environment();
+        if let Some(runtime_dir) = runtime_dir.as_ref() {
+            let path = runtime_dir.path().to_string_lossy().into_owned();
+            for name in ["TMPDIR", "TMP", "TEMP"] {
+                environment.retain(|(key, _)| key != name);
+                environment.push((name.to_owned(), path.clone()));
+            }
+        }
+        environment.extend(
+            network
+                .as_ref()
+                .map(|proxy| {
+                    network_proxy::ProxyEnvironment::new(
+                        proxy.http_port().try_into().expect("bound port"),
+                        proxy.socks_port().try_into().expect("bound port"),
+                    )
+                    .variables()
+                    .into_iter()
+                    .map(|(name, value)| (name.to_owned(), value))
+                    .collect::<Vec<_>>()
+                })
+                .unwrap_or_default(),
+        );
+        let child = match prepared.spawn(&environment) {
+            Ok(child) => child,
+            Err(
+                error @ SandboxError::StartFailed {
+                    timing: SandboxDenialTiming::BeforeProcessStart,
+                    ..
+                },
+            ) if matches!(authority, CommandExecutionAuthority::Sandboxed(_))
+                && prepared_kind != zeta_sandboxing::SandboxKind::Unrestricted
+                && authority.sandbox_policy().network() != NetworkAccess::Managed =>
+            {
+                return Ok(StartResult::Finished(
+                    CommandExecutionOutcome::SandboxDenied(SandboxDenialOutput::safe_to_retry(
+                        format!("sandbox launcher could not start: {error}"),
+                        ProcessExecutionOutput::from_captured_streams(
+                            ProcessExitStatus::Terminated,
+                            "",
+                            "",
+                        ),
+                    )),
+                ));
+            }
+            Err(error) => return Err(ExecutionError::Sandbox(error)),
+        };
+        Ok(StartResult::Started(StartedCommand {
+            child,
+            input: Some(input),
+            authority,
+            _runtime_dir: runtime_dir,
+            _network: network,
+        }))
+    }
+}
+
+enum StartResult {
+    Started(StartedCommand),
+    Finished(CommandExecutionOutcome),
+}
+
+struct StartedCommand {
+    child: ProcessHandle,
+    input: Option<CommandInput>,
+    authority: CommandExecutionAuthority,
+    _runtime_dir: Option<tempfile::TempDir>,
+    _network: Option<network_proxy::NetworkProxy>,
+}
+
+#[cfg(unix)]
+fn prepare_runtime_scope(
+    scope: Option<&SandboxScope>,
+    default_dir: &Dir,
+) -> Result<(Option<tempfile::TempDir>, Option<SandboxScope>), ExecutionError> {
+    let runtime_dir = tempfile::Builder::new()
+        .prefix("zeta-exec-")
+        .tempdir()
+        .map_err(|error| ExecutionError::Spawn(error.to_string()))?;
+    let dir = Dir::open(default_dir.env().clone(), runtime_dir.path())
+        .map_err(|error| ExecutionError::Spawn(error.to_string()))?;
+    let scope = scope
+        .cloned()
+        .unwrap_or_else(|| SandboxScope::single(default_dir.clone()))
+        .with_private_ipc_dir(dir)
+        .map_err(ExecutionError::Sandbox)?;
+    Ok((Some(runtime_dir), Some(scope)))
+}
+
+#[cfg(not(unix))]
+fn prepare_runtime_scope(
+    scope: Option<&SandboxScope>,
+    _: &Dir,
+) -> Result<(Option<tempfile::TempDir>, Option<SandboxScope>), ExecutionError> {
+    Ok((None, scope.cloned()))
 }
 
 fn execution_environment() -> Vec<(String, String)> {

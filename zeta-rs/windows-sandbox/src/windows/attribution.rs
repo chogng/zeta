@@ -26,9 +26,9 @@ use windows_sys::Win32::Security::GetTokenInformation;
 use windows_sys::Win32::Security::SID_AND_ATTRIBUTES;
 use windows_sys::Win32::Security::TOKEN_GROUPS;
 use windows_sys::Win32::Security::TOKEN_QUERY;
+use windows_sys::Win32::Security::TOKEN_USER;
 use windows_sys::Win32::Security::TokenRestrictedSids;
 use windows_sys::Win32::Security::TokenUser;
-use windows_sys::Win32::Security::TOKEN_USER;
 use windows_sys::Win32::System::Threading::OpenProcess;
 use windows_sys::Win32::System::Threading::OpenProcessToken;
 use windows_sys::Win32::System::Threading::PROCESS_QUERY_LIMITED_INFORMATION;
@@ -221,15 +221,8 @@ fn attribution_for_process(process_id: u32) -> io::Result<(OwnedHandle, Connecti
 
 fn token_user(token: HANDLE) -> io::Result<String> {
     let mut byte_len = 0_u32;
-    let queried = unsafe {
-        GetTokenInformation(
-            token,
-            TokenUser,
-            std::ptr::null_mut(),
-            0,
-            &mut byte_len,
-        )
-    };
+    let queried =
+        unsafe { GetTokenInformation(token, TokenUser, std::ptr::null_mut(), 0, &mut byte_len) };
     if queried != 0 || unsafe { GetLastError() } != ERROR_INSUFFICIENT_BUFFER {
         return Err(last_error("query proxy client user SID buffer size"));
     }

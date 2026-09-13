@@ -226,6 +226,9 @@ impl AgentGrepService {
         if let Some(glob) = glob {
             command.args(["--glob", &glob]);
         }
+        for glob in super::LOCAL_DENIED_GLOBS {
+            command.args(["--glob", &format!("!{glob}")]);
+        }
         command.arg("--").arg(pattern).arg(&path.absolute);
         let output = match run_search(command, cancellation) {
             Ok(output) => output,
@@ -272,7 +275,10 @@ impl AgentGrepService {
             },
             scope: path.relative.clone(),
             include_patterns: glob.into_iter().collect(),
-            exclude_patterns: Vec::new(),
+            exclude_patterns: super::LOCAL_DENIED_GLOBS
+                .iter()
+                .map(|pattern| (*pattern).to_owned())
+                .collect(),
             max_results: MAX_AGENT_MATCHES,
         };
         let result = match index.search(&query) {

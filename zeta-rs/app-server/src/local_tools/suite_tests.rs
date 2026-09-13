@@ -29,6 +29,15 @@ impl SandboxBackend for PassThroughBackend {
     ) -> Result<PreparedCommand, SandboxError> {
         Ok(PreparedCommand::unrestricted(command))
     }
+
+    fn prepare_scoped(
+        &self,
+        command: &SandboxCommand,
+        _: SandboxPolicy,
+        _: &zeta_sandboxing::SandboxScope,
+    ) -> Result<PreparedCommand, SandboxError> {
+        Ok(PreparedCommand::unrestricted(command))
+    }
 }
 
 #[test]
@@ -106,6 +115,20 @@ fn dir_resolution_is_bound_to_the_exact_session_and_grant() {
         .unwrap();
     assert!(matches!(write, ToolExecutionOutput::Success(_)));
     assert_eq!(std::fs::read_to_string(created).unwrap(), "created");
+    let denied = session_dir.path().join(".env");
+    std::fs::write(&denied, "secret").unwrap();
+    for permission in [Permission::InspectRepository, Permission::MutateRepository] {
+        let Err(error) = suite.resolve(
+            &denied.display().to_string(),
+            true,
+            Some(&session_id),
+            None,
+            permission,
+        ) else {
+            panic!("denied path unexpectedly resolved")
+        };
+        assert!(error.contains("denied by the local filesystem policy"));
+    }
     assert!(
         suite
             .resolve(
@@ -133,6 +156,134 @@ fn dir_resolution_is_bound_to_the_exact_session_and_grant() {
             )
             .is_err()
     );
+}
+
+#[test]
+fn shell_session_tool_returns_early_then_drives_the_same_process() {
+    let cwd_dir = tempfile::tempdir().unwrap();
+    let grant = authorization(cwd_dir.path());
+    let shell_authorization = grant.authorize(Permission::ExecuteCommands).unwrap();
+    let access = Arc::new(crate::dir_grants::DirGrants::default());
+    let session_id = SessionId::new("session-command").unwrap();
+    let thread_id = ThreadId::new("thread-command").unwrap();
+    access.add_dir(session_id.clone(), grant).unwrap();
+    let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
+    let shell = LocalShellToolService::new_with_action_policy_revision(
+        shell_authorization,
+        ripgrep.clone(),
+        PassThroughBackend,
+        ActionPolicyRevision::new("test-policy-v1"),
+        super::super::shell_sandbox(),
+    )
+    .unwrap();
+    let agent_grep = Arc::new(AgentGrepService::new(
+        zeta_config::AgentGrepBackend::Ripgrep,
+        ripgrep.clone(),
+        None,
+    ));
+    let suite = LocalToolSuite::new(shell, ripgrep, agent_grep, access);
+    #[cfg(windows)]
+    let (program, arguments) = (
+        std::path::PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+            .join("System32/WindowsPowerShell/v1.0/powershell.exe")
+            .display()
+            .to_string(),
+        vec![
+            "-NoLogo".to_owned(),
+            "-NoProfile".to_owned(),
+            "-NonInteractive".to_owned(),
+            "-Command".to_owned(),
+            "$line=[Console]::In.ReadLine(); [Console]::Out.Write(\"got:$line\")".to_owned(),
+        ],
+    );
+    #[cfg(unix)]
+    let (program, arguments) = (
+        "/bin/sh".to_owned(),
+        vec![
+            "-c".to_owned(),
+            "read line; printf 'got:%s' \"$line\"".to_owned(),
+        ],
+    );
+    let cancellation = zeta_async_utils::CancellationSource::new();
+    let authority = ToolAuthorization::Sandboxed(super::super::shell_sandbox());
+    let start = suite
+        .shell_session(
+            &tool_call(
+                "shell-session",
+                serde_json::json!({
+                    "action": "start",
+                    "session_id": null,
+                    "program": program,
+                    "arguments": arguments,
+                    "working_directory": cwd_dir.path().display().to_string(),
+                    "input": null,
+                    "stdout_cursor": null,
+                    "stderr_cursor": null,
+                    "wait_ms": 0,
+                }),
+            ),
+            &authority,
+            &cancellation.token(),
+            &session_id,
+            &thread_id,
+            None,
+        )
+        .unwrap();
+    let ToolExecutionOutput::Success(start) = start else {
+        panic!("session start failed")
+    };
+    let start: serde_json::Value = serde_json::from_str(&start).unwrap();
+    assert_eq!(start["status"], "running");
+    let command_id = start["session_id"].as_str().unwrap();
+    suite
+        .shell_session(
+            &tool_call(
+                "shell-session",
+                serde_json::json!({"action":"write","session_id":command_id,"input":"hello\n"}),
+            ),
+            &authority,
+            &cancellation.token(),
+            &session_id,
+            &thread_id,
+            None,
+        )
+        .unwrap();
+    let mut stdout = String::new();
+    let mut stdout_cursor = 0;
+    let mut stderr_cursor = 0;
+    loop {
+        let read = suite
+            .shell_session(
+                &tool_call(
+                    "shell-session",
+                    serde_json::json!({
+                        "action":"read",
+                        "session_id":command_id,
+                        "stdout_cursor":stdout_cursor,
+                        "stderr_cursor":stderr_cursor,
+                        "wait_ms":1000,
+                    }),
+                ),
+                &authority,
+                &cancellation.token(),
+                &session_id,
+                &thread_id,
+                None,
+            )
+            .unwrap();
+        let ToolExecutionOutput::Success(read) = read else {
+            panic!("session read failed")
+        };
+        let read: serde_json::Value = serde_json::from_str(&read).unwrap();
+        stdout.push_str(read["stdout"]["text"].as_str().unwrap());
+        stdout_cursor = read["stdout"]["next_cursor"].as_u64().unwrap();
+        stderr_cursor = read["stderr"]["next_cursor"].as_u64().unwrap();
+        if read["status"] != "running" {
+            assert_eq!(read["status"], "exited");
+            break;
+        }
+    }
+    assert_eq!(stdout, "got:hello");
 }
 
 fn authorization(path: &std::path::Path) -> Grant {

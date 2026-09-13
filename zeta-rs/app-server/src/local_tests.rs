@@ -2022,6 +2022,9 @@ fn message_restore_points_preserve_git_versions_after_restart() {
     let profile = tempfile::tempdir().unwrap();
     let repo = tempfile::tempdir().unwrap();
     run_local_git(repo.path(), &["init", "--quiet", "--initial-branch=main"]);
+    // Content assertions compare checkout bytes, so pin the test repository
+    // away from the machine's core.autocrlf setting.
+    run_local_git(repo.path(), &["config", "core.autocrlf", "false"]);
     std::fs::write(repo.path().join("tracked.txt"), "initial\n").unwrap();
     run_local_git(repo.path(), &["add", "."]);
     run_local_git(repo.path(), &["commit", "--quiet", "-m", "initial"]);
@@ -2185,9 +2188,6 @@ fn message_restore_points_preserve_git_versions_after_restart() {
         serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/request","params":{"commandId":"delete","sessionId":session_id,"request":{"type":"delete"}}}),
     );
     assert!(deleted.get("error").is_none(), "{deleted}");
-    assert!(
-        run_local_git(repo.path(), &["for-each-ref", "refs/zeta/messages/"])
-            .trim()
-            .is_empty()
-    );
+    let remaining = run_local_git(repo.path(), &["for-each-ref", "refs/zeta/messages/"]);
+    assert!(remaining.trim().is_empty(), "message refs survived: {remaining}");
 }

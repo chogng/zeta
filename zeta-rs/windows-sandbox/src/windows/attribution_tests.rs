@@ -66,7 +66,12 @@ fn resolves_loopback_connection_to_current_process() -> io::Result<()> {
     assert_eq!(process_id, std::process::id());
     let current_user = super::super::win::current_user().expect("query current user SID");
     assert_eq!(identity.user_sid, current_user);
-    assert!(identity.restricting_sids.iter().all(|sid| sid.starts_with("S-")));
+    assert!(
+        identity
+            .restricting_sids
+            .iter()
+            .all(|sid| sid.starts_with("S-"))
+    );
     drop(client);
     Ok(())
 }

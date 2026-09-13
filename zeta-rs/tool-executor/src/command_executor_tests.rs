@@ -352,6 +352,162 @@ impl SandboxBackend for MissingSandboxLauncher {
 }
 
 #[test]
+fn command_session_keeps_one_process_for_later_input_and_output_reads() {
+    let dir = TestDir::new();
+    let executor = CommandExecutor::new(dir.root(), PassThroughBackend, AllowAll, test_limits());
+    let owner = CommandSessionOwner::new("connection-1", "thread-1", "local");
+    #[cfg(windows)]
+    let request = CommandRequest {
+        program: PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+            .join("System32/WindowsPowerShell/v1.0/powershell.exe")
+            .display()
+            .to_string(),
+        arguments: vec![
+            "-NoLogo".into(),
+            "-NoProfile".into(),
+            "-NonInteractive".into(),
+            "-Command".into(),
+            "$line=[Console]::In.ReadLine(); [Console]::Out.Write(\"got:$line\")".into(),
+        ],
+        working_directory: ".".into(),
+        input: CommandInput::Closed,
+    };
+    #[cfg(unix)]
+    let request = CommandRequest {
+        program: "/bin/sh".into(),
+        arguments: vec!["-c".into(), "read line; printf 'got:%s' \"$line\"".into()],
+        working_directory: ".".into(),
+        input: CommandInput::Closed,
+    };
+
+    let started = executor
+        .start_session_scoped_with_network(
+            request,
+            CommandExecutionAuthority::Unrestricted,
+            &CancellationSource::new().token(),
+            None,
+            None,
+            owner.clone(),
+            Duration::from_millis(10),
+            None,
+        )
+        .unwrap();
+    let CommandSessionStart::Running(initial) = started else {
+        panic!("input-blocked command must remain running")
+    };
+    executor
+        .write_session(&owner, &initial.session_id, b"hello\n".to_vec())
+        .unwrap();
+    executor
+        .close_session_input(&owner, &initial.session_id)
+        .unwrap();
+    let mut cursor = CommandSessionCursor {
+        stdout: initial.stdout.next_cursor,
+        stderr: initial.stderr.next_cursor,
+    };
+    let mut stdout = String::new();
+    let update = loop {
+        let update = executor
+            .read_session(&owner, &initial.session_id, cursor, Duration::from_secs(1))
+            .unwrap();
+        stdout.push_str(&update.stdout.text);
+        cursor = CommandSessionCursor {
+            stdout: update.stdout.next_cursor,
+            stderr: update.stderr.next_cursor,
+        };
+        if update.status != CommandSessionStatus::Running {
+            break update;
+        }
+    };
+
+    assert_eq!(
+        update.status,
+        CommandSessionStatus::Exited(ProcessExitStatus::Code(0))
+    );
+    assert_eq!(stdout, "got:hello");
+    assert!(
+        executor
+            .read_session(
+                &CommandSessionOwner::new("connection-2", "thread-1", "local"),
+                &initial.session_id,
+                CommandSessionCursor::default(),
+                Duration::ZERO,
+            )
+            .is_err()
+    );
+    executor
+        .release_session(&owner, &initial.session_id)
+        .unwrap();
+}
+
+#[test]
+fn command_session_wait_budget_does_not_terminate_the_process() {
+    let dir = TestDir::new();
+    let executor = CommandExecutor::new(dir.root(), PassThroughBackend, AllowAll, test_limits());
+    let owner = CommandSessionOwner::new("connection", "thread", "local");
+    #[cfg(windows)]
+    let request = CommandRequest {
+        program: PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+            .join("System32/WindowsPowerShell/v1.0/powershell.exe")
+            .display()
+            .to_string(),
+        arguments: vec![
+            "-NoLogo".into(),
+            "-NoProfile".into(),
+            "-NonInteractive".into(),
+            "-Command".into(),
+            "Start-Sleep -Seconds 5".into(),
+        ],
+        working_directory: ".".into(),
+        input: CommandInput::Closed,
+    };
+    #[cfg(unix)]
+    let request = CommandRequest {
+        program: "/bin/sh".into(),
+        arguments: vec!["-c".into(), "sleep 5".into()],
+        working_directory: ".".into(),
+        input: CommandInput::Closed,
+    };
+
+    let CommandSessionStart::Running(initial) = executor
+        .start_session_scoped_with_network(
+            request,
+            CommandExecutionAuthority::Unrestricted,
+            &CancellationSource::new().token(),
+            None,
+            None,
+            owner.clone(),
+            Duration::ZERO,
+            None,
+        )
+        .unwrap()
+    else {
+        panic!("sleeping command must remain running")
+    };
+    let update = executor
+        .read_session(
+            &owner,
+            &initial.session_id,
+            CommandSessionCursor::default(),
+            Duration::from_millis(10),
+        )
+        .unwrap();
+    assert_eq!(update.status, CommandSessionStatus::Running);
+    executor
+        .terminate_session(&owner, &initial.session_id)
+        .unwrap();
+    let terminal = executor
+        .read_session(
+            &owner,
+            &initial.session_id,
+            CommandSessionCursor::default(),
+            Duration::from_secs(2),
+        )
+        .unwrap();
+    assert_eq!(terminal.status, CommandSessionStatus::Terminated);
+}
+
+#[test]
 fn executor_spawns_only_the_command_prepared_by_the_sandbox_backend() {
     let dir = TestDir::new();
     let executor = CommandExecutor::new(dir.root(), ReplacingBackend, AllowAll, test_limits());

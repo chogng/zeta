@@ -8,11 +8,20 @@ fn network_rules_select_managed_execution_without_broadening_the_default_policy(
     assert_eq!(initial.network(), NetworkAccess::Denied);
     #[cfg(windows)]
     {
-        assert_eq!(initial.file_system_isolation(), zeta_sandboxing::FileSystemIsolation::WindowsAccount);
-        assert_eq!(initial.host_acl_changes(), zeta_sandboxing::HostAclChanges::ScopedWithTraversal);
+        assert_eq!(
+            initial.file_system_isolation(),
+            zeta_sandboxing::FileSystemIsolation::WindowsAccount
+        );
+        assert_eq!(
+            initial.host_acl_changes(),
+            zeta_sandboxing::HostAclChanges::ScopedWithTraversal
+        );
     }
     #[cfg(not(windows))]
-    assert_eq!(initial.file_system_isolation(), zeta_sandboxing::FileSystemIsolation::Strict);
+    assert_eq!(
+        initial.file_system_isolation(),
+        zeta_sandboxing::FileSystemIsolation::Strict
+    );
     config.user.rules.push(ExecPolicyRule::new(
         ExecPolicyRuleId::new("network"),
         ExecPolicySelector::all([
@@ -34,4 +43,3 @@ fn network_rules_select_managed_execution_without_broadening_the_default_policy(
     );
     assert!(matches!(snapshot.default(), ExecPolicyDefault::Deny(_)));
 }
-

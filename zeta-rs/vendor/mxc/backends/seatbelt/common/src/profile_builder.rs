@@ -28,7 +28,7 @@
 use std::fmt::Write as _;
 
 use crate::seatbelt_policy;
-use wxc_common::filesystem_resolve::{resolve_path_plan, FsIntent};
+use wxc_common::filesystem_resolve::{FsIntent, resolve_path_plan};
 use wxc_common::host_is_canonical_loopback;
 use wxc_common::models::{ClipboardPolicy, ContainerPolicy, ExecutionRequest, ProxyAddress};
 
@@ -87,7 +87,23 @@ pub fn build_profile_with_proxy(
         .as_ref()
         .is_some_and(|config| !config.allow_unix_sockets)
     {
-        out.push_str("(deny network-bind network-outbound (subpath \"/\"))\n");
+        let allowed = request
+            .seatbelt
+            .as_ref()
+            .expect("restricted Unix socket policy has Seatbelt configuration")
+            .allowed_unix_socket_paths
+            .iter()
+            .map(|path| resolve_policy_path(path))
+            .collect::<Result<Vec<_>, _>>()?;
+        if allowed.is_empty() {
+            out.push_str("(deny network-bind network-outbound (subpath \"/\"))\n");
+        } else {
+            out.push_str("(deny network-bind network-outbound (require-all (subpath \"/\")");
+            for path in allowed {
+                let _ = write!(out, " (require-not (subpath {}))", quote_scheme(&path));
+            }
+            out.push_str("))\n");
+        }
     }
     // Policy-derived deny rules go LAST so they win on conflict.
     write_filesystem_deny(&mut out, &resolved);
@@ -277,7 +293,11 @@ fn write_filesystem_deny(out: &mut String, paths: &ResolvedPaths) {
                     &[hidden.clone()],
                 );
             } else {
-                let _ = write!(out, "(deny file-read* file-write* network-bind network-outbound (require-all (subpath {})", quote_scheme(hidden));
+                let _ = write!(
+                    out,
+                    "(deny file-read* file-write* network-bind network-outbound (require-all (subpath {})",
+                    quote_scheme(hidden)
+                );
                 for path in exceptions {
                     let _ = write!(out, " (require-not (subpath {}))", quote_scheme(path));
                 }
@@ -1347,6 +1367,24 @@ mod tests {
         assert!(p.contains(RW_RULE));
         assert!(!p.contains("network-inbound"));
         assert!(!p.contains("(allow network-outbound)"));
+    }
+
+    #[test]
+    fn restricted_unix_sockets_reopen_only_the_execution_private_directory() {
+        let mut r = req();
+        r.policy.readwrite_paths = vec!["/tmp/work".into(), "/tmp/zeta-exec".into()];
+        r.seatbelt = Some(SeatbeltConfig {
+            allow_unix_sockets: false,
+            allowed_unix_socket_paths: vec!["/tmp/zeta-exec".into()],
+            ..Default::default()
+        });
+
+        let profile = build_profile(&r).unwrap();
+
+        assert!(profile.contains(
+            "(deny network-bind network-outbound (require-all (subpath \"/\") (require-not (subpath \"/private/tmp/zeta-exec\"))))"
+        ));
+        assert!(profile.contains("(subpath \"/private/tmp/work\")"));
     }
 
     #[test]

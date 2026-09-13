@@ -188,6 +188,75 @@ fn powershell_initializes_and_runs_a_pipeline_with_the_restricted_token() {
     ));
 }
 
+#[test]
+fn restricted_child_attaches_to_execution_owned_conpty() {
+    let temp = tempfile::tempdir().unwrap();
+    let directory = std::fs::canonicalize(temp.path()).unwrap();
+    let _directory_pin = super::super::filesystem::pin(&directory).unwrap();
+    let owner = win::current_user().unwrap();
+    let capability = "S-1-5-21-611-612-613-614";
+    let desktop = super::super::desktop::Desktop::new(&owner, &owner, capability).unwrap();
+    let system = std::env::var("SystemRoot").unwrap();
+    let mut terminal =
+        zeta_utils_pty::PreparedConPty::new(zeta_utils_pty::TerminalSize { rows: 24, cols: 80 })
+            .unwrap();
+    terminal
+        .resize(zeta_utils_pty::TerminalSize {
+            rows: 30,
+            cols: 100,
+        })
+        .unwrap();
+    let request = Request {
+        version: 4,
+        owner: owner.clone(),
+        account: owner,
+        capability: capability.into(),
+        // The ping keeps the client alive long enough for the ConPTY renderer
+        // to flush the echoed line before the pseudoconsole is closed.
+        command: format!(
+            "\"{system}\\System32\\cmd.exe\" /d /c \"echo pty-ready & ping -n 3 127.0.0.1 > NUL\""
+        ),
+        cwd: temp.path().to_str().unwrap().into(),
+        environment: vec![
+            format!("SystemRoot={system}"),
+            format!("PATH={system}\\System32"),
+        ],
+        pipes: None,
+        pseudoconsole: Some(terminal.pseudoconsole_handle() as usize),
+        reply: directory.join("unused-reply.json"),
+        desktop: desktop.name.clone(),
+    };
+    let (process, thread, _, _) = prepare_child(&request).unwrap();
+    let job = super::super::job::Job::new(&win::random_hex(16).unwrap()).unwrap();
+    job.assign_process(process.0).unwrap();
+    job.set_ui_limits().unwrap();
+    let writer = terminal.take_writer().unwrap();
+    let reader = terminal.take_reader().unwrap();
+    // ConPTY renders asynchronously, so output must be drained while the
+    // child runs instead of after the pseudoconsole is closed.
+    let drained = std::thread::spawn(move || {
+        let mut reader = reader;
+        let mut output = Vec::new();
+        reader.read_to_end(&mut output).unwrap();
+        output
+    });
+    assert_eq!(unsafe { ResumeThread(thread.0) }, 1);
+    assert_eq!(
+        unsafe { WaitForSingleObject(process.0, 10000) },
+        WAIT_OBJECT_0
+    );
+    let mut exit_code = 0;
+    assert_ne!(unsafe { GetExitCodeProcess(process.0, &mut exit_code) }, 0);
+    drop(writer);
+    drop(terminal);
+    let output = drained.join().unwrap();
+    assert!(
+        String::from_utf8_lossy(&output).contains("pty-ready"),
+        "ConPTY exit={exit_code:#x}, output: {:?}",
+        String::from_utf8_lossy(&output)
+    );
+}
+
 fn check_child(command: String) {
     // Exercises the actual child-creation path under the current ordinary user.
     // Dedicated-account logon and network enforcement are separate acceptance.
@@ -200,7 +269,7 @@ fn check_child(command: String) {
     let pipes = Pipes::new(&owner, &owner).unwrap();
     let system = std::env::var("SystemRoot").unwrap();
     let request = Request {
-        version: 3,
+        version: 4,
         owner: owner.clone(),
         account: owner,
         capability: capability.into(),
@@ -210,7 +279,8 @@ fn check_child(command: String) {
             format!("SystemRoot={system}"),
             format!("TEMP={}", directory.display()),
         ],
-        pipes: pipes.names.clone(),
+        pipes: Some(pipes.names.clone()),
+        pseudoconsole: None,
         reply: directory.join("unused-reply.json"),
         desktop: desktop.name.clone(),
     };

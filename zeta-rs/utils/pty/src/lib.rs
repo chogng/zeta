@@ -49,3 +49,5 @@ pub use windows_input::WindowsTtyInputNormalizer;
 
 #[cfg(windows)]
 pub use pipe::CancellablePipeReader;
+#[cfg(windows)]
+pub use win::conpty::PreparedConPty;

@@ -131,6 +131,7 @@ fn audit_does_not_authorize_mutations_outside_the_approved_scope() {
         env: Vec::new(),
         mode: super::super::account::NetworkMode::Denied,
         proxy_port: None,
+        io: zeta_sandboxing::ProcessIo::Pipes,
     };
     assert!(check_findings(&request, &BTreeSet::from([work])).is_ok());
     let error = check_findings(&request, &BTreeSet::from([outside.clone()])).unwrap_err();

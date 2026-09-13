@@ -19,7 +19,7 @@ use windows_sys::Win32::System::JobObjects::IsProcessInJob;
 use windows_sys::Win32::System::Pipes::*;
 use windows_sys::Win32::System::Threading::*;
 
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Request {
     pub(super) version: u32,
@@ -29,7 +29,8 @@ pub(super) struct Request {
     pub(super) command: String,
     pub(super) cwd: String,
     pub(super) environment: Vec<String>,
-    pub(super) pipes: [String; 3],
+    pub(super) pipes: Option<[String; 3]>,
+    pub(super) pseudoconsole: Option<usize>,
     pub(super) reply: std::path::PathBuf,
     pub(super) desktop: String,
 }
@@ -45,9 +46,9 @@ struct Reply {
 pub(super) struct Child {
     pub(super) process: Handle,
     pub(super) pid: u32,
-    pub(super) stdin: File,
-    pub(super) stdout: File,
-    pub(super) stderr: File,
+    pub(super) stdin: Box<dyn std::io::Write + Send>,
+    pub(super) stdout: Box<dyn std::io::Read + Send>,
+    pub(super) stderr: Option<Box<dyn std::io::Read + Send>>,
 }
 
 pub(super) struct Pipes {
@@ -135,15 +136,11 @@ pub(super) fn spawn(
     runner: &Path,
     directory: &Path,
     request: &Request,
-    pipes: Pipes,
+    pipes: Option<Pipes>,
+    terminal: Option<&mut zeta_utils_pty::PreparedConPty>,
     job: &super::job::Job,
 ) -> Result<Child> {
     let input = directory.join("request.json");
-    std::fs::write(
-        &input,
-        serde_json::to_vec(request).map_err(|error| error.to_string())?,
-    )
-    .map_err(|error| error.to_string())?;
     let arguments = [
         runner.to_string_lossy().into_owned(),
         "run".into(),
@@ -203,10 +200,36 @@ pub(super) fn spawn(
         }
         return Err(error.to_string());
     }
+    let mut worker_request = request.clone();
+    if let Some(terminal) = terminal.as_ref() {
+        let mut remote = std::ptr::null_mut();
+        if unsafe {
+            DuplicateHandle(
+                GetCurrentProcess(),
+                terminal.pseudoconsole_handle().cast(),
+                worker.0,
+                &mut remote,
+                0,
+                0,
+                DUPLICATE_SAME_ACCESS,
+            )
+        } == 0
+        {
+            return Err(win::error("DuplicateHandle(pseudoconsole)"));
+        }
+        worker_request.pseudoconsole = Some(remote as usize);
+    }
+    std::fs::write(
+        &input,
+        serde_json::to_vec(&worker_request).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())?;
     if unsafe { ResumeThread(worker_thread.0) } == u32::MAX {
         return Err(win::error("ResumeThread(logon worker)"));
     }
-    if let Err(error) = pipes.connect(worker.0) {
+    if let Some(pipes) = pipes.as_ref()
+        && let Err(error) = pipes.connect(worker.0)
+    {
         if unsafe { WaitForSingleObject(worker.0, 0) } == WAIT_OBJECT_0 {
             let mut code = 0;
             unsafe {
@@ -287,7 +310,26 @@ pub(super) fn spawn(
     if unsafe { ResumeThread(thread.0) } != 1 {
         return Err("prepared child did not have exactly one suspension".into());
     }
-    let [stdin, stdout, stderr] = pipes.files();
+    let (stdin, stdout, stderr) = match (pipes, terminal) {
+        (Some(pipes), None) => {
+            let [stdin, stdout, stderr] = pipes.files();
+            (
+                Box::new(stdin) as Box<dyn std::io::Write + Send>,
+                Box::new(stdout) as Box<dyn std::io::Read + Send>,
+                Some(Box::new(stderr) as Box<dyn std::io::Read + Send>),
+            )
+        }
+        (None, Some(terminal)) => (
+            terminal
+                .take_writer()
+                .ok_or("ConPTY input has already been taken")?,
+            terminal
+                .take_reader()
+                .ok_or("ConPTY output has already been taken")?,
+            None,
+        ),
+        _ => return Err("process stdio must use either pipes or ConPTY".into()),
+    };
     Ok(Child {
         process: child,
         pid: reply.pid,
@@ -351,7 +393,7 @@ pub(super) fn run(path: &Path) -> Result<()> {
         return Err("worker request exceeds 1 MiB".into());
     }
     let request: Request = serde_json::from_slice(&data).map_err(|_| "invalid worker request")?;
-    if request.version != 3 || win::current_user()? != request.account {
+    if request.version != 4 || win::current_user()? != request.account {
         return Err("worker request identity or protocol mismatch".into());
     }
     if request.account == request.owner {
@@ -526,33 +568,39 @@ pub(super) fn restricted_token(owner: &str, account: &str, capability: &str) -> 
 pub(super) fn prepare_child(request: &Request) -> Result<(Handle, Handle, u32, u32)> {
     let token = restricted_token(&request.owner, &request.account, &request.capability)?;
     let mut handles = Vec::new();
-    for (index, pipe) in request.pipes.iter().enumerate() {
-        let access = if index == 0 {
-            GENERIC_READ
-        } else {
-            GENERIC_WRITE
-        };
-        let handle = Handle::new(
-            unsafe {
-                CreateFileW(
-                    win::wide(pipe).as_ptr(),
-                    access,
-                    0,
-                    std::ptr::null(),
-                    OPEN_EXISTING,
-                    0,
-                    std::ptr::null_mut(),
-                )
-            },
-            "CreateFileW(standard stream)",
-        )?;
-        if unsafe { SetHandleInformation(handle.0, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) } == 0
-        {
-            return Err(win::error("SetHandleInformation"));
+    if let Some(pipes) = &request.pipes {
+        for (index, pipe) in pipes.iter().enumerate() {
+            let access = if index == 0 {
+                GENERIC_READ
+            } else {
+                GENERIC_WRITE
+            };
+            let handle = Handle::new(
+                unsafe {
+                    CreateFileW(
+                        win::wide(pipe).as_ptr(),
+                        access,
+                        0,
+                        std::ptr::null(),
+                        OPEN_EXISTING,
+                        0,
+                        std::ptr::null_mut(),
+                    )
+                },
+                "CreateFileW(standard stream)",
+            )?;
+            if unsafe { SetHandleInformation(handle.0, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) }
+                == 0
+            {
+                return Err(win::error("SetHandleInformation"));
+            }
+            handles.push(handle);
         }
-        handles.push(handle);
     }
-    let inherited = [handles[0].0, handles[1].0, handles[2].0];
+    let inherited = (!handles.is_empty()).then(|| [handles[0].0, handles[1].0, handles[2].0]);
+    if inherited.is_some() == request.pseudoconsole.is_some() {
+        return Err("worker request must select exactly one standard-stream mode".into());
+    }
     let mut size = 0;
     let attribute_count = 1;
     unsafe {
@@ -573,19 +621,40 @@ pub(super) fn prepare_child(request: &Request) -> Result<(Handle, Handle, u32, u
         }
     }
     let _attributes = Attributes(attributes);
-    if unsafe {
-        UpdateProcThreadAttribute(
-            attributes,
-            0,
-            PROC_THREAD_ATTRIBUTE_HANDLE_LIST as usize,
-            inherited.as_ptr().cast_mut().cast(),
-            size_of_val(&inherited),
-            std::ptr::null_mut(),
-            std::ptr::null(),
-        )
-    } == 0
-    {
-        return Err(win::error("UpdateProcThreadAttribute(handle list)"));
+    if let Some(inherited) = inherited.as_ref() {
+        if unsafe {
+            UpdateProcThreadAttribute(
+                attributes,
+                0,
+                PROC_THREAD_ATTRIBUTE_HANDLE_LIST as usize,
+                inherited.as_ptr().cast_mut().cast(),
+                size_of_val(inherited),
+                std::ptr::null_mut(),
+                std::ptr::null(),
+            )
+        } == 0
+        {
+            return Err(win::error("UpdateProcThreadAttribute(handle list)"));
+        }
+    } else {
+        let pseudoconsole = request
+            .pseudoconsole
+            .filter(|handle| *handle != 0)
+            .ok_or("invalid pseudoconsole handle")? as HANDLE;
+        if unsafe {
+            UpdateProcThreadAttribute(
+                attributes,
+                0,
+                PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE as usize,
+                pseudoconsole,
+                size_of::<HANDLE>(),
+                std::ptr::null_mut(),
+                std::ptr::null(),
+            )
+        } == 0
+        {
+            return Err(win::error("UpdateProcThreadAttribute(pseudoconsole)"));
+        }
     }
     let mut environment = Vec::new();
     for entry in &request.environment {
@@ -608,20 +677,40 @@ pub(super) fn prepare_child(request: &Request) -> Result<(Handle, Handle, u32, u
         bInheritHandle: 0,
     };
     let mut desktop = win::wide(&request.desktop);
+    let mut startup_info = STARTUPINFOW {
+        cb: size_of::<STARTUPINFOEXW>() as u32,
+        lpDesktop: desktop.as_mut_ptr(),
+        ..unsafe { std::mem::zeroed() }
+    };
+    if let Some(inherited) = inherited {
+        startup_info.dwFlags = STARTF_USESTDHANDLES;
+        startup_info.hStdInput = inherited[0];
+        startup_info.hStdOutput = inherited[1];
+        startup_info.hStdError = inherited[2];
+    } else {
+        // A pseudoconsole child must not inherit our standard handles, or its
+        // output follows them into this process's console instead of the ConPTY.
+        startup_info.dwFlags = STARTF_USESTDHANDLES;
+        startup_info.hStdInput = INVALID_HANDLE_VALUE;
+        startup_info.hStdOutput = INVALID_HANDLE_VALUE;
+        startup_info.hStdError = INVALID_HANDLE_VALUE;
+    }
     let startup = STARTUPINFOEXW {
-        StartupInfo: STARTUPINFOW {
-            cb: size_of::<STARTUPINFOEXW>() as u32,
-            dwFlags: STARTF_USESTDHANDLES,
-            hStdInput: inherited[0],
-            hStdOutput: inherited[1],
-            hStdError: inherited[2],
-            lpDesktop: desktop.as_mut_ptr(),
-            ..unsafe { std::mem::zeroed() }
-        },
+        StartupInfo: startup_info,
         lpAttributeList: attributes,
     };
     let mut command = win::wide(&request.command);
     let mut process: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
+    // CREATE_NO_WINDOW suppresses the console handle itself, so a child
+    // attached to a pseudoconsole must not carry it.
+    let creation_flags = if inherited.is_some() {
+        CREATE_SUSPENDED
+            | CREATE_NO_WINDOW
+            | CREATE_UNICODE_ENVIRONMENT
+            | EXTENDED_STARTUPINFO_PRESENT
+    } else {
+        CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT
+    };
     if unsafe {
         CreateProcessAsUserW(
             token.0,
@@ -629,11 +718,8 @@ pub(super) fn prepare_child(request: &Request) -> Result<(Handle, Handle, u32, u
             command.as_mut_ptr(),
             &security,
             &security,
-            1,
-            CREATE_SUSPENDED
-                | CREATE_NO_WINDOW
-                | CREATE_UNICODE_ENVIRONMENT
-                | EXTENDED_STARTUPINFO_PRESENT,
+            i32::from(inherited.is_some()),
+            creation_flags,
             environment.as_ptr().cast(),
             win::wide(&request.cwd).as_ptr(),
             &startup.StartupInfo,

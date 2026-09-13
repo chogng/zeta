@@ -62,3 +62,26 @@ fn managed_proxy_never_opens_general_ingress() {
         Some("http://127.0.0.1:3128")
     );
 }
+
+#[cfg(windows)]
+#[test]
+fn psec_can_be_required_without_opening_host_read_access() {
+    let policy = SandboxPolicy {
+        version: "0.8.0-alpha".into(),
+        filesystem: Some(FilesystemSection::default()),
+        network: None,
+        ui: None,
+        timeout_ms: None,
+    };
+    let mut request = crate::build_request_with_containment(
+        &policy,
+        &crate::Containment::ProcessContainer(Default::default()),
+        None,
+    )
+    .unwrap();
+
+    request.require_process_security_environment();
+
+    assert!(request.inner.require_process_security_environment);
+    assert!(request.inner.host_filesystem.is_none());
+}

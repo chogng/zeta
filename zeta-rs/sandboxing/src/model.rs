@@ -116,6 +116,13 @@ pub struct SandboxCommand {
     arguments: Vec<OsString>,
     working_directory: PathBuf,
     network_proxy: Option<ManagedNetworkAccess>,
+    io: ProcessIo,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProcessIo {
+    Pipes,
+    Pty(zeta_utils_pty::TerminalSize),
 }
 
 impl SandboxCommand {
@@ -129,6 +136,7 @@ impl SandboxCommand {
             arguments: arguments.into_iter().map(Into::into).collect(),
             working_directory: working_directory.into(),
             network_proxy: None,
+            io: ProcessIo::Pipes,
         }
     }
 
@@ -153,12 +161,22 @@ impl SandboxCommand {
         self.network_proxy
     }
 
+    pub fn with_pty(mut self, size: zeta_utils_pty::TerminalSize) -> Self {
+        self.io = ProcessIo::Pty(size);
+        self
+    }
+
+    pub fn io(&self) -> ProcessIo {
+        self.io
+    }
+
     pub(crate) fn with_working_directory(&self, working_directory: PathBuf) -> Self {
         Self {
             program: self.program.clone(),
             arguments: self.arguments.clone(),
             working_directory,
             network_proxy: self.network_proxy,
+            io: self.io,
         }
     }
 }
@@ -303,6 +321,11 @@ impl PreparedCommand {
         let process = match self.launch {
             Launch::Sandbox(launch) => launch.spawn(environment),
             Launch::Command => {
+                if let ProcessIo::Pty(_) = self.command.io() {
+                    return Err(SandboxError::UnsupportedPolicy(
+                        "the ordinary process launcher cannot attach a PTY".into(),
+                    ));
+                }
                 let mut command = Command::new(self.command.program());
                 command
                     .args(self.command.arguments())

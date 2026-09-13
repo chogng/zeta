@@ -9,6 +9,18 @@ pub trait SandboxProcess: Send {
     fn take_stdout(&mut self) -> Option<Box<dyn Read + Send>>;
     fn take_stderr(&mut self) -> Option<Box<dyn Read + Send>>;
     fn try_wait(&mut self) -> io::Result<Option<SandboxProcessExitStatus>>;
+    fn interrupt(&mut self) -> io::Result<()> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "process interrupt is not supported by this sandbox backend",
+        ))
+    }
+    fn resize(&mut self, _: zeta_utils_pty::TerminalSize) -> io::Result<()> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "process is not attached to a PTY",
+        ))
+    }
     fn close(&mut self) -> io::Result<()>;
 }
 
@@ -39,6 +51,12 @@ impl ProcessHandle {
     }
     pub fn try_wait(&mut self) -> io::Result<Option<SandboxProcessExitStatus>> {
         self.inner.try_wait()
+    }
+    pub fn interrupt(&mut self) -> io::Result<()> {
+        self.inner.interrupt()
+    }
+    pub fn resize(&mut self, size: zeta_utils_pty::TerminalSize) -> io::Result<()> {
+        self.inner.resize(size)
     }
     pub fn close(&mut self) -> io::Result<()> {
         self.inner.close()
@@ -157,6 +175,10 @@ impl SandboxProcess for CommandProcess {
                 )
             })
         })
+    }
+    #[cfg(unix)]
+    fn interrupt(&mut self) -> io::Result<()> {
+        zeta_utils_pty::process_group::interrupt_process_group(self.child.id())
     }
     fn close(&mut self) -> io::Result<()> {
         CommandProcess::close(self)

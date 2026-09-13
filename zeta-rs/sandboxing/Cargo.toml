@@ -11,6 +11,7 @@ name = "zeta_sandboxing"
 path = "src/lib.rs"
 
 [dependencies]
+globset = { workspace = true }
 zeta-utils-pty = { workspace = true }
 zeta-file-access = { workspace = true }
 

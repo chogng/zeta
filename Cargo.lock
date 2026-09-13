@@ -13045,6 +13045,7 @@ dependencies = [
 name = "zeta-sandboxing"
 version = "0.1.0"
 dependencies = [
+ "globset",
  "tempfile",
  "zeta-file-access",
  "zeta-utils-pty",
@@ -13306,6 +13307,8 @@ dependencies = [
 name = "zeta-tool-executor"
 version = "0.1.0"
 dependencies = [
+ "getrandom 0.2.17",
+ "tempfile",
  "zeta-async-utils",
  "zeta-file-access",
  "zeta-install-context",
@@ -13313,6 +13316,7 @@ dependencies = [
  "zeta-network-proxy",
  "zeta-protocol",
  "zeta-sandboxing",
+ "zeta-utils-pty",
 ]
 
 [[package]]
@@ -13630,6 +13634,7 @@ dependencies = [
  "zeta-network-proxy",
  "zeta-sandboxing",
  "zeta-tool-executor",
+ "zeta-utils-pty",
 ]
 
 [[package]]

@@ -2,10 +2,10 @@
 // Licensed under the MIT License.
 
 //! Request construction controls used by embedding applications.
-use crate::policy::HostFilesystemAccess;
-use crate::policy::SandboxRequest;
 use crate::Error;
 use crate::ErrorCode;
+use crate::policy::HostFilesystemAccess;
+use crate::policy::SandboxRequest;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -65,12 +65,11 @@ impl SandboxRequest {
         Ok(self)
     }
 
-    /// Denies pathname Unix sockets on Seatbelt, independently of filesystem write grants.
-    pub fn deny_seatbelt_unix_sockets(&mut self) -> &mut Self {
-        self.inner
-            .seatbelt
-            .get_or_insert_with(Default::default)
-            .allow_unix_sockets = false;
+    /// Restricts pathname Unix sockets to execution-owned directories on Seatbelt.
+    pub fn restrict_seatbelt_unix_sockets(&mut self, paths: Vec<String>) -> &mut Self {
+        let seatbelt = self.inner.seatbelt.get_or_insert_with(Default::default);
+        seatbelt.allow_unix_sockets = false;
+        seatbelt.allowed_unix_socket_paths = paths;
         self
     }
 
@@ -111,12 +110,21 @@ impl SandboxRequest {
         Ok(self)
     }
 
+    /// Requires the Windows ProcessContainer request to use PSEC even when the
+    /// caller intentionally omits a host-wide filesystem visibility ceiling.
+    pub fn require_process_security_environment(&mut self) -> &mut Self {
+        self.inner.require_process_security_environment = true;
+        self.inner.prepared_files = None;
+        self
+    }
+
     /// Select a complete implementation without provisioning or starting a process.
     /// Spawn revalidates the selected implementation and never switches it after failure.
     pub fn prepare(&mut self) -> Result<&mut Self, Error> {
         #[cfg(windows)]
         if self.inner.containment == wxc_common::models::ContainmentBackend::ProcessContainer
-            && self.inner.host_filesystem.is_some()
+            && (self.inner.host_filesystem.is_some()
+                || self.inner.require_process_security_environment)
         {
             self.inner.prepared_files = Some(
                 wxc_common::filesystem_object::FilesystemSnapshot::capture(

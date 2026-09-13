@@ -155,7 +155,7 @@ fn spawn_process_container(
     request: &ExecutionRequest,
     logger: &mut Logger,
 ) -> Result<Box<dyn SandboxProcess>, MxcError> {
-    if request.host_filesystem.is_some() {
+    if request.host_filesystem.is_some() || request.require_process_security_environment {
         use appcontainer_common::base_container_runner::BaseContainerRunner;
         use wxc_common::sandbox_process::SandboxBackend;
         if let Some(snapshot) = &request.prepared_files {
@@ -173,7 +173,7 @@ fn spawn_process_container(
             .map_err(map_spawn_error);
     }
     use appcontainer_common::dispatcher::{
-        spawn_with_fallback_and_capture, DispatchError, SpawnDispatchError,
+        DispatchError, SpawnDispatchError, spawn_with_fallback_and_capture,
     };
     use std::fmt::Write;
     use wxc_common::sandbox_process::StdioMode;
@@ -289,7 +289,7 @@ fn spawn_wslc(
 #[cfg(test)]
 mod tests {
     use super::{ensure_host_supported, map_spawn_error, spawn_runner};
-    use crate::policy::{build_request, SandboxPolicy};
+    use crate::policy::{SandboxPolicy, build_request};
     use wxc_common::logger::{Logger, Mode};
     use wxc_common::models::ContainmentBackend;
     use wxc_common::mxc_error::MxcErrorCode;

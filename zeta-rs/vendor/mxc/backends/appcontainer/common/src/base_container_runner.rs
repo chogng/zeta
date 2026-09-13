@@ -19,23 +19,22 @@ use std::sync::Arc;
 use learning_mode_core::DenialAnalyzer;
 use learning_mode_windows::{
     CaptureSession, EtlDenialAnalyzer, LearningModeApi, LearningModeError,
-    ProcessSecurityEnvironment, SecurityEnvironmentApi, SecurityEnvironmentStartupInfo,
-    PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE,
+    PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE, ProcessSecurityEnvironment, SecurityEnvironmentApi,
+    SecurityEnvironmentStartupInfo,
 };
 use windows::Win32::Foundation::{
-    CloseHandle, GetLastError, SetHandleInformation, ERROR_CALL_NOT_IMPLEMENTED,
-    ERROR_NOT_SUPPORTED, E_NOTIMPL, HANDLE, HANDLE_FLAG_INHERIT, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    CloseHandle, E_NOTIMPL, ERROR_CALL_NOT_IMPLEMENTED, ERROR_NOT_SUPPORTED, GetLastError, HANDLE,
+    HANDLE_FLAG_INHERIT, SetHandleInformation, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use windows::Win32::System::Console::{
     GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
 };
 use windows::Win32::System::LibraryLoader::{
-    GetProcAddress, LoadLibraryExW, LOAD_LIBRARY_SEARCH_SYSTEM32,
+    GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW,
 };
 use windows::Win32::System::Threading::{
-    CreateProcessW, GetExitCodeProcess, TerminateProcess, WaitForSingleObject,
-    EXTENDED_STARTUPINFO_PRESENT, PROCESS_CREATION_FLAGS, PROCESS_INFORMATION,
-    STARTF_USESTDHANDLES, STARTUPINFOW,
+    CreateProcessW, EXTENDED_STARTUPINFO_PRESENT, GetExitCodeProcess, PROCESS_CREATION_FLAGS,
+    PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOW, TerminateProcess, WaitForSingleObject,
 };
 use windows_core::{PCWSTR, PWSTR};
 
@@ -48,8 +47,8 @@ use crate::capture_output::{
     write_stderr_line_best_effort,
 };
 use crate::guarded_capture::{
-    finalize_guarded_capture, validate_retain_etl_supported, GuardedCaptureFactory,
-    GuardedCaptureSession, GuardedStop,
+    GuardedCaptureFactory, GuardedCaptureSession, GuardedStop, finalize_guarded_capture,
+    validate_retain_etl_supported,
 };
 use crate::job_object::UiJobObject;
 use crate::launch_diagnostics::{
@@ -71,19 +70,19 @@ use wxc_common::models::{
 use wxc_common::mxc_error::ApiFailure;
 use wxc_common::mxc_error::MxcError;
 use wxc_common::process_util::{
-    create_std_pipes, InterruptiblePipeReader, OwnedHandle, PipeReadCanceller, PipeWriter,
-    SendOwnedHandle,
+    InterruptiblePipeReader, OwnedHandle, PipeReadCanceller, PipeWriter, SendOwnedHandle,
+    create_std_pipes,
 };
 use wxc_common::sandbox_process::{
-    boxed_closer, cancel_and_join_discard, spawn_discard, take_boxed_read, take_boxed_write,
-    SandboxBackend, SandboxProcess, StdioMode, StreamCloser,
+    SandboxBackend, SandboxProcess, StdioMode, StreamCloser, boxed_closer, cancel_and_join_discard,
+    spawn_discard, take_boxed_read, take_boxed_write,
 };
 use wxc_common::script_runner::get_timeout_milliseconds;
 use wxc_common::string_util;
-use wxc_common::validator::{validate_network_policy_support, NetworkPolicySupport};
+use wxc_common::validator::{NetworkPolicySupport, validate_network_policy_support};
 
 use windows::Win32::System::Threading::{
-    ResumeThread, CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT,
+    CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, ResumeThread,
 };
 
 fn build_child_env_block(
@@ -226,8 +225,7 @@ const SANDBOX_CAP_FS_DENY: u64 = 0x0000_0000_0000_0002;
 const SANDBOX_CAP_NETWORK_PROXY: u64 = 0x0000_0000_0000_0004;
 const CAPTURE_API_AVAILABLE_LOG: &str =
     "captureDenials: learning-mode trace API available (processmodel.dll)";
-const PSEC_DENIED_PATHS_UNSUPPORTED_MSG: &str =
-    "filesystem.deniedPaths on the process-security-environment path requires \
+const PSEC_DENIED_PATHS_UNSUPPORTED_MSG: &str = "filesystem.deniedPaths on the process-security-environment path requires \
      QueryProcessSecurityEnvironmentSupport to advertise PSE_SUPPORT_FS_DENY; this OS \
      build does not support that policy, and the process-security-environment path \
      cannot fall back to AppContainer or host-DACL enforcement";
@@ -1285,7 +1283,9 @@ impl BaseContainerRunner {
 
         let capture_denials = request.policy.capture_denials.clone();
         let use_process_security_environment = self.uses_process_security_environment(&request);
-        if request.host_filesystem.is_some() && !use_process_security_environment {
+        if (request.host_filesystem.is_some() || request.require_process_security_environment)
+            && !use_process_security_environment
+        {
             let mut error =
                 ScriptResponse::error("the prepared PSEC implementation is no longer available");
             error.failure_phase = wxc_common::models::FailurePhase::BackendUnavailable;
@@ -1518,19 +1518,19 @@ impl BaseContainerRunner {
                 h_stdin = match unsafe { GetStdHandle(STD_INPUT_HANDLE) } {
                     Ok(h) => h,
                     Err(e) => {
-                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDIN): {e}")))
+                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDIN): {e}")));
                     }
                 };
                 h_stdout = match unsafe { GetStdHandle(STD_OUTPUT_HANDLE) } {
                     Ok(h) => h,
                     Err(e) => {
-                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDOUT): {e}")))
+                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDOUT): {e}")));
                     }
                 };
                 h_stderr = match unsafe { GetStdHandle(STD_ERROR_HANDLE) } {
                     Ok(h) => h,
                     Err(e) => {
-                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDERR): {e}")))
+                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDERR): {e}")));
                     }
                 };
 
@@ -1808,7 +1808,7 @@ impl BaseContainerRunner {
                 None => {
                     return Err(ScriptResponse::error(
                         "internal error: SBOX launch API was not initialized",
-                    ))
+                    ));
                 }
             };
             let spec_bytes = match spec_bytes.as_deref() {
@@ -1816,7 +1816,7 @@ impl BaseContainerRunner {
                 None => {
                     return Err(ScriptResponse::error(
                         "internal error: SBOX specification was not initialized",
-                    ))
+                    ));
                 }
             };
             let (success, error) = SandboxLaunchArgs {
@@ -1984,8 +1984,7 @@ impl BaseContainerRunner {
                     self.proxy_coordinator.stop(logger);
                 }
 
-                const JOB_SETUP_FAILED_MSG: &str =
-                    "BaseContainer sandbox could not be placed in a job object, so it \
+                const JOB_SETUP_FAILED_MSG: &str = "BaseContainer sandbox could not be placed in a job object, so it \
                      could not be reliably terminated; the launch was rejected to \
                      avoid running an uncontainable sandbox.";
                 let mut extended_error = format!("BaseContainer job-object setup failed: {e}");
@@ -3299,8 +3298,10 @@ mod tests {
             first.etl_path.extension().and_then(|ext| ext.to_str()),
             Some("etl")
         );
-        assert!(wxc_common::filesystem_dacl::owner_is_self(&first.directory)
-            .expect("read managed directory owner"));
+        assert!(
+            wxc_common::filesystem_dacl::owner_is_self(&first.directory)
+                .expect("read managed directory owner")
+        );
         drop(first);
         drop(second);
         assert!(!first_directory.exists());
@@ -3847,9 +3848,11 @@ mod tests {
         let error = BaseContainerRunner::validate_resolved_network_contract(&request, false)
             .expect_err("a late PSEC-to-SBOX transition must fail closed");
         assert_eq!(error.failure_phase, FailurePhase::BackendUnavailable);
-        assert!(error
-            .error_message
-            .contains("requires process-security-environment networking"));
+        assert!(
+            error
+                .error_message
+                .contains("requires process-security-environment networking")
+        );
     }
 
     #[test]
@@ -3895,10 +3898,11 @@ mod tests {
         let bytes = BaseContainerRunner::build_sandbox_spec(&request);
         let spec = base_container_layout::root_as_sandbox_spec(&bytes).unwrap();
         assert_eq!(spec.capabilities(), Some("privateNetworkClientServer"));
-        assert!(spec
-            .network_policy()
-            .and_then(|policy| policy.allowed_appcontainer_peer())
-            .is_none());
+        assert!(
+            spec.network_policy()
+                .and_then(|policy| policy.allowed_appcontainer_peer())
+                .is_none()
+        );
     }
 
     #[test]
@@ -4603,10 +4607,11 @@ mod tests {
         );
         assert!(egress.allow().is_none());
         assert!(egress.deny().is_none());
-        assert!(spec
-            .network_policy()
-            .and_then(|policy| policy.allowed_appcontainer_peer())
-            .is_none());
+        assert!(
+            spec.network_policy()
+                .and_then(|policy| policy.allowed_appcontainer_peer())
+                .is_none()
+        );
     }
 
     #[test]

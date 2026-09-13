@@ -92,12 +92,21 @@ impl SandboxBackend for RecordingBackend {
         _: &Dir,
     ) -> Result<PreparedCommand, SandboxError> {
         self.policies.lock().unwrap().push(policy);
-        Ok(PreparedCommand::new(
+        #[cfg(windows)]
+        let prepared = PreparedCommand::new(
+            SandboxKind::Unrestricted,
+            "cmd.exe",
+            ["/C", "echo", "sandbox-authority-reached-executor"],
+            command.working_directory(),
+        );
+        #[cfg(not(windows))]
+        let prepared = PreparedCommand::new(
             SandboxKind::Unrestricted,
             "/bin/sh",
             ["-c", "printf sandbox-authority-reached-executor"],
             command.working_directory(),
-        ))
+        );
+        Ok(prepared)
     }
 }
 

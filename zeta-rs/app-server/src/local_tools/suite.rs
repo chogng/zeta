@@ -47,6 +47,13 @@ use zeta_protocol::ToolDefinition;
 use zeta_protocol::ToolExecutionOutput;
 use zeta_protocol::ToolName;
 use zeta_protocol::ToolOutputStream;
+use zeta_shell_command::CommandExecutionAuthority;
+use zeta_shell_command::CommandSessionCursor;
+use zeta_shell_command::CommandSessionId;
+use zeta_shell_command::CommandSessionOwner;
+use zeta_shell_command::CommandSessionStart;
+use zeta_shell_command::CommandSessionStatus;
+use zeta_shell_command::CommandTerminalSize;
 use zeta_shell_command::RipgrepExecutable;
 
 use super::AgentGrepService;
@@ -95,6 +102,13 @@ const GLOB_DESCRIPTION: &str = r#"Finds files by glob pattern, sorted by most re
 - Supports patterns like "**/*.rs" or "src/**/*.test.ts".
 - Returns at most 100 paths; narrow the pattern if truncated.
 - Use grep to search file contents; use glob to find files by name."#;
+const SHELL_SESSION_DESCRIPTION: &str = r#"Starts or controls one long-running command session.
+
+- start creates the command once and may return while it is still running.
+- read uses independent stdout/stderr cursors and never terminates on wait expiry.
+- write sends input to the same process; close_input sends EOF.
+- interrupt requests a foreground interrupt; terminate kills the process tree.
+- A session belongs to the current Session, Thread, and Environment."#;
 
 fn schema(value: &str) -> Value {
     serde_json::from_str(value).expect("static tool schema is valid")
@@ -114,6 +128,7 @@ const WRITE_SCHEMA: &str = r#"{"type":"object","properties":{"path":{"type":"str
 const EDIT_SCHEMA: &str = r#"{"type":"object","properties":{"path":{"type":"string","description":"Absolute path of the file to modify."},"old_string":{"type":"string","description":"Exact text to replace. Must be unique in the file unless replace_all is true."},"new_string":{"type":"string","description":"Replacement text. Must differ from old_string."},"replace_all":{"type":["boolean","null"],"description":"Replace every occurrence. Defaults to false."}},"required":["path","old_string","new_string","replace_all"],"additionalProperties":false}"#;
 const GREP_SCHEMA: &str = r#"{"type":"object","properties":{"pattern":{"type":"string","description":"Regular expression to search for."},"path":{"type":["string","null"],"description":"File or directory to search. Defaults to the selected directory."},"glob":{"type":["string","null"],"description":"Restrict to files matching this glob, e.g. \"*.rs\"."},"case_insensitive":{"type":["boolean","null"],"description":"Case-insensitive search. Defaults to false."}},"required":["pattern","path","glob","case_insensitive"],"additionalProperties":false}"#;
 const GLOB_SCHEMA: &str = r#"{"type":"object","properties":{"pattern":{"type":"string","description":"Glob pattern to match file paths against."},"path":{"type":["string","null"],"description":"Directory to search in. Defaults to the selected directory."}},"required":["pattern","path"],"additionalProperties":false}"#;
+const SHELL_SESSION_SCHEMA: &str = r#"{"type":"object","properties":{"action":{"type":"string","enum":["start","read","write","close_input","interrupt","resize","terminate"]},"session_id":{"type":["string","null"]},"program":{"type":["string","null"]},"arguments":{"type":["array","null"],"items":{"type":"string"}},"working_directory":{"type":["string","null"]},"input":{"type":["string","null"]},"stdout_cursor":{"type":["integer","null"],"minimum":0},"stderr_cursor":{"type":["integer","null"],"minimum":0},"wait_ms":{"type":["integer","null"],"minimum":0,"maximum":30000},"terminal_rows":{"type":["integer","null"],"minimum":1,"maximum":1000},"terminal_cols":{"type":["integer","null"],"minimum":1,"maximum":1000}},"required":["action","session_id","program","arguments","working_directory","input","stdout_cursor","stderr_cursor","wait_ms","terminal_rows","terminal_cols"],"additionalProperties":false}"#;
 const MAX_READ_FILE_BYTES: u64 = 10 * 1024 * 1024;
 const MAX_WRITE_FILE_BYTES: usize = 10 * 1024 * 1024;
 const SEARCH_TIMEOUT: Duration = Duration::from_secs(30);
@@ -152,6 +167,11 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             definition("edit", EDIT_DESCRIPTION, EDIT_SCHEMA),
             definition("grep", GREP_DESCRIPTION, GREP_SCHEMA),
             definition("glob", GLOB_DESCRIPTION, GLOB_SCHEMA),
+            definition(
+                "shell-session",
+                SHELL_SESSION_DESCRIPTION,
+                SHELL_SESSION_SCHEMA,
+            ),
         ];
         Self {
             shell,
@@ -239,6 +259,17 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             root.resolve_for_write(&relative)
         }
         .map_err(|_| format!("path is outside the authorized directories: {value}"))?;
+        match permission {
+            DirPermission::InspectRepository => {
+                super::ensure_local_file_access(&root, &absolute, false)
+                    .map_err(|error| error.to_string())?;
+            }
+            DirPermission::MutateRepository => {
+                super::ensure_local_file_access(&root, &absolute, true)
+                    .map_err(|error| error.to_string())?;
+            }
+            _ => {}
+        }
         Ok(ResolvedFilePath {
             root: authorization.dir().clone(),
             authorization,
@@ -649,9 +680,11 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             )
             .map_err(CoreError::Execution)?;
         let mut command = Command::new(self.ripgrep.path());
-        command
-            .args(["--no-config", "--files", "--glob", &pattern])
-            .arg(resolved.absolute);
+        command.args(["--no-config", "--files", "--glob", &pattern]);
+        for denied in super::LOCAL_DENIED_GLOBS {
+            command.args(["--glob", &format!("!{denied}")]);
+        }
+        command.arg(resolved.absolute);
         let output = match run_search(command, cancellation) {
             Ok(output) => output,
             Err(SearchError::Cancelled(error)) => return Err(error),
@@ -694,6 +727,208 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         }
         Ok(ToolExecutionOutput::Success(text))
     }
+
+    fn shell_session(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        session_id: &SessionId,
+        thread_id: &ThreadId,
+        network_policy: Option<&network_proxy::NetworkPolicyHandle>,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        let action = string_arg(&call.arguments, "action")?;
+        let owner = command_session_owner(session_id, thread_id);
+        match action.as_str() {
+            "start" => {
+                let program = required_nullable_string(&call.arguments, "program")?;
+                let arguments = required_nullable_strings(&call.arguments, "arguments")?;
+                let working_directory =
+                    required_nullable_string(&call.arguments, "working_directory")?;
+                let wait = duration_arg(&call.arguments, "wait_ms")?;
+                let resolved = self
+                    .resolve(
+                        &working_directory,
+                        true,
+                        Some(session_id),
+                        Some(thread_id),
+                        DirPermission::ExecuteCommands,
+                    )
+                    .map_err(CoreError::Execution)?;
+                let command_directory = if resolved.relative.as_os_str().is_empty() {
+                    PathBuf::from(".")
+                } else {
+                    resolved.relative.clone()
+                };
+                let request = ShellCommandRequest::new(program, arguments, command_directory)
+                    .map_err(|error| CoreError::Execution(error.to_string()))?
+                    .with_dir_root(resolved.root.canonical_path());
+                let scope = super::local_sandbox_scope(&resolved.root)?;
+                let authority = self.command_authority(authorization);
+                let started = self
+                    .shell
+                    .shell
+                    .start_authorized_session_with_network(
+                        request,
+                        authority,
+                        cancellation,
+                        matches!(authority, CommandExecutionAuthority::Sandboxed(_))
+                            .then_some(&scope),
+                        network_policy,
+                        owner,
+                        wait,
+                        terminal_size(&call.arguments)?,
+                    )
+                    .map_err(|error| CoreError::Execution(super::execution_error(error)))?;
+                match started {
+                    CommandSessionStart::Completed(outcome) => {
+                        Ok(ToolExecutionOutput::Success(session_outcome_json(outcome)?))
+                    }
+                    CommandSessionStart::Running(update) => {
+                        Ok(ToolExecutionOutput::Success(session_update_json(&update)?))
+                    }
+                }
+            }
+            "read" => {
+                let id = command_session_id(&call.arguments)?;
+                let update = self
+                    .shell
+                    .shell
+                    .read_session(
+                        &owner,
+                        &id,
+                        CommandSessionCursor {
+                            stdout: nullable_u64(&call.arguments, "stdout_cursor")?.unwrap_or(0),
+                            stderr: nullable_u64(&call.arguments, "stderr_cursor")?.unwrap_or(0),
+                        },
+                        duration_arg(&call.arguments, "wait_ms")?,
+                    )
+                    .map_err(|error| CoreError::Execution(super::execution_error(error)))?;
+                Ok(ToolExecutionOutput::Success(session_update_json(&update)?))
+            }
+            "write" => {
+                let id = command_session_id(&call.arguments)?;
+                let input = required_nullable_string(&call.arguments, "input")?;
+                self.shell
+                    .shell
+                    .write_session(&owner, &id, input.into_bytes())
+                    .map_err(|error| CoreError::Execution(super::execution_error(error)))?;
+                Ok(ToolExecutionOutput::Success("input accepted".into()))
+            }
+            "close_input" => {
+                let id = command_session_id(&call.arguments)?;
+                self.shell
+                    .shell
+                    .close_session_input(&owner, &id)
+                    .map_err(|error| CoreError::Execution(super::execution_error(error)))?;
+                Ok(ToolExecutionOutput::Success("input closed".into()))
+            }
+            "interrupt" => {
+                let id = command_session_id(&call.arguments)?;
+                self.shell
+                    .shell
+                    .interrupt_session(&owner, &id)
+                    .map_err(|error| CoreError::Execution(super::execution_error(error)))?;
+                Ok(ToolExecutionOutput::Success("interrupt requested".into()))
+            }
+            "resize" => {
+                let id = command_session_id(&call.arguments)?;
+                let size = terminal_size(&call.arguments)?.ok_or_else(|| {
+                    CoreError::Execution("resize requires terminal_rows and terminal_cols".into())
+                })?;
+                self.shell
+                    .shell
+                    .resize_session(&owner, &id, size)
+                    .map_err(|error| CoreError::Execution(super::execution_error(error)))?;
+                Ok(ToolExecutionOutput::Success("terminal resized".into()))
+            }
+            "terminate" => {
+                let id = command_session_id(&call.arguments)?;
+                self.shell
+                    .shell
+                    .terminate_session(&owner, &id)
+                    .map_err(|error| CoreError::Execution(super::execution_error(error)))?;
+                Ok(ToolExecutionOutput::Success("termination requested".into()))
+            }
+            _ => Err(CoreError::Execution(format!(
+                "unsupported shell-session action: {action}"
+            ))),
+        }
+    }
+
+    fn command_authority(&self, authorization: &ToolAuthorization) -> CommandExecutionAuthority {
+        let mut authority = match authorization {
+            ToolAuthorization::Sandboxed(policy) => CommandExecutionAuthority::Sandboxed(*policy),
+            ToolAuthorization::UnsandboxedGrant { .. }
+            | ToolAuthorization::ExecPolicyGranted(_)
+            | ToolAuthorization::AutoReviewed(_)
+            | ToolAuthorization::PermissionBypassed(_)
+            | ToolAuthorization::ApprovedOnce(_) => CommandExecutionAuthority::Unrestricted,
+        };
+        if self.shell.shell_policy.network() == zeta_sandboxing::NetworkAccess::Managed
+            && matches!(authority, CommandExecutionAuthority::Unrestricted)
+        {
+            authority = CommandExecutionAuthority::Sandboxed(
+                zeta_sandboxing::SandboxPolicy::new(
+                    zeta_sandboxing::FileSystemAccess::FullAccess,
+                    zeta_sandboxing::NetworkAccess::Managed,
+                )
+                .with_host_acl_changes(self.shell.shell_policy.host_acl_changes()),
+            );
+        }
+        authority
+    }
+
+    fn review_shell_session(
+        &self,
+        call: &ToolCall,
+        session_id: Option<&SessionId>,
+        thread_id: Option<&ThreadId>,
+    ) -> Result<ActionReviewRequest, CoreError> {
+        let action = string_arg(&call.arguments, "action")?;
+        if action == "start" {
+            let program = required_nullable_string(&call.arguments, "program")?;
+            let arguments = required_nullable_strings(&call.arguments, "arguments")?;
+            let working_directory = required_nullable_string(&call.arguments, "working_directory")?;
+            let resolved = self
+                .resolve(
+                    &working_directory,
+                    true,
+                    session_id,
+                    thread_id,
+                    DirPermission::ExecuteCommands,
+                )
+                .map_err(CoreError::Policy)?;
+            let request = ShellCommandRequest::new(program, arguments, &resolved.relative)
+                .map_err(|error| CoreError::Policy(error.to_string()))?;
+            return self.shell.prepare_session_at(
+                request,
+                &resolved.authorization,
+                resolved.relative,
+            );
+        }
+        let canonical = serde_json::to_vec(&json!({
+            "tool": "shell-session",
+            "action": action,
+            "sessionId": call.arguments.get("session_id"),
+            "ownerSession": session_id,
+            "ownerThread": thread_id,
+        }))
+        .map_err(|error| CoreError::Policy(error.to_string()))?;
+        Ok(ActionReviewRequest::new(
+            ResolvedAction::new(
+                ActionDigest::from_canonical_bytes(canonical),
+                ActionKind::LocalProcess(ProcessInvocationKind::Direct),
+                format!("{action} an existing command session"),
+                CapabilitySet::default(),
+            ),
+            ActionProvenance::new(ActionSource::BuiltInTool, "shell-session"),
+            SandboxCompatibility::NotApplicable {
+                reason: "the operation is restricted to an existing owner-bound process".into(),
+            },
+            self.shell.action_policy_revision.clone(),
+        ))
+    }
 }
 
 impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
@@ -704,6 +939,9 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
         if call.name.as_str() == "shell-command" {
             return self.shell.prepare(call);
+        }
+        if call.name.as_str() == "shell-session" {
+            return self.review_shell_session(call, None, None);
         }
         match call.name.as_str() {
             "read_file" | "grep" | "glob" => self.review(call, false, None, None),
@@ -744,6 +982,13 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         let identity = facts.execution_identity().ok_or_else(|| {
             CoreError::Policy("local tools require durable caller identity".into())
         })?;
+        if call.name.as_str() == "shell-session" {
+            return self.review_shell_session(
+                call,
+                Some(identity.session_id()),
+                Some(identity.thread_id()),
+            );
+        }
         match call.name.as_str() {
             "read_file" | "grep" | "glob" => self.review(
                 call,
@@ -854,7 +1099,7 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         interactions: Arc<dyn zeta_core::ToolInteractionService>,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        if call.name.as_str() != "shell-command" {
+        if !matches!(call.name.as_str(), "shell-command" | "shell-session") {
             return self.execute_streaming_with_facts(
                 call,
                 authorization,
@@ -866,12 +1111,20 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         let identity = facts.execution_identity().ok_or_else(|| {
             CoreError::Execution("local tools require durable caller identity".into())
         })?;
-        let review = self.prepare_with_facts(call, facts)?;
-        let network = crate::network_policy::for_execution(
-            review,
-            format!("{}:{}", identity.turn_id(), call.id),
-            interactions,
-        );
+        let starts_process = call.name.as_str() == "shell-command"
+            || (call.name.as_str() == "shell-session"
+                && call.arguments.get("action").and_then(Value::as_str) == Some("start"));
+        let network = if starts_process
+            && self.shell.shell_policy.network() == zeta_sandboxing::NetworkAccess::Managed
+        {
+            Some(crate::network_policy::for_execution(
+                self.prepare_with_facts(call, facts)?,
+                format!("{}:{}", identity.turn_id(), call.id),
+                interactions,
+            ))
+        } else {
+            None
+        };
         let output = self.execute_scoped_with_network(
             call,
             authorization,
@@ -879,7 +1132,7 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
             &identity.thread_id().to_string(),
             Some(identity.session_id()),
             Some(identity.thread_id()),
-            Some(&network),
+            network.as_ref(),
         )?;
         if let ToolExecutionOutput::Success(text) = &output {
             sink.emit(ToolOutputStream::Stdout, text.clone())?;
@@ -939,6 +1192,22 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 cancellation,
                 &resolved.authorization,
                 resolved.relative,
+                network_policy,
+            );
+        }
+        if call.name.as_str() == "shell-session" {
+            let session_id = session_id.ok_or_else(|| {
+                CoreError::Execution("shell-session requires a durable Session owner".into())
+            })?;
+            let thread_id = thread_id.ok_or_else(|| {
+                CoreError::Execution("shell-session requires a durable Thread owner".into())
+            })?;
+            return self.shell_session(
+                call,
+                authorization,
+                cancellation,
+                session_id,
+                thread_id,
                 network_policy,
             );
         }
@@ -1021,6 +1290,121 @@ fn run_search(
         }
         std::thread::sleep(Duration::from_millis(50));
     }
+}
+
+fn command_session_owner(session_id: &SessionId, thread_id: &ThreadId) -> CommandSessionOwner {
+    CommandSessionOwner::new(session_id.to_string(), thread_id.to_string(), "local")
+}
+
+fn command_session_id(arguments: &Value) -> Result<CommandSessionId, CoreError> {
+    CommandSessionId::new(required_nullable_string(arguments, "session_id")?)
+        .map_err(CoreError::Execution)
+}
+
+fn duration_arg(arguments: &Value, name: &str) -> Result<Duration, CoreError> {
+    let millis = nullable_u64(arguments, name)?.unwrap_or(0);
+    if millis > 30_000 {
+        return Err(CoreError::Execution(format!(
+            "{name} must not exceed 30000"
+        )));
+    }
+    Ok(Duration::from_millis(millis))
+}
+
+fn terminal_size(arguments: &Value) -> Result<Option<CommandTerminalSize>, CoreError> {
+    let rows = nullable_u64(arguments, "terminal_rows")?;
+    let cols = nullable_u64(arguments, "terminal_cols")?;
+    match (rows, cols) {
+        (None, None) => Ok(None),
+        (Some(rows), Some(cols)) => Ok(Some(CommandTerminalSize {
+            rows: u16::try_from(rows)
+                .map_err(|_| CoreError::Execution("terminal_rows is too large".into()))?,
+            cols: u16::try_from(cols)
+                .map_err(|_| CoreError::Execution("terminal_cols is too large".into()))?,
+        })),
+        _ => Err(CoreError::Execution(
+            "terminal_rows and terminal_cols must be supplied together".into(),
+        )),
+    }
+}
+
+fn required_nullable_string(arguments: &Value, name: &str) -> Result<String, CoreError> {
+    nullable_string(arguments, name)?
+        .ok_or_else(|| CoreError::Execution(format!("{name} is required for this action")))
+}
+
+fn required_nullable_strings(arguments: &Value, name: &str) -> Result<Vec<String>, CoreError> {
+    let value = arguments
+        .get(name)
+        .ok_or_else(|| CoreError::Execution(format!("missing {name}")))?;
+    let values = value
+        .as_array()
+        .ok_or_else(|| CoreError::Execution(format!("{name} must be an array for this action")))?;
+    values
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| CoreError::Execution(format!("{name} entries must be strings")))
+        })
+        .collect()
+}
+
+fn session_update_json(
+    update: &zeta_shell_command::CommandSessionUpdate,
+) -> Result<String, CoreError> {
+    let (status, exit) = match &update.status {
+        CommandSessionStatus::Running => ("running", None),
+        CommandSessionStatus::Exited(exit) => ("exited", Some(*exit)),
+        CommandSessionStatus::SandboxDenied => ("sandbox_denied", None),
+        CommandSessionStatus::Cancelled => ("cancelled", None),
+        CommandSessionStatus::TimedOut => ("timed_out", None),
+        CommandSessionStatus::Terminated => ("terminated", None),
+        CommandSessionStatus::Failed(_) => ("failed", None),
+    };
+    serde_json::to_string_pretty(&json!({
+        "session_id": update.session_id.as_str(),
+        "status": status,
+        "exit_status": exit,
+        "error": match &update.status {
+            CommandSessionStatus::Failed(message) => Some(message.as_str()),
+            _ => None,
+        },
+        "stdout": {
+            "text": update.stdout.text,
+            "next_cursor": update.stdout.next_cursor,
+            "gap": update.stdout.gap,
+        },
+        "stderr": {
+            "text": update.stderr.text,
+            "next_cursor": update.stderr.next_cursor,
+            "gap": update.stderr.gap,
+        },
+    }))
+    .map_err(|error| CoreError::Execution(error.to_string()))
+}
+
+fn session_outcome_json(
+    outcome: zeta_shell_command::CommandExecutionOutcome,
+) -> Result<String, CoreError> {
+    let value = match outcome {
+        zeta_shell_command::CommandExecutionOutcome::Completed(output) => json!({
+            "status": "exited",
+            "exit_code": output.exit_code,
+            "stdout": output.stdout,
+            "stderr": output.stderr,
+            "stdout_truncated": output.stdout_truncated,
+            "stderr_truncated": output.stderr_truncated,
+        }),
+        zeta_shell_command::CommandExecutionOutcome::SandboxDenied(denial) => json!({
+            "status": "sandbox_denied",
+            "reason": denial.reason(),
+            "output": denial.output(),
+            "replay_safety": denial.replay_safety(),
+        }),
+    };
+    serde_json::to_string_pretty(&value).map_err(|error| CoreError::Execution(error.to_string()))
 }
 
 fn string_arg(arguments: &Value, name: &str) -> Result<String, CoreError> {

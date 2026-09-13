@@ -30,7 +30,9 @@ use zeta_tools::{
 
 pub use zeta_tool_executor::{
     ApprovalPolicy, ApprovalRequirement, CommandExecutionAuthority, CommandExecutionOutcome,
-    ExecutionError, ExecutionLimits as ShellCommandLimits,
+    CommandSessionCursor, CommandSessionId, CommandSessionOwner, CommandSessionStart,
+    CommandSessionStatus, CommandSessionUpdate, CommandTerminalSize, ExecutionError,
+    ExecutionLimits as ShellCommandLimits,
 };
 
 /// Error raised while constructing the shell-command executor.
@@ -144,6 +146,98 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
             scope.or(owned_scope.as_ref()),
             network_policy,
         )
+    }
+
+    pub fn start_authorized_session_with_network(
+        &self,
+        request: ShellCommandRequest,
+        authority: CommandExecutionAuthority,
+        cancellation: &CancellationToken,
+        scope: Option<&SandboxScope>,
+        network_policy: Option<&network_proxy::NetworkPolicyHandle>,
+        owner: CommandSessionOwner,
+        wait_budget: std::time::Duration,
+        terminal: Option<zeta_tool_executor::CommandTerminalSize>,
+    ) -> Result<CommandSessionStart, ExecutionError> {
+        let dir = request
+            .dir_root()
+            .map(Dir::open_local)
+            .transpose()
+            .map_err(|error| ExecutionError::Spawn(error.to_string()))?;
+        if let (Some(dir), Some(scope)) = (&dir, scope)
+            && dir != scope.command_dir()
+        {
+            return Err(ExecutionError::Spawn(
+                "sandbox command directory does not match the materialized request".into(),
+            ));
+        }
+        self.executor.start_session_scoped_with_network(
+            CommandRequest {
+                program: request.program,
+                arguments: request.arguments,
+                working_directory: request.working_directory,
+                input: CommandInput::Open,
+            },
+            authority,
+            cancellation,
+            scope,
+            network_policy,
+            owner,
+            wait_budget,
+            terminal,
+        )
+    }
+
+    pub fn read_session(
+        &self,
+        owner: &CommandSessionOwner,
+        id: &CommandSessionId,
+        cursor: CommandSessionCursor,
+        wait_budget: std::time::Duration,
+    ) -> Result<CommandSessionUpdate, ExecutionError> {
+        self.executor.read_session(owner, id, cursor, wait_budget)
+    }
+
+    pub fn write_session(
+        &self,
+        owner: &CommandSessionOwner,
+        id: &CommandSessionId,
+        bytes: Vec<u8>,
+    ) -> Result<(), ExecutionError> {
+        self.executor.write_session(owner, id, bytes)
+    }
+
+    pub fn close_session_input(
+        &self,
+        owner: &CommandSessionOwner,
+        id: &CommandSessionId,
+    ) -> Result<(), ExecutionError> {
+        self.executor.close_session_input(owner, id)
+    }
+
+    pub fn interrupt_session(
+        &self,
+        owner: &CommandSessionOwner,
+        id: &CommandSessionId,
+    ) -> Result<(), ExecutionError> {
+        self.executor.interrupt_session(owner, id)
+    }
+
+    pub fn terminate_session(
+        &self,
+        owner: &CommandSessionOwner,
+        id: &CommandSessionId,
+    ) -> Result<(), ExecutionError> {
+        self.executor.terminate_session(owner, id)
+    }
+
+    pub fn resize_session(
+        &self,
+        owner: &CommandSessionOwner,
+        id: &CommandSessionId,
+        size: CommandTerminalSize,
+    ) -> Result<(), ExecutionError> {
+        self.executor.resize_session(owner, id, size)
     }
 
     fn run(&self, invocation: ToolInvocation) -> ToolExecutionOutcome {

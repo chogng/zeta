@@ -12,7 +12,6 @@ mod win;
 
 use account::NetworkMode;
 use std::collections::BTreeMap;
-use std::fs::File;
 use std::io;
 use std::io::Read;
 use std::io::Write;
@@ -28,11 +27,11 @@ use wxc_common::host_changes::HostAclScope;
 use wxc_common::models::ContainerPolicy;
 use zeta_sandboxing::FileSystemAccess;
 use zeta_sandboxing::HostAclChanges;
+use zeta_sandboxing::HostReadScope;
 use zeta_sandboxing::NetworkAccess;
 use zeta_sandboxing::PreparedCommand;
 use zeta_sandboxing::ProcessHandle;
 use zeta_sandboxing::SandboxCommand;
-use zeta_sandboxing::SandboxDirAccess;
 use zeta_sandboxing::SandboxError;
 use zeta_sandboxing::SandboxKind;
 use zeta_sandboxing::SandboxLaunch;
@@ -51,6 +50,7 @@ struct Execution {
     env: Vec<String>,
     mode: NetworkMode,
     proxy_port: Option<u16>,
+    io: zeta_sandboxing::ProcessIo,
 }
 
 fn unavailable(error: impl ToString) -> SandboxError {
@@ -66,12 +66,7 @@ pub(super) fn prepare(
     policy: SandboxPolicy,
     scope: &SandboxScope,
 ) -> Result<PreparedCommand, SandboxError> {
-    if !policy.requires_platform_sandbox() {
-        if !scope.is_single_unhidden() {
-            return Err(SandboxError::InvalidScope(
-                "unrestricted execution cannot hide directories".into(),
-            ));
-        }
+    if !policy.requires_platform_sandbox() && scope.is_single_unhidden() {
         return Ok(PreparedCommand::unrestricted(command));
     }
     if policy.file_system() == FileSystemAccess::FullAccess {
@@ -89,33 +84,16 @@ pub(super) fn prepare(
             "Windows account execution requires scoped filesystem ACL authorization".into(),
         ));
     }
-    let mut files = ContainerPolicy::default();
-    for grant in scope.grants() {
-        let root = grant.dir().canonical_path();
-        let text = root
-            .to_str()
-            .ok_or_else(|| unavailable("filesystem paths must be Unicode"))?
-            .to_owned();
-        if policy.file_system() == FileSystemAccess::DirectoryWrite
-            && grant.access() == SandboxDirAccess::ReadWrite
-        {
-            files.readwrite_paths.push(text);
-            for name in zeta_sandboxing::PROTECTED_DIR_METADATA_NAMES {
-                let path = root.join(name);
-                match std::fs::symlink_metadata(&path) {
-                    Ok(_) => files.readonly_paths.push(
-                        path.to_str()
-                            .ok_or_else(|| unavailable("filesystem paths must be Unicode"))?
-                            .into(),
-                    ),
-                    Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-                    Err(error) => return Err(unavailable(error)),
-                }
-            }
-        } else {
-            files.readonly_paths.push(text);
-        }
+    let resolved_filesystem = scope.resolve_filesystem(policy.file_system())?;
+    if resolved_filesystem.host_read() == HostReadScope::Minimal {
+        return Err(SandboxError::UnsupportedPolicy(
+            "Windows account isolation cannot enforce a minimal host-read scope".into(),
+        ));
     }
+    let mut files = ContainerPolicy::default();
+    files.readwrite_paths = unicode_paths(resolved_filesystem.readwrite_paths())?;
+    files.readonly_paths = unicode_paths(resolved_filesystem.readonly_paths())?;
+    files.denied_paths = unicode_paths(resolved_filesystem.denied_paths())?;
     let authority = HostAclScope::new(
         scope
             .grants()
@@ -129,14 +107,6 @@ pub(super) fn prepare(
             ),
     )
     .map_err(unavailable)?;
-    for dir in scope.hidden_dirs() {
-        files.denied_paths.push(
-            dir.canonical_path()
-                .to_str()
-                .ok_or_else(|| unavailable("filesystem paths must be Unicode"))?
-                .into(),
-        );
-    }
     let argv = std::iter::once(command.program())
         .chain(command.arguments().iter().map(|arg| arg.as_os_str()))
         .map(|arg| {
@@ -214,8 +184,21 @@ pub(super) fn prepare(
             env: Vec::new(),
             mode,
             proxy_port,
+            io: command.io(),
         },
     ))
+}
+
+fn unicode_paths(paths: &[PathBuf]) -> Result<Vec<String>, SandboxError> {
+    paths
+        .iter()
+        .map(|path| {
+            path.to_str()
+                .filter(|value| !value.contains('\0'))
+                .map(str::to_owned)
+                .ok_or_else(|| unavailable("filesystem paths must be Unicode without NUL"))
+        })
+        .collect()
 }
 
 impl SandboxLaunch for Execution {
@@ -282,14 +265,15 @@ struct Resources {
     _directory_pin: win::Handle,
     _directory: Directory,
     _lease: runtime::Lease,
+    terminal: Option<zeta_utils_pty::PreparedConPty>,
 }
 
 struct Process {
     process: Option<win::Handle>,
     pid: u32,
-    stdin: Option<File>,
-    stdout: Option<File>,
-    stderr: Option<File>,
+    stdin: Option<Box<dyn Write + Send>>,
+    stdout: Option<Box<dyn Read + Send>>,
+    stderr: Option<Box<dyn Read + Send>>,
     resources: Option<Resources>,
     exit: Option<i32>,
 }
@@ -333,7 +317,16 @@ fn spawn(request: &Execution) -> Result<Process, String> {
         })
         .transpose()?;
     let job = job::Job::new(&lease.account.name)?;
-    let pipes = process::Pipes::new(&owner, &lease.account.sid)?;
+    let mut terminal = match request.io {
+        zeta_sandboxing::ProcessIo::Pipes => None,
+        zeta_sandboxing::ProcessIo::Pty(size) => {
+            Some(zeta_utils_pty::PreparedConPty::new(size).map_err(|error| error.to_string())?)
+        }
+    };
+    let pipes = terminal
+        .is_none()
+        .then(|| process::Pipes::new(&owner, &lease.account.sid))
+        .transpose()?;
     let mut environment = BTreeMap::new();
     for entry in &request.env {
         let (name, value) = entry.split_once('=').ok_or("invalid environment entry")?;
@@ -364,7 +357,7 @@ fn spawn(request: &Execution) -> Result<Process, String> {
         environment.insert("NO_PROXY".into(), String::new());
     }
     let worker = process::Request {
-        version: 3,
+        version: 4,
         owner,
         account: lease.account.sid.clone(),
         capability,
@@ -374,7 +367,8 @@ fn spawn(request: &Execution) -> Result<Process, String> {
             .into_iter()
             .map(|(key, value)| format!("{key}={value}"))
             .collect(),
-        pipes: pipes.names.clone(),
+        pipes: pipes.as_ref().map(|pipes| pipes.names.clone()),
+        pseudoconsole: None,
         reply: directory.0.join("reply.json"),
         desktop: desktop.name.clone(),
     };
@@ -392,6 +386,7 @@ fn spawn(request: &Execution) -> Result<Process, String> {
             _directory_pin: directory_pin,
             _directory: directory,
             _lease: lease,
+            terminal: None,
         }),
         exit: None,
     };
@@ -402,13 +397,15 @@ fn spawn(request: &Execution) -> Result<Process, String> {
         &resources._directory.0,
         &worker,
         pipes,
+        terminal.as_mut(),
         &resources.job,
     )?;
     result.pid = child.pid;
     result.process = Some(child.process);
     result.stdin = Some(child.stdin);
     result.stdout = Some(child.stdout);
-    result.stderr = Some(child.stderr);
+    result.stderr = child.stderr;
+    result.resources.as_mut().unwrap().terminal = terminal;
     Ok(result)
 }
 
@@ -428,13 +425,13 @@ impl Process {
 
 impl SandboxProcess for Process {
     fn take_stdin(&mut self) -> Option<Box<dyn Write + Send>> {
-        self.stdin.take().map(|file| Box::new(file) as _)
+        self.stdin.take()
     }
     fn take_stdout(&mut self) -> Option<Box<dyn Read + Send>> {
-        self.stdout.take().map(|file| Box::new(file) as _)
+        self.stdout.take()
     }
     fn take_stderr(&mut self) -> Option<Box<dyn Read + Send>> {
-        self.stderr.take().map(|file| Box::new(file) as _)
+        self.stderr.take()
     }
     fn try_wait(&mut self) -> io::Result<Option<SandboxProcessExitStatus>> {
         if let Some(exit) = self.exit {
@@ -460,6 +457,19 @@ impl SandboxProcess for Process {
     }
     fn close(&mut self) -> io::Result<()> {
         self.finish()
+    }
+    fn resize(&mut self, size: zeta_utils_pty::TerminalSize) -> io::Result<()> {
+        self.resources
+            .as_ref()
+            .and_then(|resources| resources.terminal.as_ref())
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "process is not attached to ConPTY",
+                )
+            })?
+            .resize(size)
+            .map_err(io::Error::other)
     }
 }
 

@@ -1,6 +1,6 @@
-use super::*;
 use super::super::process;
 use super::super::win;
+use super::*;
 use std::io::Read;
 use std::io::Write;
 use windows_sys::Win32::Foundation::*;
@@ -128,7 +128,9 @@ fn matching_account_and_capability_reaches_upstream() {
                     let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
                     let read_len = stream.read(&mut buf).unwrap_or(0);
                     if read_len > 0 {
-                        let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK");
+                        let _ = stream.write_all(
+                            b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK",
+                        );
                     }
                     return;
                 }
@@ -142,7 +144,10 @@ fn matching_account_and_capability_reaches_upstream() {
     });
 
     let (code, stdout, stderr) = run_restricted_client(capability, port);
-    assert_eq!(code, 0, "authorized client must successfully connect: stdout={stdout}, stderr={stderr}");
+    assert_eq!(
+        code, 0,
+        "authorized client must successfully connect: stdout={stdout}, stderr={stderr}"
+    );
     responder.join().unwrap();
     drop(proxy);
 }
@@ -159,7 +164,7 @@ fn run_restricted_client(capability: &str, target_port: u16) -> (i32, String, St
         "\"{system}\\System32\\curl.exe\" -s -S --connect-timeout 2 --max-time 3 http://127.0.0.1:{target_port}"
     );
     let request = process::Request {
-        version: 3,
+        version: 4,
         owner: owner.clone(),
         account: owner,
         capability: capability.into(),
@@ -169,7 +174,8 @@ fn run_restricted_client(capability: &str, target_port: u16) -> (i32, String, St
             format!("SystemRoot={system}"),
             format!("TEMP={}", directory.display()),
         ],
-        pipes: pipes.names.clone(),
+        pipes: Some(pipes.names.clone()),
+        pseudoconsole: None,
         reply: directory.join("unused-reply.json"),
         desktop: desktop.name.clone(),
     };

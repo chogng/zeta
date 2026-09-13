@@ -76,13 +76,13 @@ impl SandboxBackend for MxcSandbox {
         policy: SandboxPolicy,
         scope: &SandboxScope,
     ) -> Result<PreparedCommand, SandboxError> {
-        if !policy.requires_platform_sandbox() {
-            if !scope.is_single_unhidden() {
-                return Err(unavailable(
-                    "an unrestricted command cannot carry an isolated directory scope",
-                ));
-            }
+        if !policy.requires_platform_sandbox() && scope.is_single_unhidden() {
             return Ok(PreparedCommand::unrestricted(command));
+        }
+        if matches!(command.io(), zeta_sandboxing::ProcessIo::Pty(_)) {
+            return Err(SandboxError::UnsupportedPolicy(
+                "the MXC streaming SDK does not yet expose a PTY-attached restricted launch".into(),
+            ));
         }
         let mut request = policy::request(command, policy, scope)?;
         #[cfg(target_os = "windows")]

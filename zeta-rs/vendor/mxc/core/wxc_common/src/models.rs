@@ -142,6 +142,10 @@ pub struct SeatbeltConfig {
     /// Whether writable filesystem grants may also open pathname Unix sockets.
     #[serde(default = "default_true")]
     pub allow_unix_sockets: bool,
+    /// Embedding-only directories where pathname Unix sockets remain available
+    /// when `allow_unix_sockets` is false.
+    #[serde(skip)]
+    pub allowed_unix_socket_paths: Vec<String>,
     /// Optional override of the generated TinyScheme profile.
     #[serde(rename = "profileOverride", skip_serializing_if = "Option::is_none")]
     pub profile_override: Option<String>,
@@ -208,6 +212,7 @@ impl Default for SeatbeltConfig {
     fn default() -> Self {
         Self {
             allow_unix_sockets: true,
+            allowed_unix_socket_paths: Vec::new(),
             profile_override: None,
             gui_access: false,
             launch_method: LaunchMethod::default(),
@@ -956,6 +961,10 @@ pub struct ExecutionRequest {
     pub host_filesystem: Option<crate::host_changes::HostFilesystemAccess>,
     #[serde(skip)]
     pub host_filesystem_roots: Vec<String>,
+    /// Embedding-only requirement that forbids ProcessContainer from selecting
+    /// AppContainer or host-DACL implementations for this request.
+    #[serde(skip)]
+    pub require_process_security_environment: bool,
     #[serde(skip)]
     pub prepared_files: Option<crate::filesystem_object::FilesystemSnapshot>,
     /// Host-resolved executable; unavailable to untrusted serialized requests.

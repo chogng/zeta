@@ -76,6 +76,10 @@ impl<B: SandboxBackend> SandboxManager<B> {
         self.backend.kind()
     }
 
+    pub fn dir(&self) -> &Dir {
+        &self.dir
+    }
+
     pub fn requires_shared_network_proxy(&self) -> bool {
         self.backend.requires_shared_network_proxy()
     }

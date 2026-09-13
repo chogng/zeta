@@ -63,6 +63,48 @@ pub struct RawConPty {
     output_read: FileDescriptor,
 }
 
+/// A ConPTY created by a process owner that delegates only its pseudoconsole
+/// handle to a separately prepared child launcher.
+pub struct PreparedConPty {
+    con: PsuedoCon,
+    input_write: Option<FileDescriptor>,
+    output_read: Option<FileDescriptor>,
+}
+
+impl PreparedConPty {
+    pub fn new(size: crate::TerminalSize) -> anyhow::Result<Self> {
+        let (con, input_write, output_read) = create_conpty_handles(size.into())?;
+        Ok(Self {
+            con,
+            input_write: Some(input_write),
+            output_read: Some(output_read),
+        })
+    }
+
+    pub fn pseudoconsole_handle(&self) -> RawHandle {
+        self.con.raw_handle().cast()
+    }
+
+    pub fn take_writer(&mut self) -> Option<Box<dyn std::io::Write + Send>> {
+        self.input_write
+            .take()
+            .map(|writer| Box::new(writer) as Box<dyn std::io::Write + Send>)
+    }
+
+    pub fn take_reader(&mut self) -> Option<Box<dyn std::io::Read + Send>> {
+        self.output_read
+            .take()
+            .map(|reader| Box::new(reader) as Box<dyn std::io::Read + Send>)
+    }
+
+    pub fn resize(&self, size: crate::TerminalSize) -> anyhow::Result<()> {
+        self.con.resize(COORD {
+            X: size.cols as i16,
+            Y: size.rows as i16,
+        })
+    }
+}
+
 impl RawConPty {
     pub fn new(cols: i16, rows: i16) -> anyhow::Result<Self> {
         let (con, input_write, output_read) = create_conpty_handles(PtySize {

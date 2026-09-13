@@ -61,7 +61,10 @@ use zeta_protocol::ToolExecutionOutput;
 use zeta_protocol::ToolOutputStream;
 use zeta_sandboxing::FileSystemAccess;
 use zeta_sandboxing::NetworkAccess;
+use zeta_sandboxing::PatternMatchTiming;
 use zeta_sandboxing::SandboxBackend;
+use zeta_sandboxing::SandboxPathAccess;
+use zeta_sandboxing::SandboxPathRule;
 use zeta_sandboxing::SandboxPolicy;
 use zeta_sandboxing::SandboxScope;
 use zeta_shell_command::ApprovalPolicy;
@@ -651,7 +654,19 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         ))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
         let request = self.materialize_at(request, authorization.dir(), relative)?;
-        self.review_request_scoped(&request, None)
+        let scope = local_sandbox_scope(authorization.dir())?;
+        self.review_request_scoped(&request, Some(&scope))
+    }
+
+    fn prepare_session_at(
+        &self,
+        request: ShellCommandRequest,
+        authorization: &Authorization,
+        relative: PathBuf,
+    ) -> Result<ActionReviewRequest, CoreError> {
+        let request = self.materialize_at(request, authorization.dir(), relative)?;
+        let scope = local_sandbox_scope(authorization.dir())?;
+        self.review_request_scoped(&request, Some(&scope))
     }
 
     fn execute_at(
@@ -668,14 +683,28 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         ))
         .map_err(|error| CoreError::Execution(error.to_string()))?;
         let request = self.materialize_at(request, dir_authorization.dir(), relative)?;
-        self.execute_request_scoped(request, authorization, cancellation, None, network_policy)
+        let scope = local_sandbox_scope(dir_authorization.dir())?;
+        self.execute_request_scoped(
+            request,
+            authorization,
+            cancellation,
+            Some(&scope),
+            network_policy,
+        )
     }
 
     fn review_request(
         &self,
         request: &ShellCommandRequest,
     ) -> Result<ActionReviewRequest, CoreError> {
-        self.review_request_scoped(request, None)
+        let selected_root = request
+            .dir_root()
+            .map(Dir::open_local)
+            .transpose()
+            .map_err(|error| CoreError::Policy(error.to_string()))?
+            .unwrap_or_else(|| self.authorization.dir().clone());
+        let scope = local_sandbox_scope(&selected_root)?;
+        self.review_request_scoped(request, Some(&scope))
     }
 
     fn review_request_scoped(
@@ -745,7 +774,14 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        self.execute_request_scoped(request, authorization, cancellation, None, None)
+        let selected_root = request
+            .dir_root()
+            .map(Dir::open_local)
+            .transpose()
+            .map_err(|error| CoreError::Execution(error.to_string()))?
+            .unwrap_or_else(|| self.authorization.dir().clone());
+        let scope = local_sandbox_scope(&selected_root)?;
+        self.execute_request_scoped(request, authorization, cancellation, Some(&scope), None)
     }
 
     fn execute_request_scoped(
@@ -756,19 +792,13 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         sandbox_scope: Option<&SandboxScope>,
         network_policy: Option<&network_proxy::NetworkPolicyHandle>,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        let mut authority = if sandbox_scope.is_some() {
-            CommandExecutionAuthority::Sandboxed(self.shell_policy)
-        } else {
-            match authorization {
-                ToolAuthorization::Sandboxed(policy) => {
-                    CommandExecutionAuthority::Sandboxed(*policy)
-                }
-                ToolAuthorization::UnsandboxedGrant { .. }
-                | ToolAuthorization::ExecPolicyGranted(_)
-                | ToolAuthorization::AutoReviewed(_)
-                | ToolAuthorization::PermissionBypassed(_)
-                | ToolAuthorization::ApprovedOnce(_) => CommandExecutionAuthority::Unrestricted,
-            }
+        let mut authority = match authorization {
+            ToolAuthorization::Sandboxed(policy) => CommandExecutionAuthority::Sandboxed(*policy),
+            ToolAuthorization::UnsandboxedGrant { .. }
+            | ToolAuthorization::ExecPolicyGranted(_)
+            | ToolAuthorization::AutoReviewed(_)
+            | ToolAuthorization::PermissionBypassed(_)
+            | ToolAuthorization::ApprovedOnce(_) => CommandExecutionAuthority::Unrestricted,
         };
         if self.shell_policy.network() == NetworkAccess::Managed
             && matches!(authority, CommandExecutionAuthority::Unrestricted)
@@ -778,11 +808,14 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
                     .with_host_acl_changes(self.shell_policy.host_acl_changes()),
             );
         }
+        let effective_scope = matches!(authority, CommandExecutionAuthority::Sandboxed(_))
+            .then_some(sandbox_scope)
+            .flatten();
         match self.shell.execute_authorized_with_network(
             request,
             authority,
             cancellation,
-            sandbox_scope,
+            effective_scope,
             network_policy,
         ) {
             Ok(CommandExecutionOutcome::Completed(output)) => {
@@ -793,7 +826,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
                     "stdout_truncated": output.stdout_truncated,
                     "stderr_truncated": output.stderr_truncated,
                 });
-                if sandbox_scope.is_some() {
+                if effective_scope.is_some() {
                     value["managed_scope"] = true.into();
                 }
                 let text = serde_json::to_string_pretty(&value)
@@ -1240,6 +1273,7 @@ fn materialize_patch_targets(
             authorization.dir().resolve_for_write(&relative)
         }
         .map_err(|error| CoreError::Policy(error.to_string()))?;
+        ensure_local_file_access(authorization.dir(), &resolved, true)?;
         targets.push(resolved.display().to_string());
         let prefix = if existing && line.starts_with("*** Update File: ") {
             "*** Update File: "
@@ -1511,6 +1545,45 @@ fn local_isolation() -> zeta_sandboxing::FileSystemIsolation {
         zeta_sandboxing::FileSystemIsolation::WindowsAccount
     } else {
         zeta_sandboxing::FileSystemIsolation::Strict
+    }
+}
+
+const LOCAL_DENIED_GLOBS: &[&str] = &["**/.env"];
+
+fn local_sandbox_scope(dir: &Dir) -> Result<SandboxScope, CoreError> {
+    let rules = LOCAL_DENIED_GLOBS
+        .iter()
+        .map(|pattern| {
+            SandboxPathRule::pattern(
+                dir.clone(),
+                *pattern,
+                SandboxPathAccess::Denied,
+                PatternMatchTiming::PreparationSnapshot,
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| CoreError::Policy(error.to_string()))?;
+    SandboxScope::single(dir.clone())
+        .with_path_rules(rules)
+        .map_err(|error| CoreError::Policy(error.to_string()))
+}
+
+fn ensure_local_file_access(dir: &Dir, path: &Path, write: bool) -> Result<(), CoreError> {
+    let filesystem = local_sandbox_scope(dir)?
+        .resolve_filesystem(FileSystemAccess::DirectoryWrite)
+        .map_err(|error| CoreError::Policy(error.to_string()))?;
+    let allowed = if write {
+        filesystem.allows_write(path)
+    } else {
+        filesystem.allows_read(path)
+    };
+    if allowed {
+        Ok(())
+    } else {
+        Err(CoreError::Policy(format!(
+            "path is denied by the local filesystem policy: {}",
+            path.display()
+        )))
     }
 }
 

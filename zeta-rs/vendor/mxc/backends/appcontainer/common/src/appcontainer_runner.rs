@@ -2184,10 +2184,10 @@ mod tests {
         let proxy = wxc_common::models::ProxyAddress::new("127.0.0.1".to_string(), 8080);
         let entries = super::build_explicit_entries(&env, Some(&proxy));
 
-        // Original proxy vars should be stripped.
+        // Original proxy vars should be scrubbed.
         assert!(!entries
             .iter()
-            .any(|(k, _)| k == "http_proxy" || k == "https_proxy" || k == "NO_PROXY"));
+            .any(|(k, _)| k == "http_proxy" || k == "https_proxy"));
         // FOO should remain.
         assert!(entries.iter().any(|(k, v)| k == "FOO" && v == "bar"));
         // Injected proxy vars should be present.
@@ -2198,6 +2198,11 @@ mod tests {
         assert!(entries
             .iter()
             .any(|(k, v)| k == "HTTPS_PROXY" && v == &proxy_url));
+        // NO_PROXY is neutralized to the empty string rather than omitted, so
+        // an inherited exemption cannot survive the cooperative proxy.
+        assert!(entries
+            .iter()
+            .any(|(k, v)| k == "NO_PROXY" && v.is_empty()));
     }
 
     // ---- validate_runner: unsupported policy fields surface as errors. ----

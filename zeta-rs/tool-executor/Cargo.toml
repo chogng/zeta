@@ -11,11 +11,14 @@ name = "zeta_tool_executor"
 path = "src/lib.rs"
 
 [dependencies]
+getrandom = { workspace = true }
 network-proxy = { workspace = true, features = ["server"] }
+tempfile = { workspace = true }
 zeta-async-utils = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-sandboxing = { workspace = true }
 zeta-file-access = { workspace = true }
+zeta-utils-pty = { workspace = true }
 
 [dev-dependencies]
 mxc-sandbox = { workspace = true }

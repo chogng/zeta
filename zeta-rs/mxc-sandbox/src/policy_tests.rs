@@ -1,12 +1,16 @@
-use super::filesystem;
+use super::filesystem_from_resolved;
 #[cfg(target_os = "windows")]
 use super::windows_process_container;
 #[cfg(target_os = "windows")]
 use super::windows_ui;
+use std::path::Path;
 use zeta_file_access::Dir;
 use zeta_sandboxing::FileSystemAccess;
+use zeta_sandboxing::MissingPathBehavior;
 use zeta_sandboxing::SandboxDirAccess;
 use zeta_sandboxing::SandboxDirGrant;
+use zeta_sandboxing::SandboxPathAccess;
+use zeta_sandboxing::SandboxPathRule;
 use zeta_sandboxing::SandboxScope;
 
 #[cfg(target_os = "windows")]
@@ -55,7 +59,8 @@ fn writable_grants_protect_existing_metadata_without_creating_absent_paths() {
         FileSystemAccess::DirectoryWrite,
         FileSystemAccess::FullAccess,
     ] {
-        let policy = filesystem(access, &scope).unwrap();
+        let resolved = scope.resolve_filesystem(access).unwrap();
+        let policy = filesystem_from_resolved(&resolved).unwrap();
         assert_eq!(
             policy.readwrite_paths,
             [work.canonical_path().to_str().unwrap()]
@@ -63,9 +68,9 @@ fn writable_grants_protect_existing_metadata_without_creating_absent_paths() {
         assert_eq!(
             policy.readonly_paths,
             [
-                work.canonical_path().join(".git"),
-                work.canonical_path().join(".agents"),
                 reference.canonical_path().to_owned(),
+                work.canonical_path().join(".agents"),
+                work.canonical_path().join(".git"),
             ]
             .map(|path| path.to_str().unwrap().to_owned())
         );
@@ -84,11 +89,10 @@ fn writable_grants_protect_existing_metadata_without_creating_absent_paths() {
 fn an_empty_work_directory_keeps_its_write_grant() {
     let temp = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(temp.path()).unwrap();
-    let policy = filesystem(
-        FileSystemAccess::DirectoryWrite,
-        &SandboxScope::single(dir.clone()),
-    )
-    .unwrap();
+    let resolved = SandboxScope::single(dir.clone())
+        .resolve_filesystem(FileSystemAccess::DirectoryWrite)
+        .unwrap();
+    let policy = filesystem_from_resolved(&resolved).unwrap();
     assert_eq!(
         policy.readwrite_paths,
         [dir.canonical_path().to_str().unwrap()]
@@ -96,4 +100,48 @@ fn an_empty_work_directory_keeps_its_write_grant() {
     assert!(policy.readonly_paths.is_empty());
     assert!(policy.denied_paths.is_empty());
     assert_eq!(std::fs::read_dir(temp.path()).unwrap().count(), 0);
+}
+
+#[test]
+fn exact_path_rules_are_carried_into_the_mxc_filesystem_policy() {
+    let temp = tempfile::tempdir().unwrap();
+    std::fs::create_dir(temp.path().join("config")).unwrap();
+    std::fs::write(temp.path().join(".env"), "secret").unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let scope = SandboxScope::single(dir.clone())
+        .with_path_rules(vec![
+            SandboxPathRule::exact(
+                dir.clone(),
+                "config",
+                SandboxPathAccess::ReadOnly,
+                MissingPathBehavior::Reject,
+            )
+            .unwrap(),
+            SandboxPathRule::exact(
+                dir,
+                ".env",
+                SandboxPathAccess::Denied,
+                MissingPathBehavior::Reject,
+            )
+            .unwrap(),
+        ])
+        .unwrap();
+    let resolved = scope
+        .resolve_filesystem(FileSystemAccess::DirectoryWrite)
+        .unwrap();
+
+    let policy = filesystem_from_resolved(&resolved).unwrap();
+
+    assert!(
+        policy
+            .readonly_paths
+            .iter()
+            .any(|path| Path::new(path) == temp.path().join("config"))
+    );
+    assert!(
+        policy
+            .denied_paths
+            .iter()
+            .any(|path| Path::new(path) == temp.path().join(".env"))
+    );
 }

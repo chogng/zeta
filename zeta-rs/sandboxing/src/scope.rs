@@ -1,4 +1,7 @@
 use crate::SandboxError;
+use crate::filesystem::HostReadScope;
+use crate::filesystem::ResolvedFileSystem;
+use crate::filesystem::SandboxPathRule;
 use std::collections::BTreeSet;
 use zeta_file_access::Dir;
 
@@ -40,6 +43,9 @@ pub struct SandboxScope {
     command_dir: Dir,
     grants: Vec<SandboxDirGrant>,
     hidden_dirs: Vec<Dir>,
+    host_read: HostReadScope,
+    path_rules: Vec<SandboxPathRule>,
+    private_ipc_dirs: Vec<Dir>,
 }
 
 impl SandboxScope {
@@ -51,6 +57,9 @@ impl SandboxScope {
             )],
             command_dir,
             hidden_dirs: Vec::new(),
+            host_read: HostReadScope::Host,
+            path_rules: Vec::new(),
+            private_ipc_dirs: Vec::new(),
         }
     }
 
@@ -126,6 +135,9 @@ impl SandboxScope {
             command_dir,
             grants,
             hidden_dirs,
+            host_read: HostReadScope::Host,
+            path_rules: Vec::new(),
+            private_ipc_dirs: Vec::new(),
         })
     }
 
@@ -141,9 +153,63 @@ impl SandboxScope {
         &self.hidden_dirs
     }
 
+    pub fn with_host_read(mut self, host_read: HostReadScope) -> Self {
+        self.host_read = host_read;
+        self
+    }
+
+    pub fn host_read(&self) -> HostReadScope {
+        self.host_read
+    }
+
+    pub fn with_path_rules(
+        mut self,
+        path_rules: Vec<SandboxPathRule>,
+    ) -> Result<Self, SandboxError> {
+        for rule in &path_rules {
+            if !self.grants.iter().any(|grant| grant.dir() == rule.owner()) {
+                return Err(SandboxError::InvalidScope(
+                    "sandbox path rule owner must have an exact directory grant".into(),
+                ));
+            }
+        }
+        self.path_rules = path_rules;
+        Ok(self)
+    }
+
+    pub fn path_rules(&self) -> &[SandboxPathRule] {
+        &self.path_rules
+    }
+
+    pub fn with_private_ipc_dir(mut self, dir: Dir) -> Result<Self, SandboxError> {
+        let mut grants = self.grants.clone();
+        grants.push(SandboxDirGrant::new(
+            dir.clone(),
+            SandboxDirAccess::ReadWrite,
+        ));
+        let validated = Self::new(self.command_dir.clone(), grants, self.hidden_dirs.clone())?;
+        self.grants = validated.grants;
+        self.private_ipc_dirs.push(dir);
+        Ok(self)
+    }
+
+    pub fn private_ipc_dirs(&self) -> &[Dir] {
+        &self.private_ipc_dirs
+    }
+
+    pub fn resolve_filesystem(
+        &self,
+        access: crate::FileSystemAccess,
+    ) -> Result<ResolvedFileSystem, SandboxError> {
+        crate::filesystem::resolve(self, access)
+    }
+
     /// Whether this scope grants only its command directory without hiding host directories.
     pub fn is_single_unhidden(&self) -> bool {
         self.hidden_dirs.is_empty()
+            && self.path_rules.is_empty()
+            && self.private_ipc_dirs.is_empty()
+            && self.host_read == HostReadScope::Host
             && self.grants.len() == 1
             && self.grants[0].dir() == &self.command_dir
             && self.grants[0].access() == SandboxDirAccess::ReadWrite

@@ -319,7 +319,6 @@ fn durable_user_and_dir_exec_rules_drive_local_authorization() {
     ));
 }
 
-
 #[test]
 fn local_policy_runs_agent_coordination_without_an_external_approval() {
     for tool_name in [
