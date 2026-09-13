@@ -23,6 +23,7 @@ where
         command_id: new_command_id("theme"),
         expected_revision: config.revision,
         preferred_model: Patch::Missing,
+        preferred_reasoning_effort: Patch::Missing,
         approval_review_model: Patch::Missing,
         commit_message_model: Patch::Missing,
         tool_mode: Patch::Missing,

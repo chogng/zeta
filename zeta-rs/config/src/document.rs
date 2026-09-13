@@ -21,6 +21,7 @@ use zeta_model_provider_config::ProviderConfigError;
 use zeta_model_provider_config::ProviderConfigRegistry;
 use zeta_protocol::ModelRef;
 use zeta_protocol::ProviderId;
+use zeta_protocol::ReasoningEffort;
 
 /// User-selected model source for automatic approval review.
 ///
@@ -112,6 +113,8 @@ pub enum AgentGrepBackend {
 pub struct AgentConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preferred_model: Option<ModelRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preferred_reasoning_effort: Option<ReasoningEffort>,
     #[serde(default)]
     pub approval_review_model: ApprovalReviewModelSelection,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -267,6 +270,7 @@ pub struct ResolvedConfig {
     pub features: features::FeatureOverrides,
     pub issues: crate::IssueConfig,
     pub preferred_model: Option<ModelRef>,
+    pub preferred_reasoning_effort: Option<ReasoningEffort>,
     pub approval_review_model: ApprovalReviewModelSelection,
     pub commit_message_model: Option<ModelRef>,
     pub tool_mode: zeta_protocol::ToolMode,
@@ -353,6 +357,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             features: document.features.clone(),
             issues: document.issues.clone(),
             preferred_model: document.agent.preferred_model.clone(),
+            preferred_reasoning_effort: document.agent.preferred_reasoning_effort,
             approval_review_model: document.agent.approval_review_model.clone(),
             commit_message_model: document.agent.commit_message_model.clone(),
             tool_mode: document.agent.tool_mode,

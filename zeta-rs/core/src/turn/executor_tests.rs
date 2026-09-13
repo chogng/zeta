@@ -68,6 +68,8 @@ use zeta_protocol::ModelResponse;
 use zeta_protocol::ModelStreamEvent;
 use zeta_protocol::ModelUsage;
 use zeta_protocol::ProviderId;
+use zeta_protocol::ReasoningConfig;
+use zeta_protocol::ReasoningEffort;
 use zeta_protocol::RequestUserInput;
 use zeta_protocol::RequestUserInputResponse;
 use zeta_protocol::ResponseItem;
@@ -126,6 +128,34 @@ fn completes_a_text_turn_from_durable_context() {
             .status,
         TurnStatus::Completed
     );
+}
+
+#[test]
+fn populates_configured_reasoning_on_model_request() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let reasoning = ReasoningConfig {
+        effort: ReasoningEffort::High,
+        summary: false,
+    };
+    let model = Arc::new(
+        ScriptedModel::new([Ok(text_response("answer"))])
+            .with_reasoning(reasoning.clone()),
+    );
+    let executor = TurnExecutor::without_tools(threads, model.clone());
+
+    let completion = executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+
+    assert!(matches!(
+        completion,
+        TurnExecutionOutcome::Completed(crate::CompletedTurn {
+            item: ThreadItem::AgentMessage { ref text, .. },
+            ..
+        }) if text == "answer"
+    ));
+    assert_eq!(model.requests().len(), 1);
+    assert_eq!(model.requests()[0].reasoning, Some(reasoning));
 }
 
 #[cfg(feature = "code-mode")]
@@ -2414,6 +2444,7 @@ fn running_tool_user_input_is_durable_and_resumes_the_same_execution() {
 struct ScriptedModel {
     responses: Mutex<VecDeque<Result<ModelResponse, CoreError>>>,
     requests: Mutex<Vec<ModelRequest>>,
+    reasoning: Option<ReasoningConfig>,
 }
 
 #[test]
@@ -3283,7 +3314,13 @@ impl ScriptedModel {
         Self {
             responses: Mutex::new(responses.into_iter().collect()),
             requests: Mutex::new(Vec::new()),
+            reasoning: None,
         }
+    }
+
+    fn with_reasoning(mut self, reasoning: ReasoningConfig) -> Self {
+        self.reasoning = Some(reasoning);
+        self
     }
 
     fn requests(&self) -> Vec<ModelRequest> {
@@ -3292,6 +3329,13 @@ impl ScriptedModel {
 }
 
 impl ModelService for ScriptedModel {
+    fn reasoning_config(
+        &self,
+        _: ModelSelection<'_>,
+    ) -> Result<Option<ReasoningConfig>, CoreError> {
+        Ok(self.reasoning.clone())
+    }
+
     fn invoke(
         &self,
         _: ModelSelection<'_>,

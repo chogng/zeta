@@ -29,8 +29,9 @@ native 可以依赖本 crate；本 crate 禁止反向依赖这些消费者。
 - `SlashCommandCatalog::default` 构造包含 `/compact` 的内置 server snapshot；该命令允许可选 inline
   保留提示，具体执行由产品 adapter 绑定到 typed context-compaction request；
 - `SlashCommandCatalog::with_local_and_server` 按 local、server 顺序合并并拒绝任何重名；
-- `SlashCommandInput` 对同一 catalog 提供 query、completion、invocation 与 command element range；
-- `SlashCommandsState` 保存当前输入对应的匹配、选择与 dismiss 状态；viewport、可见范围与滚动由各 renderer 保存；
+- `SlashCommandInput` 对同一 catalog 提供 query、completion、invocation、argument hint 与 command element range；
+  - `argument_hint(self)`：当输入命令有效、紧随空格、参数文本为空且光标停留在空格末尾时返回 `Some(&'c str)`；开始输入参数或光标离开末尾时返回 `None`；
+- `SlashCommandsState` 保存当前输入对应的匹配、选择与 dismiss 状态；暴露 `argument_hint(&self)` 供输入组件呈现行内提示；viewport、可见范围与滚动由各 renderer 保存；
 - `SlashCommandsView` 是 renderer 只读 projection，不允许渲染过程改变状态。
 
 输入校验按 Rust UTF-8 byte range 工作。名称只允许 lowercase ASCII letters、digits 与 interior
@@ -72,6 +73,9 @@ state/catalog 解析，避免展示了一个命令却由另一套 parser 拒绝�
 Server origin 只表示命令由 server 声明，不决定统一的提交方式；adapter 必须按 command name 的
 产品契约执行。内置 `/compact` 必须调用 `CompactContext`，不得进入普通 `StartTurn`；其他 server
 prompt command 可以继续提交 unchanged invocation text。
+
+输入组件呈现行内虚提示时，必须以弱化样式（如置灰）将 `argument_hint` 绘制在物理光标后方，
+不得改变输入文本真实存储内容，也不得推移光标在草稿中的字符下标。
 
 ## 5. 测试与修改影响
 

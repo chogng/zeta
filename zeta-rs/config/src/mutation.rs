@@ -266,6 +266,11 @@ fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpda
         Patch::Null => document.agent.preferred_model = None,
         Patch::Value(model) => document.agent.preferred_model = Some(model.clone()),
     }
+    match &update.preferred_reasoning_effort {
+        Patch::Missing => {}
+        Patch::Null => document.agent.preferred_reasoning_effort = None,
+        Patch::Value(effort) => document.agent.preferred_reasoning_effort = Some(*effort),
+    }
     match &update.approval_review_model {
         Patch::Missing => {}
         Patch::Null => {

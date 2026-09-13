@@ -206,7 +206,7 @@ fn fullscreen_selection_copies_text_and_reports_the_clipboard_result() {
 }
 
 #[test]
-fn input_focus_follows_clicks_and_survives_modal_background_clicks() {
+fn input_focus_follows_clicks_and_clicking_modal_backdrop_closes_modal() {
     let mut app = App::new();
     app.insert_text("draft");
     let area = Rect::new(0, 0, 80, 24);
@@ -288,8 +288,7 @@ fn input_focus_follows_clicks_and_survives_modal_background_clicks() {
         area,
         mouse(MouseEventKind::Up(MouseButton::Left), outside),
     );
-    assert!(app.command_panel().is_some());
-    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.command_panel().is_none());
     assert!(app.chat_input_focused());
 }
 
@@ -318,7 +317,15 @@ fn command_modals_capture_mouse_and_keep_keyboard_navigation() {
             area,
             ratatui::layout::Position::new(surface.x, surface.y)
         ));
-        assert!(super::target_at(&app, area, 0, 0).is_none());
+        let outside = ratatui::layout::Position::new(0, 0);
+        if surface.contains(outside) {
+            assert!(super::target_at(&app, area, 0, 0).is_none());
+        } else {
+            assert_eq!(
+                super::target_at(&app, area, 0, 0),
+                Some(PointerTarget::Modal(super::super::modal::Target::Backdrop))
+            );
+        }
         let selection = app.list_selection().unwrap();
         assert_eq!(selection.active_tab().label(), "First");
         assert_eq!(selection.selected_visible_index(), Some(0));
@@ -432,12 +439,25 @@ fn detail_overlay_captures_only_its_surface_and_releases_mouse_on_close() {
                 super::overlay_contains(&app, area, position),
                 surface.contains(position)
             );
-            if !super::super::modal::layout(area).close.contains(position) {
-                assert_eq!(activate_pointer_item(&mut app, area, column, row), None);
+            if close.contains(position) {
+                assert_eq!(
+                    super::target_at(&app, area, column, row),
+                    Some(PointerTarget::Modal(super::super::modal::Target::Close))
+                );
+            } else if surface.contains(position) {
+                assert_eq!(super::target_at(&app, area, column, row), None);
+            } else {
+                assert_eq!(
+                    super::target_at(&app, area, column, row),
+                    Some(PointerTarget::Modal(super::super::modal::Target::Backdrop))
+                );
             }
         }
     }
-    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    let outside = ratatui::layout::Position::new(area.x, area.y);
+    assert!(!surface.contains(outside));
+    assert_eq!(activate_pointer_item(&mut app, area, outside.x, outside.y), None);
+    assert!(app.overlay().is_none());
     assert_base_pointer_targets(&mut app, area);
 }
 
@@ -692,7 +712,14 @@ fn overlays_block_background_wheel_and_selection_until_dismissed() {
                 super::MouseAction::Selection(None)
             ));
             assert!(app.fullscreen.selection.range().is_none());
-            assert!(app.fullscreen.pointer.pressed().is_none());
+            if !detail || kind != MouseEventKind::Down(MouseButton::Left) {
+                assert!(app.fullscreen.pointer.pressed().is_none());
+            } else {
+                assert_eq!(
+                    app.fullscreen.pointer.pressed(),
+                    Some(&PointerTarget::Modal(super::super::modal::Target::Backdrop))
+                );
+            }
             assert_eq!(app.transcript_scroll().anchor(), anchor.as_ref());
         }
         let inside = (0..area.height)

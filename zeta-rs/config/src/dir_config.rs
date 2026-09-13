@@ -9,6 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use zeta_file_access::DirId;
 use zeta_protocol::ModelRef;
+use zeta_protocol::ReasoningEffort;
 
 /// Scope supplied by the host when it reads one directory configuration document.
 ///
@@ -61,6 +62,8 @@ impl DirConfigRevision {
 pub struct DirAgentConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preferred_model: Option<ModelRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preferred_reasoning_effort: Option<ReasoningEffort>,
 }
 
 /// Runtime-free MCP declaration requested by a directory.

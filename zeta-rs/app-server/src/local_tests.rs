@@ -48,6 +48,7 @@ use zeta_protocol::ModelRef;
 use zeta_protocol::ModelRequest;
 use zeta_protocol::ModelResponse;
 use zeta_protocol::Patch;
+use zeta_protocol::ReasoningEffort;
 use zeta_protocol::ResponseItem;
 use zeta_protocol::StopReason;
 use zeta_secrets::MemorySecretStore;
@@ -1409,6 +1410,58 @@ fn configured_model_context_enables_core_managed_compaction() {
 }
 
 #[test]
+fn config_backed_model_service_resolves_reasoning_effort() {
+    let provider = ProviderId::new("openai").unwrap();
+    let model = ModelId::new("gpt-5.6").unwrap();
+    let provider_config = ModelProviderConfig::new(provider.clone());
+    let profile = tempfile::tempdir().unwrap();
+    let config = Arc::new(ConfigStore::open(profile.path().join("config.json")).unwrap());
+    let configured = config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("configure-provider").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::ConfigureProvider {
+                provider: provider.clone(),
+                config: provider_config,
+            },
+        })
+        .unwrap();
+    config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("select-model-with-effort").unwrap(),
+            expected_revision: configured.revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                preferred_model: Patch::Value(ModelRef::new(provider.clone(), model.clone())),
+                preferred_reasoning_effort: Patch::Value(ReasoningEffort::High),
+                ..Default::default()
+            }),
+        })
+        .unwrap();
+    let provider_configs = ProviderConfigRegistry::builtin();
+    let catalog_provider = Arc::new(ModelProviderRuntime::new(provider_configs.clone()));
+    let service = ConfigBackedModelService {
+        config,
+        dir_config: None,
+        provider_configs,
+        models_manager: catalog_provider.models_manager(),
+        catalog_provider,
+        catalog_runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
+        resolver: Arc::new(RecordingSnapshotResolver {
+            gate: Arc::new(ResponseGate::default()),
+        }),
+    };
+    assert_eq!(
+        service
+            .reasoning_config(ModelSelection::ConfiguredDefault)
+            .unwrap(),
+        Some(zeta_protocol::ReasoningConfig {
+            effort: ReasoningEffort::High,
+            summary: false,
+        })
+    );
+}
+
+#[test]
 fn image_input_policy_tracks_the_selected_provider_and_original_detail_capability() {
     let providers = ProviderConfigRegistry::builtin();
     let openai = ResolvedConfig {
@@ -1473,6 +1526,7 @@ fn select_model(
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 features: Default::default(),
                 preferred_model: Patch::Value(model_ref(model)),
+                preferred_reasoning_effort: Patch::Missing,
                 approval_review_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,

@@ -203,6 +203,7 @@ fn dynamic_commands_share_popup_completion_and_submission() {
         name: "diagnose".into(),
         description: "inspect the current dir".into(),
         argument_mode: SlashCommandArgumentMode::Optional,
+        argument_hint: None,
     };
     let registry = SlashCommandCatalog::with_local_and_server(
         built_in_slash_command_definitions(),
@@ -234,6 +235,7 @@ fn forwarded_dynamic_command_restores_command_text_before_structured_arguments()
         name: "diagnose".into(),
         description: "inspect the current dir".into(),
         argument_mode: SlashCommandArgumentMode::Optional,
+        argument_hint: None,
     };
     let registry =
         SlashCommandCatalog::with_local_and_server(built_in_slash_command_definitions(), [dynamic])
@@ -399,4 +401,22 @@ fn queue_restore_rebuilds_skill_and_context_bindings_without_duplicate_selectors
                 content: "file contents".into()
             })
     );
+}
+
+#[test]
+fn chat_input_offers_argument_hint_for_parameter_commands() {
+    let mut chat_input = ChatInputHarness::new();
+    chat_input.insert_text("/cd ");
+    assert_eq!(chat_input.input.argument_hint(), Some("<path>"));
+
+    chat_input.insert_text("foo");
+    assert_eq!(chat_input.input.argument_hint(), None);
+
+    chat_input.handle_key(key(KeyCode::Backspace));
+    chat_input.handle_key(key(KeyCode::Backspace));
+    chat_input.handle_key(key(KeyCode::Backspace));
+    assert_eq!(chat_input.input.argument_hint(), Some("<path>"));
+
+    chat_input.handle_key(key(KeyCode::Backspace));
+    assert_eq!(chat_input.input.argument_hint(), None);
 }

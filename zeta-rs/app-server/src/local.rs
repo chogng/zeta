@@ -1831,6 +1831,24 @@ impl ModelService for ConfigBackedModelService {
         ))
     }
 
+    fn reasoning_config(
+        &self,
+        selection: ModelSelection<'_>,
+    ) -> Result<Option<zeta_protocol::ReasoningConfig>, CoreError> {
+        let config = self.config_for_selection(selection)?;
+        let Some(model) = config.preferred_model.as_ref() else {
+            return Ok(None);
+        };
+        let static_model = find_static_model(model);
+        let effort = config
+            .preferred_reasoning_effort
+            .or_else(|| static_model.and_then(|m| m.default_reasoning_effort));
+        Ok(effort.map(|effort| zeta_protocol::ReasoningConfig {
+            effort,
+            summary: false,
+        }))
+    }
+
     fn input_token_measurement_capability(
         &self,
         selection: ModelSelection<'_>,

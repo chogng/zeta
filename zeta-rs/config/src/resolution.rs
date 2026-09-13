@@ -19,6 +19,7 @@ pub enum ConfigValueSource {
 pub struct ConfigProvenance {
     pub issues: ConfigValueSource,
     pub preferred_model: Option<ConfigValueSource>,
+    pub preferred_reasoning_effort: Option<ConfigValueSource>,
     pub approval_review_model: ConfigValueSource,
     pub commit_message_model: Option<ConfigValueSource>,
     pub providers: BTreeMap<ProviderId, ConfigValueSource>,
@@ -38,6 +39,11 @@ impl ConfigProvenance {
             preferred_model: document
                 .agent
                 .preferred_model
+                .as_ref()
+                .map(|_| ConfigValueSource::User),
+            preferred_reasoning_effort: document
+                .agent
+                .preferred_reasoning_effort
                 .as_ref()
                 .map(|_| ConfigValueSource::User),
             approval_review_model: ConfigValueSource::User,
@@ -173,6 +179,10 @@ pub fn resolve_scoped_config(
                 &dir_id,
                 model,
             );
+        }
+        if let Some(effort) = dir.document.agent.preferred_reasoning_effort {
+            values.preferred_reasoning_effort = Some(effort);
+            provenance.preferred_reasoning_effort = Some(ConfigValueSource::Dir(dir_id.clone()));
         }
 
         let source = ConfigValueSource::Dir(dir_id.clone());

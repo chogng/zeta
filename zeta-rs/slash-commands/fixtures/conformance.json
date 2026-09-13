@@ -1,6 +1,6 @@
 {
   "definitions": [
-    { "name": "diagnose", "description": "Inspect the workspace", "argumentMode": "optional" },
+    { "name": "diagnose", "description": "Inspect the workspace", "argumentMode": "optional", "argumentHint": "<path>" },
     { "name": "status", "description": "Show current status", "argumentMode": "none" }
   ],
   "matching": [

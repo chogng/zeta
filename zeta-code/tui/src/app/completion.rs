@@ -609,7 +609,11 @@ pub(super) fn apply_tui_config(
         Err(error) => app.update(ThreadEvent::FailureReported(error)),
     }
     app.update(ModelEvent::SummaryReceived(
-        crate::models::ModelSummary::from_catalog(config.preferred_model, model_catalog),
+        crate::models::ModelSummary::from_catalog(
+            config.preferred_model,
+            config.preferred_reasoning_effort,
+            model_catalog,
+        ),
     ));
 }
 

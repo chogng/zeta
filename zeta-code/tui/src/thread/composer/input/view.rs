@@ -73,6 +73,7 @@ pub(crate) fn draw(
     cursor: ChatInputCursor,
     focus: ChatInputFocus,
     chrome: ChatInputChrome,
+    argument_hint: Option<&str>,
     context: RenderContext<'_>,
 ) {
     let wrapped = wrap_input(
@@ -98,6 +99,12 @@ pub(crate) fn draw(
             ])
         })
         .collect::<Vec<_>>();
+    if let Some(hint) = argument_hint
+        && let Some(line) = lines.get_mut(wrapped.cursor_row)
+    {
+        line.spans
+            .push(Span::styled(hint, Style::default().fg(context.muted())));
+    }
     if input.is_empty()
         && matches!(chrome, ChatInputChrome::Box)
         && focus == ChatInputFocus::Blurred

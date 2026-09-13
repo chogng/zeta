@@ -21,6 +21,7 @@ use zeta_protocol::ModelRef;
 use zeta_protocol::ModelRequest;
 use zeta_protocol::ModelResponse;
 use zeta_protocol::ModelStreamEvent;
+use zeta_protocol::ReasoningConfig;
 use zeta_protocol::RequestId;
 use zeta_protocol::RequestUserInput;
 use zeta_protocol::RequestUserInputResponse;
@@ -156,6 +157,14 @@ pub trait ModelService: Send + Sync {
         _: ModelSelection<'_>,
     ) -> Result<ModelImageInputPolicy, CoreError> {
         Ok(ModelImageInputPolicy::default())
+    }
+
+    /// Reports whether the selected immutable model can measure input locally or remotely.
+    fn reasoning_config(
+        &self,
+        _: ModelSelection<'_>,
+    ) -> Result<Option<ReasoningConfig>, CoreError> {
+        Ok(None)
     }
 
     /// Reports whether the selected immutable model can measure input locally or remotely.

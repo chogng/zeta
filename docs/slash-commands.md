@@ -73,6 +73,43 @@ Theme picker，带 ID 时静默直接切换；Theme picker 不启用搜索，通
 的上下焦点移动进入 SearchBox。其他 built-ins 属于 TUI coordination。任意 local/server 同名都拒绝
 整份合并结果，不按客户端优先级静默覆盖。Skill 与命令使用不同前缀；同名 Skill 仍因来源歧义不进入无来源限定的 `$name` 候选，但不会覆盖或屏蔽 `/name` 命令。
 
+## 参数模式与行内虚提示
+
+命令定义通过 `argument_mode` 声明是否接受参数，通过 `argument_hint` 声明输入框光标后的参数占位虚提示（Ghost Text）。
+
+### 1. 参数模式
+
+| 模式 (`argument_mode`) | 含义 | 行为表现 |
+| :--- | :--- | :--- |
+| `none` | 不接受参数 | 命令后若输入额外参数，整行不作为该命令执行 |
+| `required` | 必须提供参数 | 提交时若缺少参数则提示错误或拒绝执行 |
+| `optional` | 参数可选 | 无参数时触发默认行为或打开选择面板，有参数时直接应用 |
+
+### 2. 占位虚提示与内置命令规范
+
+`SlashCommandDefinition` 的 `argument_hint`（Rust `Option<String>`，TypeScript `argumentHint?: string`）定义参数占位符。占位符遵循统一规范，使用尖括号包裹小写描述（如 `<path>`）：
+
+| 命令 | 模式 | 虚提示 (`argument_hint`) | 说明 |
+| :--- | :--- | :--- | :--- |
+| `/cd` | `required` | `<path>` | 切换工作目录 |
+| `/add-dir` | `required` | `<path>` | 添加工作区目录 |
+| `/export` | `required` | `<path>` | 导出当前对话内容 |
+| `/model` | `optional` | `<model> [effort]` | 切换模型与思考量级别（如 `openai/o3-mini high` 或 `clear`），无参数打开选择器 |
+| `/theme` | `optional` | `<theme>` | 切换主题，带参数直接设置，无参数打开选择器 |
+| `/resume` | `required` | `<session-id>` | 恢复指定会话 |
+| `/rewind` | `required` | `<checkpoint>` | 回退到指定检查点 |
+| `/fork` | `required` | `<message>` | 基于指定消息分叉新会话 |
+| `/new` | `optional` | `<prompt>` | 新建会话，可选初始提示语 |
+| `/compact` | `optional` | 无 | 压缩上下文，由服务端声明 |
+| `/clear` | `none` | 无 | 清空当前对话，不接受参数 |
+| `/help` | `none` | 无 | 显示帮助信息，不接受参数 |
+
+### 3. 虚提示交互生命周期
+
+- **激活条件**：输入完整合法命令后键入空格，参数文本尚为空（或仅包含空白），且光标位于末尾。
+- **隐藏条件**：光标离开末尾（如回退编辑命令名），或用户开始键入非空白参数字符时，虚提示立即消失。
+- **呈现规范**：输入框在光标后以置灰弱化样式（如 `context.muted()`）绘制虚提示；光标保持在实际输入的空格处，不移动物理光标，实际输入文本也不包含占位符内容。
+
 ## Config 边界
 
 `initialize.slashCommands` 不进入通用 config，也不由 slash command view 读取 config。它是 connection

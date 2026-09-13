@@ -8,11 +8,13 @@ fn catalog() -> SlashCommandCatalog {
             name: "model".into(),
             description: "select a model".into(),
             argument_mode: SlashCommandArgumentMode::Optional,
+            argument_hint: Some("<model>".into()),
         },
         SlashCommandDefinition {
             name: "status".into(),
             description: "show status".into(),
             argument_mode: SlashCommandArgumentMode::None,
+            argument_hint: None,
         },
     ])
     .unwrap()
@@ -51,4 +53,26 @@ fn commands_without_arguments_reject_extra_text() {
             .invocation()
             .is_none()
     );
+}
+
+#[test]
+fn argument_hint_is_offered_only_after_command_with_empty_arguments() {
+    let catalog = catalog();
+    let input = SlashCommandInput::at_cursor("/model ", 7, &catalog);
+    assert_eq!(input.argument_hint(), Some("<model>"));
+
+    let input = SlashCommandInput::at_cursor("/model   ", 9, &catalog);
+    assert_eq!(input.argument_hint(), Some("<model>"));
+
+    let input = SlashCommandInput::at_cursor("/model", 6, &catalog);
+    assert_eq!(input.argument_hint(), None);
+
+    let input = SlashCommandInput::at_cursor("/model claude", 13, &catalog);
+    assert_eq!(input.argument_hint(), None);
+
+    let input = SlashCommandInput::at_cursor("/model ", 3, &catalog);
+    assert_eq!(input.argument_hint(), None);
+
+    let input = SlashCommandInput::at_cursor("/status ", 8, &catalog);
+    assert_eq!(input.argument_hint(), None);
 }

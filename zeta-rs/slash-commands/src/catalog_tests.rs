@@ -7,6 +7,7 @@ fn command(name: &str) -> SlashCommandDefinition {
         name: name.into(),
         description: "inspect the dir".into(),
         argument_mode: SlashCommandArgumentMode::Optional,
+        argument_hint: None,
     }
 }
 

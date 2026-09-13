@@ -178,6 +178,7 @@ impl AppServer {
                 command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                     features: params.features,
                     preferred_model: model_ref_update_from_dto(params.preferred_model)?,
+                    preferred_reasoning_effort: params.preferred_reasoning_effort,
                     approval_review_model: approval_review_model_update_from_dto(
                         params.approval_review_model,
                     )?,
@@ -208,6 +209,7 @@ impl AppServer {
                 command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                     features: Default::default(),
                     preferred_model: Patch::Missing,
+                    preferred_reasoning_effort: Patch::Missing,
                     approval_review_model: Patch::Missing,
                     commit_message_model: Patch::Missing,
                     tool_mode: Patch::Missing,
@@ -622,6 +624,7 @@ fn config_read_result(
         revision: snapshot.revision.get(),
         generation: snapshot.generation.get(),
         preferred_model: snapshot.values.preferred_model.map(model_ref_dto),
+        preferred_reasoning_effort: snapshot.values.preferred_reasoning_effort,
         approval_review_model: approval_review_model_dto(snapshot.values.approval_review_model),
         commit_message_model: snapshot.values.commit_message_model.map(model_ref_dto),
         commit_message_active_dir_authorized,

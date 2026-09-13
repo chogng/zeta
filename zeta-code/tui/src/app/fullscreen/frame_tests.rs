@@ -372,6 +372,7 @@ fn modal_keeps_wrapped_tabs_between_title_and_body() {
                 None,
                 None,
                 crate::render::InteractionState::default(),
+                false,
                 crate::config::KeyHintStyle::Contrast,
                 test_context(),
             )
@@ -996,6 +997,7 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
             provider: "anthropic".into(),
             model: "claude-sonnet".into(),
         }),
+        None,
         None,
     )));
     let terminal_area = Rect::new(0, 0, 80, 20);
@@ -1744,6 +1746,7 @@ fn slash_popup_wraps_descriptions_to_two_clickable_lines_and_truncates_the_rest(
             name: "diagnose".into(),
             description: "one two three four five six seven eight nine ten".into(),
             argument_mode: SlashCommandArgumentMode::Optional,
+            argument_hint: None,
         }],
     )
     .unwrap();
@@ -2225,7 +2228,7 @@ fn configured_model_summary() -> ModelSummary {
             },
         ],
     };
-    ModelSummary::from_catalog(Some(preferred), Some(&catalog))
+    ModelSummary::from_catalog(Some(preferred), None, Some(&catalog))
 }
 
 #[test]

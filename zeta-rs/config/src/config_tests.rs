@@ -351,6 +351,7 @@ fn update_preferences(
         command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
             features: Default::default(),
             preferred_model,
+            preferred_reasoning_effort: Patch::Missing,
             approval_review_model: Patch::Missing,
             commit_message_model: Patch::Missing,
             tool_mode: Patch::Missing,
@@ -687,6 +688,7 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 features: Default::default(),
                 preferred_model: Patch::Missing,
+                preferred_reasoning_effort: Patch::Missing,
                 approval_review_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Value(zeta_protocol::ToolMode::CodeModeOnly),
@@ -903,7 +905,10 @@ fn dir_document(preferred_model: Option<ModelRef>) -> DirConfigDocument {
     };
     let plugin_id = PluginPackageId::new("acme/code-review").unwrap();
     DirConfigDocument {
-        agent: DirAgentConfig { preferred_model },
+        agent: DirAgentConfig {
+            preferred_model,
+            preferred_reasoning_effort: None,
+        },
         mcp: DirMcpConfig {
             servers: BTreeMap::from([(mcp_server.id.clone(), mcp_server)]),
         },
@@ -1217,6 +1222,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 features: Default::default(),
                 preferred_model: Patch::Missing,
+                preferred_reasoning_effort: Patch::Missing,
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,
@@ -1238,6 +1244,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 features: Default::default(),
                 preferred_model: Patch::Missing,
+                preferred_reasoning_effort: Patch::Missing,
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,

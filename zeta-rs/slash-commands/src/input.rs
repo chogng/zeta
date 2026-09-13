@@ -28,14 +28,14 @@ pub struct SlashCommandInvocation {
 
 /// Read-only interpretation of composer text against one canonical catalog snapshot.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct SlashCommandInput<'a> {
+pub struct SlashCommandInput<'a, 'c> {
     text: &'a str,
     cursor: usize,
-    catalog: &'a SlashCommandCatalog,
+    catalog: &'c SlashCommandCatalog,
 }
 
-impl<'a> SlashCommandInput<'a> {
-    pub fn at_cursor(text: &'a str, cursor: usize, catalog: &'a SlashCommandCatalog) -> Self {
+impl<'a, 'c> SlashCommandInput<'a, 'c> {
+    pub fn at_cursor(text: &'a str, cursor: usize, catalog: &'c SlashCommandCatalog) -> Self {
         Self {
             text,
             cursor,
@@ -43,7 +43,7 @@ impl<'a> SlashCommandInput<'a> {
         }
     }
 
-    pub fn for_submission(text: &'a str, catalog: &'a SlashCommandCatalog) -> Self {
+    pub fn for_submission(text: &'a str, catalog: &'c SlashCommandCatalog) -> Self {
         Self::at_cursor(text, text.len(), catalog)
     }
 
@@ -123,6 +123,23 @@ impl<'a> SlashCommandInput<'a> {
             return None;
         }
         Some(command_range)
+    }
+
+    pub fn argument_hint(self) -> Option<&'c str> {
+        let command_range = command_name_range(self.text)?;
+        let command = self
+            .catalog
+            .command_named(&self.text[1..command_range.end])?;
+        let hint = command.argument_hint.as_deref()?;
+        let trailing = &self.text[command_range.end..];
+        if trailing.starts_with(char::is_whitespace)
+            && trailing.trim().is_empty()
+            && self.cursor == self.text.len()
+        {
+            Some(hint)
+        } else {
+            None
+        }
     }
 }
 

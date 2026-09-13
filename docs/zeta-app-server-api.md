@@ -175,10 +175,10 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 客户端必须拒绝不同 protocol major、缺失的 required capability 或不支持的 capability version。
 schema hash 是 exact artifact 诊断信号，不单独决定运行时兼容性。
 `slashCommands` 每项的 `name` 只能使用 lowercase ASCII letters、digits 与 interior hyphens，
-description 不能为空，同一 snapshot 中 name 必须唯一。该 snapshot 负责 discoverability 与
-inline argument parsing；客户端必须按命令契约分发。Skill 和 server prompt command 通过
-`StartTurn.input` 保留 `/name`、text/image 顺序；内置 `/compact` 通过
-`session/request::CompactContext` 执行，不发送普通聊天文本。
+description 不能为空，同一 snapshot 中 name 必须唯一。可选字段 `argumentHint`（如 `<path>`、`<prompt>`）
+用于向客户端声明行内参数占位虚提示。该 snapshot 负责 discoverability 与 inline argument parsing；
+客户端必须按命令契约分发。Skill 和 server prompt command 通过 `StartTurn.input` 保留 `/name`、text/image 顺序；
+内置 `/compact` 通过 `session/request::CompactContext` 执行，不发送普通聊天文本。
 校验、local/server 合并与 Rust client 交互状态的 canonical owner 是
 [`zeta-slash-commands`](../zeta-rs/slash-commands/README.md)；App Server 只组合并发布 server snapshot。
 三种 client surface 的合并、执行与渲染边界见 [`slash-commands.md`](slash-commands.md)。

@@ -27,6 +27,7 @@ impl Default for SlashCommandCatalog {
             name: "compact".into(),
             description: "Summarize conversation history to free context space".into(),
             argument_mode: SlashCommandArgumentMode::Optional,
+            argument_hint: None,
         }])
         .expect("built-in slash command definitions are valid")
     }

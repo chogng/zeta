@@ -47,6 +47,10 @@ impl ChatComposerView<'_> {
     pub(super) fn input_completion(&self) -> Option<CompletionView<'_>> {
         self.input.completion()
     }
+
+    pub(super) fn argument_hint(&self) -> Option<&str> {
+        self.input.argument_hint()
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]

@@ -19,6 +19,7 @@ export interface SlashCommandDefinition {
 	readonly name: string;
 	readonly description: string;
 	readonly argumentMode: "none" | "optional";
+	readonly argumentHint?: string;
 }
 
 export interface SkillSelectorDefinition {

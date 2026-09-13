@@ -872,6 +872,10 @@ impl TurnExecutor {
                 request.parallel_tool_calls = profile.parallel_tool_calls;
             }
             let model = invocation.model().as_service_selection();
+            request.reasoning = self
+                .model
+                .reasoning_config(model)
+                .map_err(ExecutionFailure::service)?;
             let billing_scope = self
                 .model
                 .billing_scope(model)

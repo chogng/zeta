@@ -35,6 +35,7 @@ fn border_uses_the_modal_theme_color() {
                 "Config",
                 &crate::widgets::key_hint::KeyHints::new().with_action("Esc", "close"),
                 InteractionState::default(),
+                false,
                 crate::config::KeyHintStyle::Contrast,
                 test_context(),
             )
@@ -44,6 +45,32 @@ fn border_uses_the_modal_theme_color() {
     assert_eq!(
         terminal.backend().buffer()[(layout.surface.x, layout.surface.y)].fg,
         test_context().modal_border()
+    );
+}
+
+#[test]
+fn border_uses_warning_color_when_blocked_alert_is_active() {
+    let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
+    let layout = ModalLayout::new(Rect::new(0, 0, 40, 12), 32, 10);
+
+    terminal
+        .draw(|frame| {
+            super::draw(
+                frame,
+                layout,
+                "Config",
+                &crate::widgets::key_hint::KeyHints::new().with_action("Esc", "close"),
+                InteractionState::default(),
+                true,
+                crate::config::KeyHintStyle::Contrast,
+                test_context(),
+            )
+        })
+        .unwrap();
+
+    assert_eq!(
+        terminal.backend().buffer()[(layout.surface.x, layout.surface.y)].fg,
+        test_context().warning()
     );
 }
 
@@ -81,6 +108,7 @@ fn close_uses_shared_hover_and_pressed_theme_states() {
                     "Config",
                     &crate::widgets::key_hint::KeyHints::new().with_action("Esc", "close"),
                     state,
+                    false,
                     crate::config::KeyHintStyle::Contrast,
                     context,
                 )

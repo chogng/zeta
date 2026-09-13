@@ -34,6 +34,7 @@ where
         });
         let summary = crate::models::ModelSummary::from_catalog(
             config.preferred_model.clone(),
+            config.preferred_reasoning_effort,
             Some(&catalog),
         );
         let label = summary.model_label();
