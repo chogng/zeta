@@ -133,6 +133,43 @@ fn every_header_action_has_its_own_hit_target_and_activation() {
 }
 
 #[test]
+fn clicking_dashboard_twice_returns_to_the_active_session() {
+    let mut app = app_with_branch();
+    app.update(crate::thread::Event::ContextChanged {
+        session_id: zeta_protocol::SessionId::new("current").unwrap(),
+        thread_id: zeta_protocol::ThreadId::new("current").unwrap(),
+    });
+    let area = Rect::new(0, 0, 100, 20);
+    let header = super::super::layout(&app, area).header;
+    let position = (0..area.width)
+        .map(|column| Position::new(column, header.y))
+        .find(|position| {
+            super::target_at(&app, header, *position) == Some(super::Target::Dashboard)
+        })
+        .unwrap();
+
+    app.fullscreen.focus_header(super::Target::Dashboard);
+    assert_eq!(
+        super::super::pointer::activate_pointer_item(&mut app, area, position.x, position.y),
+        None
+    );
+    assert!(app.session_manager_view().is_some());
+    assert_eq!(app.session_manager_hint().text(), "Esc to return");
+
+    app.fullscreen.focus_header(super::Target::Dashboard);
+    assert_eq!(
+        super::super::pointer::activate_pointer_item(&mut app, area, position.x, position.y),
+        None
+    );
+    assert!(app.session_manager_view().is_none());
+    assert!(app.chat_input_focused());
+    assert_eq!(
+        app.sessions.active_session_id().unwrap().as_str(),
+        "current"
+    );
+}
+
+#[test]
 fn keyboard_focus_reaches_header_and_context_uses_the_existing_progress_bar() {
     use zeta_app_server_protocol::protocol::config::ModelRefDto;
     use zeta_protocol::ModelContextUsage;

@@ -129,6 +129,31 @@ fn dashboard_command_opens_the_manager() {
 }
 
 #[test]
+fn dashboard_escape_exits_from_focused_list_and_right_does_not_exit() {
+    let mut app = active_session_app();
+    assert_eq!(app.handle_key(key(KeyCode::Left)), None);
+    assert!(app.session_manager_view().is_some());
+    assert_eq!(app.session_manager_hint().text(), "Esc to return");
+    assert_eq!(app.handle_key(key(KeyCode::Right)), None);
+    assert!(app.session_manager_view().is_some());
+
+    assert_eq!(app.handle_key(key(KeyCode::Up)), None);
+    assert!(app.session_manager_focused());
+    app.fullscreen.focus_page();
+    assert!(!app.fullscreen.input_focused());
+    assert!(app.session_manager_hint().text().ends_with("Esc to return"));
+    assert_eq!(app.handle_key(key(KeyCode::Right)), None);
+    assert!(app.session_manager_view().is_some());
+    crate::tui_assert_snapshot!("dashboard_list_focused_before_escape", render(&app));
+
+    assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
+    assert!(app.session_manager_view().is_none());
+    assert!(!app.session_manager_focused());
+    assert!(app.chat_input_focused());
+    crate::tui_assert_snapshot!("dashboard_after_escape", render(&app));
+}
+
+#[test]
 fn session_manager_preview_reads_conversation_and_restores_focus_without_editing() {
     let mut app = active_session_app();
     app.handle_key(key(KeyCode::Left));

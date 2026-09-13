@@ -36,6 +36,16 @@ pub(in crate::app) fn handle_key(
         return command;
     }
     if key.kind == KeyEventKind::Press
+        && bindings::ESC_RETURN.matches(key)
+        && app.session_manager_view().is_some()
+        && app.issue_manager().is_none()
+        && app.approval_view().is_none()
+        && app.query_view().is_none()
+        && app.completion().is_none()
+    {
+        return exit_manager(app).flatten();
+    }
+    if key.kind == KeyEventKind::Press
         && bindings::RETURN_INPUT.matches(key)
         && !app.fullscreen.input_focused()
     {
@@ -851,8 +861,7 @@ pub(in crate::app) fn exit_manager(app: &mut App) -> Option<Option<AppCommand>> 
                         .into(),
                     ));
                 }
-                close_transient_surfaces(app);
-                app.fullscreen.sessions.show_session(session_id);
+                show_conversation(app, session_id);
                 Some(None)
             } else {
                 Some(Some(
