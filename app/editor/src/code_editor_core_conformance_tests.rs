@@ -1,14 +1,14 @@
 use crate::CodeEditorCommand;
 use crate::CodeEditorDocument;
 use crate::CodeEditorTextEdit;
-use zeta_editor_core::EditorCoreDocument;
-use zeta_editor_core::EditorCoreRevision;
-use zeta_editor_core::EditorCoreSelection;
-use zeta_editor_core::EditorCoreSelectionSet;
-use zeta_editor_core::EditorCoreTextEdit;
-use zeta_editor_core::EditorCoreTextRange;
-use zeta_editor_core::EditorCoreTransaction;
-use zeta_editor_core::EditorCoreUtf16Offset;
+use ash_editor_core::EditorCoreDocument;
+use ash_editor_core::EditorCoreRevision;
+use ash_editor_core::EditorCoreSelection;
+use ash_editor_core::EditorCoreSelectionSet;
+use ash_editor_core::EditorCoreTextEdit;
+use ash_editor_core::EditorCoreTextRange;
+use ash_editor_core::EditorCoreTransaction;
+use ash_editor_core::EditorCoreUtf16Offset;
 
 fn utf16_offset(text: &str, byte_offset: usize) -> EditorCoreUtf16Offset {
     assert!(text.is_char_boundary(byte_offset));

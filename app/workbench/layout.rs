@@ -5,12 +5,12 @@
 
 use std::time::Instant;
 
-use zeta_ui_components::Resizable;
-use zeta_ui_components::SashOrientation;
-use zeta_ui_components::SashState;
-use zeta_ui_components::ScrollCommand;
-use zeta_ui_components::ScrollMetrics;
-use zeta_ui_components::ScrollbarPresentation;
+use ash_ui_components::Resizable;
+use ash_ui_components::SashOrientation;
+use ash_ui_components::SashState;
+use ash_ui_components::ScrollCommand;
+use ash_ui_components::ScrollMetrics;
+use ash_ui_components::ScrollbarPresentation;
 use zui::ui::HoverPresence;
 use zui::ui::Point;
 use zui::ui::SplitViewResizeSnapshot;
@@ -107,7 +107,7 @@ impl WorkbenchLayoutState {
 
     pub(crate) fn tab_container_scroll_state_mut(
         &mut self,
-    ) -> &mut zeta_ui_components::ScrollState {
+    ) -> &mut ash_ui_components::ScrollState {
         self.tab_container.scroll_state_mut()
     }
 

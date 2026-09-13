@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use zeta_ui_components::InteractionRegion;
+use ash_ui_components::InteractionRegion;
 use zui::ui::AccessibilityRole;
 use zui::ui::CaretVisibility;
 use zui::ui::ComponentContext;

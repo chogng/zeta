@@ -1,161 +1,161 @@
 [workspace]
-exclude = ["zeta-rs/vendor/mxc"]
+exclude = ["ash-rs/vendor/mxc"]
 members = [
-    "zeta-rs/ext/sleep",
-    "zeta-rs/ext/git-attribution",
-    "zeta-rs/ext/image-generation",
-    "zeta-rs/ext/history-notes",
-    "zeta-rs/ext/goal",
-    "zeta-rs/ext/agent",
-    "zeta-rs/ext/guardian-v2",
-    "zeta-rs/memories",
-    "zeta-rs/ext/items",
-    "zeta-rs/ext/memories",
-    "zeta-rs/ext/queue",
-    "zeta-rs/analytics",
-    "zeta-rs/diagnostics",
-    "zeta-rs/feedback",
-    "zeta-rs/features",
-    "zeta-rs/config-schema",
-    "zeta-rs/process-hardening",
-    "zeta-rs/build-info",
-    "zeta-rs/agent-environment",
-    "zeta-rs/agent-graph-store",
-    "zeta-rs/github",
-    "zeta-rs/agent-import",
-    "zeta-rs/agent-roles",
-    "zeta-rs/attachments",
-    "zeta-rs/app-server",
-    "zeta-rs/app-server-daemon",
-    "zeta-rs/app-server-client",
-    "zeta-rs/app-server-protocol",
-    "zeta-rs/app-server-transport",
-    "zeta-rs/collaboration",
-    "zeta-rs/collaboration-server",
-    "zeta-rs/codebase",
-    "zeta-rs/codebase-store",
-    "zeta-rs/cloud-codebase",
-    "zeta-rs/code-mode",
-    "zeta-rs/code-mode-host",
-    "zeta-rs/code-mode-protocol",
-    "zeta-rs/code-mode-runtime",
-    "zeta-rs/v8-poc",
-    "zeta-rs/chatgpt",
-    "zeta-rs/apply-patch",
-    "zeta-rs/async-utils",
-    "zeta-rs/ext/guardian-reviewer",
-    "zeta-rs/automation",
-    "zeta-rs/memory-diagnostics",
-    "zeta-rs/bwrap",
-    "zeta-code/ansi-escape",
-    "zeta-code/cli",
-    "zeta-code/update-sign",
-    "zeta-code/sprite",
-    "zeta-rs/config",
-    "zeta-rs/context-engine",
-    "zeta-rs/core",
-    "zeta-rs/diff",
-    "zeta-rs/debug-adapter",
-    "zeta-rs/extensions",
-    "zeta-rs/editor-extension-host",
-    "zeta-rs/editor-core",
-    "zeta-rs/environment",
-    "zeta-rs/ext/extension-api",
-    "zeta-rs/ext/connectors",
-    "zeta-rs/ext/mcp",
-    "zeta-rs/ext/skills",
-    "zeta-rs/ext/web-search",
-    "zeta-rs/secrets",
-    "zeta-rs/exec",
-    "zeta-rs/execpolicy",
-    "zeta-rs/tool-executor",
-    "zeta-rs/file-identity",
-    "zeta-rs/file-search",
-    "zeta-rs/fast-regex-search",
-    "zeta-rs/immutable-generation-store",
-    "zeta-rs/package-store",
-    "zeta-rs/file-system",
-    "zeta-rs/file-system-tool",
-    "zeta-rs/file-watcher",
-    "zeta-rs/git",
-    "zeta-rs/history",
-    "zeta-rs/message-history",
-    "zeta-rs/hooks",
-    "zeta-rs/http-client",
-    "zeta-rs/network-proxy",
-    "zeta-rs/mxc-sandbox",
-    "zeta-rs/windows-sandbox",
-    "zeta-rs/websocket-client",
-    "zeta-rs/install-context",
-    "zeta-rs/input-classifier",
-    "zeta-rs/instructions",
-    "zeta-rs/keybinding",
-    "zeta-rs/keyring-store",
-    "zeta-rs/kimi",
-    "zeta-rs/lsp-server-provider",
-    "zeta-rs/lsp-manager",
-    "zeta-rs/login",
-    "zeta-rs/core-plugins",
-    "zeta-rs/lsp",
-    "zeta-rs/model-accounting",
-    "zeta-rs/model-provider",
-    "zeta-rs/model-provider-config",
-    "zeta-rs/models-manager",
-    "zeta-rs/model-tokenizer",
-    "zeta-rs/ollama",
-    "zeta-rs/mcp",
-    "zeta-rs/action-policy",
-    "zeta-rs/plugin",
-    "zeta-rs/prompts",
-    "zeta-rs/protocol",
-    "zeta-rs/projects",
-    "zeta-rs/product-update",
-    "zeta-rs/remote",
-    "zeta-rs/remote-connections",
-    "zeta-rs/remote-host",
-    "zeta-rs/remote-server",
-    "zeta-rs/rollout",
-    "zeta-rs/rollout-trace",
-    "zeta-rs/rmcp-client",
-    "zeta-rs/sandboxing",
-    "zeta-rs/shell-command",
-    "zeta-rs/shell-completion",
-    "zeta-rs/slash-commands",
-    "zeta-rs/slash-launcher",
-    "zeta-rs/skills",
-    "zeta-rs/state",
-    "zeta-rs/syntax",
-    "zeta-rs/terminal",
-    "zeta-rs/text-file",
-    "zeta-rs/theme",
-    "zeta-rs/thread-store",
-    "zeta-rs/thread-transcript",
-    "zeta-rs/git-turn-changes",
-    "zeta-rs/tools",
-    "zeta-rs/uds",
-    "zeta-code/tui",
-    "zeta-rs/utils/absolute-path",
-    "zeta-rs/utils/cache",
-    "zeta-rs/utils/elapsed",
-    "zeta-rs/utils/home-dir",
-    "zeta-rs/utils/image",
-    "zeta-rs/utils/json-to-toml",
-    "zeta-rs/utils/output-truncation",
-    "zeta-rs/utils/path-uri",
-    "zeta-rs/utils/path-utils",
-    "zeta-rs/utils/pdf",
-    "zeta-rs/utils/pty",
-    "zeta-rs/utils/stream-parser",
-    "zeta-rs/utils/template",
-    "zeta-rs/utils/typst",
-    "zeta-rs/file-access",
-    "zeta-rs/worktree",
-    "zeta-rs/content-search",
-    "zeta-rs/arg0",
-    "zeta-rs/user-verification",
-    "zeta-rs/zeta-api",
-    "zeta-rs/zeta-client",
-    "zeta-rs/otel",
+    "ash-rs/ext/sleep",
+    "ash-rs/ext/git-attribution",
+    "ash-rs/ext/image-generation",
+    "ash-rs/ext/history-notes",
+    "ash-rs/ext/goal",
+    "ash-rs/ext/agent",
+    "ash-rs/ext/guardian-v2",
+    "ash-rs/memories",
+    "ash-rs/ext/items",
+    "ash-rs/ext/memories",
+    "ash-rs/ext/queue",
+    "ash-rs/analytics",
+    "ash-rs/diagnostics",
+    "ash-rs/feedback",
+    "ash-rs/features",
+    "ash-rs/config-schema",
+    "ash-rs/process-hardening",
+    "ash-rs/build-info",
+    "ash-rs/agent-environment",
+    "ash-rs/agent-graph-store",
+    "ash-rs/github",
+    "ash-rs/agent-import",
+    "ash-rs/agent-roles",
+    "ash-rs/attachments",
+    "ash-rs/app-server",
+    "ash-rs/app-server-daemon",
+    "ash-rs/app-server-client",
+    "ash-rs/app-server-protocol",
+    "ash-rs/app-server-transport",
+    "ash-rs/collaboration",
+    "ash-rs/collaboration-server",
+    "ash-rs/codebase",
+    "ash-rs/codebase-store",
+    "ash-rs/cloud-codebase",
+    "ash-rs/code-mode",
+    "ash-rs/code-mode-host",
+    "ash-rs/code-mode-protocol",
+    "ash-rs/code-mode-runtime",
+    "ash-rs/v8-poc",
+    "ash-rs/chatgpt",
+    "ash-rs/apply-patch",
+    "ash-rs/async-utils",
+    "ash-rs/ext/guardian-reviewer",
+    "ash-rs/automation",
+    "ash-rs/memory-diagnostics",
+    "ash-rs/bwrap",
+    "ash-code/ansi-escape",
+    "ash-code/cli",
+    "ash-code/update-sign",
+    "ash-code/sprite",
+    "ash-rs/config",
+    "ash-rs/context-engine",
+    "ash-rs/core",
+    "ash-rs/diff",
+    "ash-rs/debug-adapter",
+    "ash-rs/extensions",
+    "ash-rs/editor-extension-host",
+    "ash-rs/editor-core",
+    "ash-rs/environment",
+    "ash-rs/ext/extension-api",
+    "ash-rs/ext/connectors",
+    "ash-rs/ext/mcp",
+    "ash-rs/ext/skills",
+    "ash-rs/ext/web-search",
+    "ash-rs/secrets",
+    "ash-rs/exec",
+    "ash-rs/execpolicy",
+    "ash-rs/tool-executor",
+    "ash-rs/file-identity",
+    "ash-rs/file-search",
+    "ash-rs/fast-regex-search",
+    "ash-rs/immutable-generation-store",
+    "ash-rs/package-store",
+    "ash-rs/file-system",
+    "ash-rs/file-system-tool",
+    "ash-rs/file-watcher",
+    "ash-rs/git",
+    "ash-rs/history",
+    "ash-rs/message-history",
+    "ash-rs/hooks",
+    "ash-rs/http-client",
+    "ash-rs/network-proxy",
+    "ash-rs/mxc-sandbox",
+    "ash-rs/windows-sandbox",
+    "ash-rs/websocket-client",
+    "ash-rs/install-context",
+    "ash-rs/input-classifier",
+    "ash-rs/instructions",
+    "ash-rs/keybinding",
+    "ash-rs/keyring-store",
+    "ash-rs/kimi",
+    "ash-rs/lsp-server-provider",
+    "ash-rs/lsp-manager",
+    "ash-rs/login",
+    "ash-rs/core-plugins",
+    "ash-rs/lsp",
+    "ash-rs/model-accounting",
+    "ash-rs/model-provider",
+    "ash-rs/model-provider-config",
+    "ash-rs/models-manager",
+    "ash-rs/model-tokenizer",
+    "ash-rs/ollama",
+    "ash-rs/mcp",
+    "ash-rs/action-policy",
+    "ash-rs/plugin",
+    "ash-rs/prompts",
+    "ash-rs/protocol",
+    "ash-rs/projects",
+    "ash-rs/product-update",
+    "ash-rs/remote",
+    "ash-rs/remote-connections",
+    "ash-rs/remote-host",
+    "ash-rs/remote-server",
+    "ash-rs/rollout",
+    "ash-rs/rollout-trace",
+    "ash-rs/rmcp-client",
+    "ash-rs/sandboxing",
+    "ash-rs/shell-command",
+    "ash-rs/shell-completion",
+    "ash-rs/slash-commands",
+    "ash-rs/slash-launcher",
+    "ash-rs/skills",
+    "ash-rs/state",
+    "ash-rs/syntax",
+    "ash-rs/terminal",
+    "ash-rs/text-file",
+    "ash-rs/theme",
+    "ash-rs/thread-store",
+    "ash-rs/thread-transcript",
+    "ash-rs/git-turn-changes",
+    "ash-rs/tools",
+    "ash-rs/uds",
+    "ash-code/tui",
+    "ash-rs/utils/absolute-path",
+    "ash-rs/utils/cache",
+    "ash-rs/utils/elapsed",
+    "ash-rs/utils/home-dir",
+    "ash-rs/utils/image",
+    "ash-rs/utils/json-to-toml",
+    "ash-rs/utils/output-truncation",
+    "ash-rs/utils/path-uri",
+    "ash-rs/utils/path-utils",
+    "ash-rs/utils/pdf",
+    "ash-rs/utils/pty",
+    "ash-rs/utils/stream-parser",
+    "ash-rs/utils/template",
+    "ash-rs/utils/typst",
+    "ash-rs/file-access",
+    "ash-rs/worktree",
+    "ash-rs/content-search",
+    "ash-rs/arg0",
+    "ash-rs/user-verification",
+    "ash-rs/ash-api",
+    "ash-rs/ash-client",
+    "ash-rs/otel",
     "app",
     "app/commands",
     "app/editor",
@@ -174,13 +174,13 @@ members = [
     "app/zui",
 ]
 default-members = [
-    "zeta-rs/ext/sleep",
-    "zeta-rs/ext/git-attribution",
-    "zeta-rs/ext/image-generation",
-    "zeta-rs/ext/history-notes",
-    "zeta-rs/ext/goal",
-    "zeta-rs/ext/agent",
-    "zeta-rs/ext/guardian-v2","app"]
+    "ash-rs/ext/sleep",
+    "ash-rs/ext/git-attribution",
+    "ash-rs/ext/image-generation",
+    "ash-rs/ext/history-notes",
+    "ash-rs/ext/goal",
+    "ash-rs/ext/agent",
+    "ash-rs/ext/guardian-v2","app"]
 resolver = "3"
 
 [workspace.package]
@@ -192,32 +192,32 @@ version = "0.1.0"
 [workspace.dependencies]
 async-io = "2.6.0"
 event-listener = "5.4.2"
-sleep = { package = "zeta-sleep", path = "zeta-rs/ext/sleep" }
-git-attribution = { package = "zeta-git-attribution", path = "zeta-rs/ext/git-attribution" }
-image-generation = { package = "zeta-image-generation", path = "zeta-rs/ext/image-generation" }
-history-notes = { package = "zeta-history-notes", path = "zeta-rs/ext/history-notes" }
-goal = { package = "zeta-goal", path = "zeta-rs/ext/goal" }
-agent = { package = "zeta-agent", path = "zeta-rs/ext/agent" }
-guardian-v2 = { package = "zeta-guardian-v2", path = "zeta-rs/ext/guardian-v2" }
-memories = { package = "zeta-memories", path = "zeta-rs/memories" }
-memories-extension = { package = "zeta-memories-extension", path = "zeta-rs/ext/memories" }
-extension-items = { package = "zeta-extension-items", path = "zeta-rs/ext/items" }
-queue = { package = "zeta-queue", path = "zeta-rs/ext/queue" }
-analytics = { package = "zeta-analytics", path = "zeta-rs/analytics" }
-diagnostics = { package = "zeta-diagnostics", path = "zeta-rs/diagnostics" }
-feedback = { package = "zeta-feedback", path = "zeta-rs/feedback" }
-features = { package = "zeta-features", path = "zeta-rs/features" }
-process-hardening = { package = "zeta-process-hardening", path = "zeta-rs/process-hardening" }
-build-info = { package = "zeta-build-info", path = "zeta-rs/build-info" }
-mxc-sandbox = { package = "zeta-mxc-sandbox", path = "zeta-rs/mxc-sandbox" }
-windows-sandbox = { package = "zeta-windows-sandbox", path = "zeta-rs/windows-sandbox" }
+sleep = { package = "ash-sleep", path = "ash-rs/ext/sleep" }
+git-attribution = { package = "ash-git-attribution", path = "ash-rs/ext/git-attribution" }
+image-generation = { package = "ash-image-generation", path = "ash-rs/ext/image-generation" }
+history-notes = { package = "ash-history-notes", path = "ash-rs/ext/history-notes" }
+goal = { package = "ash-goal", path = "ash-rs/ext/goal" }
+agent = { package = "ash-agent", path = "ash-rs/ext/agent" }
+guardian-v2 = { package = "ash-guardian-v2", path = "ash-rs/ext/guardian-v2" }
+memories = { package = "ash-memories", path = "ash-rs/memories" }
+memories-extension = { package = "ash-memories-extension", path = "ash-rs/ext/memories" }
+extension-items = { package = "ash-extension-items", path = "ash-rs/ext/items" }
+queue = { package = "ash-queue", path = "ash-rs/ext/queue" }
+analytics = { package = "ash-analytics", path = "ash-rs/analytics" }
+diagnostics = { package = "ash-diagnostics", path = "ash-rs/diagnostics" }
+feedback = { package = "ash-feedback", path = "ash-rs/feedback" }
+features = { package = "ash-features", path = "ash-rs/features" }
+process-hardening = { package = "ash-process-hardening", path = "ash-rs/process-hardening" }
+build-info = { package = "ash-build-info", path = "ash-rs/build-info" }
+mxc-sandbox = { package = "ash-mxc-sandbox", path = "ash-rs/mxc-sandbox" }
+windows-sandbox = { package = "ash-windows-sandbox", path = "ash-rs/windows-sandbox" }
 mxc-sdk = { git = "https://github.com/microsoft/mxc", rev = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
-network-proxy = { package = "zeta-network-proxy", path = "zeta-rs/network-proxy" }
+network-proxy = { package = "ash-network-proxy", path = "ash-rs/network-proxy" }
 bytes = "1"
 http-body-util = "0.1"
 hyper = "1"
 hyper-util = "0.1"
-zeta-memory-diagnostics = { path = "zeta-rs/memory-diagnostics" }
+ash-memory-diagnostics = { path = "ash-rs/memory-diagnostics" }
 accesskit = "0.24.0"
 accesskit-platform = { package = "accesskit_winit", version = "0.32.2" }
 anyhow = "1"
@@ -231,7 +231,7 @@ bytemuck = { version = "1", features = ["derive"] }
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 chrono-tz = "0.10.4"
 iana-time-zone = "0.1.64"
-zeta-automation = { path = "zeta-rs/automation" }
+ash-automation = { path = "ash-rs/automation" }
 candle-core = "0.9.2"
 candle-nn = "0.9.2"
 candle-onnx = "0.9.2"
@@ -352,150 +352,150 @@ windows-sys = "0.59"
 x11rb = "0.13.2"
 zeroize = "1"
 zip = { version = "4.6.1", default-features = false, features = ["deflate-flate2"] }
-zeta-agent-environment = { path = "zeta-rs/agent-environment" }
-agent-graph-store = { package = "zeta-agent-graph-store", path = "zeta-rs/agent-graph-store" }
-zeta-agent-import = { path = "zeta-rs/agent-import" }
-agent-roles = { package = "zeta-agent-roles", path = "zeta-rs/agent-roles" }
-zeta-attachments = { path = "zeta-rs/attachments" }
-zeta-ansi-escape = { path = "zeta-code/ansi-escape" }
-zeta-commands = { path = "app/commands" }
-zeta-app-server = { path = "zeta-rs/app-server" }
-zeta-app-server-daemon = { path = "zeta-rs/app-server-daemon" }
-zeta-app-server-client = { path = "zeta-rs/app-server-client" }
-zeta-app-server-protocol = { path = "zeta-rs/app-server-protocol" }
-zeta-app-server-transport = { path = "zeta-rs/app-server-transport" }
-zeta-collaboration = { path = "zeta-rs/collaboration" }
-zeta-collaboration-server = { path = "zeta-rs/collaboration-server" }
-zeta-codebase = { path = "zeta-rs/codebase" }
-zeta-codebase-store = { path = "zeta-rs/codebase-store" }
-zeta-cloud-codebase = { path = "zeta-rs/cloud-codebase" }
-zeta-code-mode = { path = "zeta-rs/code-mode" }
-zeta-code-mode-host = { path = "zeta-rs/code-mode-host" }
-zeta-code-mode-protocol = { path = "zeta-rs/code-mode-protocol" }
-zeta-code-mode-runtime = { path = "zeta-rs/code-mode-runtime" }
-zeta-v8-poc = { path = "zeta-rs/v8-poc" }
-zeta-chatgpt = { path = "zeta-rs/chatgpt" }
-zeta-apply-patch = { path = "zeta-rs/apply-patch" }
-zeta-async-utils = { path = "zeta-rs/async-utils" }
-guardian-reviewer = { package = "zeta-guardian-reviewer", path = "zeta-rs/ext/guardian-reviewer" }
-zeta-api = { path = "zeta-rs/zeta-api" }
-zeta-client = { path = "zeta-rs/zeta-client" }
-zeta-otel = { path = "zeta-rs/otel" }
-zeta-config = { path = "zeta-rs/config" }
-zeta-context-engine = { path = "zeta-rs/context-engine" }
-zeta-core = { path = "zeta-rs/core" }
-zeta-diff = { path = "zeta-rs/diff" }
-zeta-debug-adapter = { path = "zeta-rs/debug-adapter" }
-zeta-editor = { path = "app/editor" }
-zeta-editor-host = { path = "app/editor-host" }
-zeta-editor-core = { path = "zeta-rs/editor-core" }
-zeta-environment = { path = "zeta-rs/environment" }
-zeta-extension-api = { path = "zeta-rs/ext/extension-api" }
-connectors = { package = "zeta-connectors-extension", path = "zeta-rs/ext/connectors" }
-zeta-mcp-extension = { path = "zeta-rs/ext/mcp" }
-zeta-skills-extension = { path = "zeta-rs/ext/skills" }
-zeta-web-search-extension = { path = "zeta-rs/ext/web-search" }
-zeta-exec = { path = "zeta-rs/exec" }
-zeta-execpolicy = { path = "zeta-rs/execpolicy" }
-zeta-tool-executor = { path = "zeta-rs/tool-executor" }
-zeta-extensions = { path = "zeta-rs/extensions" }
-zeta-editor-extension-host = { path = "zeta-rs/editor-extension-host" }
-zeta-icons = { path = "app/icons" }
-zeta-file-identity = { path = "zeta-rs/file-identity" }
-zeta-file-search = { path = "zeta-rs/file-search" }
-zeta-file-system = { path = "zeta-rs/file-system" }
-zeta-file-system-tool = { path = "zeta-rs/file-system-tool" }
-zeta-fast-regex-search = { path = "zeta-rs/fast-regex-search" }
-zeta-immutable-generation-store = { path = "zeta-rs/immutable-generation-store" }
-zeta-package-store = { path = "zeta-rs/package-store" }
-zeta-file-watcher = { path = "zeta-rs/file-watcher" }
-zeta-files = { path = "app/files" }
-github = { package = "zeta-github", path = "zeta-rs/github" }
-zeta-git = { path = "zeta-rs/git" }
-zeta-history = { path = "zeta-rs/history" }
-message-history = { package = "zeta-message-history", path = "zeta-rs/message-history" }
-zeta-hooks = { path = "zeta-rs/hooks" }
-zeta-http-client = { path = "zeta-rs/http-client" }
-zeta-websocket-client = { path = "zeta-rs/websocket-client" }
-zeta-install-context = { path = "zeta-rs/install-context" }
-zeta-input-classifier = { path = "zeta-rs/input-classifier" }
-zeta-instructions = { path = "zeta-rs/instructions" }
-zeta-keyring-store = { path = "zeta-rs/keyring-store" }
-zeta-kimi = { path = "zeta-rs/kimi" }
-zeta-keybinding = { path = "zeta-rs/keybinding" }
-zeta-keybindings-host = { path = "app/keybindings" }
-zeta-lsp-server-provider = { path = "zeta-rs/lsp-server-provider" }
-zeta-lsp-manager = { path = "zeta-rs/lsp-manager" }
-zeta-login = { path = "zeta-rs/login" }
-zeta-core-plugins = { path = "zeta-rs/core-plugins" }
-zeta-lsp = { path = "zeta-rs/lsp" }
-zeta-markdown = { path = "app/markdown" }
-zeta-mcp = { path = "zeta-rs/mcp" }
-zeta-model-accounting = { path = "zeta-rs/model-accounting" }
-zeta-model-provider = { path = "zeta-rs/model-provider" }
-zeta-model-provider-config = { path = "zeta-rs/model-provider-config" }
-zeta-models-manager = { path = "zeta-rs/models-manager" }
-zeta-model-tokenizer = { path = "zeta-rs/model-tokenizer" }
-zeta-ollama = { path = "zeta-rs/ollama" }
-zeta-action-policy = { path = "zeta-rs/action-policy" }
-zeta-plugin = { path = "zeta-rs/plugin" }
-zeta-prompts = { path = "zeta-rs/prompts" }
-zeta-protocol = { path = "zeta-rs/protocol" }
-zeta-projects = { path = "zeta-rs/projects" }
-zeta-product-update = { path = "zeta-rs/product-update" }
-zeta-remote = { path = "zeta-rs/remote" }
-zeta-remote-connections = { path = "zeta-rs/remote-connections" }
-zeta-remote-host = { path = "zeta-rs/remote-host" }
-zeta-remote-server = { path = "zeta-rs/remote-server" }
-zeta-rollout = { path = "zeta-rs/rollout" }
-zeta-rollout-trace = { path = "zeta-rs/rollout-trace" }
-zeta-rmcp-client = { path = "zeta-rs/rmcp-client" }
-zeta-sandboxing = { path = "zeta-rs/sandboxing" }
-zeta-scm = { path = "app/scm" }
-zeta-content-search = { path = "zeta-rs/content-search" }
-arg0 = { package = "zeta-arg0", path = "zeta-rs/arg0" }
-zeta-secrets = { path = "zeta-rs/secrets" }
-zeta-session = { path = "app/session" }
-zeta-settings = { path = "app/settings" }
-zeta-shell-command = { path = "zeta-rs/shell-command" }
-zeta-shell-completion = { path = "zeta-rs/shell-completion" }
-zeta-slash-commands = { path = "zeta-rs/slash-commands" }
-zeta-sprite = { path = "zeta-code/sprite", default-features = false }
-zeta-slash-launcher = { path = "zeta-rs/slash-launcher" }
-zeta-skills = { path = "zeta-rs/skills" }
-zeta-state = { path = "zeta-rs/state" }
-zeta-syntax = { path = "zeta-rs/syntax" }
-zeta-terminal = { path = "zeta-rs/terminal" }
-zeta-terminal-runtime = { path = "app/terminal-runtime" }
-zeta-terminal-detection = { path = "zeta-rs/terminal-detection" }
-zeta-text-file = { path = "zeta-rs/text-file" }
-zeta-theme = { path = "zeta-rs/theme" }
-zeta-ui-theme = { path = "app/theme" }
-zeta-thread-store = { path = "zeta-rs/thread-store" }
-zeta-thread-transcript = { path = "zeta-rs/thread-transcript" }
-git-turn-changes = { path = "zeta-rs/git-turn-changes" }
-zeta-tools = { path = "zeta-rs/tools" }
-zeta-tui = { path = "zeta-code/tui" }
-zeta-uds = { path = "zeta-rs/uds" }
-zeta-ui-components = { path = "app/ui-components" }
-zeta-workbench = { path = "app/workbench" }
-zeta-utils-absolute-path = { path = "zeta-rs/utils/absolute-path" }
-zeta-utils-cache = { path = "zeta-rs/utils/cache" }
-zeta-utils-elapsed = { path = "zeta-rs/utils/elapsed" }
-zeta-utils-home-dir = { path = "zeta-rs/utils/home-dir" }
-zeta-utils-image = { path = "zeta-rs/utils/image" }
-zeta-utils-json-to-toml = { path = "zeta-rs/utils/json-to-toml" }
-zeta-utils-output-truncation = { path = "zeta-rs/utils/output-truncation" }
-zeta-utils-path = { path = "zeta-rs/utils/path-utils" }
-zeta-utils-path-uri = { path = "zeta-rs/utils/path-uri" }
-zeta-utils-stream-parser = { path = "zeta-rs/utils/stream-parser" }
-zeta-utils-template = { path = "zeta-rs/utils/template" }
-zeta-pdf = { path = "zeta-rs/utils/pdf" }
-zeta-typst = { path = "zeta-rs/utils/typst" }
-zeta-utils-pty = { path = "zeta-rs/utils/pty" }
-zeta-file-access = { path = "zeta-rs/file-access" }
-worktree = { path = "zeta-rs/worktree" }
-zeta-user-verification = { path = "zeta-rs/user-verification" }
+ash-agent-environment = { path = "ash-rs/agent-environment" }
+agent-graph-store = { package = "ash-agent-graph-store", path = "ash-rs/agent-graph-store" }
+ash-agent-import = { path = "ash-rs/agent-import" }
+agent-roles = { package = "ash-agent-roles", path = "ash-rs/agent-roles" }
+ash-attachments = { path = "ash-rs/attachments" }
+ash-ansi-escape = { path = "ash-code/ansi-escape" }
+ash-commands = { path = "app/commands" }
+ash-app-server = { path = "ash-rs/app-server" }
+ash-app-server-daemon = { path = "ash-rs/app-server-daemon" }
+ash-app-server-client = { path = "ash-rs/app-server-client" }
+ash-app-server-protocol = { path = "ash-rs/app-server-protocol" }
+ash-app-server-transport = { path = "ash-rs/app-server-transport" }
+ash-collaboration = { path = "ash-rs/collaboration" }
+ash-collaboration-server = { path = "ash-rs/collaboration-server" }
+ash-codebase = { path = "ash-rs/codebase" }
+ash-codebase-store = { path = "ash-rs/codebase-store" }
+ash-cloud-codebase = { path = "ash-rs/cloud-codebase" }
+ash-code-mode = { path = "ash-rs/code-mode" }
+ash-code-mode-host = { path = "ash-rs/code-mode-host" }
+ash-code-mode-protocol = { path = "ash-rs/code-mode-protocol" }
+ash-code-mode-runtime = { path = "ash-rs/code-mode-runtime" }
+ash-v8-poc = { path = "ash-rs/v8-poc" }
+ash-chatgpt = { path = "ash-rs/chatgpt" }
+ash-apply-patch = { path = "ash-rs/apply-patch" }
+ash-async-utils = { path = "ash-rs/async-utils" }
+guardian-reviewer = { package = "ash-guardian-reviewer", path = "ash-rs/ext/guardian-reviewer" }
+ash-api = { path = "ash-rs/ash-api" }
+ash-client = { path = "ash-rs/ash-client" }
+ash-otel = { path = "ash-rs/otel" }
+ash-config = { path = "ash-rs/config" }
+ash-context-engine = { path = "ash-rs/context-engine" }
+ash-core = { path = "ash-rs/core" }
+ash-diff = { path = "ash-rs/diff" }
+ash-debug-adapter = { path = "ash-rs/debug-adapter" }
+ash-editor = { path = "app/editor" }
+ash-editor-host = { path = "app/editor-host" }
+ash-editor-core = { path = "ash-rs/editor-core" }
+ash-environment = { path = "ash-rs/environment" }
+ash-extension-api = { path = "ash-rs/ext/extension-api" }
+connectors = { package = "ash-connectors-extension", path = "ash-rs/ext/connectors" }
+ash-mcp-extension = { path = "ash-rs/ext/mcp" }
+ash-skills-extension = { path = "ash-rs/ext/skills" }
+ash-web-search-extension = { path = "ash-rs/ext/web-search" }
+ash-exec = { path = "ash-rs/exec" }
+ash-execpolicy = { path = "ash-rs/execpolicy" }
+ash-tool-executor = { path = "ash-rs/tool-executor" }
+ash-extensions = { path = "ash-rs/extensions" }
+ash-editor-extension-host = { path = "ash-rs/editor-extension-host" }
+ash-icons = { path = "app/icons" }
+ash-file-identity = { path = "ash-rs/file-identity" }
+ash-file-search = { path = "ash-rs/file-search" }
+ash-file-system = { path = "ash-rs/file-system" }
+ash-file-system-tool = { path = "ash-rs/file-system-tool" }
+ash-fast-regex-search = { path = "ash-rs/fast-regex-search" }
+ash-immutable-generation-store = { path = "ash-rs/immutable-generation-store" }
+ash-package-store = { path = "ash-rs/package-store" }
+ash-file-watcher = { path = "ash-rs/file-watcher" }
+ash-files = { path = "app/files" }
+github = { package = "ash-github", path = "ash-rs/github" }
+ash-git = { path = "ash-rs/git" }
+ash-history = { path = "ash-rs/history" }
+message-history = { package = "ash-message-history", path = "ash-rs/message-history" }
+ash-hooks = { path = "ash-rs/hooks" }
+ash-http-client = { path = "ash-rs/http-client" }
+ash-websocket-client = { path = "ash-rs/websocket-client" }
+ash-install-context = { path = "ash-rs/install-context" }
+ash-input-classifier = { path = "ash-rs/input-classifier" }
+ash-instructions = { path = "ash-rs/instructions" }
+ash-keyring-store = { path = "ash-rs/keyring-store" }
+ash-kimi = { path = "ash-rs/kimi" }
+ash-keybinding = { path = "ash-rs/keybinding" }
+ash-keybindings-host = { path = "app/keybindings" }
+ash-lsp-server-provider = { path = "ash-rs/lsp-server-provider" }
+ash-lsp-manager = { path = "ash-rs/lsp-manager" }
+ash-login = { path = "ash-rs/login" }
+ash-core-plugins = { path = "ash-rs/core-plugins" }
+ash-lsp = { path = "ash-rs/lsp" }
+ash-markdown = { path = "app/markdown" }
+ash-mcp = { path = "ash-rs/mcp" }
+ash-model-accounting = { path = "ash-rs/model-accounting" }
+ash-model-provider = { path = "ash-rs/model-provider" }
+ash-model-provider-config = { path = "ash-rs/model-provider-config" }
+ash-models-manager = { path = "ash-rs/models-manager" }
+ash-model-tokenizer = { path = "ash-rs/model-tokenizer" }
+ash-ollama = { path = "ash-rs/ollama" }
+ash-action-policy = { path = "ash-rs/action-policy" }
+ash-plugin = { path = "ash-rs/plugin" }
+ash-prompts = { path = "ash-rs/prompts" }
+ash-protocol = { path = "ash-rs/protocol" }
+ash-projects = { path = "ash-rs/projects" }
+ash-product-update = { path = "ash-rs/product-update" }
+ash-remote = { path = "ash-rs/remote" }
+ash-remote-connections = { path = "ash-rs/remote-connections" }
+ash-remote-host = { path = "ash-rs/remote-host" }
+ash-remote-server = { path = "ash-rs/remote-server" }
+ash-rollout = { path = "ash-rs/rollout" }
+ash-rollout-trace = { path = "ash-rs/rollout-trace" }
+ash-rmcp-client = { path = "ash-rs/rmcp-client" }
+ash-sandboxing = { path = "ash-rs/sandboxing" }
+ash-scm = { path = "app/scm" }
+ash-content-search = { path = "ash-rs/content-search" }
+arg0 = { package = "ash-arg0", path = "ash-rs/arg0" }
+ash-secrets = { path = "ash-rs/secrets" }
+ash-session = { path = "app/session" }
+ash-settings = { path = "app/settings" }
+ash-shell-command = { path = "ash-rs/shell-command" }
+ash-shell-completion = { path = "ash-rs/shell-completion" }
+ash-slash-commands = { path = "ash-rs/slash-commands" }
+ash-sprite = { path = "ash-code/sprite", default-features = false }
+ash-slash-launcher = { path = "ash-rs/slash-launcher" }
+ash-skills = { path = "ash-rs/skills" }
+ash-state = { path = "ash-rs/state" }
+ash-syntax = { path = "ash-rs/syntax" }
+ash-terminal = { path = "ash-rs/terminal" }
+ash-terminal-runtime = { path = "app/terminal-runtime" }
+ash-terminal-detection = { path = "ash-rs/terminal-detection" }
+ash-text-file = { path = "ash-rs/text-file" }
+ash-theme = { path = "ash-rs/theme" }
+ash-ui-theme = { path = "app/theme" }
+ash-thread-store = { path = "ash-rs/thread-store" }
+ash-thread-transcript = { path = "ash-rs/thread-transcript" }
+git-turn-changes = { path = "ash-rs/git-turn-changes" }
+ash-tools = { path = "ash-rs/tools" }
+ash-tui = { path = "ash-code/tui" }
+ash-uds = { path = "ash-rs/uds" }
+ash-ui-components = { path = "app/ui-components" }
+ash-workbench = { path = "app/workbench" }
+ash-utils-absolute-path = { path = "ash-rs/utils/absolute-path" }
+ash-utils-cache = { path = "ash-rs/utils/cache" }
+ash-utils-elapsed = { path = "ash-rs/utils/elapsed" }
+ash-utils-home-dir = { path = "ash-rs/utils/home-dir" }
+ash-utils-image = { path = "ash-rs/utils/image" }
+ash-utils-json-to-toml = { path = "ash-rs/utils/json-to-toml" }
+ash-utils-output-truncation = { path = "ash-rs/utils/output-truncation" }
+ash-utils-path = { path = "ash-rs/utils/path-utils" }
+ash-utils-path-uri = { path = "ash-rs/utils/path-uri" }
+ash-utils-stream-parser = { path = "ash-rs/utils/stream-parser" }
+ash-utils-template = { path = "ash-rs/utils/template" }
+ash-pdf = { path = "ash-rs/utils/pdf" }
+ash-typst = { path = "ash-rs/utils/typst" }
+ash-utils-pty = { path = "ash-rs/utils/pty" }
+ash-file-access = { path = "ash-rs/file-access" }
+worktree = { path = "ash-rs/worktree" }
+ash-user-verification = { path = "ash-rs/user-verification" }
 zui = { path = "app/zui", default-features = false }
 
 [profile.dev]
@@ -509,11 +509,11 @@ opt-level = 1
 # Keep the native product's unwind metadata below macOS compact-unwind encoding limits.
 opt-level = "s"
 
-[profile.dev.package.zeta-app-server]
+[profile.dev.package.ash-app-server]
 # The embedded App Server dominates native unwind metadata in development builds.
 opt-level = "s"
 
-[profile.dev.package.zeta-app-server-client]
+[profile.dev.package.ash-app-server-client]
 # Keep the brokered client small enough to coexist with the native product graph.
 opt-level = "s"
 
@@ -521,11 +521,11 @@ opt-level = "s"
 # Large integration-test dependency graphs otherwise exceed macOS compact-unwind limits.
 opt-level = 1
 
-[profile.test.package.zeta-app-server]
+[profile.test.package.ash-app-server]
 # Large App Server test binaries otherwise exceed macOS compact-unwind encoding limits.
 opt-level = "s"
 
-[profile.test.package.zeta-app-server-client]
+[profile.test.package.ash-app-server-client]
 # Keep client integration tests debuggable while reducing generated unwind metadata.
 opt-level = "s"
 
@@ -547,8 +547,8 @@ unsafe_code = "forbid"
 candle-onnx = { path = "third_party/candle-onnx" }
 
 [patch."https://github.com/microsoft/mxc"]
-mxc_engine = { path = "zeta-rs/vendor/mxc/core/mxc_engine" }
-wxc_common = { path = "zeta-rs/vendor/mxc/core/wxc_common" }
-appcontainer_common = { path = "zeta-rs/vendor/mxc/backends/appcontainer/common" }
-bwrap_common = { path = "zeta-rs/vendor/mxc/backends/bubblewrap/common" }
-seatbelt_common = { path = "zeta-rs/vendor/mxc/backends/seatbelt/common" }
+mxc_engine = { path = "ash-rs/vendor/mxc/core/mxc_engine" }
+wxc_common = { path = "ash-rs/vendor/mxc/core/wxc_common" }
+appcontainer_common = { path = "ash-rs/vendor/mxc/backends/appcontainer/common" }
+bwrap_common = { path = "ash-rs/vendor/mxc/backends/bubblewrap/common" }
+seatbelt_common = { path = "ash-rs/vendor/mxc/backends/seatbelt/common" }

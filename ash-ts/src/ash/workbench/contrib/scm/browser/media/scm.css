@@ -1,0 +1,602 @@
+.ash-scm {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 8px 0;
+}
+
+.ash-scm-secondary-pane {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ash-scm-empty {
+  margin: 0;
+  padding: 8px;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  font-size: 12px;
+}
+
+.ash-scm-graph {
+  --scm-graph-accent: var(--ash-accent-background);
+  --scm-graph-lane-0: var(--ash-accent-foreground);
+  --scm-graph-lane-1: var(--ash-success-foreground);
+  --scm-graph-lane-2: var(--ash-warning-foreground);
+  --scm-graph-lane-3: var(--ash-error-foreground);
+  --scm-graph-lane-4: color-mix(in srgb, var(--ash-accent-foreground) 70%, var(--ash-foreground));
+  --scm-graph-lane-5: color-mix(in srgb, var(--ash-success-foreground) 70%, var(--ash-foreground));
+  --scm-graph-lane-6: color-mix(in srgb, var(--ash-warning-foreground) 70%, var(--ash-foreground));
+  --scm-graph-lane-7: color-mix(in srgb, var(--ash-error-foreground) 70%, var(--ash-foreground));
+  container-name: ash-scm-graph;
+  container-type: inline-size;
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 2px 0 8px;
+  overflow: auto;
+  scrollbar-color: var(--ash-scrollbar-slider-background) transparent;
+  scrollbar-width: thin;
+}
+
+.ash-scm-graph::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.ash-scm-graph::-webkit-scrollbar-track,
+.ash-scm-graph::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.ash-scm-graph::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 5px;
+  background: var(--ash-scrollbar-slider-background) padding-box;
+}
+
+.ash-scm-graph::-webkit-scrollbar-thumb:hover {
+  background: var(--ash-scrollbar-slider-hover-background) padding-box;
+}
+
+.ash-scm-graph::-webkit-scrollbar-thumb:active {
+  background: var(--ash-scrollbar-slider-active-background) padding-box;
+}
+
+.ash-scm-graph > .ash-scm-command {
+  margin-left: 8px;
+}
+
+.ash-scm-graph-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ash-scm-graph-spacer {
+  display: block;
+  padding: 0;
+  pointer-events: none;
+}
+
+.ash-scm-graph-commit {
+  --scm-graph-row-background: var(--ash-side-bar-background);
+  position: relative;
+  min-width: 0;
+}
+
+.ash-scm-graph-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 22px;
+  align-items: center;
+  padding: 0 8px 0 0;
+  line-height: 22px;
+}
+
+.ash-scm-graph-commit:focus-visible {
+  outline: none;
+}
+
+.ash-scm-graph-commit:focus-visible > .ash-scm-graph-row {
+  outline: 1px solid var(--ash-focus-border);
+  outline-offset: -1px;
+}
+
+.ash-scm-graph-row:hover {
+  background: linear-gradient(to right, transparent var(--scm-graph-content-x, 22px), var(--ash-list-hover-background) var(--scm-graph-content-x, 22px));
+}
+
+.ash-scm-graph-graph {
+  height: 22px;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.ash-scm-graph-path {
+  fill: none;
+  stroke: var(--scm-graph-lane-color, var(--scm-graph-accent));
+  stroke-linecap: round;
+  stroke-width: 1px;
+}
+
+.ash-scm-graph-node {
+  fill: var(--scm-graph-lane-color, var(--scm-graph-accent));
+  stroke: var(--scm-graph-row-background);
+  stroke-width: 2px;
+}
+
+.ash-scm-graph-path[data-lane-color="0"],
+.ash-scm-graph-node[data-lane-color="0"] { --scm-graph-lane-color: var(--scm-graph-lane-0); }
+
+.ash-scm-graph-path[data-lane-color="1"],
+.ash-scm-graph-node[data-lane-color="1"] { --scm-graph-lane-color: var(--scm-graph-lane-1); }
+
+.ash-scm-graph-path[data-lane-color="2"],
+.ash-scm-graph-node[data-lane-color="2"] { --scm-graph-lane-color: var(--scm-graph-lane-2); }
+
+.ash-scm-graph-path[data-lane-color="3"],
+.ash-scm-graph-node[data-lane-color="3"] { --scm-graph-lane-color: var(--scm-graph-lane-3); }
+
+.ash-scm-graph-path[data-lane-color="4"],
+.ash-scm-graph-node[data-lane-color="4"] { --scm-graph-lane-color: var(--scm-graph-lane-4); }
+
+.ash-scm-graph-path[data-lane-color="5"],
+.ash-scm-graph-node[data-lane-color="5"] { --scm-graph-lane-color: var(--scm-graph-lane-5); }
+
+.ash-scm-graph-path[data-lane-color="6"],
+.ash-scm-graph-node[data-lane-color="6"] { --scm-graph-lane-color: var(--scm-graph-lane-6); }
+
+.ash-scm-graph-path[data-lane-color="7"],
+.ash-scm-graph-node[data-lane-color="7"] { --scm-graph-lane-color: var(--scm-graph-lane-7); }
+
+.ash-scm-graph-graph.head > .ash-scm-graph-node.inner {
+  fill: var(--scm-graph-row-background);
+}
+
+.ash-scm-graph-details {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.ash-scm-graph-subject {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ash-scm-graph-commit.current .ash-scm-graph-subject {
+  font-weight: var(--ash-font-weight-semi-bold);
+}
+
+.ash-scm-graph-label-container {
+  display: flex;
+  min-width: 0;
+  max-width: 48%;
+  flex: 0 1 auto;
+  gap: 4px;
+  align-items: center;
+  overflow: hidden;
+}
+
+.ash-scm-graph-label {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 180px;
+  align-items: center;
+  border: 0;
+  border-radius: 10px;
+  gap: 2px;
+  padding: 0 5px 0 3px;
+  overflow: hidden;
+  color: var(--scm-graph-ref-color);
+  background: color-mix(in srgb, var(--scm-graph-ref-color) 14%, transparent);
+  font-size: var(--ash-font-size-label2);
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ash-scm-graph-label > .ash-icon {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+}
+
+.ash-scm-graph-label-description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ash-scm-graph-label.head {
+  --scm-graph-ref-color: var(--scm-graph-accent);
+  color: var(--ash-list-active-selection-foreground);
+  background: var(--scm-graph-accent);
+}
+
+.ash-scm-graph-label.local {
+  --scm-graph-ref-color: var(--scm-graph-lane-0);
+}
+
+.ash-scm-graph-label.remote {
+  --scm-graph-ref-color: var(--scm-graph-lane-2);
+}
+
+.ash-scm-graph-remotes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 8px 6px;
+  color: var(--ash-muted-foreground);
+  font-size: var(--ash-font-size-label2);
+}
+
+.ash-scm-graph-remote {
+  border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+.ash-scm-graph-metadata {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  overflow: hidden;
+  color: var(--ash-muted-foreground);
+  font-size: var(--ash-font-size-label2);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ash-scm-graph-changes {
+  display: block;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ash-scm-graph-changes > li {
+  height: 22px;
+}
+
+.ash-scm-graph-change {
+  display: flex;
+  width: calc(100% - var(--scm-graph-content-x, 22px));
+  height: 22px;
+  min-width: 0;
+  align-items: center;
+  border: 0;
+  border-radius: 0;
+  margin-left: var(--scm-graph-content-x, 22px);
+  padding: 0 8px 0 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.ash-scm-graph-change > .ash-icon-label {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ash-scm-graph-change-description {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ash-muted-foreground);
+  font-size: var(--ash-font-size-label2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ash-scm-graph-change:hover,
+.ash-scm-graph-change:focus-visible {
+  background: var(--ash-list-hover-background);
+  outline: none;
+}
+
+.ash-scm-graph-change-status {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  color: var(--ash-muted-foreground);
+  font-size: var(--ash-font-size-label2);
+  font-weight: var(--ash-font-weight-semi-bold);
+}
+
+.ash-scm-graph-change-status.added { color: var(--ash-success-foreground); }
+.ash-scm-graph-change-status.deleted { color: var(--ash-error-foreground); }
+.ash-scm-graph-change-status.modified,
+.ash-scm-graph-change-status.renamed { color: var(--ash-warning-foreground); }
+
+.ash-scm-graph-change-state {
+  padding-left: calc(var(--scm-graph-node-x, 11px) + 11px);
+  overflow: hidden;
+  color: var(--ash-muted-foreground);
+  font-size: var(--ash-font-size-label2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ash-scm-graph-load-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 4px 8px 8px;
+}
+
+.ash-scm-graph-load-more > .ash-scm-empty {
+  padding: 0;
+}
+
+@container ash-scm-graph (max-width: 360px) {
+  .ash-scm-graph-metadata {
+    display: none;
+  }
+
+  .ash-scm-graph-label-container {
+    max-width: 35%;
+  }
+}
+
+.ash-scm-graph-hover {
+  display: grid;
+  max-width: min(420px, calc(100vw - 32px));
+  gap: 3px;
+}
+
+.ash-scm-graph-hover-subject {
+  font-weight: var(--ash-font-weight-semi-bold);
+}
+
+.ash-scm-graph-hover-metadata {
+  overflow-wrap: anywhere;
+  color: var(--ash-muted-foreground);
+  font-size: var(--ash-font-size-label2);
+}
+
+.ash-scm-remote-actions {
+  gap: 4px;
+}
+
+.ash-scm-command {
+  margin-left: auto;
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: 3px;
+  padding: 3px 8px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ash-scm-command:hover {
+  background: color-mix(in srgb, currentColor 9%, transparent);
+}
+
+.ash-scm-command:focus-visible {
+  outline: 1px solid var(--ash-focus-border);
+  outline-offset: 1px;
+}
+
+.ash-scm-command:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.ash-scm-commit-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding: 0 8px 8px;
+}
+
+.ash-scm-repository-selector {
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px 0;
+  color: var(--ash-description-foreground);
+  font-size: 11px;
+}
+
+.ash-scm-repository-selector[hidden] {
+  display: none;
+}
+
+.ash-scm-repository-selector > select {
+  min-width: 0;
+  height: 26px;
+  padding: 0 24px 0 7px;
+  color: var(--ash-input-foreground);
+  background: var(--ash-input-background);
+  border: 1px solid var(--ash-input-border, transparent);
+  border-radius: 2px;
+}
+
+.ash-scm-repository-selector > select:focus-visible {
+  outline: 1px solid var(--ash-focus-border);
+  outline-offset: -1px;
+}
+
+.ash-scm-commit-input {
+  min-width: 0;
+  resize: vertical;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 3px;
+  padding: 5px 7px;
+  color: inherit;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  font: inherit;
+}
+
+.ash-scm-commit-input:focus {
+  border-color: var(--ash-focus-border);
+  outline: 1px solid var(--ash-focus-border);
+}
+
+.ash-scm-commit.ash-button,
+.ash-scm-find-issues.ash-button {
+  width: 100%;
+  color: var(--ash-button-primary-foreground);
+  background: var(--ash-files-empty-explorer-open-folder-background);
+}
+
+.ash-scm-commit.ash-button:not(:disabled):hover,
+.ash-scm-find-issues.ash-button:not(:disabled):hover {
+  background: var(--ash-files-empty-explorer-open-folder-hover-background);
+}
+
+.ash-scm-find-issues.ash-button {
+  margin: 0 8px 8px;
+  width: calc(100% - 16px);
+}
+
+.ash-scm-changes {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.ash-scm-section-heading {
+  display: flex;
+  min-width: 0;
+  min-height: 22px;
+  align-items: center;
+  margin: 0;
+  padding: 0 8px 0 16px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.ash-scm-section-heading:focus-visible {
+  outline: 1px solid var(--ash-focus-border);
+  outline-offset: -1px;
+}
+
+.ash-scm-section-label {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ash-scm-section-count {
+  flex: 0 0 auto;
+  min-width: 18px;
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.ash-scm-action-toolbar {
+  flex: 0 0 auto;
+}
+
+.ash-scm-section-actions,
+.ash-scm-change-actions {
+  display: none;
+}
+
+.ash-scm-section-heading:hover > .ash-scm-section-actions,
+.ash-scm-section-heading:focus-within > .ash-scm-section-actions,
+.ash-scm-change:hover > .ash-scm-change-actions,
+.ash-scm-change:focus-within > .ash-scm-change-actions {
+  display: flex;
+}
+
+.ash-scm-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ash-scm-change {
+  display: flex;
+  min-width: 0;
+  min-height: 22px;
+  align-items: center;
+  padding: 0 8px 0 16px;
+  line-height: 22px;
+}
+
+.ash-scm-change-open {
+  display: flex;
+  min-width: 0;
+  min-height: 22px;
+  flex: 1 1 auto;
+  align-items: center;
+  overflow: hidden;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ash-scm-change:hover {
+  background: var(--ash-list-hover-background);
+}
+
+.ash-scm-change-open:focus-visible {
+  outline: 1px solid var(--ash-focus-border);
+  outline-offset: -1px;
+}
+
+.ash-scm-change-open:disabled {
+  cursor: default;
+}
+
+.ash-scm-change-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.ash-scm-change-description {
+  min-width: 0;
+  flex: 1 10 auto;
+  overflow: hidden;
+  margin-left: 6px;
+  color: var(--ash-muted-foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ash-scm-change-status {
+  flex: 0 0 16px;
+  width: 16px;
+  margin-left: 4px;
+  color: color-mix(in srgb, currentColor 78%, transparent);
+  font-weight: 700;
+  text-align: center;
+}
+
+.ash-scm-change-status.status-added,
+.ash-scm-change-status.status-untracked {
+  color: var(--ash-success-foreground);
+}
+
+.ash-scm-change-status.status-deleted,
+.ash-scm-change-status.status-unmerged {
+  color: var(--ash-error-foreground);
+}
+
+.ash-scm-change-status.status-modified,
+.ash-scm-change-status.status-renamed,
+.ash-scm-change-status.status-copied,
+.ash-scm-change-status.status-typeChanged {
+  color: var(--ash-warning-foreground);
+}

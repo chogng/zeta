@@ -48,7 +48,7 @@ fn refreshing_files_resets_pixel_scroll() {
 
 fn test_dir(label: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
-        "zeta-files-{label}-{}-{}",
+        "ash-files-{label}-{}-{}",
         std::process::id(),
         NEXT_DIR_ID.fetch_add(1, Ordering::Relaxed)
     ))

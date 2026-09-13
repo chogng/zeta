@@ -20,12 +20,12 @@ Auto Review 只在确定性规则无法独立判断时提供风险建议；它�
 
 ## 1. 决策摘要
 
-Zeta 把 Auto Review 定义为“受确定性策略约束的风险审查建议层”，而不是第二套权限系统。
+Ash 把 Auto Review 定义为“受确定性策略约束的风险审查建议层”，而不是第二套权限系统。
 
 核心决策：
 
 - 主机先解析精确动作、来源、最小能力和沙箱兼容性；
-- `zeta-execpolicy` 对 Host / Organization / User / Directory typed rules 做纯求值；更严格 effect
+- `ash-execpolicy` 对 Host / Organization / User / Directory typed rules 做纯求值；更严格 effect
   优先，Directory 不能产生 `AllowUnsandboxed`；该结果和 exact `UserAllowlist` 都优先于 LLM；
 - `UserAllowlist` 只接受绑定动作摘要、完整能力集合与策略版本的精确沙箱外授权，不接受工具名称
   或命令前缀；
@@ -69,9 +69,9 @@ Auto Review 不解决：
 | 组件 | 拥有 | 不拥有 |
 | --- | --- | --- |
 | 工具主机 | 精确解析动作、来源、最小能力和审查证据 | 最终策略决定 |
-| `zeta-execpolicy` | typed rules、layer merge、effect precedence、semantic revision 与纯求值 | 最终 grant、LLM、配置 I/O |
-| `zeta-action-policy` | rule effect 映射、exact grants、风险审查接口、风险与授权门槛和最终决定 | 规则持久化、LLM 提示词与模型提供方 |
-| `zeta-guardian-reviewer` | 审查协议、结论绑定、并发、期限、取消与重试 | 签发授权、执行工具、批准界面 |
+| `ash-execpolicy` | typed rules、layer merge、effect precedence、semantic revision 与纯求值 | 最终 grant、LLM、配置 I/O |
+| `ash-action-policy` | rule effect 映射、exact grants、风险审查接口、风险与授权门槛和最终决定 | 规则持久化、LLM 提示词与模型提供方 |
+| `ash-guardian-reviewer` | 审查协议、结论绑定、并发、期限、取消与重试 | 签发授权、执行工具、批准界面 |
 | `ext/guardian-v2` | 隔离模型适配和审核扩展安装 | 最终授权 |
 | App Server | 配置安全点、审查模型解析和模型提供方适配器 | 审查建议的授权语义 |
 | Core | 工具调度、类型化批准、持久化执行起点与提权、安全重试门槛、恢复和拒绝断路器 | 模型风险判断、操作系统沙箱 |
@@ -82,14 +82,14 @@ Auto Review 不解决：
 
 ```text
 工具主机 ──准备完成的动作与证据──► Core
-Core ──审查请求──► zeta-action-policy ──纯规则求值──► zeta-execpolicy
-zeta-action-policy ──建议调用──► zeta-guardian-reviewer
-zeta-guardian-reviewer ──模型请求──► ext/guardian-v2 审查适配器
-zeta-action-policy ──最终决定──► Core
+Core ──审查请求──► ash-action-policy ──纯规则求值──► ash-execpolicy
+ash-action-policy ──建议调用──► ash-guardian-reviewer
+ash-guardian-reviewer ──模型请求──► ext/guardian-v2 审查适配器
+ash-action-policy ──最终决定──► Core
 Core ──精确执行授权──► 工具执行器与沙箱
 ```
 
-`zeta-action-policy` 不能依赖 `zeta-guardian-reviewer`。它依赖自己定义的风险审查接口
+`ash-action-policy` 不能依赖 `ash-guardian-reviewer`。它依赖自己定义的风险审查接口
 `ActionClassifier`，因此未来可以替换模型实现、关闭 Auto Review 或增加确定性审查器，而不改变
 权限系统的最终授权责任。
 
@@ -162,7 +162,7 @@ flowchart TD
 文件、发出请求或产生其他副作用，即使风险审查器返回批准 `Approve`，Core 也不得自动重放原调用；
 它只能记录终止或未知结果，并让 Agent 修改动作或请求用户决定。
 
-`zeta-protocol::SandboxDenialOutput` 保存原因、退出状态、标准输出、标准错误输出、聚合输出和
+`ash-protocol::SandboxDenialOutput` 保存原因、退出状态、标准输出、标准错误输出、聚合输出和
 重放安全性。Core 从中截取最多 500 字符的原因和 2,000 字符的聚合输出给风险审查器；原结构化
 拒绝与第二次执行授权一起持久化写入 `ThreadEvent::ToolExecutionEscalated`。第二次执行只允许
 一次，不形成循环。
@@ -222,7 +222,7 @@ flowchart TD
 
 ## 7. 上下文、信任与隐私
 
-风险审查器需要理解用户意图，但“更多上下文”并不天然更安全。Zeta 使用证据代理，而不是复制
+风险审查器需要理解用户意图，但“更多上下文”并不天然更安全。Ash 使用证据代理，而不是复制
 完整对话记录：
 
 - 用户直接指令标记为可信用户意图；
@@ -361,5 +361,5 @@ Auto Review 的失败模式必须显式：
 - 凭证和密钥不进入评测样本集或普通审查上下文。
 
 Auto Review 的实现细节、错误语义和修改指南见
-[`zeta-guardian-reviewer` README](../zeta-rs/ext/guardian-reviewer/README.md)；确定性决策引擎与授权实现见
-[`zeta-action-policy` README](../zeta-rs/action-policy/README.md)。
+[`ash-guardian-reviewer` README](../ash-rs/ext/guardian-reviewer/README.md)；确定性决策引擎与授权实现见
+[`ash-action-policy` README](../ash-rs/action-policy/README.md)。

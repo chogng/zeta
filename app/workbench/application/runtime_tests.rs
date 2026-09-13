@@ -3,15 +3,15 @@ use std::collections::BTreeMap;
 use super::runtime::GuiConfig;
 use super::runtime::gui_editor_text_style;
 use super::runtime::gui_interface_typography;
-use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
-use zeta_ui_theme::DEFAULT_UI_THEME;
+use ash_app_server_protocol::protocol::config::FrontendConfigDto;
+use ash_ui_theme::DEFAULT_UI_THEME;
 use zui::ui::FontWeight;
 use zui::ui::{Color, FontFamily};
 
 #[test]
 fn gui_config_builds_the_editor_text_style_without_theme_typography_defaults() {
     let gui = GuiConfig {
-        theme: "zeta-dark".into(),
+        theme: "ash-dark".into(),
         interface_font_family: "Inter".into(),
         interface_font_size: 15,
         editor_font_family: "JetBrains Mono".into(),

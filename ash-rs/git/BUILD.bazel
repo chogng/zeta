@@ -1,0 +1,19 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "git",
+    crate_name = "ash_git",
+    # Unoptimized async integration-test futures need the product's 8 MiB stack budget.
+    test_env = {"RUST_MIN_STACK": "8388608"},
+    # Integration tests invoke the installed Git and exercise system-directory discovery.
+    test_env_inherit = ["PATH"] + select({
+        "@platforms//os:windows": [
+            "LOCALAPPDATA",
+            "ProgramFiles",
+            "ProgramFiles(x86)",
+            "ProgramW6432",
+            "SystemRoot",
+        ],
+        "//conditions:default": [],
+    }),
+)

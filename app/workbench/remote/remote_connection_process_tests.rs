@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use zeta_remote_connections::RemoteConnectionName;
+use ash_remote_connections::RemoteConnectionName;
 
 use super::remote_connection_command;
 use crate::launch_progress::REMOTE_LAUNCH_PROGRESS_ENV;

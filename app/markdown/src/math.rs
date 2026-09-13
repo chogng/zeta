@@ -195,7 +195,7 @@ impl MathKey {
 
 fn math_image_id(source: &str, mode: MarkdownMathMode, color: Color, font_size: f32) -> ImageId {
     let mut digest = Sha256::new();
-    digest.update(b"zeta-markdown-math-v1\0");
+    digest.update(b"ash-markdown-math-v1\0");
     digest.update(source.as_bytes());
     digest.update([match mode {
         MarkdownMathMode::Inline => 0,

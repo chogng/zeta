@@ -12,7 +12,7 @@ test = false
 
 [dependencies]
 process-hardening = { workspace = true }
-zeta-workbench = { workspace = true }
+ash-workbench = { workspace = true }
 
 [lints]
 workspace = true

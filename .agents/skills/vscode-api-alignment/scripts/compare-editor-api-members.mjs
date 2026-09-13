@@ -1,12 +1,12 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import ts from '../../../../zeta-ts/node_modules/typescript/lib/typescript.js';
+import ts from '../../../../ash-ts/node_modules/typescript/lib/typescript.js';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../../..');
-const zetaEditorRoot = resolve(repositoryRoot, 'zeta-ts/src/zeta/editor');
+const ashEditorRoot = resolve(repositoryRoot, 'ash-ts/src/ash/editor');
 const vscodeEditorRoot = resolve(repositoryRoot, '../vscode/src/vs/editor');
-const ledgerPath = resolve(zetaEditorRoot, 'api-alignment-status.md');
+const ledgerPath = resolve(ashEditorRoot, 'api-alignment-status.md');
 const sourceCache = new Map();
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
 	const ledger = readFileSync(ledgerPath, 'utf8');
@@ -25,7 +25,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
 }
 
 function compareDeclaration(file, declaration) {
-	const localFile = resolve(zetaEditorRoot, file);
+	const localFile = resolve(ashEditorRoot, file);
 	const upstreamFile = resolve(vscodeEditorRoot, file);
 	if (!existsSync(localFile) || !existsSync(upstreamFile)) {
 		return {
@@ -36,7 +36,7 @@ function compareDeclaration(file, declaration) {
 			extra: [],
 		};
 	}
-	const local = readDeclaration(localFile, declaration, zetaEditorRoot);
+	const local = readDeclaration(localFile, declaration, ashEditorRoot);
 	const upstream = readDeclaration(upstreamFile, declaration, vscodeEditorRoot);
 	if (!local || !upstream) {
 		return {

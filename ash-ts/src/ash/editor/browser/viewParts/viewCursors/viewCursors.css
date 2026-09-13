@@ -1,0 +1,102 @@
+.stanza-editor .cursors-layer {
+	position: absolute;
+	top: 0;
+}
+
+.stanza-editor .cursors-layer > .cursor {
+	position: absolute;
+	overflow: hidden;
+	box-sizing: border-box;
+	background-color: var(--ash-editor-cursor-foreground);
+	border-color: var(--ash-editor-cursor-foreground);
+	color: var(--ash-editor-cursor-background);
+}
+
+.stanza-editor .cursors-layer > .cursor.cursor-primary {
+	background-color: var(--ash-editor-multi-cursor-primary-foreground);
+	border-color: var(--ash-editor-multi-cursor-primary-foreground);
+	color: var(--ash-editor-multi-cursor-primary-background);
+}
+
+.stanza-editor .cursors-layer > .cursor.cursor-secondary {
+	background-color: var(--ash-editor-multi-cursor-secondary-foreground);
+	border-color: var(--ash-editor-multi-cursor-secondary-foreground);
+	color: var(--ash-editor-multi-cursor-secondary-background);
+}
+
+[data-color-scheme="high-contrast-dark"] .stanza-editor .cursors-layer.has-selection > .cursor,
+[data-color-scheme="high-contrast-light"] .stanza-editor .cursors-layer.has-selection > .cursor {
+	border-left: var(--ash-stroke-thickness) solid currentColor;
+	border-right: var(--ash-stroke-thickness) solid currentColor;
+}
+
+/* -- smooth-caret-animation -- */
+.stanza-editor .cursors-layer.cursor-smooth-caret-animation > .cursor {
+	transition: all 80ms;
+}
+
+/* -- block-outline-style -- */
+.stanza-editor .cursors-layer.cursor-block-outline-style > .cursor {
+	background: transparent !important;
+	border-style: solid;
+	border-width: 1px;
+}
+
+/* -- underline-style -- */
+.stanza-editor .cursors-layer.cursor-underline-style > .cursor {
+	border-bottom-width: 2px;
+	border-bottom-style: solid;
+	background: transparent !important;
+}
+
+/* -- underline-thin-style -- */
+.stanza-editor .cursors-layer.cursor-underline-thin-style > .cursor {
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+	background: transparent !important;
+}
+
+@keyframes ash-cursor-smooth {
+	0%,
+	20% {
+		opacity: 1;
+	}
+	60%,
+	100% {
+		opacity: 0;
+	}
+}
+
+@keyframes ash-cursor-phase {
+	0%,
+	20% {
+		opacity: 1;
+	}
+	90%,
+	100% {
+		opacity: 0;
+	}
+}
+
+@keyframes ash-cursor-expand {
+	0%,
+	20% {
+		transform: scaleY(1);
+	}
+	80%,
+	100% {
+		transform: scaleY(0);
+	}
+}
+
+.cursor-smooth > .cursor {
+	animation: ash-cursor-smooth 0.5s ease-in-out 0s 20 alternate;
+}
+
+.cursor-phase > .cursor {
+	animation: ash-cursor-phase 0.5s ease-in-out 0s 20 alternate;
+}
+
+.cursor-expand > .cursor {
+	animation: ash-cursor-expand 0.5s ease-in-out 0s 20 alternate;
+}

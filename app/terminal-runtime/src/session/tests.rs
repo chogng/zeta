@@ -4,7 +4,7 @@ use super::{
     BootstrapOutputFilter, SHELL_BOOTSTRAP_MARKER, TerminalSessionEvent,
     TerminalSessionEventEnvelope, TerminalSessionKey, shell_bootstrap,
 };
-use zeta_terminal::{GridSize, TerminalCore};
+use ash_terminal::{GridSize, TerminalCore};
 
 #[test]
 fn terminal_events_keep_their_desktop_session_identity() {
@@ -64,7 +64,7 @@ fn bootstrap_output_filter_discards_startup_output_across_chunk_boundaries() {
 fn pty_output_feeds_the_terminal_core() {
     use std::collections::HashMap;
 
-    use zeta_utils_pty::{SpawnedProcess, TerminalSize, spawn_pty_process};
+    use ash_utils_pty::{SpawnedProcess, TerminalSize, spawn_pty_process};
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
@@ -118,7 +118,7 @@ fn pty_output_feeds_the_terminal_core() {
 fn two_pty_processes_can_back_independent_terminal_panes() {
     use std::collections::HashMap;
 
-    use zeta_utils_pty::{SpawnedProcess, TerminalSize, spawn_pty_process};
+    use ash_utils_pty::{SpawnedProcess, TerminalSize, spawn_pty_process};
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)

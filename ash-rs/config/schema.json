@@ -1,0 +1,1328 @@
+{
+  "$defs": {
+    "AgentConfig": {
+      "additionalProperties": false,
+      "description": "Agent defaults that may be resolved into future model invocations.",
+      "properties": {
+        "approvalReviewModel": {
+          "$ref": "#/$defs/ApprovalReviewModelSelection",
+          "default": {
+            "type": "automatic"
+          }
+        },
+        "commitMessageModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "grepBackend": {
+          "$ref": "#/$defs/AgentGrepBackend",
+          "default": "ripgrep"
+        },
+        "preferredModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "toolMode": {
+          "$ref": "#/$defs/ToolMode",
+          "default": "direct"
+        }
+      },
+      "type": "object"
+    },
+    "AgentGrepBackend": {
+      "description": "Selects the implementation behind the Agent-only `grep` Tool.",
+      "enum": [
+        "ripgrep",
+        "fastRegex"
+      ],
+      "type": "string"
+    },
+    "ApprovalReviewModelSelection": {
+      "description": "User-selected model source for automatic approval review.\n\n`Automatic` follows the active Agent model's provider and delegates the exact model choice to\nthat provider's definition. `Explicit` binds review to one configured provider/model without\nchanging the main Agent model.",
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "automatic",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "model": {
+              "$ref": "#/$defs/ModelRef"
+            },
+            "type": {
+              "const": "explicit",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "model"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CodebaseAutomaticContext": {
+      "description": "Whether code retrieval is automatically added to the first model invocation of a Turn.",
+      "enum": [
+        "off",
+        "firstInvocation"
+      ],
+      "type": "string"
+    },
+    "CodebaseConfig": {
+      "additionalProperties": false,
+      "description": "Durable local Codebase preferences. Cloud publication consent is owned by Cloud Codebase.",
+      "properties": {
+        "automaticContext": {
+          "$ref": "#/$defs/CodebaseAutomaticContext",
+          "default": "off"
+        },
+        "models": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CodebaseModelSelection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "CodebaseModelSelection": {
+      "additionalProperties": false,
+      "description": "User-selected device-local models for semantic codebase indexing and query.",
+      "properties": {
+        "embeddingModel": {
+          "$ref": "#/$defs/ModelRef"
+        },
+        "rerankModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "embeddingModel"
+      ],
+      "type": "object"
+    },
+    "CommitMessageConfig": {
+      "additionalProperties": false,
+      "description": "Directory-scoped authorization for automatic commit-message generation.",
+      "properties": {
+        "sourceEgressGrants": {
+          "additionalProperties": {
+            "$ref": "#/$defs/CommitMessageEgressGrant"
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "CommitMessageEgressGrant": {
+      "additionalProperties": false,
+      "description": "Exact model and endpoint configuration authorized to receive one Directory's source text.",
+      "properties": {
+        "model": {
+          "$ref": "#/$defs/ModelRef"
+        },
+        "provider": {
+          "$ref": "#/$defs/ModelProviderConfig"
+        }
+      },
+      "required": [
+        "model",
+        "provider"
+      ],
+      "type": "object"
+    },
+    "CustomProviderConfig": {
+      "additionalProperties": false,
+      "description": "User-defined API connection, independent of built-in provider identities.",
+      "properties": {
+        "contextWindow": {
+          "default": 272000,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "order": {
+          "default": 0,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "protocol": {
+          "$ref": "#/$defs/CustomProviderProtocol"
+        }
+      },
+      "required": [
+        "name",
+        "protocol"
+      ],
+      "type": "object"
+    },
+    "CustomProviderProtocol": {
+      "enum": [
+        "responses",
+        "chatCompletions",
+        "anthropicMessages"
+      ],
+      "type": "string"
+    },
+    "DirPermissionsConfig": {
+      "additionalProperties": false,
+      "description": "Durable user-owned permissions for explicitly selected directories.",
+      "properties": {
+        "entries": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Permissions"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "paths": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "Canonical paths retained only as display metadata.",
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "ExecPolicyActionKind": {
+      "description": "Stable action category exposed to deterministic execution-policy selectors.",
+      "enum": [
+        "local_process",
+        "file_system_mutation",
+        "network_request",
+        "browser_interaction",
+        "external_service_mutation",
+        "credential_use",
+        "system_operation"
+      ],
+      "type": "string"
+    },
+    "ExecPolicyEffect": {
+      "description": "Policy effect returned when a rule matches.",
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "continue",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "allow_unsandboxed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "require_approval",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "require_sandbox",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "deny",
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "reason"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ExecPolicyRule": {
+      "description": "One validated rule in an immutable execution-policy layer.",
+      "properties": {
+        "effect": {
+          "$ref": "#/$defs/ExecPolicyEffect"
+        },
+        "id": {
+          "$ref": "#/$defs/ExecPolicyRuleId"
+        },
+        "justification": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "selector": {
+          "$ref": "#/$defs/ExecPolicySelector"
+        }
+      },
+      "required": [
+        "id",
+        "selector",
+        "effect"
+      ],
+      "type": "object"
+    },
+    "ExecPolicyRuleId": {
+      "description": "Stable identity of one deterministic rule.",
+      "type": "string"
+    },
+    "ExecPolicySelector": {
+      "description": "A deterministic selector over trusted, host-materialized action fields.",
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "any",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "digest": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "action_digest",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "digest"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action_kind": {
+              "$ref": "#/$defs/ExecPolicyActionKind"
+            },
+            "kind": {
+              "const": "action_kind",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "action_kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "source",
+              "type": "string"
+            },
+            "source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "source_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "command_prefix",
+              "type": "string"
+            },
+            "pattern": {
+              "items": {
+                "$ref": "#/$defs/ExecPolicyToken"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "pattern"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "host": {
+              "$ref": "#/$defs/HostMatcher"
+            },
+            "kind": {
+              "const": "network",
+              "type": "string"
+            },
+            "port": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "protocol": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "host"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "capability_kind": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "capability",
+              "type": "string"
+            },
+            "scope": {
+              "$ref": "#/$defs/ScopeMatcher"
+            }
+          },
+          "required": [
+            "kind",
+            "capability_kind",
+            "scope"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "all",
+              "type": "string"
+            },
+            "selectors": {
+              "items": {
+                "$ref": "#/$defs/ExecPolicySelector"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "selectors"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ExecPolicyToken": {
+      "description": "One argument position in a command-prefix selector.",
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "literal",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "one_of",
+              "type": "string"
+            },
+            "value": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "HookAction": {
+      "description": "Declarative Hook action. Runtime execution still requires policy and sandbox approval.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "args": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "program": {
+              "type": "string"
+            },
+            "type": {
+              "const": "process",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "program"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "HookConfig": {
+      "additionalProperties": false,
+      "description": "Runtime-free Hook declaration stored in User or Directory TOML.",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/HookAction"
+        },
+        "enablement": {
+          "$ref": "#/$defs/HookEnablement",
+          "default": "disabled"
+        },
+        "event": {
+          "$ref": "#/$defs/HookEvent"
+        },
+        "id": {
+          "$ref": "#/$defs/HookId"
+        },
+        "matcher": {
+          "$ref": "#/$defs/HookMatcher",
+          "default": {
+            "toolNames": []
+          }
+        }
+      },
+      "required": [
+        "id",
+        "event",
+        "action"
+      ],
+      "type": "object"
+    },
+    "HookEnablement": {
+      "description": "Desired enablement of one Hook declaration.",
+      "enum": [
+        "disabled",
+        "enabled"
+      ],
+      "type": "string"
+    },
+    "HookEvent": {
+      "description": "Safe-point event that may request a Hook execution.",
+      "enum": [
+        "beforeTool",
+        "afterTool",
+        "turnCompleted"
+      ],
+      "type": "string"
+    },
+    "HookId": {
+      "description": "Stable namespaced identity for one declarative Hook.",
+      "type": "string"
+    },
+    "HookMatcher": {
+      "additionalProperties": false,
+      "description": "Optional exact tool-name filter for tool-related Hook events.\n\nAn empty set matches every tool for `beforeTool` and `afterTool`. `turnCompleted` requires an\nempty set because it has no tool subject.",
+      "properties": {
+        "toolNames": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "type": "object"
+    },
+    "HooksConfig": {
+      "additionalProperties": false,
+      "description": "Hook declarations keyed by namespaced identity.",
+      "properties": {
+        "hooks": {
+          "additionalProperties": {
+            "$ref": "#/$defs/HookConfig"
+          },
+          "default": {},
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "HostMatcher": {
+      "description": "Explicit network host matching semantics.",
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "exact",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "domain_suffix",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "IssueConfig": {
+      "additionalProperties": false,
+      "description": "Refresh preferences for the Issue browser. Agent execution uses ordinary Session settings.",
+      "properties": {
+        "autoRefreshMinutes": {
+          "default": 10,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "LanguageServerConfig": {
+      "additionalProperties": false,
+      "description": "Runtime-free language-server preference stored by the User Config authority.",
+      "properties": {
+        "executable": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mode": {
+          "$ref": "#/$defs/LanguageServerModeConfig",
+          "default": "enabled"
+        }
+      },
+      "type": "object"
+    },
+    "LanguageServerModeConfig": {
+      "description": "Durable user intent for one language server.",
+      "enum": [
+        "disabled",
+        "enabled"
+      ],
+      "type": "string"
+    },
+    "LanguageServersConfig": {
+      "additionalProperties": false,
+      "description": "User-owned language-server preferences keyed by stable integration identity.",
+      "properties": {
+        "servers": {
+          "additionalProperties": {
+            "$ref": "#/$defs/LanguageServerConfig"
+          },
+          "default": {},
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "McpConfig": {
+      "additionalProperties": false,
+      "description": "MCP declarations owned by the user configuration authority.",
+      "properties": {
+        "servers": {
+          "additionalProperties": {
+            "$ref": "#/$defs/McpServerConfig"
+          },
+          "default": {},
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "McpCredentialBinding": {
+      "description": "A non-secret reference to credential material owned by the relevant authentication domain.",
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "unauthenticated",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "credentialRef": {
+              "type": "string"
+            },
+            "type": {
+              "const": "reference",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "credentialRef"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "McpServerConfig": {
+      "additionalProperties": false,
+      "description": "Desired, runtime-free definition for a standalone MCP server.",
+      "properties": {
+        "credential": {
+          "$ref": "#/$defs/McpCredentialBinding",
+          "default": {
+            "type": "unauthenticated"
+          }
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "enablement": {
+          "$ref": "#/$defs/McpServerEnablement",
+          "default": "disabled"
+        },
+        "id": {
+          "$ref": "#/$defs/McpServerId"
+        },
+        "transport": {
+          "$ref": "#/$defs/McpTransportConfig"
+        }
+      },
+      "required": [
+        "id",
+        "displayName",
+        "transport"
+      ],
+      "type": "object"
+    },
+    "McpServerEnablement": {
+      "description": "Desired enablement for a configured MCP server.\n\nThis is user intent only. An enabled declaration still needs runtime policy, credential, and\ntransport checks before an MCP manager may connect it.",
+      "enum": [
+        "disabled",
+        "enabled"
+      ],
+      "type": "string"
+    },
+    "McpServerId": {
+      "description": "Stable, namespaced identity for one logical MCP server declaration.\n\nThe containing configuration authority validates the namespace it owns. This keeps User,\nDirectory, and Plugin declarations from silently colliding on a display name.",
+      "type": "string"
+    },
+    "McpTransportConfig": {
+      "description": "Non-secret transport declaration for one standalone MCP server.",
+      "oneOf": [
+        {
+          "properties": {
+            "args": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "command": {
+              "type": "string"
+            },
+            "type": {
+              "const": "stdio",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "command",
+            "args"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "streamableHttp",
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ModelContextConfig": {
+      "description": "Model-specific context limits supplied by user or host configuration.\n\nThis metadata is deliberately separate from transport normalization: Core\nconsumes it to decide whether it can enforce a context budget itself.",
+      "properties": {
+        "autoCompactTokenLimit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "contextWindow": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "contextWindow"
+      ],
+      "type": "object"
+    },
+    "ModelId": {
+      "type": "string"
+    },
+    "ModelProviderConfig": {
+      "properties": {
+        "baseUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "custom": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CustomProviderConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "maxOutputTokens": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "modelContext": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ModelContextConfig"
+          },
+          "type": "object"
+        },
+        "provider": {
+          "$ref": "#/$defs/ProviderId"
+        }
+      },
+      "required": [
+        "provider"
+      ],
+      "type": "object"
+    },
+    "ModelRef": {
+      "properties": {
+        "model": {
+          "$ref": "#/$defs/ModelId"
+        },
+        "provider": {
+          "$ref": "#/$defs/ProviderId"
+        }
+      },
+      "required": [
+        "provider",
+        "model"
+      ],
+      "type": "object"
+    },
+    "Permission": {
+      "description": "Permission kind that can be granted for one directory scope.",
+      "enum": [
+        "readFiles",
+        "writeFiles",
+        "executeCommands",
+        "watchFiles",
+        "browseFiles",
+        "searchFiles",
+        "loadInstructions",
+        "loadConfig",
+        "discoverSkills",
+        "discoverMcp",
+        "useLanguageServices",
+        "discoverHooks",
+        "discoverPlugins",
+        "inspectRepository",
+        "mutateRepository"
+      ],
+      "type": "string"
+    },
+    "Permissions": {
+      "description": "Complete permission set granted to one directory.",
+      "items": {
+        "$ref": "#/$defs/Permission"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "PluginRequest": {
+      "additionalProperties": false,
+      "description": "User request for one exact Plugin package.\n\nThis is desired configuration only. It does not install the package, grant capabilities,\nbind credentials, or prove that activation succeeded.",
+      "properties": {
+        "enablement": {
+          "$ref": "#/$defs/PluginRequestEnablement",
+          "default": "disabled"
+        },
+        "pluginId": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "pluginId",
+        "version"
+      ],
+      "type": "object"
+    },
+    "PluginRequestEnablement": {
+      "description": "Desired participation of a requested Plugin in future activation resolution.",
+      "enum": [
+        "disabled",
+        "enabled"
+      ],
+      "type": "string"
+    },
+    "PluginsConfig": {
+      "additionalProperties": false,
+      "description": "User Plugin requests keyed by stable package identity.",
+      "properties": {
+        "requests": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PluginRequest"
+          },
+          "default": {},
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "ProviderId": {
+      "type": "string"
+    },
+    "ScopeMatcher": {
+      "description": "Explicit capability-scope matching semantics.",
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "exact",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "prefix",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "SkillEnablement": {
+      "description": "Desired user enablement for one discovered Skill.",
+      "enum": [
+        "disabled",
+        "enabled"
+      ],
+      "type": "string"
+    },
+    "SkillSourceConfig": {
+      "additionalProperties": false,
+      "description": "A runtime-free, user-owned Skill source declaration.\n\n`root_reference` is an opaque host reference, not a trusted filesystem handle. A future Skill\nmanager resolves it, checks containment and the required capability, then publishes a separate catalog snapshot.",
+      "properties": {
+        "enablement": {
+          "$ref": "#/$defs/SkillSourceEnablement",
+          "default": "disabled"
+        },
+        "id": {
+          "$ref": "#/$defs/SkillSourceId"
+        },
+        "rootReference": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "rootReference"
+      ],
+      "type": "object"
+    },
+    "SkillSourceEnablement": {
+      "description": "Desired enablement for one configured Skill source.",
+      "enum": [
+        "disabled",
+        "enabled"
+      ],
+      "type": "string"
+    },
+    "SkillSourceId": {
+      "description": "Stable identity for one configured, built-in, directory, or Plugin Skill source.",
+      "type": "string"
+    },
+    "SkillsConfig": {
+      "additionalProperties": false,
+      "description": "Skill source declarations owned by the user configuration authority.",
+      "properties": {
+        "enablement": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "$ref": "#/$defs/SkillEnablement"
+            },
+            "type": "object"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "sources": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SkillSourceConfig"
+          },
+          "default": {},
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "ToolMode": {
+      "description": "Selects how a model may use the ordinary Tool catalog for one Turn.\n\n`Direct` is the compatibility default. `CodeMode` keeps the ordinary direct surface and adds\nthe Code Mode entry points. `CodeModeOnly` exposes only those entry points while the projected\nordinary tools remain callable from JavaScript.",
+      "enum": [
+        "direct",
+        "codeMode",
+        "codeModeOnly"
+      ],
+      "type": "string"
+    },
+    "ToolSearchConfig": {
+      "additionalProperties": false,
+      "description": "Runtime-free user preference for deferred Agent-tool retrieval.",
+      "properties": {
+        "embeddingModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Exact embedding model used only when hybrid retrieval is enabled."
+        },
+        "mode": {
+          "$ref": "#/$defs/ToolSearchModeConfig",
+          "default": "lexical"
+        }
+      },
+      "type": "object"
+    },
+    "ToolSearchModeConfig": {
+      "description": "User-selected retrieval policy for deferred Agent tools.",
+      "oneOf": [
+        {
+          "const": "lexical",
+          "description": "Search names and metadata locally with exact/regex matching and BM25 ranking.",
+          "type": "string"
+        },
+        {
+          "const": "hybridEmbedding",
+          "description": "Require a ready embedding model, then merge its ranking with local lexical retrieval.",
+          "type": "string"
+        }
+      ]
+    },
+    "UserExecPolicyConfig": {
+      "additionalProperties": false,
+      "description": "Durable user-owned execution-policy rules.",
+      "properties": {
+        "rules": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ExecPolicyRule"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Durable, non-secret user intent for ordinary Ash configuration.\n\nProvider entries are keyed by `ProviderId`; each value repeats its provider identity so a\nserialized document remains self-describing and mismatched entries can be rejected.",
+  "properties": {
+    "agent": {
+      "$ref": "#/$defs/AgentConfig",
+      "default": {
+        "approvalReviewModel": {
+          "type": "automatic"
+        },
+        "grepBackend": "ripgrep",
+        "toolMode": "direct"
+      }
+    },
+    "codebase": {
+      "$ref": "#/$defs/CodebaseConfig",
+      "default": {
+        "automaticContext": "off"
+      }
+    },
+    "commitMessages": {
+      "$ref": "#/$defs/CommitMessageConfig",
+      "default": {}
+    },
+    "desktop": {
+      "additionalProperties": true,
+      "default": {},
+      "type": "object"
+    },
+    "dirPermissions": {
+      "$ref": "#/$defs/DirPermissionsConfig",
+      "default": {
+        "entries": {},
+        "paths": {}
+      }
+    },
+    "execPolicy": {
+      "$ref": "#/$defs/UserExecPolicyConfig",
+      "default": {
+        "rules": []
+      }
+    },
+    "features": {
+      "additionalProperties": false,
+      "properties": {
+        "analytics": {
+          "type": "boolean"
+        },
+        "codeMode": {
+          "type": "boolean"
+        },
+        "queue": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "gui": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "hooks": {
+      "$ref": "#/$defs/HooksConfig",
+      "default": {
+        "hooks": {}
+      }
+    },
+    "issues": {
+      "$ref": "#/$defs/IssueConfig",
+      "default": {
+        "autoRefreshMinutes": 10
+      }
+    },
+    "languageServers": {
+      "$ref": "#/$defs/LanguageServersConfig",
+      "default": {
+        "servers": {}
+      }
+    },
+    "mcp": {
+      "$ref": "#/$defs/McpConfig",
+      "default": {
+        "servers": {}
+      }
+    },
+    "plugins": {
+      "$ref": "#/$defs/PluginsConfig",
+      "default": {
+        "requests": {}
+      }
+    },
+    "providers": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ModelProviderConfig"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "schemaVersion": {
+      "const": 2,
+      "type": "integer"
+    },
+    "skills": {
+      "$ref": "#/$defs/SkillsConfig",
+      "default": {
+        "enablement": {},
+        "sources": {}
+      }
+    },
+    "toolSearch": {
+      "$ref": "#/$defs/ToolSearchConfig",
+      "default": {
+        "mode": "lexical"
+      }
+    },
+    "tui": {
+      "additionalProperties": true,
+      "type": "object"
+    }
+  },
+  "required": [
+    "schemaVersion"
+  ],
+  "title": "Ash user configuration",
+  "type": "object"
+}

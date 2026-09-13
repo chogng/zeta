@@ -1,0 +1,27 @@
+[package]
+name = "ash-update-sign"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "ash-update-sign"
+path = "src/main.rs"
+
+[dependencies]
+base64 = { workspace = true }
+process-hardening = { workspace = true }
+ed25519-dalek = { workspace = true }
+semver = { workspace = true }
+sha2 = { workspace = true }
+zeroize = { workspace = true }
+ash-product-update = { workspace = true, features = ["signing"] }
+
+[dev-dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,5 +1,5 @@
 use super::{TerminalSelection, TerminalSelectionRange, paint_terminal_selection, selected_text};
-use zeta_terminal::{ScreenBuffer, TerminalMousePosition};
+use ash_terminal::{ScreenBuffer, TerminalMousePosition};
 use zui::input::ElementState;
 use zui::ui::{Color, Rect, UiScene};
 

@@ -1,0 +1,16 @@
+---
+source: ash-code/tui/src/app/fullscreen/pointer_tests.rs
+expression: text
+---
+  .                        [Dashboard]  
+                                        
+                                        
+                                        
+                                        
+  ────────────────────────────────────  
+  /quit                      quit Ash  
+  ╭──────────────────────────────────╮  
+  │ > /q                             │  
+  ╰──────────────── Automatic model ─╯  
+                                        
+  Enter send · shift+tab permissions

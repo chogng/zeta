@@ -1,7 +1,7 @@
 packages:
   - build
   - scripts
-  - zeta-ts
+  - ash-ts
 allowBuilds:
   electron: true
   esbuild: true

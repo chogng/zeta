@@ -1,5 +1,5 @@
 ---
-description: Zeta targeted testing and command-line verification rules.
+description: Ash targeted testing and command-line verification rules.
 applyTo: "**"
 ---
 
@@ -16,7 +16,7 @@ Validation and test synchronization are part of the implementation, regardless o
 | 新增或修改用户可见界面 | 更新对应行为验证；已有 snapshot 基线时同步更新并逐份审阅。替换界面时保留行为和状态覆盖，不能只删除旧基线。 |
 | 修改 Agent 执行逻辑 | 列出受影响的主要逻辑与用户可见行为，新增或更新覆盖真实调用链的集成测试；复用现有测试设施，不以局部辅助函数测试代替流程验证。 |
 | 修改配置类型或协议接口 | 同步调用方、校验、序列化测试和接口文档；更新该接口已有的 schema、生成类型及 fixtures。 |
-| 修改依赖或编译期资源 | 同步所属项目的 lockfile 和受影响的构建、资源打包清单，并验证实际使用的构建入口。使用 Zeta 现有工具，不引入其他仓库专属的锁文件或命令。 |
+| 修改依赖或编译期资源 | 同步所属项目的 lockfile 和受影响的构建、资源打包清单，并验证实际使用的构建入口。使用 Ash 现有工具，不引入其他仓库专属的锁文件或命令。 |
 | 修改、重构、替换、移动或删除实现 | 修改前检索生产与测试调用点；同步迁移或删除模块导出、测试、测试辅助代码和文档。测试专用 helper 不进入主实现。 |
 
 交付前检查本次测试和正常构建的 warning，处理由本次改动引入的 warning；不能通过 `allow(dead_code)`、伪造调用或新增仅为消除 warning 的测试来掩盖无用代码。构建退出码为零不代表验证完成；确实无法处理的 warning 必须说明原因和影响，不能宣称已全部完成。

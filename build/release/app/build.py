@@ -18,8 +18,8 @@ from urllib.parse import urlsplit
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from build.lib.zeta_build.targets import TARGETS
-from build.lib.zeta_build.targets import target_spec
+from build.lib.ash_build.targets import TARGETS
+from build.lib.ash_build.targets import target_spec
 from build.release.remote.bundle import RemoteRuntimeBundle
 from build.release.remote.bundle import validate_remote_runtime_bundle
 from build.release.package.cargo import cargo_environment
@@ -236,13 +236,13 @@ def build_package(
         staged_binary.parent.mkdir(parents=True)
         shutil.copy2(binary, staged_binary)
         if windows_sandbox_binary is not None:
-            shutil.copy2(windows_sandbox_binary, staging / "bin/zeta-windows-sandbox.exe")
+            shutil.copy2(windows_sandbox_binary, staging / "bin/ash-windows-sandbox.exe")
             copy_windows_sandbox_notices(REPOSITORY_ROOT, staging / "licenses")
         copy_uds_notices(REPOSITORY_ROOT, staging / "licenses")
         mxc_license = staging / "licenses" / "mxc"
         mxc_license.mkdir(parents=True)
         shutil.copyfile(
-            REPOSITORY_ROOT / "zeta-rs/vendor/mxc/LICENSE.md",
+            REPOSITORY_ROOT / "ash-rs/vendor/mxc/LICENSE.md",
             mxc_license / "LICENSE.md",
         )
         if os.name != "nt":
@@ -254,7 +254,7 @@ def build_package(
         if remote_runtime_bundle is not None:
             shutil.copytree(
                 remote_runtime_bundle.root,
-                staging / "zeta-remote-runtimes",
+                staging / "ash-remote-runtimes",
             )
         metadata = {
             "formatVersion": 1,
@@ -280,12 +280,12 @@ def build_package(
             }
         elif remote_runtime_bundle is not None:
             metadata["remoteRuntimeCatalog"] = {
-                "path": "zeta-remote-runtimes/catalog.json",
+                "path": "ash-remote-runtimes/catalog.json",
                 "sha256": remote_runtime_bundle.catalog_sha256,
                 "trustBinding": "compiledIntoSignedBinary",
             }
         if windows_sandbox_binary is not None:
-            metadata["windowsSandbox"] = {"path": "bin/zeta-windows-sandbox.exe", "sha256": sha256(staging / "bin/zeta-windows-sandbox.exe")}
+            metadata["windowsSandbox"] = {"path": "bin/ash-windows-sandbox.exe", "sha256": sha256(staging / "bin/ash-windows-sandbox.exe")}
         (staging / "app-package.json").write_text(json.dumps(metadata, indent=2) + "\n")
         staging.rename(output)
     except BaseException:

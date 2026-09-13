@@ -6,19 +6,19 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
 use std::time::Duration;
 
-use zeta_app_server_client::AppServerRequestHandle;
-use zeta_app_server_client::ServerNotification;
-use zeta_app_server_protocol::protocol::model::ModelCatalogEntry;
-use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
-use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
-use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
-use zeta_protocol::ApprovalMode;
-use zeta_protocol::CommandId;
-use zeta_protocol::ModelRef;
-use zeta_protocol::Session;
-use zeta_protocol::SessionId;
-use zeta_protocol::Thread;
-use zeta_protocol::TurnId;
+use ash_app_server_client::AppServerRequestHandle;
+use ash_app_server_client::ServerNotification;
+use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
+use ash_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
+use ash_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
+use ash_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
+use ash_protocol::ApprovalMode;
+use ash_protocol::CommandId;
+use ash_protocol::ModelRef;
+use ash_protocol::Session;
+use ash_protocol::SessionId;
+use ash_protocol::Thread;
+use ash_protocol::TurnId;
 
 /// The default number of commands that may wait for the worker.
 pub const DEFAULT_COMMAND_QUEUE_CAPACITY: usize = 32;
@@ -124,7 +124,7 @@ pub enum SessionRuntimeCommand {
         /// Stable identity retained by the caller for every retry of this rewrite.
         operation_id: CommandId,
         /// Source Thread retained across retries even after the runtime activates its child.
-        source_thread_id: zeta_protocol::ThreadId,
+        source_thread_id: ash_protocol::ThreadId,
         /// First Turn excluded from the replacement Thread.
         before_turn_id: TurnId,
         /// Replacement user message.

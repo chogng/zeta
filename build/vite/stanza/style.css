@@ -1,12 +1,12 @@
 :root {
   color-scheme: light;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  --zeta-font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  --zeta-font-family-monospace: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
-  --zeta-foreground: #3b3b3b;
-  --zeta-description-foreground: #616161;
-  --zeta-editor-background: #ffffff;
-  --zeta-border: #e5e5e5;
+  --ash-font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  --ash-font-family-monospace: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  --ash-foreground: #3b3b3b;
+  --ash-description-foreground: #616161;
+  --ash-editor-background: #ffffff;
+  --ash-border: #e5e5e5;
 }
 
 * {
@@ -19,8 +19,8 @@ body {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  color: var(--zeta-foreground);
-  background: var(--zeta-editor-background);
+  color: var(--ash-foreground);
+  background: var(--ash-editor-background);
 }
 
 body {
@@ -35,7 +35,7 @@ body {
   min-width: 0;
   padding: 0 10px 0 14px;
   background: #f3f3f3;
-  border-bottom: 1px solid var(--zeta-border);
+  border-bottom: 1px solid var(--ash-border);
 }
 
 .stanza-debug-title {
@@ -46,7 +46,7 @@ body {
 
 .stanza-debug-title span,
 .stanza-debug-toolbar code {
-  color: var(--zeta-description-foreground);
+  color: var(--ash-description-foreground);
   font-size: 12px;
 }
 

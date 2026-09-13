@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "action-policy",
+    crate_name = "ash_action_policy",
+)

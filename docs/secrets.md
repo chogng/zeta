@@ -1,14 +1,14 @@
 # 凭据与秘密系统
 
-> - 物理位置：`zeta-rs/secrets/`
-> - Rust crate：`zeta_secrets`
+> - 物理位置：`ash-rs/secrets/`
+> - Rust crate：`ash_secrets`
 > - 层次：host secret persistence primitive
 > - 当前实现：typed key/value、`load/store/delete` port、profile 私有文件、OS keyring、ephemeral memory 与 unavailable backend
-> - Crate 实现、安全义务与测试：[`zeta-rs/secrets/README.md`](../zeta-rs/secrets/README.md)
-> - OS keyring adapter：[`zeta-rs/keyring-store/README.md`](../zeta-rs/keyring-store/README.md)
+> - Crate 实现、安全义务与测试：[`ash-rs/secrets/README.md`](../ash-rs/secrets/README.md)
+> - OS keyring adapter：[`ash-rs/keyring-store/README.md`](../ash-rs/keyring-store/README.md)
 > - Direct-provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据边界)
 > - Interactive login control plane：[`login.md`](login.md)
-> - App Server 登录控制面：[`zeta-app-server-api.md`](zeta-app-server-api.md#11-account-与登录)
+> - App Server 登录控制面：[`ash-app-server-api.md`](ash-app-server-api.md#11-account-与登录)
 
 ## 快速理解
 
@@ -25,7 +25,7 @@
 
 ## 1. 结论
 
-`zeta-secrets` 是长期保留的独立基础设施 crate，但它不是 credential authority，也不是统一 OAuth
+`ash-secrets` 是长期保留的独立基础设施 crate，但它不是 credential authority，也不是统一 OAuth
 框架。它只回答一件事：
 
 > 在不进入普通配置、日志、telemetry 或产品事件的前提下，按 opaque key
@@ -37,16 +37,16 @@ primitive，不能共享一套虚假的 `CredentialManager`。
 
 ## 2. 所有权
 
-### `zeta-secrets` 拥有
+### `ash-secrets` 拥有
 
 - `SecretKey`、`SecretValue` 和 secret-store error；
 - `SecretStore::load/store/delete`；
 - profile 私有 file、OS keyring、ephemeral 与 unavailable backend adapter；
-- Zeta namespace isolation；
+- Ash namespace isolation；
 - secret value 的 `Debug` 脱敏和内存清理；
 - backend access、atomic replacement、权限和 negative logging tests。
 
-### `zeta-secrets` 不拥有
+### `ash-secrets` 不拥有
 
 - API key、OAuth token bundle、AWS/Google/Azure identity 的业务类型；
 - Provider/account/workspace/tenant/credential revision；
@@ -63,7 +63,7 @@ primitive，不能共享一套虚假的 `CredentialManager`。
 
 ```text
 static declaration
-  zeta-config / model-provider-config
+  ash-config / model-provider-config
   └─ 只保存 CredentialRef、account selection、provider auth mode
 
 domain runtime
@@ -73,21 +73,21 @@ domain runtime
   └─ 把领域 identity 映射为 SecretKey
 
 interactive login
-  zeta-login + provider-specific adapter
+  ash-login + provider-specific adapter
   └─ 只发布 redacted account 状态；是否使用 SecretStore 由 exact adapter 决定
 
 secret persistence
-  zeta-secrets
+  ash-secrets
   └─ load / store / delete opaque bytes
 
 wire and transport
-  zeta-api          ── method/path/protocol headers/body/event codec
-  zeta-client       ── operation retry/framing/telemetry
-  zeta-http-client  ── HTTP + shared proxy/TLS/target policy
-  zeta-websocket-client ── WebSocket handshake/message transport
+  ash-api          ── method/path/protocol headers/body/event codec
+  ash-client       ── operation retry/framing/telemetry
+  ash-http-client  ── HTTP + shared proxy/TLS/target policy
+  ash-websocket-client ── WebSocket handshake/message transport
 ```
 
-`zeta-api`、`zeta-client`、`zeta-http-client` 和 `zeta-websocket-client` 都不依赖 `zeta-secrets`。它们接收已经构造完成的请求或已经解析的 sensitive transport value，不读取 secret backend，也不刷新 token。
+`ash-api`、`ash-client`、`ash-http-client` 和 `ash-websocket-client` 都不依赖 `ash-secrets`。它们接收已经构造完成的请求或已经解析的 sensitive transport value，不读取 secret backend，也不刷新 token。
 
 ## 4. 公共接口
 
@@ -115,7 +115,7 @@ provider/kimi/current/oauth
 ```
 
 这里的 account segment 必须是 opaque ID，不能直接放 email、token 或 workspace name。
-ChatGPT 凭据按 [Codex 兼容约定](chatgpt-subscription.md) 保存于 Codex 用户存储，Zeta 按 Codex 是否可发现选择只读复用或维护，不在 profile SecretStore 中保存 token 副本；SecretStore 仅保存 `provider/openai-chatgpt/disconnected`。Kimi 的凭据和刷新仍由本机 adapter 及 profile SecretStore 负责。
+ChatGPT 凭据按 [Codex 兼容约定](chatgpt-subscription.md) 保存于 Codex 用户存储，Ash 按 Codex 是否可发现选择只读复用或维护，不在 profile SecretStore 中保存 token 副本；SecretStore 仅保存 `provider/openai-chatgpt/disconnected`。Kimi 的凭据和刷新仍由本机 adapter 及 profile SecretStore 负责。
 MCP/Connector 使用自己的 namespace，不能把 Provider key schema 当成通用 credential schema。
 
 ## 5. Backend 策略
@@ -135,7 +135,7 @@ MCP/Connector 使用自己的 namespace，不能把 Provider key schema 当成�
 profile file backend 的最低要求：
 
 - parent directory 私有，Unix file mode 至少 `0600`；
-- Zeta 专属文件名和 schema version；
+- Ash 专属文件名和 schema version；
 - temp file + fsync + atomic replace；
 - 并发写入有确定的 serialization；
 - delete 清理 exact value file；
@@ -145,7 +145,7 @@ profile file backend 的最低要求：
 
 ## 6. 生命周期与一致性
 
-`zeta-secrets` 不提供跨多个 key 的业务事务。领域 runtime 负责：
+`ash-secrets` 不提供跨多个 key 的业务事务。领域 runtime 负责：
 
 1. 验证新 credential/token bundle；
 2. 编码成有 schema version 的领域 payload；
@@ -160,7 +160,7 @@ secret backend。Backend 可以序列化物理写入，但不能推断 token exp
 ## 7. 当前实现位置
 
 ```text
-zeta-rs/secrets/
+ash-rs/secrets/
 ├── BUILD.bazel
 ├── Cargo.toml
 ├── README.md
@@ -177,7 +177,7 @@ zeta-rs/secrets/
 ```
 
 ```text
-zeta-rs/keyring-store/
+ash-rs/keyring-store/
 ├── BUILD.bazel
 ├── Cargo.toml
 ├── README.md
@@ -186,7 +186,7 @@ zeta-rs/keyring-store/
     └── lib_tests.rs
 ```
 
-文件 backend 的跨平台实现位于 `zeta-secrets/src/file.rs` 和 `file_windows.rs`。OS keyring adapter 位于独立的 `zeta-keyring-store`，避免基础 value/port crate 强制引入平台 credential 依赖。
+文件 backend 的跨平台实现位于 `ash-secrets/src/file.rs` 和 `file_windows.rs`。OS keyring adapter 位于独立的 `ash-keyring-store`，避免基础 value/port crate 强制引入平台 credential 依赖。
 
 ## 8. 交互式敏感输入
 
@@ -209,22 +209,22 @@ ChatGPT 订阅的 `isSecret` 请求是首个明确消费者，完成门见 [`cha
 允许：
 
 ```text
-model-provider direct credential ──▶ zeta-secrets
-MCP runtime ─────▶ zeta-secrets
-Connector auth ──▶ zeta-secrets
-login adapter ───▶ zeta-secrets       # only when the provider owns token persistence
+model-provider direct credential ──▶ ash-secrets
+MCP runtime ─────▶ ash-secrets
+Connector auth ──▶ ash-secrets
+login adapter ───▶ ash-secrets       # only when the provider owns token persistence
 App Server composition ──▶ domain auth services
 ```
 
 禁止：
 
 ```text
-zeta-secrets ──▶ model-provider / MCP / Plugin / zeta-api / zeta-client / zeta-http-client / zeta-core
-zeta-api ──────▶ zeta-secrets
-zeta-client ───▶ zeta-secrets
-zeta-http-client ──▶ zeta-secrets
-zeta-core ─────▶ zeta-secrets
-zeta-config ───▶ secret value
+ash-secrets ──▶ model-provider / MCP / Plugin / ash-api / ash-client / ash-http-client / ash-core
+ash-api ──────▶ ash-secrets
+ash-client ───▶ ash-secrets
+ash-http-client ──▶ ash-secrets
+ash-core ─────▶ ash-secrets
+ash-config ───▶ secret value
 Desktop renderer ──▶ SecretStore
 ```
 
@@ -243,14 +243,14 @@ Desktop renderer ──▶ SecretStore
 
 ## 11. 固定决策
 
-1. 长期保留独立 `zeta-secrets` crate。
-2. 删除 `zeta-credentials`；不建立同义的统一 credential/OAuth authority。
-3. Direct-provider credential 属于 `zeta-model-provider`，interactive login 属于 `zeta-login`；
+1. 长期保留独立 `ash-secrets` crate。
+2. 删除 `ash-credentials`；不建立同义的统一 credential/OAuth authority。
+3. Direct-provider credential 属于 `ash-model-provider`，interactive login 属于 `ash-login`；
    MCP/Connector 各自拥有登录状态机。
 4. secrets 只保存 opaque bytes，不理解 token 或 account。
 5. Config 只保存 reference，不保存 secret。
 6. API/client/Core 不读取 secret store。
 7. 本地 composition 默认使用 `<profile>/secrets` 下的私有文件 backend；Unix 强制 0700/0600，Windows 使用 owner-only protected DACL 和 write-through atomic replacement。
-8. `zeta-keyring-store` 保留为可注入的平台 adapter；它不是 daemon 默认，不与文件 backend fallback 或双写。
+8. `ash-keyring-store` 保留为可注入的平台 adapter；它不是 daemon 默认，不与文件 backend fallback 或双写。
 9. `LocalProfileRuntime` 拥有一个 profile 的唯一 `SecretStore`；共享 profile runtime 时注入不同 store 会直接拒绝，不形成第二套 credential authority。
 10. App Server protocol 和普通 server operation 不暴露 secret；local composition 只把 `SecretStore` 注入 Connector、MCP、ChatGPT 与 Kimi credential adapter。订阅 token 只在本地 credential owner 与单次模型请求之间流动，不进入 Core Agent Loop 状态。

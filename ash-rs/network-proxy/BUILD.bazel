@@ -1,0 +1,7 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "network-proxy",
+    crate_name = "network_proxy",
+    crate_features = ["server"],
+)

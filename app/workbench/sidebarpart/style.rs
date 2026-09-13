@@ -3,9 +3,9 @@ use crate::Icon;
 use crate::ScrollViewStyle;
 use crate::SearchBoxStyle;
 use crate::TabStatusKind;
-use zeta_icons::icons;
-use zeta_ui_theme::UiTheme;
-use zeta_ui_theme::UiTypography;
+use ash_icons::icons;
+use ash_ui_theme::UiTheme;
+use ash_ui_theme::UiTypography;
 use zui::ui::TextStyle;
 
 /// Semantic colors consumed by Workbench chrome components.

@@ -9,7 +9,7 @@ use crate::TabInputKey;
 use crate::TabInputMetadata;
 use crate::TabStatus;
 use crate::TabStatusKind;
-use zeta_protocol::{Session, SessionId, SessionStatus};
+use ash_protocol::{Session, SessionId, SessionStatus};
 
 fn session(id: &str, title: &str) -> Session {
     Session {
@@ -103,11 +103,11 @@ fn catalog_upsert_does_not_change_the_active_input() {
     let active = session("session-active", "Active");
     let saved = session("session-saved", "Saved");
     let mut part = SidebarPart::default();
-    upsert_session(&mut part, &active, "~/zeta");
+    upsert_session(&mut part, &active, "~/ash");
     let active_before_catalog = part.active_tab_key().cloned();
 
     assert_eq!(
-        upsert_catalog_session(&mut part, &saved, "~/zeta"),
+        upsert_catalog_session(&mut part, &saved, "~/ash"),
         TabInputChange::Added(TabInputKey::session(saved.session_id.clone()))
     );
     assert_eq!(part.active_tab_key().cloned(), active_before_catalog);

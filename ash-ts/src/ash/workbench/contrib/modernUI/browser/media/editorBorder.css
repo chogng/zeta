@@ -1,0 +1,4 @@
+:is(.ash-workbench, .ash-auxiliary-window-container).modern-ui .ash-workbench-editor {
+  border: 1px solid var(--ash-border);
+  border-radius: 8px;
+}

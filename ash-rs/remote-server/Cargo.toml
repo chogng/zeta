@@ -1,0 +1,39 @@
+[package]
+name = "ash-remote-server"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "ash-remote-server"
+path = "src/main.rs"
+
+[lib]
+doctest = false
+name = "ash_remote_server"
+path = "src/lib.rs"
+
+[dependencies]
+ash-utils-home-dir = { workspace = true }
+ash-install-context = { workspace = true }
+serde_json = { workspace = true }
+ash-package-store = { workspace = true }
+arg0 = { workspace = true }
+process-hardening = { workspace = true }
+build-info = { workspace = true }
+libc = { workspace = true }
+rustix = { workspace = true, features = ["process"] }
+sha2 = { workspace = true }
+ash-app-server = { workspace = true }
+ash-app-server-protocol = { workspace = true }
+
+[dev-dependencies]
+ash-file-access = { workspace = true }
+ash-fast-regex-search = { workspace = true }
+base64 = { workspace = true }
+tempfile = { workspace = true }
+ash-app-server-client = { workspace = true }
+
+[lints]
+workspace = true

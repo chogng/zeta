@@ -16,7 +16,7 @@ The repository pins `rules_rs 0.0.96` through the archive override in the root
   the Windows execution ABI and assemble its runtime DLLs from platform constraints.
 
 The Cargo graph intentionally has one root workspace. `rules_rs` therefore sees
-`app`, its direct child crates, and `zeta-rs/*` in one `cargo metadata` result. App-owned
+`app`, its direct child crates, and `ash-rs/*` in one `cargo metadata` result. App-owned
 and shared crates resolve to the same `@crates` hub; no cross-workspace metadata
 bridge or duplicate product hub is required.
 

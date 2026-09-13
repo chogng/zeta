@@ -1,5 +1,5 @@
-use zeta_protocol::ModelRef;
-use zeta_slash_commands::{
+use ash_protocol::ModelRef;
+use ash_slash_commands::{
     SlashCommandArgumentMode, SlashCommandCatalog, SlashCommandCatalogError,
     SlashCommandDefinition, SlashCommandsState,
 };

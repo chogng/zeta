@@ -1,10 +1,10 @@
-use zeta_ui_components::Button;
-use zeta_ui_components::ButtonSelection;
-use zeta_ui_components::ButtonState;
-use zeta_ui_components::InputBox;
-use zeta_ui_components::InteractionRegion;
-use zeta_ui_components::ListView;
-use zeta_ui_components::ScrollMetrics;
+use ash_ui_components::Button;
+use ash_ui_components::ButtonSelection;
+use ash_ui_components::ButtonState;
+use ash_ui_components::InputBox;
+use ash_ui_components::InteractionRegion;
+use ash_ui_components::ListView;
+use ash_ui_components::ScrollMetrics;
 use zui::ui::AccessibilityRole;
 use zui::ui::AccessibilitySelection;
 use zui::ui::Border;
@@ -563,11 +563,11 @@ impl Component for RemoteConnectionManager<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zeta_remote::RemoteDirPath;
-    use zeta_remote::SshHost;
-    use zeta_remote::SshTarget;
-    use zeta_remote_connections::RemoteConnectionEntry;
-    use zeta_remote_connections::RemoteConnectionName;
+    use ash_remote::RemoteDirPath;
+    use ash_remote::SshHost;
+    use ash_remote::SshTarget;
+    use ash_remote_connections::RemoteConnectionEntry;
+    use ash_remote_connections::RemoteConnectionName;
     use zui::ui::{InteractionFrame, UiFrame};
 
     #[test]

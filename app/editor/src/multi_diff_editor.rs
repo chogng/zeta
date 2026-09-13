@@ -4,7 +4,7 @@ use std::cell::OnceCell;
 use std::ops::Range;
 use std::time::Duration;
 
-use zeta_ui_components::{
+use ash_ui_components::{
     ActionBar, ActionBarItem, ActionBarOrientation, ActionBarStyle, ActionViewItem,
     ButtonSelection, ButtonState, ButtonStyle, InteractionRegion, ListContentPadding,
     ListScrollAnchor, ScrollAxis, ScrollCommand, ScrollMetrics, ScrollState, ScrollView,
@@ -291,7 +291,7 @@ impl MultiDiffEditorStyle {
                 .with_line_height(18.0),
             diff_editor: DiffEditorStyle::light(),
             header_button: ButtonStyle::new(
-                zeta_ui_components::ButtonBackgrounds::new(Color::TRANSPARENT)
+                ash_ui_components::ButtonBackgrounds::new(Color::TRANSPARENT)
                     .with_hovered(Color::rgb(232, 232, 232))
                     .with_focused(Color::rgb(235, 235, 237))
                     .with_pressed(Color::rgb(222, 222, 224)),

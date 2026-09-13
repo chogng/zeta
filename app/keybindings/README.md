@@ -1,4 +1,4 @@
-# `zeta-keybindings-host`
+# `ash-keybindings-host`
 
 Rust GUI 的快捷键运行能力。独立 crate 将输入、规则和连续按键状态与 Workbench 的窗口、会话及命令执行隔开；它只服务 GUI，各端仍负责自己的快捷键。
 
@@ -10,7 +10,7 @@ Rust GUI 的快捷键运行能力。独立 crate 将输入、规则和连续按�
 
 ## 为什么独立
 
-[通用规则库](../../zeta-rs/keybinding/README.md) 提供按键语法、条件和匹配算法；本 crate 补上 GUI 输入适配及运行状态。Workbench 通过 `KeybindingCatalog` 提供命令、默认绑定和上下文，两者保持单向依赖。本 crate 不依赖 Workbench、Settings、App Server 或配置文件路径。
+[通用规则库](../../ash-rs/keybinding/README.md) 提供按键语法、条件和匹配算法；本 crate 补上 GUI 输入适配及运行状态。Workbench 通过 `KeybindingCatalog` 提供命令、默认绑定和上下文，两者保持单向依赖。本 crate 不依赖 Workbench、Settings、App Server 或配置文件路径。
 
 | 调用方 | 使用的能力 | 自己负责 |
 | --- | --- | --- |
@@ -27,13 +27,13 @@ Rust GUI 的快捷键运行能力。独立 crate 将输入、规则和连续按�
 | `settings.rs` | 用户规则编译、诊断和内存中的配置编辑 |
 | `lib.rs` | 公开接口 |
 
-三端职责和配置格式见[快捷键架构](../../docs/keybindings.md)。TUI 的运行与设置交互由 `zeta-code` 自己实现，不经过本 crate。
+三端职责和配置格式见[快捷键架构](../../docs/keybindings.md)。TUI 的运行与设置交互由 `ash-code` 自己实现，不经过本 crate。
 
 ## 验证
 
 ```sh
-just check zeta-keybindings-host
-just test zeta-keybindings-host
-just test zeta-settings
-just test zeta-workbench keybinding
+just check ash-keybindings-host
+just test ash-keybindings-host
+just test ash-settings
+just test ash-workbench keybinding
 ```

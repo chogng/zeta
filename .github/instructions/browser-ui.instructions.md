@@ -1,6 +1,6 @@
 ---
-description: Zeta browser UI DOM, CSS ownership, accessibility, and rendering rules.
-applyTo: "**/src/zeta/**/browser/**/*.ts,**/src/zeta/**/browser/**/*.css,**/src/zeta/**/*.css"
+description: Ash browser UI DOM, CSS ownership, accessibility, and rendering rules.
+applyTo: "**/src/ash/**/browser/**/*.ts,**/src/ash/**/browser/**/*.css,**/src/ash/**/*.css"
 ---
 
 # Browser UI Guidelines
@@ -36,4 +36,4 @@ Follow [`docs/ui-styling-ownership.md`](../../docs/ui-styling-ownership.md) for 
 
 ## Learnings
 
-* 对齐上游 UI 时只对齐职责、行为和可观察契约；Zeta 创建并拥有的 DOM 与 CSS 必须使用 Zeta 自己的稳定品牌 class，禁止复制或延续上游产品 root class。
+* 对齐上游 UI 时只对齐职责、行为和可观察契约；Ash 创建并拥有的 DOM 与 CSS 必须使用 Ash 自己的稳定品牌 class，禁止复制或延续上游产品 root class。

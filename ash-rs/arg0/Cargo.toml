@@ -1,0 +1,16 @@
+[package]
+name = "ash-arg0"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+name = "arg0"
+doctest = false
+
+[dependencies]
+ash-fast-regex-search = { workspace = true }
+
+[lints]
+workspace = true

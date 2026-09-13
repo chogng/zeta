@@ -1,8 +1,8 @@
 # Renderer UI 样式所有权规范
 
-> 本文是 Zeta Desktop Renderer 中组件、组合控件与 Workbench Part 样式边界的 canonical 文档。
+> 本文是 Ash Desktop Renderer 中组件、组合控件与 Workbench Part 样式边界的 canonical 文档。
 > 修改 browser UI 时同时遵守 scoped [`browser-ui.instructions.md`](../.github/instructions/browser-ui.instructions.md)；该 instruction 只保留任务期规则，详细 ownership 仍由本文唯一拥有。
-> 主题值与 token 注册仍以 [`design-tokens.md`](design-tokens.md) 为准；Desktop 的跨进程和产品所有权仍以 [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) 为准。
+> 主题值与 token 注册仍以 [`design-tokens.md`](design-tokens.md) 为准；Desktop 的跨进程和产品所有权仍以 [`ash-desktop-architecture.md`](ash-desktop-architecture.md) 为准。
 > Pane-like Part 的标题层级、槽位、命名和 Composite 生命周期以 [`workbench-pane-composite-design.md`](workbench-pane-composite-design.md) 为准。
 > Command、MenuId、Context Key 与菜单型 Toolbar 的组合语义以 [`menu-system.md`](menu-system.md) 为准；本文只拥有它们最终投影到控件后的视觉边界。
 
@@ -32,7 +32,7 @@
 | --- | --- | --- | --- |
 | Primitive | `Button`、`ActionBar`、`ToolBar`、`TabList`、`PaneView` | 通用 DOM、键盘行为、ARIA、基础布局和 primitive 自身状态 | Workbench 区域语义、Panel/Sidebar 特例 |
 | Composed control | `CompositeBar`、Editor/Chat tabs control、`MenubarControl` | 领域内 item 几何、presentation variant、hover/active/selected 视觉 | Part 的位置、区域背景和网格尺寸 |
-| Part | `TitlebarPart`、`PanelPart`、`SidebarPart` | Part 根节点、标题区/内容区布局、边框、背景、直接子组件占位 | 深入修改组件内部 `.zeta-action-bar`、`.zeta-tab`、`.zeta-button` 状态 |
+| Part | `TitlebarPart`、`PanelPart`、`SidebarPart` | Part 根节点、标题区/内容区布局、边框、背景、直接子组件占位 | 深入修改组件内部 `.ash-action-bar`、`.ash-tab`、`.ash-button` 状态 |
 | Contribution/View | `TerminalViewPane`、Explorer、Search、Chat | 自有内容、命令、View 内部交互和私有子控件 | Workbench Part 的全局布局或其他 View 的皮肤 |
 | Theme | color/size registries 与 CSS custom properties | 视觉值、别名、主题覆盖和快照投影 | selector、DOM、active/hover 判定 |
 
@@ -111,18 +111,18 @@ Menu 的 pointer hover 与键盘导航必须汇入同一个 `focusedEntry`，并
 | 身份 | 表达方式 | 允许用途 | 禁止用途 |
 | --- | --- | --- | --- |
 | 行为身份 | `IAction.id`、`data-action-id` | TypeScript 路由、动作查找、诊断和测试 | CSS selector、颜色、显隐和布局 |
-| 视觉身份 | 组件拥有的稳定 class，例如 `.zeta-tab-close-action` | 组件 CSS、交互状态和 presentation | 命令分派、持久化身份和业务查找 |
+| 视觉身份 | 组件拥有的稳定 class，例如 `.ash-tab-close-action` | 组件 CSS、交互状态和 presentation | 命令分派、持久化身份和业务查找 |
 
 组合控件定义某个 item 的语义时，也负责把该语义投影为稳定的视觉 class。底层控件可以继续保留行为 ID，但 CSS 不得把 ID 当作公开样式 API：
 
 ```css
 /* 禁止：行为身份泄漏为视觉契约 */
-.zeta-tab-actions [data-action-id="zeta.tab.close"] {
+.ash-tab-actions [data-action-id="ash.tab.close"] {
   visibility: hidden;
 }
 
 /* 允许：TabList 投影并拥有视觉身份 */
-.zeta-tab-close-action {
+.ash-tab-close-action {
   visibility: hidden;
 }
 ```
@@ -131,12 +131,12 @@ Menu 的 pointer hover 与键盘导航必须汇入同一个 `focusedEntry`，并
 
 ## Selector 规则
 
-Workbench 的固定横向几何使用物理方向 CSS。仅需左右 inset 时，写作 `padding: 0 <value>`；不要使用 `padding-inline`、`margin-inline` 或其他 `*-inline` logical property。token 仍表达数值，例如 `padding: 0 var(--zeta-tab-list-item-content-inset)`。
+Workbench 的固定横向几何使用物理方向 CSS。仅需左右 inset 时，写作 `padding: 0 <value>`；不要使用 `padding-inline`、`margin-inline` 或其他 `*-inline` logical property。token 仍表达数值，例如 `padding: 0 var(--ash-tab-list-item-content-inset)`。
 
 允许组件修改自己的内部结构：
 
 ```css
-.zeta-composite-bar-label .zeta-tab {
+.ash-composite-bar-label .ash-tab {
   padding: 0 5px;
 }
 ```
@@ -144,7 +144,7 @@ Workbench 的固定横向几何使用物理方向 CSS。仅需左右 inset 时�
 允许 Part 修改直接托管组件 root 的外部尺寸或位置：
 
 ```css
-.zeta-panel-title-control > .zeta-composite-bar {
+.ash-panel-title-control > .ash-composite-bar {
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -153,7 +153,7 @@ Workbench 的固定横向几何使用物理方向 CSS。仅需左右 inset 时�
 允许 Part 修改自己的直接内容区：
 
 ```css
-.zeta-workbench-panel > .zeta-composite-content {
+.ash-workbench-panel > .ash-composite-content {
   overflow: hidden;
 }
 ```
@@ -162,10 +162,10 @@ Workbench 的固定横向几何使用物理方向 CSS。仅需左右 inset 时�
 
 ```css
 /* 禁止 */
-.zeta-panel-title-control
-  .zeta-tab-list-scroll-content
-  > .zeta-action-bar
-  > .zeta-tab.checked {
+.ash-panel-title-control
+  .ash-tab-list-scroll-content
+  > .ash-action-bar
+  > .ash-tab.checked {
   background: var(--some-color);
 }
 ```
@@ -216,8 +216,8 @@ Design token 回答“值是什么”，组件 CSS 回答“何时使用这个�
 
 ```text
 Theme registry
-  → --zeta-tab-list-active-background
-  → tablist.css 的 .zeta-tab.checked
+  → --ash-tab-list-active-background
+  → tablist.css 的 .ash-tab.checked
 ```
 
 Theme 不判断某个 tab 是否 active，Part 也不选择 active token。`TabList` 在自己的状态 selector 中消费相应 token；`CompositeBar` 只消费其 presentation 所需的 token。

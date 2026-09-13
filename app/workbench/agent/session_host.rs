@@ -5,28 +5,28 @@ use std::sync::atomic::Ordering;
 use crate::PaneBinding;
 use anyhow::Result;
 use anyhow::anyhow;
-use zeta_app_server_protocol::protocol::config::ConfigUpdateParams;
-use zeta_app_server_protocol::protocol::environment::SessionDirListParams;
-use zeta_app_server_protocol::protocol::fs::FsChanged;
-use zeta_app_server_protocol::protocol::fs::FsGetMetadataParams;
-use zeta_app_server_protocol::protocol::fs::FsGetMetadataResult;
-use zeta_app_server_protocol::protocol::fs::FsReadDirectoryEntry;
-use zeta_app_server_protocol::protocol::fs::FsReadDirectoryParams;
-use zeta_app_server_protocol::protocol::fs::FsReadFileParams;
-use zeta_app_server_protocol::protocol::fs::FsWriteFileParams;
-use zeta_app_server_protocol::protocol::git::GitBranchDto;
-use zeta_app_server_protocol::protocol::git::GitBranchSwitchParams;
-use zeta_app_server_protocol::protocol::git::GitTextDiffResult;
-use zeta_files::DirectoryEntry;
-use zeta_protocol::CommandId;
-use zeta_protocol::Patch;
-use zeta_protocol::Session;
-use zeta_scm::ScmDiff;
-use zeta_text_file::TextFileAccess;
-use zeta_text_file::TextFileDiskVersion;
-use zeta_text_file::TextFileModifiedAt;
-use zeta_text_file::TextFileSaveRequest;
-use zeta_text_file::TextFileSnapshot;
+use ash_app_server_protocol::protocol::config::ConfigUpdateParams;
+use ash_app_server_protocol::protocol::environment::SessionDirListParams;
+use ash_app_server_protocol::protocol::fs::FsChanged;
+use ash_app_server_protocol::protocol::fs::FsGetMetadataParams;
+use ash_app_server_protocol::protocol::fs::FsGetMetadataResult;
+use ash_app_server_protocol::protocol::fs::FsReadDirectoryEntry;
+use ash_app_server_protocol::protocol::fs::FsReadDirectoryParams;
+use ash_app_server_protocol::protocol::fs::FsReadFileParams;
+use ash_app_server_protocol::protocol::fs::FsWriteFileParams;
+use ash_app_server_protocol::protocol::git::GitBranchDto;
+use ash_app_server_protocol::protocol::git::GitBranchSwitchParams;
+use ash_app_server_protocol::protocol::git::GitTextDiffResult;
+use ash_files::DirectoryEntry;
+use ash_protocol::CommandId;
+use ash_protocol::Patch;
+use ash_protocol::Session;
+use ash_scm::ScmDiff;
+use ash_text_file::TextFileAccess;
+use ash_text_file::TextFileDiskVersion;
+use ash_text_file::TextFileModifiedAt;
+use ash_text_file::TextFileSaveRequest;
+use ash_text_file::TextFileSnapshot;
 
 use crate::PaneInput;
 use crate::TabInputKey;
@@ -37,9 +37,9 @@ use crate::app_server::ServerNotification;
 
 const FILE_SNAPSHOT_READ_ATTEMPTS: usize = 3;
 
-pub(crate) use zeta_session::EnvCwdSetResult;
-pub(crate) use zeta_session::SessionRuntime;
-pub(crate) use zeta_session::SessionRuntimeEvent;
+pub(crate) use ash_session::EnvCwdSetResult;
+pub(crate) use ash_session::SessionRuntime;
+pub(crate) use ash_session::SessionRuntimeEvent;
 
 impl WorkbenchApplication {
     pub(crate) fn add_session(&mut self) {
@@ -145,7 +145,7 @@ impl WorkbenchApplication {
             } => {
                 if let Err(error) = self.session_pane.set_composer_catalog(
                     slash_commands,
-                    zeta_session::composer_model_options(models),
+                    ash_session::composer_model_options(models),
                 ) {
                     eprintln!("could not install Slash Commands catalog: {error}");
                 }
@@ -255,7 +255,7 @@ impl WorkbenchApplication {
         self.remove_scm_animation_tracks(removed);
     }
 
-    fn sync_repository_state(&mut self) -> Vec<zeta_editor::MultiDiffEditorItemIdentity> {
+    fn sync_repository_state(&mut self) -> Vec<ash_editor::MultiDiffEditorItemIdentity> {
         self.scm
             .set_branch(Some(self.env.git_branch_label()).filter(|branch| *branch != "No Git"));
         self.scm.replace_diffs(self.env.diffs().iter().map(|diff| {
@@ -265,7 +265,7 @@ impl WorkbenchApplication {
 
     fn remove_scm_animation_tracks(
         &mut self,
-        removed: Vec<zeta_editor::MultiDiffEditorItemIdentity>,
+        removed: Vec<ash_editor::MultiDiffEditorItemIdentity>,
     ) {
         for identity in removed {
             self.retained_runtime
@@ -318,7 +318,7 @@ impl WorkbenchApplication {
                 self.show_agent_pane();
                 self.workbench.expand_inspector();
                 self.main_surface.show_editor();
-                self.pending_focus = Some(zeta_editor_host::FILE_EDITOR_DOCUMENT);
+                self.pending_focus = Some(ash_editor_host::FILE_EDITOR_DOCUMENT);
                 self.rebuild_presentation();
                 self.request_redraw();
             }
@@ -328,7 +328,7 @@ impl WorkbenchApplication {
 
     pub(crate) fn open_language_definition(
         &mut self,
-        target: zeta_lsp_manager::LanguageLocationTarget,
+        target: ash_lsp_manager::LanguageLocationTarget,
     ) {
         let Some(client) = self.app_server_client.as_mut() else {
             return;
@@ -346,7 +346,7 @@ impl WorkbenchApplication {
                     target.encoding,
                 ) {
                     self.file_editor_host
-                        .move_active_caret(position, zeta_editor::CodeEditorSelectionMode::Move);
+                        .move_active_caret(position, ash_editor::CodeEditorSelectionMode::Move);
                 }
                 self.language_service
                     .synchronize_active(&self.file_editor_host);
@@ -354,7 +354,7 @@ impl WorkbenchApplication {
                 self.show_agent_pane();
                 self.workbench.expand_inspector();
                 self.main_surface.show_editor();
-                self.pending_focus = Some(zeta_editor_host::FILE_EDITOR_DOCUMENT);
+                self.pending_focus = Some(ash_editor_host::FILE_EDITOR_DOCUMENT);
                 self.rebuild_presentation();
                 self.request_redraw();
             }
@@ -449,8 +449,8 @@ impl WorkbenchApplication {
 
     pub(crate) fn save_keybinding(
         &mut self,
-        command: zeta_commands::AppCommandId,
-        keybinding: &zeta_keybinding::KeySequence,
+        command: ash_commands::AppCommandId,
+        keybinding: &ash_keybinding::KeySequence,
     ) -> Result<()> {
         {
             let client = self
@@ -462,7 +462,7 @@ impl WorkbenchApplication {
                 config.gui,
                 command,
                 keybinding,
-                zeta_keybinding::HostPlatform::current(),
+                ash_keybinding::HostPlatform::current(),
             )
             .map_err(anyhow::Error::msg)?;
             client
@@ -473,6 +473,7 @@ impl WorkbenchApplication {
                     command_id: next_gui_config_command_id(),
                     expected_revision: config.revision,
                     preferred_model: Patch::Missing,
+                    preferred_reasoning_effort: Patch::Missing,
                     approval_review_model: Patch::Missing,
                     commit_message_model: Patch::Missing,
                     tool_mode: Patch::Missing,
@@ -636,7 +637,7 @@ fn directory_entries(entries: Vec<FsReadDirectoryEntry>) -> Vec<DirectoryEntry> 
     entries
         .into_iter()
         .map(|entry| {
-            if entry.file_type == zeta_app_server_protocol::protocol::fs::FsFileType::Directory {
+            if entry.file_type == ash_app_server_protocol::protocol::fs::FsFileType::Directory {
                 DirectoryEntry::directory(entry.name)
             } else {
                 DirectoryEntry::file(entry.name)
@@ -649,17 +650,17 @@ fn definition_editor_position(
     text: &str,
     row: u32,
     character: u32,
-    encoding: zeta_lsp_manager::LanguagePositionEncoding,
-) -> Option<zeta_editor::CodeEditorPosition> {
+    encoding: ash_lsp_manager::LanguagePositionEncoding,
+) -> Option<ash_editor::CodeEditorPosition> {
     let row_index = usize::try_from(row).ok()?;
     let line = text.split('\n').nth(row_index)?;
     let line = line.strip_suffix('\r').unwrap_or(line);
     let requested = usize::try_from(character).ok()?;
     let byte_offset = match encoding {
-        zeta_lsp_manager::LanguagePositionEncoding::Utf8 => {
+        ash_lsp_manager::LanguagePositionEncoding::Utf8 => {
             (requested <= line.len() && line.is_char_boundary(requested)).then_some(requested)?
         }
-        zeta_lsp_manager::LanguagePositionEncoding::Utf16 => {
+        ash_lsp_manager::LanguagePositionEncoding::Utf16 => {
             let mut units = 0;
             let mut resolved = None;
             for (offset, scalar) in line.char_indices() {
@@ -675,7 +676,7 @@ fn definition_editor_position(
             resolved.or_else(|| (units == requested).then_some(line.len()))?
         }
     };
-    Some(zeta_editor::CodeEditorPosition {
+    Some(ash_editor::CodeEditorPosition {
         row_index,
         byte_offset,
     })

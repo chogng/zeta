@@ -1,7 +1,7 @@
 use crate::TabInput;
 use crate::TabInputMetadata;
 use crate::TabStatus;
-use zeta_protocol::Session;
+use ash_protocol::Session;
 
 /// Builds the Workbench tab description owned by one Session.
 pub fn session_tab_input(session: &Session, dirs: impl IntoIterator<Item = PathBuf>) -> TabInput {

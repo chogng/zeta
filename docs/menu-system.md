@@ -1,10 +1,10 @@
 # MenuId 与 UI Action 组合系统
 
-> 本文是 Zeta Desktop Renderer 中 Command、MenuId、Context Key、MenuService 与菜单型
+> 本文是 Ash Desktop Renderer 中 Command、MenuId、Context Key、MenuService 与菜单型
 > Toolbar 组合关系的 canonical 文档。
 > Renderer 组件和 CSS 状态所有权以 [`ui-styling-ownership.md`](ui-styling-ownership.md)
 > 为准；Desktop 的进程与产品边界以
-> [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) 为准。
+> [`ash-desktop-architecture.md`](ash-desktop-architecture.md) 为准。
 
 ## 快速理解
 
@@ -291,7 +291,7 @@ primary/secondary 的投影和刷新。它的 `Menu` 表示 action 来源，不�
 | --- | --- | --- |
 | action 是否来自 `MenuId` / `MenuService`？ | 使用 `MenuWorkbenchToolBar` | 继续判断 |
 | 调用方是否已经拥有完整的 primary/secondary action 列表？ | Workbench 产品代码使用 `WorkbenchToolBar` | 先明确 action 的 owner 和来源 |
-| 是否是 `src/zeta/base` 内部的领域无关控件？ | 可以使用 `ToolBar` | 不得直接构造 base `ToolBar` |
+| 是否是 `src/ash/base` 内部的领域无关控件？ | 可以使用 `ToolBar` | 不得直接构造 base `ToolBar` |
 
 只有 base UI 和 `platform/actions` 中实现标准适配层的代码可以直接依赖 base `ToolBar`。
 Workbench Part、View、Contribution 等产品代码必须在 `WorkbenchToolBar` 与

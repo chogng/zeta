@@ -1,0 +1,5 @@
+.ash-split-view { position: relative; min-width: 0; min-height: 0; overflow: visible; }
+.ash-split-view-pane { position: absolute; display: flex; min-width: 0; min-height: 0; overflow: hidden; flex-direction: column; }
+.ash-split-view-pane-overflow-visible { overflow: visible; }
+.ash-split-view-pane[hidden] { display: none; }
+.ash-split-view-pane > * { flex: 1 1 auto; min-width: 0; min-height: 0; }

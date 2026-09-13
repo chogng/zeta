@@ -1,0 +1,19 @@
+[package]
+name = "ash-code-mode-host"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "ash-code-mode-host"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = { workspace = true }
+ash-code-mode-protocol = { workspace = true }
+ash-code-mode-runtime = { workspace = true }
+ash-package-store = { workspace = true }
+
+[lints]
+workspace = true

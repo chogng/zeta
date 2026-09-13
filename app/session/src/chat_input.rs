@@ -38,20 +38,20 @@ use shell_completion::ShellGhostSuggestion;
 use shell_completion::shell_ghost_suggestion;
 pub(crate) use view::ChatInputView;
 pub(crate) use view::draw_chat_input;
-use zeta_editor::CodeEditorCommand;
-use zeta_editor::CodeEditorLanguage;
-use zeta_editor::CodeEditorSelectionMode;
-use zeta_editor::CodeEditorStyle;
-use zeta_input_classifier::InputClassifier;
-use zeta_input_classifier::InputConversation;
-use zeta_input_classifier::InputHistoryEntry;
-use zeta_input_classifier::ShellCompletionSnapshot;
-use zeta_slash_commands::SlashCommandCatalogError;
-use zeta_slash_commands::SlashCommandDefinition;
-use zeta_ui_components::ScrollAxis;
-use zeta_ui_components::ScrollCommand;
-use zeta_ui_components::ScrollMetrics;
-use zeta_ui_components::ScrollState;
+use ash_editor::CodeEditorCommand;
+use ash_editor::CodeEditorLanguage;
+use ash_editor::CodeEditorSelectionMode;
+use ash_editor::CodeEditorStyle;
+use ash_input_classifier::InputClassifier;
+use ash_input_classifier::InputConversation;
+use ash_input_classifier::InputHistoryEntry;
+use ash_input_classifier::ShellCompletionSnapshot;
+use ash_slash_commands::SlashCommandCatalogError;
+use ash_slash_commands::SlashCommandDefinition;
+use ash_ui_components::ScrollAxis;
+use ash_ui_components::ScrollCommand;
+use ash_ui_components::ScrollMetrics;
+use ash_ui_components::ScrollState;
 use zui::ui::Point;
 use zui::ui::Rect;
 use zui::ui::Size;
@@ -109,7 +109,7 @@ impl Default for ChatInput {
 
 impl ChatInput {
     pub fn for_working_directory(working_directory: impl Into<PathBuf>) -> Self {
-        zeta_input_classifier::start_background_warmup();
+        ash_input_classifier::start_background_warmup();
         Self {
             input: ChatInputEditor::default(),
             interaction: ChatInputInteractionState::new(),

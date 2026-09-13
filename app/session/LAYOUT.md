@@ -1,4 +1,4 @@
-`zeta-session` 的目录按状态 owner 组织：
+`ash-session` 的目录按状态 owner 组织：
 
 ```text
 src

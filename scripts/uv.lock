@@ -32,7 +32,7 @@ wheels = [
 ]
 
 [[package]]
-name = "zeta-scripts"
+name = "ash-scripts"
 version = "0.0.0"
 source = { virtual = "." }
 dependencies = [

@@ -11,17 +11,17 @@ from .cargo_paths import cargo_artifact_executable
 from .cargo_paths import cargo_rendered_diagnostic
 from .cargo_paths import parse_cargo_message
 from .cargo_paths import resolve_cargo_target_directory
-from build.lib.zeta_build.targets import TargetSpec
-from build.lib.zeta_build.v8 import resolve_v8_cargo_env
+from build.lib.ash_build.targets import TargetSpec
+from build.lib.ash_build.v8 import resolve_v8_cargo_env
 
 
 _BINARIES = {
-    "zeta-app-server": ("zeta-app-server", "--server-bin"),
-    "zeta-app-server-daemon": ("zeta-app-server-daemon", "--app-server-daemon-bin"),
-    "zeta-code-mode-host": ("zeta-code-mode-host", "--code-mode-host-bin"),
-    "zeta-remote": ("zeta-remote-connections", "--remote-bin"),
-    "zeta-remote-server": ("zeta-remote-server", "--remote-server-bin"),
-    "zeta-windows-sandbox": ("zeta-windows-sandbox", "--windows-sandbox-bin"),
+    "ash-app-server": ("ash-app-server", "--server-bin"),
+    "ash-app-server-daemon": ("ash-app-server-daemon", "--app-server-daemon-bin"),
+    "ash-code-mode-host": ("ash-code-mode-host", "--code-mode-host-bin"),
+    "ash-remote": ("ash-remote-connections", "--remote-bin"),
+    "ash-remote-server": ("ash-remote-server", "--remote-server-bin"),
+    "ash-windows-sandbox": ("ash-windows-sandbox", "--windows-sandbox-bin"),
 }
 
 
@@ -39,7 +39,7 @@ def build_binaries(
     cargo: str,
     cargo_profile: str,
 ) -> Dict[str, Path]:
-    if "zeta-windows-sandbox" in inputs and not spec.is_windows:
+    if "ash-windows-sandbox" in inputs and not spec.is_windows:
         raise RuntimeError("Windows sandbox executable requires a Windows target")
     outputs = {
         name: validate_input_binary(path, name, _BINARIES[name][1], spec.is_windows)
@@ -70,7 +70,7 @@ def build_binaries(
         command,
         cwd=repository_root,
         env=cargo_environment(spec)
-        if any(name != "zeta-windows-sandbox" for name in missing)
+        if any(name != "ash-windows-sandbox" for name in missing)
         else None,
         stdout=subprocess.PIPE,
         text=True,
@@ -123,10 +123,10 @@ def resolve_windows_sandbox_binary(
     return build_binaries(
         repository_root,
         spec,
-        {"zeta-windows-sandbox": explicit_binary},
+        {"ash-windows-sandbox": explicit_binary},
         cargo=cargo,
         cargo_profile=cargo_profile,
-    )["zeta-windows-sandbox"]
+    )["ash-windows-sandbox"]
 
 
 def is_executable(path: Path) -> bool:

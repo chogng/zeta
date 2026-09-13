@@ -1,6 +1,6 @@
 # 用户主题 JSON 模板
 
-> 本文是 Desktop 与 Rust 桌面端可安装用户主题的 canonical 说明。可以直接复制并修改 [`color-theme.template.json`](../resources/design-tokens/color-theme.template.json)；架构与可靠性边界见 [`design-tokens.md`](design-tokens.md)，可用 token 见[生成目录](../resources/design-tokens/design-tokens.md)，格式 Schema 见 [`color-theme.schema.json`](../resources/design-tokens/color-theme.schema.json)。Zeta Code TUI 使用自己的主题格式，见 [`zeta-code/tui/README.md`](../zeta-code/tui/README.md)。
+> 本文是 Desktop 与 Rust 桌面端可安装用户主题的 canonical 说明。可以直接复制并修改 [`color-theme.template.json`](../resources/design-tokens/color-theme.template.json)；架构与可靠性边界见 [`design-tokens.md`](design-tokens.md)，可用 token 见[生成目录](../resources/design-tokens/design-tokens.md)，格式 Schema 见 [`color-theme.schema.json`](../resources/design-tokens/color-theme.schema.json)。Ash Code TUI 使用自己的主题格式，见 [`ash-code/tui/README.md`](../ash-code/tui/README.md)。
 
 ## 快速理解
 
@@ -24,16 +24,16 @@
 - 有效 JSON 会即时预览；取消或关闭 Settings 会恢复编辑前的主题。
 - 内置 Light/Dark 只能使用“Save As”创建新主题，不会被覆盖。
 - 用户主题可以直接“Save”，也可以修改 `id` 和 `label` 后“Save As”。
-- 用户主题可以在 JSON 编辑器中“Delete”；确认后删除文件并按原主题明暗类型切回 Zeta Light 或 Zeta Dark。
+- 用户主题可以在 JSON 编辑器中“Delete”；确认后删除文件并按原主题明暗类型切回 Ash Light 或 Ash Dark。
 - 保存成功后 JSON 会立即注册、切换并写入用户主题目录，不需要重启。
 
 ## 文件安装与卸载
 
-Zeta 宿主读取 profile root 的 `themes` 目录中的常规 `*.json` 文件。默认 profile root 在 macOS 为 `/Users/<user>/.zeta`，Linux 为 `/home/<user>/.zeta`，Windows 为 `C:\Users\<user>\.zeta`。`ZETA_HOME` 可整体覆盖 profile；测试主题加载器时还可用优先级更高的 `ZETA_DEVICE_ROOT` 仅覆盖 device resource root。Desktop 中的实际绝对路径会显示在 Settings → Appearance 底部。
+Ash 宿主读取 profile root 的 `themes` 目录中的常规 `*.json` 文件。默认 profile root 在 macOS 为 `/Users/<user>/.ash`，Linux 为 `/home/<user>/.ash`，Windows 为 `C:\Users\<user>\.ash`。`ASH_HOME` 可整体覆盖 profile；测试主题加载器时还可用优先级更高的 `ASH_DEVICE_ROOT` 仅覆盖 device resource root。Desktop 中的实际绝对路径会显示在 Settings → Appearance 底部。
 
-- 外部安装：把 [`color-theme.template.json`](../resources/design-tokens/color-theme.template.json) 复制到该目录，修改 `id`、`label` 和颜色后保存，完全重启 Zeta。
-- 外部更新：替换同名文件，完全重启 Zeta。
-- 卸载：删除对应文件，完全重启 Zeta。
+- 外部安装：把 [`color-theme.template.json`](../resources/design-tokens/color-theme.template.json) 复制到该目录，修改 `id`、`label` 和颜色后保存，完全重启 Ash。
+- 外部更新：替换同名文件，完全重启 Ash。
+- 卸载：删除对应文件，完全重启 Ash。
 - 恢复：如果已选择的主题不存在或加载失败，配置验证会回退到 System，内置 Light/Dark 始终可用。
 
 每个文件独立加载。一个损坏主题不会阻止其他主题或 App 启动；错误文件和原因会显示在 Appearance 页面。目录只读取非递归的常规 JSON 文件，最多 128 个，每个最大 1 MiB，不跟随目录或符号链接。
@@ -44,10 +44,10 @@ Zeta 宿主读取 profile root 的 `themes` 目录中的常规 `*.json` 文件�
 
 ```json
 {
-  "$schema": "https://zeta.dev/schemas/color-theme.schema.json",
+  "$schema": "https://ash.dev/schemas/color-theme.schema.json",
   "version": 1,
-  "id": "zeta-aurora",
-  "label": "Zeta Aurora",
+  "id": "ash-aurora",
+  "label": "Ash Aurora",
   "colorScheme": "dark",
   "colors": {
     "workbench.background": "#0b1020",
@@ -160,7 +160,7 @@ Rust GUI 的选择值保存在 profile `config.toml` 根级 `[gui]`，并可同�
 
 ```toml
 [gui]
-theme = "zeta-aurora"
+theme = "ash-aurora"
 interfaceFontFamily = "sans-serif"
 interfaceFontSize = 13
 editorFontFamily = "monospace"
@@ -174,16 +174,16 @@ Desktop 的选择值保存在 profile `configuration.json`；图形界面主题�
 {
   "version": 1,
   "values": {
-    "workbench.colorTheme": "zeta-aurora"
+    "workbench.colorTheme": "ash-aurora"
   }
 }
 ```
 
-各字段都可省略。`system` 表示跟随操作系统并在内置 Light/Dark 之间切换；界面字体默认使用 `sans-serif` 13px，编辑器默认使用 `monospace` 13px / 20px。Rust GUI 收到新的 Config generation 后即时应用主题选择、界面字体与编辑器字体；Desktop 保存和预览也会即时更新。外部修改主题文件后，Rust GUI 仍需重启才能重新读取文件内容。Zeta Code TUI 使用独立主题格式，选择值写入 `config.toml` 的 `[tui].theme`，不消费本模板描述的图形界面主题。
+各字段都可省略。`system` 表示跟随操作系统并在内置 Light/Dark 之间切换；界面字体默认使用 `sans-serif` 13px，编辑器默认使用 `monospace` 13px / 20px。Rust GUI 收到新的 Config generation 后即时应用主题选择、界面字体与编辑器字体；Desktop 保存和预览也会即时更新。外部修改主题文件后，Rust GUI 仍需重启才能重新读取文件内容。Ash Code TUI 使用独立主题格式，选择值写入 `config.toml` 的 `[tui].theme`，不消费本模板描述的图形界面主题。
 
 ## 开发与验证
 
-修改 Loader、Schema 或 token 后，在 `zeta-ts` 目录运行：
+修改 Loader、Schema 或 token 后，在 `ash-ts` 目录运行：
 
 ```text
 pnpm tokens:generate

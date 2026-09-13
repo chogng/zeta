@@ -1,0 +1,13 @@
+load("//:defs.bzl", "ash_rust_binary", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "file-search",
+    crate_name = "ash_file_search",
+)
+
+ash_rust_binary(
+    name = "ash-file-search",
+    crate_name = "ash_file_search_cli",
+    crate_root = "src/main.rs",
+    deps = [":file-search"],
+)

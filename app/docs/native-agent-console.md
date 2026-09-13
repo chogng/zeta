@@ -1,6 +1,6 @@
 # `app`：Agent 开发能力与人类观测
 
-> 状态：Current product direction。本文中的 Agent 只表示 Zeta。本文定义 Zeta Agent 的产品原则、能力选择、机器反馈、人类观测和工作区闭环，是这些产品决策的 canonical owner。主窗口 Tab/Pane 布局见 [`LAYOUT.md`](../LAYOUT.md)；当前源码接线见 [`app` README](../README.md)；外部 AI CLI 与终端边界见 [`TERMINAL.md`](../TERMINAL.md)；Session、Thread、Turn 与 ThreadItem 的权威语义见 [`protocol.md`](../../docs/protocol.md)。
+> 状态：Current product direction。本文中的 Agent 只表示 Ash。本文定义 Ash Agent 的产品原则、能力选择、机器反馈、人类观测和工作区闭环，是这些产品决策的 canonical owner。主窗口 Tab/Pane 布局见 [`LAYOUT.md`](../LAYOUT.md)；当前源码接线见 [`app` README](../README.md)；外部 AI CLI 与终端边界见 [`TERMINAL.md`](../TERMINAL.md)；Session、Thread、Turn 与 ThreadItem 的权威语义见 [`protocol.md`](../../docs/protocol.md)。
 
 ## 快速理解
 
@@ -106,7 +106,7 @@ Workspace
 
 ## 当前产品结构
 
-当前产品仍以 Zeta ThreadTimeline 为中央区域，普通用户消息、Zeta 消息、ToolCall 和用户直接发起的 Shell Turn 进入同一 durable Thread；Terminal、Files 和 Changes 仍通过独立区域接入。目标布局把 `Agent`、`Terminal`、`Files`、`Changes` 和 `Settings` 统一为当前 PanePart 中的视图输入；外部 AI CLI 只进入 Terminal Pane，不进入 Zeta Thread。具体结构与当前差距由 [`LAYOUT.md`](../LAYOUT.md) 拥有。
+当前产品仍以 Ash ThreadTimeline 为中央区域，普通用户消息、Ash 消息、ToolCall 和用户直接发起的 Shell Turn 进入同一 durable Thread；Terminal、Files 和 Changes 仍通过独立区域接入。目标布局把 `Agent`、`Terminal`、`Files`、`Changes` 和 `Settings` 统一为当前 PanePart 中的视图输入；外部 AI CLI 只进入 Terminal Pane，不进入 Ash Thread。具体结构与当前差距由 [`LAYOUT.md`](../LAYOUT.md) 拥有。
 
 ```text
 AgentWorkspace
@@ -115,7 +115,7 @@ AgentWorkspace
 │  ├─ AgentMessage
 │  ├─ CommandCard
 │  └─ Plan
-├─ zeta-session::SessionPaneState / Composer
+├─ ash-session::SessionPaneState / Composer
 │  ├─ Interaction Pane
 │  ├─ Compact CodeEditor
 │  ├─ Context Toolbar
@@ -126,7 +126,7 @@ AgentWorkspace
 └─ Terminal Surface
 ```
 
-Terminal 不拥有 Zeta Session、Thread 或 transcript。Zeta 发起的普通非交互式 shell execution 仍作为 typed ToolCall/ToolResult 或 direct Shell Turn 进入 Zeta Thread；外部 AI CLI 与其他交互式程序进入独立 Terminal Pane，其输入和输出只属于绑定的外部进程。Terminal 不从屏幕文字推断 Zeta ToolCall、Approval 或任务完成状态。
+Terminal 不拥有 Ash Session、Thread 或 transcript。Ash 发起的普通非交互式 shell execution 仍作为 typed ToolCall/ToolResult 或 direct Shell Turn 进入 Ash Thread；外部 AI CLI 与其他交互式程序进入独立 Terminal Pane，其输入和输出只属于绑定的外部进程。Terminal 不从屏幕文字推断 Ash ToolCall、Approval 或任务完成状态。
 
 ## 当前能力与计划方向
 
@@ -138,7 +138,7 @@ Terminal 不拥有 Zeta Session、Thread 或 transcript。Zeta 发起的普通�
 | Git | App Server 已有 repository、status、diff 和 branch typed contract；Agent 目前主要通过受控 Shell 使用 Git | 计划提供 baseline、diff、history、blame、restore 和 Agent-made change attribution | Files Changed、Diff、Untracked、Accept 和 Revert；不复制 GitKraken |
 | 语法与 AST | Editor 已消费 syntax projection；Agent 没有通用 typed AST query | 计划只暴露能提高定位、结构化修改和验证的查询 | 通常不单独呈现；最终关键发现可进入结果摘要 |
 | 构建与测试 | Agent 可通过 shell-command 执行；结果当前主要是 Tool output | 计划增加 test discovery、structured result、diagnostic binding 和 retry scope | Passed/Failed、失败位置、耗时和原始输出展开 |
-| Terminal 与 PTY | Local/Remote Terminal、direct Shell Turn 和交互式 Terminal Surface 已接入 | Zeta 继续使用结构化执行能力；外部 AI CLI 通过独立 adapter 启动 | Zeta CommandCard 与外部 CLI Terminal 分开显示 |
+| Terminal 与 PTY | Local/Remote Terminal、direct Shell Turn 和交互式 Terminal Surface 已接入 | Ash 继续使用结构化执行能力；外部 AI CLI 通过独立 adapter 启动 | Ash CommandCard 与外部 CLI Terminal 分开显示 |
 | Remote | Remote Workspace、Agent、Language、Terminal 和 Tunnel 基础路径已接入 | 保持能力在远端 Workspace authority 内执行 | 连接状态、失败、重试和执行位置 |
 
 上表中的“计划”是 Proposed，不表示对应 Agent tool 或人类 Surface 已经存在。实现时先扩展 canonical capability 和结构化结果，再选择是否需要持久证据与用户 Surface；不得先画完整面板再反推底层 contract。
@@ -148,20 +148,20 @@ Terminal 不拥有 Zeta Session、Thread 或 transcript。Zeta 发起的普通�
 | 状态或能力 | Owner | `app` 义务 |
 | --- | --- | --- |
 | Session、Thread、Turn 与 durable ThreadItem | Core / App Server | 订阅 snapshot/update，不复制 reducer |
-| 文件、Git、LSP、搜索、PTY 与 Remote authority | 对应 `zeta-rs` domain / App Server | 复用 typed contract，不从 UI 或 terminal output 反推状态 |
+| 文件、Git、LSP、搜索、PTY 与 Remote authority | 对应 `ash-rs` domain / App Server | 复用 typed contract，不从 UI 或 terminal output 反推状态 |
 | Agent capability selection 与 Tool execution | Core Tool registry / scheduler | 投影动作、结果、批准和失败，不在 Native 建第二套 Agent runtime |
 | transient Agent/Tool delta | App Server update stream | 检测 stream cursor gap；gap 后重新订阅 |
 | 任务证据的权威事实 | Core / App Server Thread facts + Workspace domain revision | 保留动作、修改、验证、风险和恢复所需的 identity，不保存平行工作区状态 |
 | 结果摘要 | Proposed Native Thread projection | 从权威事实重建，默认呈现结果并按需展开过程 |
 | Timeline scroll、展开、选择和布局 | Native presentation | 可丢弃、可从 snapshot 重建 |
-| Composer text、routing、IME 与 caret | `zeta-session::SessionPaneState` + `zeta-editor::CodeEditorDocument` | 输入变化时重新分类；提交时产生确定的 Agent 或 Shell operation |
+| Composer text、routing、IME 与 caret | `ash-session::SessionPaneState` + `ash-editor::CodeEditorDocument` | 输入变化时重新分类；提交时产生确定的 Agent 或 Shell operation |
 | Files、Changes 与 Terminal Pane | 对应 domain presentation owner | 让用户检查和接管 canonical state；Editor 和 Diff 作为视图内部内容组合 |
 | Approval、Stop 与 Retry | Core authority + Native command adapter | 明确作用范围、失败语义和恢复边界 |
 | Accept 与 Revert | Proposed domain authority + Native command adapter | 绑定明确的 Change Set 或 Checkpoint identity，不按当前屏幕内容猜测目标 |
 
 ## Composer 与执行语义
 
-同一 Composer 最终只产生两种明确提交：Agent message 或 Shell command。`zeta-input-classifier` 在输入变化时使用当前路由、历史、Shell evidence 和本地模型重新分类，不提供手动路由覆盖。Slash command 始终进入 Agent 路径。分类只选择提交类型，不授权执行，也不替代 policy、approval 或 sandbox。
+同一 Composer 最终只产生两种明确提交：Agent message 或 Shell command。`ash-input-classifier` 在输入变化时使用当前路由、历史、Shell evidence 和本地模型重新分类，不提供手动路由覆盖。Slash command 始终进入 Agent 路径。分类只选择提交类型，不授权执行，也不替代 policy、approval 或 sandbox。
 
 Agent message 通过 `session/request::StartTurn` 提交。Shell command 通过 `StartShellTurn` 提交，不调用模型；Core 原子记录 Turn acceptance、精确 shell-command ToolCall 与 Turn start，随后复用 Tool scheduler 的 policy、Workspace sandbox、one-time approval、unknown-outcome recovery 和 durable ToolResult。结束后 Agent 可以从 Thread context 看见这些事实。
 

@@ -4,7 +4,7 @@
     {
       "id": "foreground",
       "kind": "color",
-      "cssVariable": "--zeta-foreground",
+      "cssVariable": "--ash-foreground",
       "owner": "platform.theme",
       "description": "Default foreground color.",
       "needsTransparency": false,
@@ -24,7 +24,7 @@
     {
       "id": "description.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-description-foreground",
+      "cssVariable": "--ash-description-foreground",
       "owner": "platform.theme",
       "description": "Foreground for descriptive text.",
       "needsTransparency": false,
@@ -44,7 +44,7 @@
     {
       "id": "muted.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-muted-foreground",
+      "cssVariable": "--ash-muted-foreground",
       "owner": "platform.theme",
       "description": "Foreground for de-emphasized text.",
       "needsTransparency": false,
@@ -64,7 +64,7 @@
     {
       "id": "accent.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-accent-foreground",
+      "cssVariable": "--ash-accent-foreground",
       "owner": "platform.theme",
       "description": "Foreground for links and accent content.",
       "needsTransparency": false,
@@ -84,7 +84,7 @@
     {
       "id": "accent.background",
       "kind": "color",
-      "cssVariable": "--zeta-accent-background",
+      "cssVariable": "--ash-accent-background",
       "owner": "platform.theme",
       "description": "Background for accented controls and indicators.",
       "needsTransparency": false,
@@ -104,7 +104,7 @@
     {
       "id": "error.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-error-foreground",
+      "cssVariable": "--ash-error-foreground",
       "owner": "platform.theme",
       "description": "Foreground for errors.",
       "needsTransparency": false,
@@ -124,7 +124,7 @@
     {
       "id": "warning.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-warning-foreground",
+      "cssVariable": "--ash-warning-foreground",
       "owner": "platform.theme",
       "description": "Foreground for warnings.",
       "needsTransparency": false,
@@ -144,7 +144,7 @@
     {
       "id": "success.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-success-foreground",
+      "cssVariable": "--ash-success-foreground",
       "owner": "platform.theme",
       "description": "Foreground for successful states.",
       "needsTransparency": false,
@@ -164,7 +164,7 @@
     {
       "id": "focusBorder",
       "kind": "color",
-      "cssVariable": "--zeta-focus-border",
+      "cssVariable": "--ash-focus-border",
       "owner": "platform.theme",
       "description": "Border for focused controls.",
       "needsTransparency": false,
@@ -184,7 +184,7 @@
     {
       "id": "border",
       "kind": "color",
-      "cssVariable": "--zeta-border",
+      "cssVariable": "--ash-border",
       "owner": "platform.theme",
       "description": "Default separator border.",
       "needsTransparency": false,
@@ -204,7 +204,7 @@
     {
       "id": "widget.border",
       "kind": "color",
-      "cssVariable": "--zeta-widget-border",
+      "cssVariable": "--ash-widget-border",
       "owner": "platform.theme",
       "description": "Border around floating widgets.",
       "needsTransparency": false,
@@ -224,7 +224,7 @@
     {
       "id": "widget.shadow",
       "kind": "color",
-      "cssVariable": "--zeta-widget-shadow",
+      "cssVariable": "--ash-widget-shadow",
       "owner": "platform.theme",
       "description": "Shadow around floating widgets.",
       "needsTransparency": false,
@@ -244,7 +244,7 @@
     {
       "id": "chat.tabBackground",
       "kind": "color",
-      "cssVariable": "--zeta-chat-tab-background",
+      "cssVariable": "--ash-chat-tab-background",
       "owner": "chat.presentation",
       "description": "Background for inactive Chat session tabs.",
       "needsTransparency": false,
@@ -264,7 +264,7 @@
     {
       "id": "collaboration.selection0Background",
       "kind": "color",
-      "cssVariable": "--zeta-collaboration-selection0-background",
+      "cssVariable": "--ash-collaboration-selection0-background",
       "owner": "collaboration.presentation",
       "description": "Background tint for the first concurrent collaborator selection.",
       "needsTransparency": false,
@@ -284,7 +284,7 @@
     {
       "id": "collaboration.selection1Background",
       "kind": "color",
-      "cssVariable": "--zeta-collaboration-selection1-background",
+      "cssVariable": "--ash-collaboration-selection1-background",
       "owner": "collaboration.presentation",
       "description": "Background tint for the second concurrent collaborator selection.",
       "needsTransparency": false,
@@ -304,7 +304,7 @@
     {
       "id": "collaboration.selection2Background",
       "kind": "color",
-      "cssVariable": "--zeta-collaboration-selection2-background",
+      "cssVariable": "--ash-collaboration-selection2-background",
       "owner": "collaboration.presentation",
       "description": "Background tint for the third concurrent collaborator selection.",
       "needsTransparency": false,
@@ -324,7 +324,7 @@
     {
       "id": "collaboration.selection3Background",
       "kind": "color",
-      "cssVariable": "--zeta-collaboration-selection3-background",
+      "cssVariable": "--ash-collaboration-selection3-background",
       "owner": "collaboration.presentation",
       "description": "Background tint for the fourth concurrent collaborator selection.",
       "needsTransparency": false,
@@ -344,7 +344,7 @@
     {
       "id": "input.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-input-foreground",
+      "cssVariable": "--ash-input-foreground",
       "owner": "platform.theme.components",
       "description": "Input text foreground.",
       "needsTransparency": false,
@@ -364,7 +364,7 @@
     {
       "id": "input.background",
       "kind": "color",
-      "cssVariable": "--zeta-input-background",
+      "cssVariable": "--ash-input-background",
       "owner": "platform.theme.components",
       "description": "Input background.",
       "needsTransparency": false,
@@ -384,7 +384,7 @@
     {
       "id": "input.border",
       "kind": "color",
-      "cssVariable": "--zeta-input-border",
+      "cssVariable": "--ash-input-border",
       "owner": "platform.theme.components",
       "description": "Input border.",
       "needsTransparency": false,
@@ -404,7 +404,7 @@
     {
       "id": "input.placeholderForeground",
       "kind": "color",
-      "cssVariable": "--zeta-input-placeholder-foreground",
+      "cssVariable": "--ash-input-placeholder-foreground",
       "owner": "platform.theme.components",
       "description": "Input placeholder foreground.",
       "needsTransparency": false,
@@ -424,7 +424,7 @@
     {
       "id": "selection.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-selection-foreground",
+      "cssVariable": "--ash-selection-foreground",
       "owner": "platform.theme.components",
       "description": "Selected text foreground.",
       "needsTransparency": false,
@@ -444,7 +444,7 @@
     {
       "id": "selection.background",
       "kind": "color",
-      "cssVariable": "--zeta-selection-background",
+      "cssVariable": "--ash-selection-background",
       "owner": "platform.theme.components",
       "description": "Selected text background.",
       "needsTransparency": false,
@@ -464,7 +464,7 @@
     {
       "id": "hover.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-hover-foreground",
+      "cssVariable": "--ash-hover-foreground",
       "owner": "platform.theme.components",
       "description": "Foreground for managed Hovers.",
       "needsTransparency": false,
@@ -484,7 +484,7 @@
     {
       "id": "hover.background",
       "kind": "color",
-      "cssVariable": "--zeta-hover-background",
+      "cssVariable": "--ash-hover-background",
       "owner": "platform.theme.components",
       "description": "Background for managed Hovers.",
       "needsTransparency": false,
@@ -504,7 +504,7 @@
     {
       "id": "hover.border",
       "kind": "color",
-      "cssVariable": "--zeta-hover-border",
+      "cssVariable": "--ash-hover-border",
       "owner": "platform.theme.components",
       "description": "Border around managed Hovers.",
       "needsTransparency": false,
@@ -524,7 +524,7 @@
     {
       "id": "hover.shadow",
       "kind": "color",
-      "cssVariable": "--zeta-hover-shadow",
+      "cssVariable": "--ash-hover-shadow",
       "owner": "platform.theme.components",
       "description": "Shadow around managed Hovers.",
       "needsTransparency": false,
@@ -544,7 +544,7 @@
     {
       "id": "list.hoverBackground",
       "kind": "color",
-      "cssVariable": "--zeta-list-hover-background",
+      "cssVariable": "--ash-list-hover-background",
       "owner": "platform.theme.components",
       "description": "Hovered list row background.",
       "needsTransparency": false,
@@ -564,7 +564,7 @@
     {
       "id": "list.activeSelectionForeground",
       "kind": "color",
-      "cssVariable": "--zeta-list-active-selection-foreground",
+      "cssVariable": "--ash-list-active-selection-foreground",
       "owner": "platform.theme.components",
       "description": "Active list selection foreground.",
       "needsTransparency": false,
@@ -584,7 +584,7 @@
     {
       "id": "list.activeSelectionBackground",
       "kind": "color",
-      "cssVariable": "--zeta-list-active-selection-background",
+      "cssVariable": "--ash-list-active-selection-background",
       "owner": "platform.theme.components",
       "description": "Active list selection background.",
       "needsTransparency": false,
@@ -604,7 +604,7 @@
     {
       "id": "tree.indentGuidesStroke",
       "kind": "color",
-      "cssVariable": "--zeta-tree-indent-guides-stroke",
+      "cssVariable": "--ash-tree-indent-guides-stroke",
       "owner": "platform.theme.components",
       "description": "Tree indentation guide stroke.",
       "needsTransparency": false,
@@ -624,7 +624,7 @@
     {
       "id": "menu.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-menu-foreground",
+      "cssVariable": "--ash-menu-foreground",
       "owner": "platform.theme.components",
       "description": "Command menu item foreground.",
       "needsTransparency": false,
@@ -644,7 +644,7 @@
     {
       "id": "menu.selectionForeground",
       "kind": "color",
-      "cssVariable": "--zeta-menu-selection-foreground",
+      "cssVariable": "--ash-menu-selection-foreground",
       "owner": "platform.theme.components",
       "description": "Selected menu item foreground.",
       "needsTransparency": false,
@@ -664,7 +664,7 @@
     {
       "id": "menu.selectionBackground",
       "kind": "color",
-      "cssVariable": "--zeta-menu-selection-background",
+      "cssVariable": "--ash-menu-selection-background",
       "owner": "platform.theme.components",
       "description": "Selected menu item background.",
       "needsTransparency": false,
@@ -684,7 +684,7 @@
     {
       "id": "menu.background",
       "kind": "color",
-      "cssVariable": "--zeta-menu-background",
+      "cssVariable": "--ash-menu-background",
       "owner": "platform.theme.components",
       "description": "Command menu background.",
       "needsTransparency": false,
@@ -704,7 +704,7 @@
     {
       "id": "menu.hoverBackground",
       "kind": "color",
-      "cssVariable": "--zeta-menu-hover-background",
+      "cssVariable": "--ash-menu-hover-background",
       "owner": "platform.theme.components",
       "description": "Hovered command menu item background.",
       "needsTransparency": false,
@@ -724,7 +724,7 @@
     {
       "id": "button.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-button-foreground",
+      "cssVariable": "--ash-button-foreground",
       "owner": "platform.theme.components",
       "description": "Default button foreground.",
       "needsTransparency": false,
@@ -744,7 +744,7 @@
     {
       "id": "button.border",
       "kind": "color",
-      "cssVariable": "--zeta-button-border",
+      "cssVariable": "--ash-button-border",
       "owner": "platform.theme.components",
       "description": "Border around buttons that request an explicit outline.",
       "needsTransparency": false,
@@ -764,7 +764,7 @@
     {
       "id": "button.background",
       "kind": "color",
-      "cssVariable": "--zeta-button-background",
+      "cssVariable": "--ash-button-background",
       "owner": "platform.theme.components",
       "description": "Default button background.",
       "needsTransparency": false,
@@ -784,7 +784,7 @@
     {
       "id": "button.hoverBackground",
       "kind": "color",
-      "cssVariable": "--zeta-button-hover-background",
+      "cssVariable": "--ash-button-hover-background",
       "owner": "platform.theme.components",
       "description": "Hovered button background.",
       "needsTransparency": false,
@@ -804,7 +804,7 @@
     {
       "id": "button.activeBackground",
       "kind": "color",
-      "cssVariable": "--zeta-button-active-background",
+      "cssVariable": "--ash-button-active-background",
       "owner": "platform.theme.components",
       "description": "Pressed button background.",
       "needsTransparency": false,
@@ -824,7 +824,7 @@
     {
       "id": "actionBar.background",
       "kind": "color",
-      "cssVariable": "--zeta-action-bar-background",
+      "cssVariable": "--ash-action-bar-background",
       "owner": "platform.theme.components",
       "description": "Background behind an inline ActionBar.",
       "needsTransparency": false,
@@ -844,7 +844,7 @@
     {
       "id": "actionBar.toggledBackground",
       "kind": "color",
-      "cssVariable": "--zeta-action-bar-toggled-background",
+      "cssVariable": "--ash-action-bar-toggled-background",
       "owner": "platform.theme.components",
       "description": "Background for a checked ActionBar item.",
       "needsTransparency": false,
@@ -864,7 +864,7 @@
     {
       "id": "tabList.hoverBackground",
       "kind": "color",
-      "cssVariable": "--zeta-tab-list-hover-background",
+      "cssVariable": "--ash-tab-list-hover-background",
       "owner": "platform.theme.components",
       "description": "Background for a hovered TabList tab.",
       "needsTransparency": false,
@@ -884,7 +884,7 @@
     {
       "id": "tabList.activeBackground",
       "kind": "color",
-      "cssVariable": "--zeta-tab-list-active-background",
+      "cssVariable": "--ash-tab-list-active-background",
       "owner": "platform.theme.components",
       "description": "Background for a selected TabList tab.",
       "needsTransparency": false,
@@ -904,7 +904,7 @@
     {
       "id": "button.secondaryBackground",
       "kind": "color",
-      "cssVariable": "--zeta-button-secondary-background",
+      "cssVariable": "--ash-button-secondary-background",
       "owner": "platform.theme.components",
       "description": "Secondary button background.",
       "needsTransparency": false,
@@ -924,7 +924,7 @@
     {
       "id": "button.primaryForeground",
       "kind": "color",
-      "cssVariable": "--zeta-button-primary-foreground",
+      "cssVariable": "--ash-button-primary-foreground",
       "owner": "platform.theme.components",
       "description": "Primary button foreground.",
       "needsTransparency": false,
@@ -944,7 +944,7 @@
     {
       "id": "button.primaryBackground",
       "kind": "color",
-      "cssVariable": "--zeta-button-primary-background",
+      "cssVariable": "--ash-button-primary-background",
       "owner": "platform.theme.components",
       "description": "Primary button background.",
       "needsTransparency": false,
@@ -964,7 +964,7 @@
     {
       "id": "button.primaryHoverBackground",
       "kind": "color",
-      "cssVariable": "--zeta-button-primary-hover-background",
+      "cssVariable": "--ash-button-primary-hover-background",
       "owner": "platform.theme.components",
       "description": "Hovered primary button background.",
       "needsTransparency": false,
@@ -984,7 +984,7 @@
     {
       "id": "toolbar.hoverBackground",
       "kind": "color",
-      "cssVariable": "--zeta-toolbar-hover-background",
+      "cssVariable": "--ash-toolbar-hover-background",
       "owner": "platform.theme.components",
       "description": "Hovered toolbar item background.",
       "needsTransparency": false,
@@ -1004,7 +1004,7 @@
     {
       "id": "keybindingLabel.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-keybinding-label-foreground",
+      "cssVariable": "--ash-keybinding-label-foreground",
       "owner": "platform.theme.components",
       "description": "Keybinding label foreground.",
       "needsTransparency": false,
@@ -1024,7 +1024,7 @@
     {
       "id": "keybindingLabel.background",
       "kind": "color",
-      "cssVariable": "--zeta-keybinding-label-background",
+      "cssVariable": "--ash-keybinding-label-background",
       "owner": "platform.theme.components",
       "description": "Keybinding label background.",
       "needsTransparency": false,
@@ -1044,7 +1044,7 @@
     {
       "id": "keybindingLabel.border",
       "kind": "color",
-      "cssVariable": "--zeta-keybinding-label-border",
+      "cssVariable": "--ash-keybinding-label-border",
       "owner": "platform.theme.components",
       "description": "Keybinding label border.",
       "needsTransparency": false,
@@ -1064,7 +1064,7 @@
     {
       "id": "keybindingLabel.bottomBorder",
       "kind": "color",
-      "cssVariable": "--zeta-keybinding-label-bottom-border",
+      "cssVariable": "--ash-keybinding-label-bottom-border",
       "owner": "platform.theme.components",
       "description": "Keybinding label bottom border.",
       "needsTransparency": false,
@@ -1084,7 +1084,7 @@
     {
       "id": "scrollbar.shadow",
       "kind": "color",
-      "cssVariable": "--zeta-scrollbar-shadow",
+      "cssVariable": "--ash-scrollbar-shadow",
       "owner": "platform.theme.components",
       "description": "Scrollbar shadow indicating that the editor is scrolled.",
       "needsTransparency": false,
@@ -1104,7 +1104,7 @@
     {
       "id": "scrollbar.sliderBackground",
       "kind": "color",
-      "cssVariable": "--zeta-scrollbar-slider-background",
+      "cssVariable": "--ash-scrollbar-slider-background",
       "owner": "platform.theme.components",
       "description": "Scrollbar slider background.",
       "needsTransparency": false,
@@ -1124,7 +1124,7 @@
     {
       "id": "scrollbar.sliderHoverBackground",
       "kind": "color",
-      "cssVariable": "--zeta-scrollbar-slider-hover-background",
+      "cssVariable": "--ash-scrollbar-slider-hover-background",
       "owner": "platform.theme.components",
       "description": "Hovered scrollbar slider background.",
       "needsTransparency": false,
@@ -1144,7 +1144,7 @@
     {
       "id": "scrollbar.sliderActiveBackground",
       "kind": "color",
-      "cssVariable": "--zeta-scrollbar-slider-active-background",
+      "cssVariable": "--ash-scrollbar-slider-active-background",
       "owner": "platform.theme.components",
       "description": "Active scrollbar slider background.",
       "needsTransparency": false,
@@ -1164,7 +1164,7 @@
     {
       "id": "dialog.background",
       "kind": "color",
-      "cssVariable": "--zeta-dialog-background",
+      "cssVariable": "--ash-dialog-background",
       "owner": "platform.theme.components",
       "description": "Dialog background.",
       "needsTransparency": false,
@@ -1184,7 +1184,7 @@
     {
       "id": "dialog.border",
       "kind": "color",
-      "cssVariable": "--zeta-dialog-border",
+      "cssVariable": "--ash-dialog-border",
       "owner": "platform.theme.components",
       "description": "Dialog border.",
       "needsTransparency": false,
@@ -1204,7 +1204,7 @@
     {
       "id": "dialog.backdropBackground",
       "kind": "color",
-      "cssVariable": "--zeta-dialog-backdrop-background",
+      "cssVariable": "--ash-dialog-backdrop-background",
       "owner": "platform.theme.components",
       "description": "Backdrop behind modal dialogs.",
       "needsTransparency": false,
@@ -1224,7 +1224,7 @@
     {
       "id": "dialog.shadow",
       "kind": "color",
-      "cssVariable": "--zeta-dialog-shadow",
+      "cssVariable": "--ash-dialog-shadow",
       "owner": "platform.theme.components",
       "description": "Shadow around modal dialogs.",
       "needsTransparency": false,
@@ -1244,7 +1244,7 @@
     {
       "id": "quickInput.background",
       "kind": "color",
-      "cssVariable": "--zeta-quick-input-background",
+      "cssVariable": "--ash-quick-input-background",
       "owner": "platform.theme.components",
       "description": "Quick input background.",
       "needsTransparency": false,
@@ -1264,7 +1264,7 @@
     {
       "id": "quickInput.backdropBackground",
       "kind": "color",
-      "cssVariable": "--zeta-quick-input-backdrop-background",
+      "cssVariable": "--ash-quick-input-backdrop-background",
       "owner": "platform.theme.components",
       "description": "Backdrop behind quick input.",
       "needsTransparency": false,
@@ -1284,7 +1284,7 @@
     {
       "id": "textLink.activeForeground",
       "kind": "color",
-      "cssVariable": "--zeta-text-link-active-foreground",
+      "cssVariable": "--ash-text-link-active-foreground",
       "owner": "platform.theme.components",
       "description": "Foreground for active links and link-like editor actions.",
       "needsTransparency": false,
@@ -1304,7 +1304,7 @@
     {
       "id": "text.codeBlockBackground",
       "kind": "color",
-      "cssVariable": "--zeta-text-code-block-background",
+      "cssVariable": "--ash-text-code-block-background",
       "owner": "platform.theme.components",
       "description": "Inline and block code background.",
       "needsTransparency": false,
@@ -1324,7 +1324,7 @@
     {
       "id": "search.matchBackground",
       "kind": "color",
-      "cssVariable": "--zeta-search-match-background",
+      "cssVariable": "--ash-search-match-background",
       "owner": "platform.theme.components",
       "description": "Highlighted search match background.",
       "needsTransparency": false,
@@ -1344,7 +1344,7 @@
     {
       "id": "sectionHeader.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-section-header-foreground",
+      "cssVariable": "--ash-section-header-foreground",
       "owner": "workbench.shell",
       "description": "Section header foreground.",
       "needsTransparency": false,
@@ -1364,7 +1364,7 @@
     {
       "id": "workbench.background",
       "kind": "color",
-      "cssVariable": "--zeta-workbench-background",
+      "cssVariable": "--ash-workbench-background",
       "owner": "workbench.shell",
       "description": "Workbench root background.",
       "needsTransparency": false,
@@ -1384,7 +1384,7 @@
     {
       "id": "editor.background",
       "kind": "color",
-      "cssVariable": "--zeta-editor-background",
+      "cssVariable": "--ash-editor-background",
       "owner": "workbench.shell",
       "description": "Editor background.",
       "needsTransparency": false,
@@ -1404,7 +1404,7 @@
     {
       "id": "editor.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-foreground",
+      "cssVariable": "--ash-editor-foreground",
       "owner": "workbench.shell",
       "description": "Editor foreground.",
       "needsTransparency": false,
@@ -1424,7 +1424,7 @@
     {
       "id": "editor.tabBackground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-tab-background",
+      "cssVariable": "--ash-editor-tab-background",
       "owner": "workbench.shell",
       "description": "Background for inactive Editor tabs.",
       "needsTransparency": false,
@@ -1444,7 +1444,7 @@
     {
       "id": "titleBar.background",
       "kind": "color",
-      "cssVariable": "--zeta-title-bar-background",
+      "cssVariable": "--ash-title-bar-background",
       "owner": "workbench.shell",
       "description": "Title bar background.",
       "needsTransparency": false,
@@ -1464,7 +1464,7 @@
     {
       "id": "titleBar.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-title-bar-foreground",
+      "cssVariable": "--ash-title-bar-foreground",
       "owner": "workbench.shell",
       "description": "Title bar foreground.",
       "needsTransparency": false,
@@ -1484,7 +1484,7 @@
     {
       "id": "titleBar.actionForeground",
       "kind": "color",
-      "cssVariable": "--zeta-title-bar-action-foreground",
+      "cssVariable": "--ash-title-bar-action-foreground",
       "owner": "workbench.shell",
       "description": "Title bar action foreground.",
       "needsTransparency": false,
@@ -1504,7 +1504,7 @@
     {
       "id": "titleBar.hoverBackground",
       "kind": "color",
-      "cssVariable": "--zeta-title-bar-hover-background",
+      "cssVariable": "--ash-title-bar-hover-background",
       "owner": "workbench.shell",
       "description": "Hovered title bar item background.",
       "needsTransparency": false,
@@ -1524,7 +1524,7 @@
     {
       "id": "sideBar.background",
       "kind": "color",
-      "cssVariable": "--zeta-side-bar-background",
+      "cssVariable": "--ash-side-bar-background",
       "owner": "workbench.shell",
       "description": "Primary side bar background.",
       "needsTransparency": false,
@@ -1544,7 +1544,7 @@
     {
       "id": "auxiliaryBar.background",
       "kind": "color",
-      "cssVariable": "--zeta-auxiliary-bar-background",
+      "cssVariable": "--ash-auxiliary-bar-background",
       "owner": "workbench.shell",
       "description": "Auxiliary side bar background.",
       "needsTransparency": false,
@@ -1564,7 +1564,7 @@
     {
       "id": "panel.background",
       "kind": "color",
-      "cssVariable": "--zeta-panel-background",
+      "cssVariable": "--ash-panel-background",
       "owner": "workbench.shell",
       "description": "Panel background.",
       "needsTransparency": false,
@@ -1584,7 +1584,7 @@
     {
       "id": "compositeBar.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-composite-bar-foreground",
+      "cssVariable": "--ash-composite-bar-foreground",
       "owner": "workbench.shell",
       "description": "Active composite bar foreground.",
       "needsTransparency": false,
@@ -1604,7 +1604,7 @@
     {
       "id": "compositeBar.inactiveForeground",
       "kind": "color",
-      "cssVariable": "--zeta-composite-bar-inactive-foreground",
+      "cssVariable": "--ash-composite-bar-inactive-foreground",
       "owner": "workbench.shell",
       "description": "Inactive composite bar foreground.",
       "needsTransparency": false,
@@ -1624,7 +1624,7 @@
     {
       "id": "statusBar.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-status-bar-foreground",
+      "cssVariable": "--ash-status-bar-foreground",
       "owner": "workbench.shell",
       "description": "Status bar foreground.",
       "needsTransparency": false,
@@ -1644,7 +1644,7 @@
     {
       "id": "statusBar.background",
       "kind": "color",
-      "cssVariable": "--zeta-status-bar-background",
+      "cssVariable": "--ash-status-bar-background",
       "owner": "workbench.shell",
       "description": "Status bar background.",
       "needsTransparency": false,
@@ -1664,7 +1664,7 @@
     {
       "id": "statusBarItem.hoverForeground",
       "kind": "color",
-      "cssVariable": "--zeta-status-bar-item-hover-foreground",
+      "cssVariable": "--ash-status-bar-item-hover-foreground",
       "owner": "workbench.shell",
       "description": "Hovered status bar item foreground.",
       "needsTransparency": false,
@@ -1684,7 +1684,7 @@
     {
       "id": "statusBarItem.hoverBackground",
       "kind": "color",
-      "cssVariable": "--zeta-status-bar-item-hover-background",
+      "cssVariable": "--ash-status-bar-item-hover-background",
       "owner": "workbench.shell",
       "description": "Hovered status bar item background.",
       "needsTransparency": false,
@@ -1704,7 +1704,7 @@
     {
       "id": "statusBarItem.compactHoverBackground",
       "kind": "color",
-      "cssVariable": "--zeta-status-bar-item-compact-hover-background",
+      "cssVariable": "--ash-status-bar-item-compact-hover-background",
       "owner": "workbench.shell",
       "description": "Overlay for the hovered member of a compact status bar group.",
       "needsTransparency": false,
@@ -1724,7 +1724,7 @@
     {
       "id": "statusBarItem.activeBackground",
       "kind": "color",
-      "cssVariable": "--zeta-status-bar-item-active-background",
+      "cssVariable": "--ash-status-bar-item-active-background",
       "owner": "workbench.shell",
       "description": "Pressed status bar item background.",
       "needsTransparency": false,
@@ -1744,7 +1744,7 @@
     {
       "id": "statusBarItem.remoteForeground",
       "kind": "color",
-      "cssVariable": "--zeta-status-bar-item-remote-foreground",
+      "cssVariable": "--ash-status-bar-item-remote-foreground",
       "owner": "workbench.shell",
       "description": "Remote status bar item foreground.",
       "needsTransparency": false,
@@ -1764,7 +1764,7 @@
     {
       "id": "statusBarItem.remoteBackground",
       "kind": "color",
-      "cssVariable": "--zeta-status-bar-item-remote-background",
+      "cssVariable": "--ash-status-bar-item-remote-background",
       "owner": "workbench.shell",
       "description": "Remote status bar item background.",
       "needsTransparency": false,
@@ -1784,7 +1784,7 @@
     {
       "id": "statusBarItem.remoteHoverForeground",
       "kind": "color",
-      "cssVariable": "--zeta-status-bar-item-remote-hover-foreground",
+      "cssVariable": "--ash-status-bar-item-remote-hover-foreground",
       "owner": "workbench.shell",
       "description": "Hovered remote status bar item foreground.",
       "needsTransparency": false,
@@ -1804,7 +1804,7 @@
     {
       "id": "statusBarItem.remoteHoverBackground",
       "kind": "color",
-      "cssVariable": "--zeta-status-bar-item-remote-hover-background",
+      "cssVariable": "--ash-status-bar-item-remote-hover-background",
       "owner": "workbench.shell",
       "description": "Hovered remote status bar item background.",
       "needsTransparency": false,
@@ -1824,7 +1824,7 @@
     {
       "id": "sash.hoverBackground",
       "kind": "color",
-      "cssVariable": "--zeta-sash-hover-background",
+      "cssVariable": "--ash-sash-hover-background",
       "owner": "workbench.shell",
       "description": "Hovered sash background.",
       "needsTransparency": false,
@@ -1844,7 +1844,7 @@
     {
       "id": "editor.token.commentForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-token-comment-foreground",
+      "cssVariable": "--ash-editor-token-comment-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for comment tokens independently of their syntax or semantic source.",
       "needsTransparency": false,
@@ -1864,7 +1864,7 @@
     {
       "id": "editor.token.keywordForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-token-keyword-foreground",
+      "cssVariable": "--ash-editor-token-keyword-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for keyword tokens independently of their syntax or semantic source.",
       "needsTransparency": false,
@@ -1884,7 +1884,7 @@
     {
       "id": "editor.token.stringForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-token-string-foreground",
+      "cssVariable": "--ash-editor-token-string-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for string tokens independently of their syntax or semantic source.",
       "needsTransparency": false,
@@ -1904,7 +1904,7 @@
     {
       "id": "editor.token.numberForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-token-number-foreground",
+      "cssVariable": "--ash-editor-token-number-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for number tokens independently of their syntax or semantic source.",
       "needsTransparency": false,
@@ -1924,7 +1924,7 @@
     {
       "id": "editor.token.regexpForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-token-regexp-foreground",
+      "cssVariable": "--ash-editor-token-regexp-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for regular-expression tokens independently of their syntax or semantic source.",
       "needsTransparency": false,
@@ -1944,7 +1944,7 @@
     {
       "id": "editor.token.typeForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-token-type-foreground",
+      "cssVariable": "--ash-editor-token-type-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for type tokens independently of their syntax or semantic source.",
       "needsTransparency": false,
@@ -1964,7 +1964,7 @@
     {
       "id": "editor.token.functionForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-token-function-foreground",
+      "cssVariable": "--ash-editor-token-function-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for function tokens independently of their syntax or semantic source.",
       "needsTransparency": false,
@@ -1984,7 +1984,7 @@
     {
       "id": "editor.token.variableForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-token-variable-foreground",
+      "cssVariable": "--ash-editor-token-variable-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for variable tokens independently of their syntax or semantic source.",
       "needsTransparency": false,
@@ -2004,7 +2004,7 @@
     {
       "id": "editor.token.operatorForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-token-operator-foreground",
+      "cssVariable": "--ash-editor-token-operator-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for operator tokens independently of their syntax or semantic source.",
       "needsTransparency": false,
@@ -2024,7 +2024,7 @@
     {
       "id": "editor.token.attributeForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-token-attribute-foreground",
+      "cssVariable": "--ash-editor-token-attribute-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for attribute tokens.",
       "needsTransparency": false,
@@ -2044,7 +2044,7 @@
     {
       "id": "editor.token.constantForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-token-constant-foreground",
+      "cssVariable": "--ash-editor-token-constant-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for constant tokens.",
       "needsTransparency": false,
@@ -2064,7 +2064,7 @@
     {
       "id": "editor.token.constructorForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-token-constructor-foreground",
+      "cssVariable": "--ash-editor-token-constructor-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for constructor tokens.",
       "needsTransparency": false,
@@ -2084,7 +2084,7 @@
     {
       "id": "editor.token.embeddedForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-token-embedded-foreground",
+      "cssVariable": "--ash-editor-token-embedded-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for embedded-language tokens.",
       "needsTransparency": false,
@@ -2104,7 +2104,7 @@
     {
       "id": "editor.token.labelForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-token-label-foreground",
+      "cssVariable": "--ash-editor-token-label-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for label tokens.",
       "needsTransparency": false,
@@ -2124,7 +2124,7 @@
     {
       "id": "editor.token.moduleForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-token-module-foreground",
+      "cssVariable": "--ash-editor-token-module-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for module and namespace tokens.",
       "needsTransparency": false,
@@ -2144,7 +2144,7 @@
     {
       "id": "editor.token.propertyForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-token-property-foreground",
+      "cssVariable": "--ash-editor-token-property-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for property tokens.",
       "needsTransparency": false,
@@ -2164,7 +2164,7 @@
     {
       "id": "editor.token.punctuationForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-token-punctuation-foreground",
+      "cssVariable": "--ash-editor-token-punctuation-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for punctuation tokens.",
       "needsTransparency": false,
@@ -2184,7 +2184,7 @@
     {
       "id": "editor.border",
       "kind": "color",
-      "cssVariable": "--zeta-editor-border",
+      "cssVariable": "--ash-editor-border",
       "owner": "editor.presentation",
       "description": "Editor surface border.",
       "needsTransparency": false,
@@ -2204,7 +2204,7 @@
     {
       "id": "editor.widgetBackground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-widget-background",
+      "cssVariable": "--ash-editor-widget-background",
       "owner": "editor.presentation",
       "description": "Background for floating editor widgets.",
       "needsTransparency": false,
@@ -2224,7 +2224,7 @@
     {
       "id": "editor.widgetBorder",
       "kind": "color",
-      "cssVariable": "--zeta-editor-widget-border",
+      "cssVariable": "--ash-editor-widget-border",
       "owner": "editor.presentation",
       "description": "Border around floating editor widgets.",
       "needsTransparency": false,
@@ -2244,7 +2244,7 @@
     {
       "id": "editor.widgetShadow",
       "kind": "color",
-      "cssVariable": "--zeta-editor-widget-shadow",
+      "cssVariable": "--ash-editor-widget-shadow",
       "owner": "editor.presentation",
       "description": "Shadow around floating editor widgets.",
       "needsTransparency": false,
@@ -2264,7 +2264,7 @@
     {
       "id": "editor.inputBackground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-input-background",
+      "cssVariable": "--ash-editor-input-background",
       "owner": "editor.presentation",
       "description": "Background for editor widget inputs.",
       "needsTransparency": false,
@@ -2284,7 +2284,7 @@
     {
       "id": "editor.listHoverBackground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-list-hover-background",
+      "cssVariable": "--ash-editor-list-hover-background",
       "owner": "editor.presentation",
       "description": "Hover background for editor widget lists.",
       "needsTransparency": false,
@@ -2304,7 +2304,7 @@
     {
       "id": "editor.descriptionForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-description-foreground",
+      "cssVariable": "--ash-editor-description-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for editor widget descriptions.",
       "needsTransparency": false,
@@ -2324,7 +2324,7 @@
     {
       "id": "editor.hoverForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-hover-foreground",
+      "cssVariable": "--ash-editor-hover-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for editor Hovers.",
       "needsTransparency": false,
@@ -2344,7 +2344,7 @@
     {
       "id": "editor.hoverBackground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-hover-background",
+      "cssVariable": "--ash-editor-hover-background",
       "owner": "editor.presentation",
       "description": "Background for editor Hovers.",
       "needsTransparency": false,
@@ -2364,7 +2364,7 @@
     {
       "id": "editor.hoverBorder",
       "kind": "color",
-      "cssVariable": "--zeta-editor-hover-border",
+      "cssVariable": "--ash-editor-hover-border",
       "owner": "editor.presentation",
       "description": "Border around editor Hovers.",
       "needsTransparency": false,
@@ -2384,7 +2384,7 @@
     {
       "id": "editor.inlayHintForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-inlay-hint-foreground",
+      "cssVariable": "--ash-editor-inlay-hint-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for editor inlay hints.",
       "needsTransparency": false,
@@ -2404,7 +2404,7 @@
     {
       "id": "editor.inlineCompletionForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-inline-completion-foreground",
+      "cssVariable": "--ash-editor-inline-completion-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for inline completions.",
       "needsTransparency": false,
@@ -2424,7 +2424,7 @@
     {
       "id": "editor.compositionBorder",
       "kind": "color",
-      "cssVariable": "--zeta-editor-composition-border",
+      "cssVariable": "--ash-editor-composition-border",
       "owner": "editor.presentation",
       "description": "Border under text in an active input method composition.",
       "needsTransparency": false,
@@ -2444,7 +2444,7 @@
     {
       "id": "editor.foldBackground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-fold-background",
+      "cssVariable": "--ash-editor-fold-background",
       "owner": "editor.presentation",
       "description": "Background behind collapsed editor ranges.",
       "needsTransparency": true,
@@ -2480,7 +2480,7 @@
     {
       "id": "editor.foldPlaceholderForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-fold-placeholder-foreground",
+      "cssVariable": "--ash-editor-fold-placeholder-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for the collapsed-range placeholder.",
       "needsTransparency": false,
@@ -2500,7 +2500,7 @@
     {
       "id": "editorGutter.foldingControlForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-gutter-folding-control-foreground",
+      "cssVariable": "--ash-editor-gutter-folding-control-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for editor folding controls.",
       "needsTransparency": false,
@@ -2520,7 +2520,7 @@
     {
       "id": "editorCursor.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-cursor-foreground",
+      "cssVariable": "--ash-editor-cursor-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for the editor cursor.",
       "needsTransparency": false,
@@ -2540,7 +2540,7 @@
     {
       "id": "editorCursor.background",
       "kind": "color",
-      "cssVariable": "--zeta-editor-cursor-background",
+      "cssVariable": "--ash-editor-cursor-background",
       "owner": "editor.presentation",
       "description": "Foreground for a character covered by a block editor cursor.",
       "needsTransparency": false,
@@ -2560,7 +2560,7 @@
     {
       "id": "editorMultiCursor.primary.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-multi-cursor-primary-foreground",
+      "cssVariable": "--ash-editor-multi-cursor-primary-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for the primary cursor when multiple cursors are active.",
       "needsTransparency": false,
@@ -2580,7 +2580,7 @@
     {
       "id": "editorMultiCursor.primary.background",
       "kind": "color",
-      "cssVariable": "--zeta-editor-multi-cursor-primary-background",
+      "cssVariable": "--ash-editor-multi-cursor-primary-background",
       "owner": "editor.presentation",
       "description": "Foreground for a character covered by the primary cursor when multiple cursors are active.",
       "needsTransparency": false,
@@ -2600,7 +2600,7 @@
     {
       "id": "editorMultiCursor.secondary.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-multi-cursor-secondary-foreground",
+      "cssVariable": "--ash-editor-multi-cursor-secondary-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for secondary cursors when multiple cursors are active.",
       "needsTransparency": false,
@@ -2620,7 +2620,7 @@
     {
       "id": "editorMultiCursor.secondary.background",
       "kind": "color",
-      "cssVariable": "--zeta-editor-multi-cursor-secondary-background",
+      "cssVariable": "--ash-editor-multi-cursor-secondary-background",
       "owner": "editor.presentation",
       "description": "Foreground for a character covered by a secondary cursor when multiple cursors are active.",
       "needsTransparency": false,
@@ -2640,7 +2640,7 @@
     {
       "id": "editorOverviewRuler.border",
       "kind": "color",
-      "cssVariable": "--zeta-editor-overview-ruler-border",
+      "cssVariable": "--ash-editor-overview-ruler-border",
       "owner": "editor.presentation",
       "description": "Color of the editor overview ruler border.",
       "needsTransparency": false,
@@ -2660,7 +2660,7 @@
     {
       "id": "editorOverviewRuler.background",
       "kind": "color",
-      "cssVariable": "--zeta-editor-overview-ruler-background",
+      "cssVariable": "--ash-editor-overview-ruler-background",
       "owner": "editor.presentation",
       "description": "Background color of the editor overview ruler.",
       "needsTransparency": true,
@@ -2696,7 +2696,7 @@
     {
       "id": "editor.lineHighlightBackground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-line-highlight-background",
+      "cssVariable": "--ash-editor-line-highlight-background",
       "owner": "editor.presentation",
       "description": "Background for the line at the primary cursor position.",
       "needsTransparency": false,
@@ -2716,7 +2716,7 @@
     {
       "id": "editor.inactiveLineHighlightBackground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-inactive-line-highlight-background",
+      "cssVariable": "--ash-editor-inactive-line-highlight-background",
       "owner": "editor.presentation",
       "description": "Background for the line at the primary cursor position when the editor is not focused.",
       "needsTransparency": false,
@@ -2736,7 +2736,7 @@
     {
       "id": "editor.lineHighlightBorder",
       "kind": "color",
-      "cssVariable": "--zeta-editor-line-highlight-border",
+      "cssVariable": "--ash-editor-line-highlight-border",
       "owner": "editor.presentation",
       "description": "Border around the line at the primary cursor position.",
       "needsTransparency": false,
@@ -2756,7 +2756,7 @@
     {
       "id": "editorRuler.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-ruler-foreground",
+      "cssVariable": "--ash-editor-ruler-foreground",
       "owner": "editor.presentation",
       "description": "Color of editor rulers.",
       "needsTransparency": false,
@@ -2776,7 +2776,7 @@
     {
       "id": "diffEditor.removedLineBackground",
       "kind": "color",
-      "cssVariable": "--zeta-diff-editor-removed-line-background",
+      "cssVariable": "--ash-diff-editor-removed-line-background",
       "owner": "editor.presentation",
       "description": "Background for removed diff lines.",
       "needsTransparency": false,
@@ -2796,7 +2796,7 @@
     {
       "id": "diffEditor.insertedLineBackground",
       "kind": "color",
-      "cssVariable": "--zeta-diff-editor-inserted-line-background",
+      "cssVariable": "--ash-diff-editor-inserted-line-background",
       "owner": "editor.presentation",
       "description": "Background for inserted diff lines.",
       "needsTransparency": false,
@@ -2816,7 +2816,7 @@
     {
       "id": "diffEditor.removedTextBackground",
       "kind": "color",
-      "cssVariable": "--zeta-diff-editor-removed-text-background",
+      "cssVariable": "--ash-diff-editor-removed-text-background",
       "owner": "editor.presentation",
       "description": "Background for removed inline diff ranges.",
       "needsTransparency": false,
@@ -2836,7 +2836,7 @@
     {
       "id": "diffEditor.insertedTextBackground",
       "kind": "color",
-      "cssVariable": "--zeta-diff-editor-inserted-text-background",
+      "cssVariable": "--ash-diff-editor-inserted-text-background",
       "owner": "editor.presentation",
       "description": "Background for inserted inline diff ranges.",
       "needsTransparency": false,
@@ -2856,7 +2856,7 @@
     {
       "id": "diffEditor.missingLineBackground",
       "kind": "color",
-      "cssVariable": "--zeta-diff-editor-missing-line-background",
+      "cssVariable": "--ash-diff-editor-missing-line-background",
       "owner": "editor.presentation",
       "description": "Background for a diff side without a corresponding source line.",
       "needsTransparency": false,
@@ -2876,7 +2876,7 @@
     {
       "id": "diffEditor.unchangedRegionBackground",
       "kind": "color",
-      "cssVariable": "--zeta-diff-editor-unchanged-region-background",
+      "cssVariable": "--ash-diff-editor-unchanged-region-background",
       "owner": "editor.presentation",
       "description": "Background for collapsed unchanged diff regions.",
       "needsTransparency": false,
@@ -2896,7 +2896,7 @@
     {
       "id": "diffEditor.unchangedRegionForeground",
       "kind": "color",
-      "cssVariable": "--zeta-diff-editor-unchanged-region-foreground",
+      "cssVariable": "--ash-diff-editor-unchanged-region-foreground",
       "owner": "editor.presentation",
       "description": "Foreground for collapsed unchanged diff regions.",
       "needsTransparency": false,
@@ -2916,7 +2916,7 @@
     {
       "id": "diffEditor.removedLineMarker",
       "kind": "color",
-      "cssVariable": "--zeta-diff-editor-removed-line-marker",
+      "cssVariable": "--ash-diff-editor-removed-line-marker",
       "owner": "editor.presentation",
       "description": "Marker foreground for removed diff lines.",
       "needsTransparency": false,
@@ -2936,7 +2936,7 @@
     {
       "id": "diffEditor.insertedLineMarker",
       "kind": "color",
-      "cssVariable": "--zeta-diff-editor-inserted-line-marker",
+      "cssVariable": "--ash-diff-editor-inserted-line-marker",
       "owner": "editor.presentation",
       "description": "Marker foreground for inserted diff lines.",
       "needsTransparency": false,
@@ -2956,7 +2956,7 @@
     {
       "id": "editor.semanticToken.commentForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-semantic-token-comment-foreground",
+      "cssVariable": "--ash-editor-semantic-token-comment-foreground",
       "owner": "editor.presentation",
       "description": "Compatibility alias for comment token foreground.",
       "needsTransparency": false,
@@ -2977,7 +2977,7 @@
     {
       "id": "editor.semanticToken.keywordForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-semantic-token-keyword-foreground",
+      "cssVariable": "--ash-editor-semantic-token-keyword-foreground",
       "owner": "editor.presentation",
       "description": "Compatibility alias for keyword token foreground.",
       "needsTransparency": false,
@@ -2998,7 +2998,7 @@
     {
       "id": "editor.semanticToken.stringForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-semantic-token-string-foreground",
+      "cssVariable": "--ash-editor-semantic-token-string-foreground",
       "owner": "editor.presentation",
       "description": "Compatibility alias for string token foreground.",
       "needsTransparency": false,
@@ -3019,7 +3019,7 @@
     {
       "id": "editor.semanticToken.numberForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-semantic-token-number-foreground",
+      "cssVariable": "--ash-editor-semantic-token-number-foreground",
       "owner": "editor.presentation",
       "description": "Compatibility alias for number token foreground.",
       "needsTransparency": false,
@@ -3040,7 +3040,7 @@
     {
       "id": "editor.semanticToken.regexpForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-semantic-token-regexp-foreground",
+      "cssVariable": "--ash-editor-semantic-token-regexp-foreground",
       "owner": "editor.presentation",
       "description": "Compatibility alias for regular-expression token foreground.",
       "needsTransparency": false,
@@ -3061,7 +3061,7 @@
     {
       "id": "editor.semanticToken.typeForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-semantic-token-type-foreground",
+      "cssVariable": "--ash-editor-semantic-token-type-foreground",
       "owner": "editor.presentation",
       "description": "Compatibility alias for type token foreground.",
       "needsTransparency": false,
@@ -3082,7 +3082,7 @@
     {
       "id": "editor.semanticToken.functionForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-semantic-token-function-foreground",
+      "cssVariable": "--ash-editor-semantic-token-function-foreground",
       "owner": "editor.presentation",
       "description": "Compatibility alias for function token foreground.",
       "needsTransparency": false,
@@ -3103,7 +3103,7 @@
     {
       "id": "editor.semanticToken.variableForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-semantic-token-variable-foreground",
+      "cssVariable": "--ash-editor-semantic-token-variable-foreground",
       "owner": "editor.presentation",
       "description": "Compatibility alias for variable token foreground.",
       "needsTransparency": false,
@@ -3124,7 +3124,7 @@
     {
       "id": "editor.semanticToken.operatorForeground",
       "kind": "color",
-      "cssVariable": "--zeta-editor-semantic-token-operator-foreground",
+      "cssVariable": "--ash-editor-semantic-token-operator-foreground",
       "owner": "editor.presentation",
       "description": "Compatibility alias for operator token foreground.",
       "needsTransparency": false,
@@ -3145,7 +3145,7 @@
     {
       "id": "files.emptyExplorerOpenFolderBackground",
       "kind": "color",
-      "cssVariable": "--zeta-files-empty-explorer-open-folder-background",
+      "cssVariable": "--ash-files-empty-explorer-open-folder-background",
       "owner": "files.presentation",
       "description": "Background for the Empty Explorer Open Folder action.",
       "needsTransparency": false,
@@ -3165,7 +3165,7 @@
     {
       "id": "files.emptyExplorerOpenFolderHoverBackground",
       "kind": "color",
-      "cssVariable": "--zeta-files-empty-explorer-open-folder-hover-background",
+      "cssVariable": "--ash-files-empty-explorer-open-folder-hover-background",
       "owner": "files.presentation",
       "description": "Hovered background for the Empty Explorer Open Folder action.",
       "needsTransparency": false,
@@ -3185,7 +3185,7 @@
     {
       "id": "settings.itemBackground",
       "kind": "color",
-      "cssVariable": "--zeta-settings-item-background",
+      "cssVariable": "--ash-settings-item-background",
       "owner": "workbench.preferences",
       "description": "Background for configuration items in the Settings editor.",
       "needsTransparency": false,
@@ -3205,7 +3205,7 @@
     {
       "id": "settings.itemSeparator",
       "kind": "color",
-      "cssVariable": "--zeta-settings-item-separator",
+      "cssVariable": "--ash-settings-item-separator",
       "owner": "workbench.preferences",
       "description": "Separator between configuration items in the Settings editor.",
       "needsTransparency": false,
@@ -3225,7 +3225,7 @@
     {
       "id": "settings.headerForeground",
       "kind": "color",
-      "cssVariable": "--zeta-settings-header-foreground",
+      "cssVariable": "--ash-settings-header-foreground",
       "owner": "workbench.preferences",
       "description": "Foreground for Settings editor section headers.",
       "needsTransparency": false,
@@ -3245,7 +3245,7 @@
     {
       "id": "settings.headerBorder",
       "kind": "color",
-      "cssVariable": "--zeta-settings-header-border",
+      "cssVariable": "--ash-settings-header-border",
       "owner": "workbench.preferences",
       "description": "Border below sticky Settings editor section headers.",
       "needsTransparency": false,
@@ -3265,7 +3265,7 @@
     {
       "id": "settings.modifiedItemIndicator",
       "kind": "color",
-      "cssVariable": "--zeta-settings-modified-item-indicator",
+      "cssVariable": "--ash-settings-modified-item-indicator",
       "owner": "workbench.preferences",
       "description": "Indicator for a setting changed from its default value.",
       "needsTransparency": false,
@@ -3285,7 +3285,7 @@
     {
       "id": "settings.focusedRowBackground",
       "kind": "color",
-      "cssVariable": "--zeta-settings-focused-row-background",
+      "cssVariable": "--ash-settings-focused-row-background",
       "owner": "workbench.preferences",
       "description": "Background for a Settings row containing keyboard focus.",
       "needsTransparency": true,
@@ -3321,7 +3321,7 @@
     {
       "id": "settings.rowHoverBackground",
       "kind": "color",
-      "cssVariable": "--zeta-settings-row-hover-background",
+      "cssVariable": "--ash-settings-row-hover-background",
       "owner": "workbench.preferences",
       "description": "Background for a hovered Settings row.",
       "needsTransparency": true,
@@ -3357,7 +3357,7 @@
     {
       "id": "terminal.background",
       "kind": "color",
-      "cssVariable": "--zeta-terminal-background",
+      "cssVariable": "--ash-terminal-background",
       "owner": "terminal.presentation",
       "description": "Terminal background.",
       "needsTransparency": false,
@@ -3377,7 +3377,7 @@
     {
       "id": "terminal.foreground",
       "kind": "color",
-      "cssVariable": "--zeta-terminal-foreground",
+      "cssVariable": "--ash-terminal-foreground",
       "owner": "terminal.presentation",
       "description": "Terminal default foreground.",
       "needsTransparency": false,
@@ -3397,7 +3397,7 @@
     {
       "id": "terminal.cursorForeground",
       "kind": "color",
-      "cssVariable": "--zeta-terminal-cursor-foreground",
+      "cssVariable": "--ash-terminal-cursor-foreground",
       "owner": "terminal.presentation",
       "description": "Terminal cursor foreground.",
       "needsTransparency": false,
@@ -3417,7 +3417,7 @@
     {
       "id": "terminal.ansiBlack",
       "kind": "color",
-      "cssVariable": "--zeta-terminal-ansi-black",
+      "cssVariable": "--ash-terminal-ansi-black",
       "owner": "terminal.presentation",
       "description": "Terminal ANSI black.",
       "needsTransparency": false,
@@ -3437,7 +3437,7 @@
     {
       "id": "terminal.ansiRed",
       "kind": "color",
-      "cssVariable": "--zeta-terminal-ansi-red",
+      "cssVariable": "--ash-terminal-ansi-red",
       "owner": "terminal.presentation",
       "description": "Terminal ANSI red.",
       "needsTransparency": false,
@@ -3457,7 +3457,7 @@
     {
       "id": "terminal.ansiGreen",
       "kind": "color",
-      "cssVariable": "--zeta-terminal-ansi-green",
+      "cssVariable": "--ash-terminal-ansi-green",
       "owner": "terminal.presentation",
       "description": "Terminal ANSI green.",
       "needsTransparency": false,
@@ -3477,7 +3477,7 @@
     {
       "id": "terminal.ansiYellow",
       "kind": "color",
-      "cssVariable": "--zeta-terminal-ansi-yellow",
+      "cssVariable": "--ash-terminal-ansi-yellow",
       "owner": "terminal.presentation",
       "description": "Terminal ANSI yellow.",
       "needsTransparency": false,
@@ -3497,7 +3497,7 @@
     {
       "id": "terminal.ansiBlue",
       "kind": "color",
-      "cssVariable": "--zeta-terminal-ansi-blue",
+      "cssVariable": "--ash-terminal-ansi-blue",
       "owner": "terminal.presentation",
       "description": "Terminal ANSI blue.",
       "needsTransparency": false,
@@ -3517,7 +3517,7 @@
     {
       "id": "terminal.ansiMagenta",
       "kind": "color",
-      "cssVariable": "--zeta-terminal-ansi-magenta",
+      "cssVariable": "--ash-terminal-ansi-magenta",
       "owner": "terminal.presentation",
       "description": "Terminal ANSI magenta.",
       "needsTransparency": false,
@@ -3537,7 +3537,7 @@
     {
       "id": "terminal.ansiCyan",
       "kind": "color",
-      "cssVariable": "--zeta-terminal-ansi-cyan",
+      "cssVariable": "--ash-terminal-ansi-cyan",
       "owner": "terminal.presentation",
       "description": "Terminal ANSI cyan.",
       "needsTransparency": false,
@@ -3557,7 +3557,7 @@
     {
       "id": "terminal.ansiWhite",
       "kind": "color",
-      "cssVariable": "--zeta-terminal-ansi-white",
+      "cssVariable": "--ash-terminal-ansi-white",
       "owner": "terminal.presentation",
       "description": "Terminal ANSI white.",
       "needsTransparency": false,
@@ -3577,7 +3577,7 @@
     {
       "id": "terminal.ansiBrightBlack",
       "kind": "color",
-      "cssVariable": "--zeta-terminal-ansi-bright-black",
+      "cssVariable": "--ash-terminal-ansi-bright-black",
       "owner": "terminal.presentation",
       "description": "Terminal ANSI bright black.",
       "needsTransparency": false,
@@ -3597,7 +3597,7 @@
     {
       "id": "terminal.ansiBrightRed",
       "kind": "color",
-      "cssVariable": "--zeta-terminal-ansi-bright-red",
+      "cssVariable": "--ash-terminal-ansi-bright-red",
       "owner": "terminal.presentation",
       "description": "Terminal ANSI bright red.",
       "needsTransparency": false,
@@ -3617,7 +3617,7 @@
     {
       "id": "terminal.ansiBrightGreen",
       "kind": "color",
-      "cssVariable": "--zeta-terminal-ansi-bright-green",
+      "cssVariable": "--ash-terminal-ansi-bright-green",
       "owner": "terminal.presentation",
       "description": "Terminal ANSI bright green.",
       "needsTransparency": false,
@@ -3637,7 +3637,7 @@
     {
       "id": "terminal.ansiBrightYellow",
       "kind": "color",
-      "cssVariable": "--zeta-terminal-ansi-bright-yellow",
+      "cssVariable": "--ash-terminal-ansi-bright-yellow",
       "owner": "terminal.presentation",
       "description": "Terminal ANSI bright yellow.",
       "needsTransparency": false,
@@ -3657,7 +3657,7 @@
     {
       "id": "terminal.ansiBrightBlue",
       "kind": "color",
-      "cssVariable": "--zeta-terminal-ansi-bright-blue",
+      "cssVariable": "--ash-terminal-ansi-bright-blue",
       "owner": "terminal.presentation",
       "description": "Terminal ANSI bright blue.",
       "needsTransparency": false,
@@ -3677,7 +3677,7 @@
     {
       "id": "terminal.ansiBrightMagenta",
       "kind": "color",
-      "cssVariable": "--zeta-terminal-ansi-bright-magenta",
+      "cssVariable": "--ash-terminal-ansi-bright-magenta",
       "owner": "terminal.presentation",
       "description": "Terminal ANSI bright magenta.",
       "needsTransparency": false,
@@ -3697,7 +3697,7 @@
     {
       "id": "terminal.ansiBrightCyan",
       "kind": "color",
-      "cssVariable": "--zeta-terminal-ansi-bright-cyan",
+      "cssVariable": "--ash-terminal-ansi-bright-cyan",
       "owner": "terminal.presentation",
       "description": "Terminal ANSI bright cyan.",
       "needsTransparency": false,
@@ -3717,7 +3717,7 @@
     {
       "id": "terminal.ansiBrightWhite",
       "kind": "color",
-      "cssVariable": "--zeta-terminal-ansi-bright-white",
+      "cssVariable": "--ash-terminal-ansi-bright-white",
       "owner": "terminal.presentation",
       "description": "Terminal ANSI bright white.",
       "needsTransparency": false,
@@ -3739,7 +3739,7 @@
     {
       "id": "fontSize.heading1",
       "kind": "size",
-      "cssVariable": "--zeta-font-size-heading1",
+      "cssVariable": "--ash-font-size-heading1",
       "owner": "platform.ui",
       "description": "Largest heading font size.",
       "value": "26px"
@@ -3747,7 +3747,7 @@
     {
       "id": "fontSize.heading2",
       "kind": "size",
-      "cssVariable": "--zeta-font-size-heading2",
+      "cssVariable": "--ash-font-size-heading2",
       "owner": "platform.ui",
       "description": "Title heading font size.",
       "value": "18px"
@@ -3755,7 +3755,7 @@
     {
       "id": "fontSize.heading3",
       "kind": "size",
-      "cssVariable": "--zeta-font-size-heading3",
+      "cssVariable": "--ash-font-size-heading3",
       "owner": "platform.ui",
       "description": "Subtitle heading font size.",
       "value": "13px"
@@ -3763,7 +3763,7 @@
     {
       "id": "fontSize.body1",
       "kind": "size",
-      "cssVariable": "--zeta-font-size-body1",
+      "cssVariable": "--ash-font-size-body1",
       "owner": "platform.ui",
       "description": "Primary body font size.",
       "value": "13px"
@@ -3771,7 +3771,7 @@
     {
       "id": "fontSize.body2",
       "kind": "size",
-      "cssVariable": "--zeta-font-size-body2",
+      "cssVariable": "--ash-font-size-body2",
       "owner": "platform.ui",
       "description": "Secondary body font size.",
       "value": "11px"
@@ -3779,7 +3779,7 @@
     {
       "id": "fontSize.label1",
       "kind": "size",
-      "cssVariable": "--zeta-font-size-label1",
+      "cssVariable": "--ash-font-size-label1",
       "owner": "platform.ui",
       "description": "Section title and tab label font size.",
       "value": "12px"
@@ -3787,7 +3787,7 @@
     {
       "id": "fontSize.label2",
       "kind": "size",
-      "cssVariable": "--zeta-font-size-label2",
+      "cssVariable": "--ash-font-size-label2",
       "owner": "platform.ui",
       "description": "Metadata label font size.",
       "value": "11px"
@@ -3795,7 +3795,7 @@
     {
       "id": "fontSize.label3",
       "kind": "size",
-      "cssVariable": "--zeta-font-size-label3",
+      "cssVariable": "--ash-font-size-label3",
       "owner": "platform.ui",
       "description": "Badge label font size.",
       "value": "10px"
@@ -3803,7 +3803,7 @@
     {
       "id": "fontWeight.regular",
       "kind": "size",
-      "cssVariable": "--zeta-font-weight-regular",
+      "cssVariable": "--ash-font-weight-regular",
       "owner": "platform.ui",
       "description": "Regular font weight for un-emphasized text.",
       "value": "400"
@@ -3811,7 +3811,7 @@
     {
       "id": "fontWeight.medium",
       "kind": "size",
-      "cssVariable": "--zeta-font-weight-medium",
+      "cssVariable": "--ash-font-weight-medium",
       "owner": "platform.ui",
       "description": "Medium font weight for controls, navigation, and other compact emphasized text.",
       "value": "500"
@@ -3819,7 +3819,7 @@
     {
       "id": "fontWeight.semiBold",
       "kind": "size",
-      "cssVariable": "--zeta-font-weight-semi-bold",
+      "cssVariable": "--ash-font-weight-semi-bold",
       "owner": "platform.ui",
       "description": "Strong font weight paired with any font-size role for tabs, headings, and emphasized text.",
       "value": "600"
@@ -3827,7 +3827,7 @@
     {
       "id": "strokeThickness",
       "kind": "size",
-      "cssVariable": "--zeta-stroke-thickness",
+      "cssVariable": "--ash-stroke-thickness",
       "owner": "platform.ui",
       "description": "Standard UI border thickness.",
       "value": "1px"
@@ -3835,7 +3835,7 @@
     {
       "id": "animation.durationFast",
       "kind": "size",
-      "cssVariable": "--zeta-animation-duration-fast",
+      "cssVariable": "--ash-animation-duration-fast",
       "owner": "platform.ui",
       "description": "Short UI state transition duration.",
       "value": "120ms"
@@ -3843,7 +3843,7 @@
     {
       "id": "animation.durationNormal",
       "kind": "size",
-      "cssVariable": "--zeta-animation-duration-normal",
+      "cssVariable": "--ash-animation-duration-normal",
       "owner": "platform.ui",
       "description": "Standard UI animation duration.",
       "value": "200ms"
@@ -3851,7 +3851,7 @@
     {
       "id": "animation.durationSlow",
       "kind": "size",
-      "cssVariable": "--zeta-animation-duration-slow",
+      "cssVariable": "--ash-animation-duration-slow",
       "owner": "platform.ui",
       "description": "Emphasized UI animation duration.",
       "value": "350ms"
@@ -3859,7 +3859,7 @@
     {
       "id": "tab.height",
       "kind": "size",
-      "cssVariable": "--zeta-tab-height",
+      "cssVariable": "--ash-tab-height",
       "owner": "platform.ui",
       "description": "Standard height for TabList tabs.",
       "value": "24px"
@@ -3867,7 +3867,7 @@
     {
       "id": "tabList.contentInset",
       "kind": "size",
-      "cssVariable": "--zeta-tab-list-content-inset",
+      "cssVariable": "--ash-tab-list-content-inset",
       "owner": "platform.ui",
       "description": "Horizontal inset between an inset TabList and its first or last tab.",
       "value": "4px"
@@ -3875,7 +3875,7 @@
     {
       "id": "tabList.itemContentInset",
       "kind": "size",
-      "cssVariable": "--zeta-tab-list-item-content-inset",
+      "cssVariable": "--ash-tab-list-item-content-inset",
       "owner": "platform.ui",
       "description": "Horizontal inset between a TabList item's edge and its label content.",
       "value": "6px"
@@ -3883,7 +3883,7 @@
     {
       "id": "compositeBar.contentInset",
       "kind": "size",
-      "cssVariable": "--zeta-composite-bar-content-inset",
+      "cssVariable": "--ash-composite-bar-content-inset",
       "owner": "platform.ui",
       "description": "Horizontal inset between a CompositeBar and its first or last action.",
       "value": "4px"
@@ -3891,7 +3891,7 @@
     {
       "id": "pane.titleHeight",
       "kind": "size",
-      "cssVariable": "--zeta-pane-title-height",
+      "cssVariable": "--ash-pane-title-height",
       "owner": "platform.ui",
       "description": "Standard height for a Workbench pane title.",
       "value": "32px"
@@ -3899,7 +3899,7 @@
     {
       "id": "actionBar.gap",
       "kind": "size",
-      "cssVariable": "--zeta-action-bar-gap",
+      "cssVariable": "--ash-action-bar-gap",
       "owner": "platform.ui",
       "description": "Gap between action bar items.",
       "value": "2px"
@@ -3907,7 +3907,7 @@
     {
       "id": "toolbar.itemGap",
       "kind": "size",
-      "cssVariable": "--zeta-toolbar-item-gap",
+      "cssVariable": "--ash-toolbar-item-gap",
       "owner": "platform.ui",
       "description": "Gap before a toolbar item.",
       "value": "2px"
@@ -3915,7 +3915,7 @@
     {
       "id": "toolbar.actionSize",
       "kind": "size",
-      "cssVariable": "--zeta-toolbar-action-size",
+      "cssVariable": "--ash-toolbar-action-size",
       "owner": "platform.ui",
       "description": "Default square toolbar action size.",
       "value": "22px"
@@ -3923,7 +3923,7 @@
     {
       "id": "scrollbar.size",
       "kind": "size",
-      "cssVariable": "--zeta-scrollbar-size",
+      "cssVariable": "--ash-scrollbar-size",
       "owner": "platform.ui",
       "description": "Default scrollbar thickness.",
       "value": "10px"
@@ -3931,7 +3931,7 @@
     {
       "id": "tree.indent",
       "kind": "size",
-      "cssVariable": "--zeta-tree-indent",
+      "cssVariable": "--ash-tree-indent",
       "owner": "platform.ui",
       "description": "Default tree nesting indentation.",
       "value": "14px"
@@ -3939,7 +3939,7 @@
     {
       "id": "sash.dragAreaSize",
       "kind": "size",
-      "cssVariable": "--zeta-sash-drag-area-size",
+      "cssVariable": "--ash-sash-drag-area-size",
       "owner": "platform.ui",
       "description": "Default pointer target size for draggable Sash separators.",
       "value": "4px"
@@ -3947,7 +3947,7 @@
     {
       "id": "sash.hoverFeedbackSize",
       "kind": "size",
-      "cssVariable": "--zeta-sash-hover-feedback-size",
+      "cssVariable": "--ash-sash-hover-feedback-size",
       "owner": "platform.ui",
       "description": "Default visible feedback size for hovered Sash separators.",
       "value": "1px"
@@ -3955,7 +3955,7 @@
     {
       "id": "modalEditor.width",
       "kind": "size",
-      "cssVariable": "--zeta-modal-editor-width",
+      "cssVariable": "--ash-modal-editor-width",
       "owner": "platform.ui",
       "description": "Preferred modal editor width.",
       "value": "960px"
@@ -3963,7 +3963,7 @@
     {
       "id": "modalEditor.height",
       "kind": "size",
-      "cssVariable": "--zeta-modal-editor-height",
+      "cssVariable": "--ash-modal-editor-height",
       "owner": "platform.ui",
       "description": "Preferred modal editor height.",
       "value": "720px"

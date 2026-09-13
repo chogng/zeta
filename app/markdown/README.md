@@ -1,12 +1,12 @@
-# `zeta-markdown`
+# `ash-markdown`
 
 > 本 README 是 Native Markdown 解析、布局和 presentation 的 crate-level canonical
 > contract。跨 crate 的 Rust Workspace 边界见
-> [`docs/zeta-rs-architecture.md`](../../docs/zeta-rs-architecture.md)；底层 scene、富文本和字体
-> shaping contract 见 [`zeta-ui-components`](../ui-components/README.md)。
+> [`docs/ash-rs-architecture.md`](../../docs/ash-rs-architecture.md)；底层 scene、富文本和字体
+> shaping contract 见 [`ash-ui-components`](../ui-components/README.md)。
 
-`zeta-markdown` 把有资源上限的 CommonMark/GFM 输入解析为只读文档 snapshot，并通过
-`zeta-ui-components` primitive 生成 Native Markdown 组件。它拥有 Markdown 结构、脚注与数学片段投影、
+`ash-markdown` 把有资源上限的 CommonMark/GFM 输入解析为只读文档 snapshot，并通过
+`ash-ui-components` primitive 生成 Native Markdown 组件。它拥有 Markdown 结构、脚注与数学片段投影、
 `syntect` 代码高亮、RaTeX 数学排版、安全链接策略、图片解码/布局、文字命中/选择/搜索几何、
 复制文本投影、accessibility 语义树、滚动 snapshot 消费和主题 token；不拥有消息 identity、网络取图、
 平台 URL opener/clipboard、输入事件分发、持久化或产品生命周期。
@@ -58,7 +58,7 @@ MarkdownLayoutEngine::layout
 ├─ MarkdownPresentation → selection/search/image snapshots
 ├─ layout_inline → inline backgrounds/decorations/link hit fragments
 ├─ layout_table → intrinsic column sizing → wrapped cell layout
-├─ content_height + clamped zeta_ui_components::ScrollState
+├─ content_height + clamped ash_ui_components::ScrollState
 └─ Markdown::emit
    ├─ PaintRect: code/table/quote/rule/inline/selection/search decoration
    ├─ PaintImage: decoded RGBA image + inline/display typeset math
@@ -73,8 +73,8 @@ Markdown::paint
 
 `MarkdownLayoutEngine` 必须由 host 复用；每次 document、bounds、style 或 scroll snapshot 变化时重新
 生成 immutable `Markdown`。`Markdown` 不保存 parser 或 font system，也不接受输入事件。
-`zeta_ui_components::ScrollState` 是 product-owned retained state，组件只消费其 snapshot；wheel normalization、
-scrollbar 和 input routing 继续复用 `zeta-ui-components` 的通用 scroll contract。
+`ash_ui_components::ScrollState` 是 product-owned retained state，组件只消费其 snapshot；wheel normalization、
+scrollbar 和 input routing 继续复用 `ash-ui-components` 的通用 scroll contract。
 
 ## 解析、信任与显示语义
 
@@ -103,8 +103,8 @@ shell。图片 loader 必须先应用 product policy，再把取得的 bytes 解
 ## 测试、修改影响与限制
 
 ```bash
-cargo test --manifest-path Cargo.toml -p zeta-markdown
-cargo clippy --manifest-path Cargo.toml -p zeta-markdown --all-targets -- -D warnings
+cargo test --manifest-path Cargo.toml -p ash-markdown
+cargo clippy --manifest-path Cargo.toml -p ash-markdown --all-targets -- -D warnings
 bazel test //app/markdown:markdown-unit-tests
 ```
 
@@ -115,7 +115,7 @@ scene projection、Unicode search、selection/copy/hit geometry、语义 heading
 段落换行和 viewport clamp。修改 parser option 或 `DocumentBuilder` 时必须同步检查资源上限、
 HTML/image 信任边界和 block fixtures；修改 `ProjectedBlock`/spacing 时必须同步检查 content
 height、offscreen culling 与 scroll clamp；修改 rich span/selection contract 时必须同步检查
-`zui::ui::TextLayout` UTF-8 cluster geometry、renderer validation 和 [`zeta-ui-components`](../ui-components/README.md)。
+`zui::ui::TextLayout` UTF-8 cluster geometry、renderer validation 和 [`ash-ui-components`](../ui-components/README.md)。
 
 当前仍不拥有平台 URL 打开、clipboard 写入、网络/文件取图和 pointer/keyboard 事件路由；
 这些副作用由 `app` 或其他 host 绑定现有 policy/input service。尚未支持 Markdown source

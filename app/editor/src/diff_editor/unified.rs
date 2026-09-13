@@ -1,7 +1,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use zeta_diff::{DiffDocument, DiffRowKind};
+use ash_diff::{DiffDocument, DiffRowKind};
 
 use super::{DiffEditorDocument, DiffEditorSide, DiffEditorState, DiffEditorStyle, project_row};
 use crate::{CodeEditorRow, CodeEditorRowSource};

@@ -3,10 +3,10 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-use zeta_input_classifier::InputClassification;
-use zeta_input_classifier::InputClassificationContext;
-use zeta_input_classifier::InputClassificationTask;
-use zeta_input_classifier::InputRoute;
+use ash_input_classifier::InputClassification;
+use ash_input_classifier::InputClassificationContext;
+use ash_input_classifier::InputClassificationTask;
+use ash_input_classifier::InputRoute;
 
 use super::ChatInput;
 use super::ComposerRoute;

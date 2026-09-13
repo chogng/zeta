@@ -1,6 +1,6 @@
 ---
 name: ux-theming
-description: Apply repository-aware theming, color-token, widget, focus, and high-contrast rules to VS Code or Zeta UI. Use when registering colors or styling themed states; in Zeta, use its existing theme registry and DOM state owners rather than VS Code variables or selectors.
+description: Apply repository-aware theming, color-token, widget, focus, and high-contrast rules to VS Code or Ash UI. Use when registering colors or styling themed states; in Ash, use its existing theme registry and DOM state owners rather than VS Code variables or selectors.
 ---
 
 This skill covers color registration, CSS variable usage, widget style patterns, focus indicators, and high-contrast theme requirements.
@@ -10,27 +10,27 @@ This skill covers color registration, CSS variable usage, widget style patterns,
 Determine the target repository before using any literal name or snippet below:
 
 - In `../vscode`, `.monaco-*`, `.hc-*`, `.vscode-high-contrast`, `src/vs`, and `--vscode-*` are literal repository conventions.
-- In Zeta, they describe upstream semantics only. Resolve the equivalent through Zeta's existing component root, state owner, and color registry; never paste the snippet or perform a prefix replacement.
+- In Ash, they describe upstream semantics only. Resolve the equivalent through Ash's existing component root, state owner, and color registry; never paste the snippet or perform a prefix replacement.
 
-### Zeta upstream-alignment guard
+### Ash upstream-alignment guard
 
-When the target is Zeta, the VS Code names and snippets below describe theme semantics only; they are not copyable CSS or DOM templates. Keep Zeta's existing theme owner and generate variables through `zeta-ts/src/zeta/platform/theme/common/colorRegistry.ts`, which emits `--zeta-*`. Never add `--vscode-*`, `.monaco-*`, `.monaco-workbench`, `.hc-black`, `.vscode-high-contrast`, or an upstream DOM/state wrapper merely to reuse a VS Code rule.
+When the target is Ash, the VS Code names and snippets below describe theme semantics only; they are not copyable CSS or DOM templates. Keep Ash's existing theme owner and generate variables through `ash-ts/src/ash/platform/theme/common/colorRegistry.ts`, which emits `--ash-*`. Never add `--vscode-*`, `.monaco-*`, `.monaco-workbench`, `.hc-black`, `.vscode-high-contrast`, or an upstream DOM/state wrapper merely to reuse a VS Code rule.
 
-Map an upstream color ID to an existing Zeta token when the semantics match. Register a new Zeta token only when the component has a distinct, durable semantic role and provide the theme variants required by Zeta's registry. Theme-name equivalence does not justify copying upstream selector structure, default hex values, focus state ownership, or high-contrast class plumbing.
+Map an upstream color ID to an existing Ash token when the semantics match. Register a new Ash token only when the component has a distinct, durable semantic role and provide the theme variants required by Ash's registry. Theme-name equivalence does not justify copying upstream selector structure, default hex values, focus state ownership, or high-contrast class plumbing.
 
-Before changing Editor or Workbench theming, record the local component root, state classes, focus owner, token owner, and computed-style behavior. Verify the first state-changing slice in a real browser, including focus and high contrast when affected, before migrating more selectors. A prefix replacement from `--vscode-*` to `--zeta-*`, matching screenshots, type checking, and selector-count progress do not prove correct theming.
+Before changing Editor or Workbench theming, record the local component root, state classes, focus owner, token owner, and computed-style behavior. Verify the first state-changing slice in a real browser, including focus and high contrast when affected, before migrating more selectors. A prefix replacement from `--vscode-*` to `--ash-*`, matching screenshots, type checking, and selector-count progress do not prove correct theming.
 
-Concrete rule: `var(--zeta-editor-background)` produced by Zeta's color registry is valid when the component already owns the editor-background semantic. Copying `var(--vscode-editor-background)` or renaming it while also importing `.monaco-editor` nesting is invalid.
+Concrete rule: `var(--ash-editor-background)` produced by Ash's color registry is valid when the component already owns the editor-background semantic. Copying `var(--vscode-editor-background)` or renaming it while also importing `.monaco-editor` nesting is invalid.
 
-Only theme the states required by the current verified component change. A missing upstream stylesheet, color ID, selector, or high-contrast rule does not authorize replacing a Zeta stylesheet, renaming unrelated local states, adding upstream wrappers, or recreating the full VS Code theme surface.
+Only theme the states required by the current verified component change. A missing upstream stylesheet, color ID, selector, or high-contrast rule does not authorize replacing a Ash stylesheet, renaming unrelated local states, adding upstream wrappers, or recreating the full VS Code theme surface.
 
-For an upstream-alignment task, exercise the same normal, focused, disabled, selected, hover, and high-contrast states that the affected component actually supports in VS Code, then assert Zeta's owned class state and computed token values. A static screenshot or a renamed variable is not evidence of parity. If Zeta omits a state or makes focus/contrast less usable, keep the item pending and fix it through the existing Zeta theme and state owners rather than importing upstream selectors.
+For an upstream-alignment task, exercise the same normal, focused, disabled, selected, hover, and high-contrast states that the affected component actually supports in VS Code, then assert Ash's owned class state and computed token values. A static screenshot or a renamed variable is not evidence of parity. If Ash omits a state or makes focus/contrast less usable, keep the item pending and fix it through the existing Ash theme and state owners rather than importing upstream selectors.
 
 ---
 
 ## VS Code repository reference
 
-Sections 1–7 below describe literal APIs, selectors, and variables for the VS Code repository. When the target is Zeta, keep only the semantic requirement—such as “use a registered background color” or “focus remains visible in high contrast”—and resolve its concrete token and selector from Zeta source.
+Sections 1–7 below describe literal APIs, selectors, and variables for the VS Code repository. When the target is Ash, keep only the semantic requirement—such as “use a registered background color” or “focus remains visible in high contrast”—and resolve its concrete token and selector from Ash source.
 
 ## 1. Registering Colors
 
@@ -61,7 +61,7 @@ export const myWidgetBackground = registerColor('myWidget.background',
 
 ## 3. Using Colors in CSS
 
-The names in this section apply literally only in the VS Code repository. In Zeta, use a `--zeta-*` variable only when it is emitted by Zeta's registry and matches the component's semantic role; never synthesize a variable by changing the prefix.
+The names in this section apply literally only in the VS Code repository. In Ash, use a `--ash-*` variable only when it is emitted by Ash's registry and matches the component's semantic role; never synthesize a variable by changing the prefix.
 
 Colors are injected as CSS custom properties on `.monaco-workbench`:
 
@@ -104,7 +104,7 @@ Available defaults: `defaultButtonStyles`, `defaultInputBoxStyles`, `defaultChec
 
 ## 5. Focus Indicators
 
-The selector and variable below are a VS Code repository example. In Zeta, keep the existing focus owner and use the registered Zeta focus token and component state selector; do not introduce `.monaco-*` nesting or `--vscode-focusBorder`.
+The selector and variable below are a VS Code repository example. In Ash, keep the existing focus owner and use the registered Ash focus token and component state selector; do not introduce `.monaco-*` nesting or `--vscode-focusBorder`.
 
 Defined in `src/vs/workbench/browser/media/style.css`:
 
@@ -130,7 +130,7 @@ Modal dialogs must trap focus within the dialog until dismissed. Use `dom.trackF
 
 ## 6. High Contrast Theme Rules
 
-The `.hc-black`, `.hc-light`, and `.vscode-high-contrast` selectors below apply literally only in the VS Code repository. In Zeta, inspect and use its existing high-contrast root/state mechanism; do not add those upstream classes or mirror their DOM nesting.
+The `.hc-black`, `.hc-light`, and `.vscode-high-contrast` selectors below apply literally only in the VS Code repository. In Ash, inspect and use its existing high-contrast root/state mechanism; do not add those upstream classes or mirror their DOM nesting.
 
 - **Always** provide `hcDark` and `hcLight` defaults when registering colors.
 - HC backgrounds: `Color.black` (hcDark), `Color.white` (hcLight).
@@ -154,7 +154,7 @@ The `.hc-black`, `.hc-light`, and `.vscode-high-contrast` selectors below apply 
 
 ## 7. No Hardcoded Visual Values
 
-The right-hand variables in the table are VS Code repository examples. In Zeta, the same semantic rule means selecting an existing registered `--zeta-*` token; it never means copying `--vscode-*` or inventing a token by prefix substitution.
+The right-hand variables in the table are VS Code repository examples. In Ash, the same semantic rule means selecting an existing registered `--ash-*` token; it never means copying `--vscode-*` or inventing a token by prefix substitution.
 
 Reviewers will always flag hardcoded colors, shadows, sizes that should use theme tokens or CSS variables.
 

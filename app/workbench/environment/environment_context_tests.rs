@@ -6,9 +6,9 @@ use super::{
     EnvironmentContext, display_working_directory, editor_language_for_path,
     repository_root_from_path,
 };
-use zeta_app_server_protocol::protocol::common::ClientInfo;
-use zeta_app_server_protocol::protocol::git::GitBranchSwitchParams;
-use zeta_editor::CodeEditorLanguage;
+use ash_app_server_protocol::protocol::common::ClientInfo;
+use ash_app_server_protocol::protocol::git::GitBranchSwitchParams;
+use ash_editor::CodeEditorLanguage;
 
 use crate::app_server::testing::{
     AppServerClient, InProcessClientOptions, InProcessTransport, start_in_process_client,
@@ -20,10 +20,10 @@ static NEXT_REPOSITORY_ID: AtomicU64 = AtomicU64::new(0);
 fn home_relative_working_directory_uses_a_compact_label() {
     assert_eq!(
         display_working_directory(
-            Path::new("/Users/lance/Desktop/zeta"),
+            Path::new("/Users/lance/Desktop/ash"),
             Some(Path::new("/Users/lance")),
         ),
-        "~/Desktop/zeta"
+        "~/Desktop/ash"
     );
     assert_eq!(
         display_working_directory(Path::new("/Users/lance"), Some(Path::new("/Users/lance"))),
@@ -33,11 +33,11 @@ fn home_relative_working_directory_uses_a_compact_label() {
 
 #[test]
 fn fixture_exposes_all_four_toolbar_values_without_inventing_git_state() {
-    let repository = EnvironmentContext::fixture("~/Desktop/zeta", Some("main"), Some(3));
+    let repository = EnvironmentContext::fixture("~/Desktop/ash", Some("main"), Some(3));
     let plain_directory = EnvironmentContext::fixture("/tmp/plain", None, None);
 
     assert_eq!(repository.location_label(), "Local");
-    assert_eq!(repository.working_directory_label(), "~/Desktop/zeta");
+    assert_eq!(repository.working_directory_label(), "~/Desktop/ash");
     assert_eq!(repository.git_branch_label(), "main");
     assert_eq!(repository.diff_summary_label(), "Changes 3 • +3 -0");
     assert_eq!(plain_directory.git_branch_label(), "No Git");
@@ -99,8 +99,8 @@ fn repository_capture_builds_real_changed_file_diffs() {
     ));
     std::fs::create_dir_all(&root).unwrap();
     run_git(&root, &["init", "--initial-branch=main"]);
-    run_git(&root, &["config", "user.name", "Zeta Test"]);
-    run_git(&root, &["config", "user.email", "zeta@example.invalid"]);
+    run_git(&root, &["config", "user.name", "Ash Test"]);
+    run_git(&root, &["config", "user.email", "ash@example.invalid"]);
     std::fs::write(root.join("tracked.txt"), "before\n").unwrap();
     std::fs::write(root.join("deleted.txt"), "gone\n").unwrap();
     run_git(&root, &["add", "tracked.txt", "deleted.txt"]);
@@ -155,8 +155,8 @@ fn switching_branch_refreshes_the_repository_state() {
     ));
     std::fs::create_dir_all(&root).unwrap();
     run_git(&root, &["init", "--initial-branch=main"]);
-    run_git(&root, &["config", "user.name", "Zeta Test"]);
-    run_git(&root, &["config", "user.email", "zeta@example.invalid"]);
+    run_git(&root, &["config", "user.name", "Ash Test"]);
+    run_git(&root, &["config", "user.email", "ash@example.invalid"]);
     std::fs::write(root.join("tracked.txt"), "main\n").unwrap();
     run_git(&root, &["add", "tracked.txt"]);
     run_git(&root, &["commit", "-m", "initial"]);

@@ -11,23 +11,23 @@ export function desktopBuildPath(repositoryRoot: string, ...segments: readonly s
   return buildPath(repositoryRoot, "desktop", ...segments);
 }
 
-export function zetaPackageBuildPath(repositoryRoot: string, ...segments: readonly string[]): string {
-  return buildPath(repositoryRoot, "zeta-package", ...segments);
+export function ashPackageBuildPath(repositoryRoot: string, ...segments: readonly string[]): string {
+  return buildPath(repositoryRoot, "ash-package", ...segments);
 }
 
-export function developmentZetaPackagePath(
+export function developmentAshPackagePath(
   repositoryRoot: string,
   runtime: DevelopmentJavaScriptRuntime = "host-provided-node",
   platform: NodeJS.Platform = process.platform,
   architecture: string = process.arch,
 ): string {
-  const developmentRoot = zetaPackageBuildPath(repositoryRoot, "dev", "store-v1", developmentHostTarget(platform, architecture), runtime, "dev-small");
+  const developmentRoot = ashPackageBuildPath(repositoryRoot, "dev", "store-v1", developmentHostTarget(platform, architecture), runtime, "dev-small");
   const manifestDirectory = join(developmentRoot, "manifests");
   const manifestName = readdirSync(manifestDirectory).filter(isPackageManifestName).sort().at(-1);
-  if (!manifestName) throw new Error(`Zeta development package has no published manifest: ${manifestDirectory}`);
+  if (!manifestName) throw new Error(`Ash development package has no published manifest: ${manifestDirectory}`);
   const manifestPath = join(manifestDirectory, manifestName);
   const manifest: unknown = JSON.parse(readFileSync(manifestPath, "utf8"));
-  if (!isPackageManifest(manifest, Number(manifestName.slice(0, 20)))) throw new Error(`Invalid Zeta development package manifest: ${manifestPath}`);
+  if (!isPackageManifest(manifest, Number(manifestName.slice(0, 20)))) throw new Error(`Invalid Ash development package manifest: ${manifestPath}`);
   return join(developmentRoot, ...manifest.directory.split("/"));
 }
 
@@ -41,7 +41,7 @@ export function developmentHostTarget(platform: NodeJS.Platform = process.platfo
     "win32-x64": "x86_64-pc-windows-msvc",
   };
   const target = targets[`${platform}-${architecture}`];
-  if (!target) throw new Error(`Unsupported Zeta development host: ${platform}/${architecture}`);
+  if (!target) throw new Error(`Unsupported Ash development host: ${platform}/${architecture}`);
   return target;
 }
 

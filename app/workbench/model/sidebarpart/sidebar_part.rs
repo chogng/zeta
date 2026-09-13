@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use zeta_protocol::SessionId;
+use ash_protocol::SessionId;
 
 use crate::TabGroup;
 use crate::TabGroupId;

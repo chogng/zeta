@@ -123,7 +123,7 @@ impl WorkbenchApplication {
         self.code_editor_style = editor_style.clone();
         self.scm
             .editor_mut()
-            .set_style(zeta_editor::MultiDiffEditorStyle::from_theme(
+            .set_style(ash_editor::MultiDiffEditorStyle::from_theme(
                 palette,
                 editor_style,
             ));
@@ -158,7 +158,7 @@ impl WorkbenchApplication {
     }
 
     fn apply_gui_keybindings(&mut self, section: &FrontendConfigDto) {
-        let platform = zeta_keybinding::HostPlatform::current();
+        let platform = ash_keybinding::HostPlatform::current();
         let rules = match keybindings::compile_user_bindings(section.0.get("keybindings"), platform)
         {
             Ok(rules) => rules,

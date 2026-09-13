@@ -1,5 +1,5 @@
 [package]
-name = "zeta-commands"
+name = "ash-commands"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true

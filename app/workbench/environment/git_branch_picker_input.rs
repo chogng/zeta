@@ -11,7 +11,7 @@ use crate::git_branch_picker::{
     GIT_BRANCH_SEARCH_INPUT, GitBranchPickerActivation, GitBranchPickerState,
 };
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
-use zeta_session::interaction::CONTEXT_GIT_BRANCH;
+use ash_session::interaction::CONTEXT_GIT_BRANCH;
 
 impl WorkbenchApplication {
     pub(super) fn toggle_git_branch_picker(&mut self) {

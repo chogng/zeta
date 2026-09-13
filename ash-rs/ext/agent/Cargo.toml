@@ -1,0 +1,28 @@
+[package]
+name = "ash-agent"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+skills-extension = { package = "ash-skills-extension", path = "../skills" }
+agent-roles = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+action-policy = { package = "ash-action-policy", path = "../../action-policy" }
+async-utils = { package = "ash-async-utils", path = "../../async-utils" }
+ash-core = { workspace = true }
+instructions = { package = "ash-instructions", path = "../../instructions" }
+models-manager = { package = "ash-models-manager", path = "../../models-manager" }
+prompts = { package = "ash-prompts", path = "../../prompts" }
+protocol = { package = "ash-protocol", path = "../../protocol" }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

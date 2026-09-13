@@ -5,7 +5,7 @@ filegroup(
     srcs = glob(["package/*.py"], exclude = ["package/test_*.py"]) + [
         "__init__.py",
         "system_signing.py",
-        "//build/lib/zeta_build:python_sources",
+        "//build/lib/ash_build:python_sources",
     ],
 )
 
@@ -14,7 +14,7 @@ filegroup(
     srcs = glob(["remote/*.py"], exclude = ["remote/test_*.py"]) + [
         "__init__.py",
         "archive.py",
-        "//build/lib/zeta_build:python_sources",
+        "//build/lib/ash_build:python_sources",
     ],
 )
 

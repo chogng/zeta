@@ -1,8 +1,8 @@
 # 外部服务连接系统
 
-> 实现：[`zeta-rs/ext/connectors/`](../zeta-rs/ext/connectors/README.md)，package：
-> `zeta-connectors-extension`，调用方使用 `connectors`。
-> Package 入口：[`core-plugins.md`](../zeta-rs/docs/core-plugins.md)。
+> 实现：[`ash-rs/ext/connectors/`](../ash-rs/ext/connectors/README.md)，package：
+> `ash-connectors-extension`，调用方使用 `connectors`。
+> Package 入口：[`core-plugins.md`](../ash-rs/docs/core-plugins.md)。
 > Plugin 声明与目录集成：[`plugins.md`](plugins.md)。MCP 调用边界：[`mcp.md`](mcp.md)。
 > 当前状态：Connector domain、SQLite authority、API-token connect/disconnect、App Server 协议、
 > package-rooted Plugin activation、ready/standalone MCP composition、模型安全点 registry replacement、
@@ -17,7 +17,7 @@ Connector 管理“外部服务是否已经连接以及连接对应哪个账号�
 提供外部服务的常见路径中，同一 package 的 Connector capability 引用 MCP capability，Connector
 在认证成功后发布就绪的 MCP 绑定。Legacy Plugin declaration 仍作为本地兼容来源。
 这是 declaration 和 runtime 之间的数据流，不是 Plugin 在运行时包含 Connector、MCP session 或 Tool。
-Connector 不要求用户登录 Zeta，连接的账号是 GitHub、Slack、Google Drive 等外部产品账号。
+Connector 不要求用户登录 Ash，连接的账号是 GitHub、Slack、Google Drive 等外部产品账号。
 
 | 用户场景 | 系统发生什么 | 不会自动发生什么 |
 | --- | --- | --- |
@@ -82,14 +82,14 @@ Connector；Plugin 或 User/Directory 也可以独立声明 MCP server。只有�
 
 | Owner | 拥有 | 明确不拥有 |
 | --- | --- | --- |
-| `zeta-plugin` | Plugin manifest 与 `ConnectorContribution` 定义 | 安装、启用、外部账号、OAuth、MCP session |
-| `zeta-core-plugins` | package artifact/install/update/uninstall、enable/grant provenance、exact capability 与 lease | 外部账号、OAuth、MCP session |
-| `zeta-connectors-extension` | 身份、定义、连接状态、目录发现、SQLite authority、API-token/OAuth 编排 | secret backend、MCP session、Tool execution |
+| `ash-plugin` | Plugin manifest 与 `ConnectorContribution` 定义 | 安装、启用、外部账号、OAuth、MCP session |
+| `ash-core-plugins` | package artifact/install/update/uninstall、enable/grant provenance、exact capability 与 lease | 外部账号、OAuth、MCP session |
+| `ash-connectors-extension` | 身份、定义、连接状态、目录发现、SQLite authority、API-token/OAuth 编排 | secret backend、MCP session、Tool execution |
 | Connector auth adapter（同一 crate） | provider 授权协议、凭据交换、刷新与撤销 | Plugin package、连接状态持久化、Tool execution |
-| `zeta-mcp-extension` | ready declaration 到 live MCP tools runtime 的 host integration | Connector account authority |
-| `zeta-tools` / Core | Tool registry、approval、durable execution | Connect/OAuth lifecycle |
+| `ash-mcp-extension` | ready declaration 到 live MCP tools runtime 的 host integration | Connector account authority |
+| `ash-tools` / Core | Tool registry、approval、durable execution | Connect/OAuth lifecycle |
 
-Connector account 不是 Zeta account。Zeta login 只能作为云端 directory、同步或 managed policy 的可选
+Connector account 不是 Ash account。Ash login 只能作为云端 directory、同步或 managed policy 的可选
 adapter；不得成为 `ConnectorId`、connection generation 或本地 runtime readiness 的前置条件。
 
 ## 3. 当前执行路径
@@ -132,7 +132,7 @@ device；browser host 与 TUI 可执行 device flow，user code 复制到 clipbo
 | 值 | 含义 | 不能替代 |
 | --- | --- | --- |
 | `ConnectorId` | 一个 connectable product declaration | Plugin ID、account ID |
-| `ConnectorAccountId` | provider 返回的外部 account/tenant identity | Zeta user ID |
+| `ConnectorAccountId` | provider 返回的外部 account/tenant identity | Ash user ID |
 | `ConnectorCredentialRef` | auth owner 可解释的 non-secret reference | access/refresh token bytes |
 | `ConnectorConnectionGeneration` | connect/revoke attempt 的单调身份 | MCP catalog generation |
 | `ConnectorSnapshotGeneration` | 一次 immutable Connector catalog projection | config revision、Tool registry generation |
@@ -162,19 +162,19 @@ connection generation；任何状态变化都必须同时推进 snapshot generat
 | API-token connect/disconnect + local secret cleanup | ✅ 已实现 |
 | OAuth state/PKCE/exchange 编排 | ✅ 已实现 provider port、App Server RPC 与 Desktop loopback callback |
 | refresh、远端 revoke | ✅ 已实现通用 lifecycle 与 GitHub adapter；远端失败保留本地连接供重试 |
-| `zeta-secrets` memory/unavailable backend | ✅ 已实现 |
+| `ash-secrets` memory/unavailable backend | ✅ 已实现 |
 | profile 私有文件 backend | ✅ 已实现并作为本地默认 Connector persistence |
 | 系统钥匙串 backend | ✅ 保留为显式 host 注入选项；daemon 默认不请求钥匙串许可 |
 | App Server list/connect/disconnect + changed notification | ✅ 已实现 |
 | Desktop API-token UI；TUI 列表/断开/通知刷新 | ✅ 已实现 |
 | OAuth browser/device interaction | ✅ Desktop browser+device、browser host device、TUI device 已实现 |
-| ready binding → `zeta-mcp-extension` composition + dispatch fence | ✅ 已实现（host-injected provider） |
+| ready binding → `ash-mcp-extension` composition + dispatch fence | ✅ 已实现（host-injected provider） |
 | exact legacy Plugin activation → Connector/MCP runtime provider | ✅ 已实现，支持 live install/enable/disable authority reconcile |
 | Marketplace bundle → Connector/MCP runtime provider | ✅ 已实现，同 digest exact binding、HTTP/packaged stdio 校验、Manager invocation lease 与 install/update/uninstall 热重建 |
 | MCP `tools/list_changed` → safe-point rebuild | ✅ 已实现 |
 
 产品部署入口为 `LocalProductServicesConfig` / `--product-services PATH` /
-`ZETA_PRODUCT_SERVICES_PATH`。该只读 JSON 可声明通用 Marketplace Manager registry、broker URL 和 public client ID，不允许
+`ASH_PRODUCT_SERVICES_PATH`。该只读 JSON 可声明通用 Marketplace Manager registry、broker URL 和 public client ID，不允许
 client secret；`trustedRoot` 必须是配置文件目录内的普通相对路径，distribution/broker base URL 必须是无
 credential/query/fragment 且以 `/` 结尾的 HTTPS URL。普通 Plugin manifest 和 user config 不能提供这些发行信任材料。官方 Marketplace 的配置和 root 已由
 package 从 `resources/product-services/` 携带，远端签名 metadata 与 package 由独立 registry 发布。下一阶段
@@ -185,9 +185,9 @@ Server safe point 和 MCP dispatch fence，不得创建第二套 Connector 状�
 {
   "schemaVersion": 2,
   "marketplaces": [{
-    "name": "zeta",
-    "metadataBaseUrl": "https://marketplace.zeta.example/metadata/",
-    "targetsBaseUrl": "https://marketplace.zeta.example/targets/",
+    "name": "ash",
+    "metadataBaseUrl": "https://marketplace.ash.example/metadata/",
+    "targetsBaseUrl": "https://marketplace.ash.example/targets/",
     "trustedRoot": "marketplace-root.json",
     "catalogRefreshIntervalSeconds": 300,
     "allowedPublishers": ["example"]

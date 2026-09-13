@@ -5,7 +5,7 @@ use crate::{
     Rect, ScrollViewStyle, ScrollbarStyle, SearchBoxStyle, TextInput, TextInputLayoutEngine,
     TextStyle, UiDispatch, UiFrame,
 };
-use zeta_icons::icons;
+use ash_icons::icons;
 
 const PARENT: ElementId = ElementId::scoped(77, 1);
 const ROOT: ElementId = ElementId::scoped(77, 2);

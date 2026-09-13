@@ -1,4 +1,4 @@
-# Zeta Repository Instructions
+# Ash Repository Instructions
 
 ## Quick reference
 
@@ -12,9 +12,9 @@ Before changing a file, identify its owner and read every matching scoped instru
 | Any implementation or test | [`testing.instructions.md`](instructions/testing.instructions.md) |
 | Rust | [`rust.instructions.md`](instructions/rust.instructions.md) and [`rust-testing.instructions.md`](instructions/rust-testing.instructions.md) |
 | TypeScript tests and validation | [`typescript-testing.instructions.md`](instructions/typescript-testing.instructions.md) |
-| `zeta-rs/native` or `app` | [`native.instructions.md`](instructions/native.instructions.md) |
+| `ash-rs/native` or `app` | [`native.instructions.md`](instructions/native.instructions.md) |
 | Markdown documentation | [`documentation.instructions.md`](instructions/documentation.instructions.md) |
-| `zeta-code` CLI/TUI | [`tui.instructions.md`](instructions/tui.instructions.md) |
+| `ash-code` CLI/TUI | [`tui.instructions.md`](instructions/tui.instructions.md) |
 
 Scoped instructions contain implementation rules. Architecture documents contain design, status, and rationale.
 
@@ -27,25 +27,25 @@ Scoped instructions contain implementation rules. Architecture documents contain
 
 ## Repository ownership
 
-Desktop frontend paths below are relative to `zeta-ts/`.
+Desktop frontend paths below are relative to `ash-ts/`.
 
 | Path | Owner |
 | --- | --- |
-| `src/zeta/base` | Domain-neutral TypeScript utilities and UI primitives |
-| `src/zeta/platform` | Shared frontend services and platform abstractions |
-| `src/zeta/editor` | Editor models, state, projection, and contributions |
-| `src/zeta/workbench` | Application shell, Parts, panes, and product composition |
-| `zeta-rs` | Shared Rust backend protocols, domains, storage, execution, terminal semantics, and backend-neutral server host |
-| `app` | Rust Desktop product, including `zui`, `zeta-ui-components`, `zeta-workbench-ui`, renderer, `wgpu`, and `winit` |
-| `zeta-code` | `zeta code` CLI and Ratatui product host |
+| `src/ash/base` | Domain-neutral TypeScript utilities and UI primitives |
+| `src/ash/platform` | Shared frontend services and platform abstractions |
+| `src/ash/editor` | Editor models, state, projection, and contributions |
+| `src/ash/workbench` | Application shell, Parts, panes, and product composition |
+| `ash-rs` | Shared Rust backend protocols, domains, storage, execution, terminal semantics, and backend-neutral server host |
+| `app` | Rust Desktop product, including `zui`, `ash-ui-components`, `ash-workbench-ui`, renderer, `wgpu`, and `winit` |
+| `ash-code` | `ash code` CLI and Ratatui product host |
 
 Preserve the frontend dependency direction `base → platform → editor → workbench`. Lower layers must not import, specialize for, or copy state from higher layers. Multiple callers do not justify moving a domain concept into `base`; the abstraction must be domain-neutral and have a complete current consumer contract.
 
-`zeta-ts` and `app` must not execute, package, import, or depend on `zeta-cli`, `zeta-tui`, `zeta-code/cli`, or the `zeta app-server` product command. App Server listening entrypoints belong to `zeta-rs/app-server`; daemon lifecycle commands belong to `zeta-rs/app-server-daemon`; local Remote management belongs to `zeta-rs/remote-connections`; the remote runtime belongs to `zeta-rs/remote-server`. Shared internal helper dispatch belongs to `zeta-rs/arg0`. The daemon manages a separate `zeta-app-server --managed` process; service registries, queue execution, and automation run in `app-server`. Keep the runtime dependency direction `app-server → app-server-daemon`, never the reverse.
+`ash-ts` and `app` must not execute, package, import, or depend on `ash-cli`, `ash-tui`, `ash-code/cli`, or the `ash app-server` product command. App Server listening entrypoints belong to `ash-rs/app-server`; daemon lifecycle commands belong to `ash-rs/app-server-daemon`; local Remote management belongs to `ash-rs/remote-connections`; the remote runtime belongs to `ash-rs/remote-server`. Shared internal helper dispatch belongs to `ash-rs/arg0`. The daemon manages a separate `ash-app-server --managed` process; service registries, queue execution, and automation run in `app-server`. Keep the runtime dependency direction `app-server → app-server-daemon`, never the reverse.
 
-`zeta-rs`, `app`, and `zeta-code` may remain in the same root Cargo workspace; workspace membership does not change implementation ownership.
+`ash-rs`, `app`, and `ash-code` may remain in the same root Cargo workspace; workspace membership does not change implementation ownership.
 
-When a request mentions Workbench, Sessions, or another frontend concept, locate it in the Renderer/Workbench first. Only route to `zeta-code` when the request explicitly concerns the terminal, Ratatui, the CLI, or `zeta-code`.
+When a request mentions Workbench, Sessions, or another frontend concept, locate it in the Renderer/Workbench first. Only route to `ash-code` when the request explicitly concerns the terminal, Ratatui, the CLI, or `ash-code`.
 
 ## General implementation rules
 

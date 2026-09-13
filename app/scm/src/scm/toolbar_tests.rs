@@ -1,4 +1,4 @@
-use zeta_editor::CodeEditorCommand;
+use ash_editor::CodeEditorCommand;
 use zui::ui::Color;
 use zui::ui::InteractionFrame;
 use zui::ui::Rect;

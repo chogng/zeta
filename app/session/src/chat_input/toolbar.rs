@@ -1,5 +1,5 @@
-use zeta_icons::icons;
-use zeta_ui_components::{
+use ash_icons::icons;
+use ash_ui_components::{
     ActionBar, ActionBarItem, ActionBarOrientation, ActionBarStyle, ActionViewItem,
     ButtonBackgrounds, ButtonState, ButtonStyle, InteractionRegion,
 };

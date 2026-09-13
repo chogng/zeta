@@ -1,7 +1,7 @@
-use zeta_commands::AppCommandId;
-use zeta_keybinding::HostPlatform;
-use zeta_keybinding::KeySequence;
-use zeta_keybinding::parse_key_sequence;
+use ash_commands::AppCommandId;
+use ash_keybinding::HostPlatform;
+use ash_keybinding::KeySequence;
+use ash_keybinding::parse_key_sequence;
 
 use super::QuickAccessProvider;
 use super::ShortcutProvider;

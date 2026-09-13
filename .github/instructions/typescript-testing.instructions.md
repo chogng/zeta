@@ -1,5 +1,5 @@
 ---
-description: Zeta TypeScript typecheck, build, unit-test, browser-test, and generated-contract validation rules.
+description: Ash TypeScript typecheck, build, unit-test, browser-test, and generated-contract validation rules.
 applyTo: "**/*.ts,**/*.tsx,**/*.cts,**/*.mts,**/package.json,**/tsconfig*.json"
 ---
 

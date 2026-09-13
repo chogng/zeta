@@ -1,16 +1,16 @@
-# `zeta-pdf`：PDF 文档入库、系统边界与演进
+# `ash-pdf`：PDF 文档入库、系统边界与演进
 
 > 当前 crate 接口、PDFium binding 与 native smoke test 见
-> [`zeta-rs/utils/pdf/README.md`](../zeta-rs/utils/pdf/README.md)。本文拥有 PDF ingestion、OCR、
+> [`ash-rs/utils/pdf/README.md`](../ash-rs/utils/pdf/README.md)。本文拥有 PDF ingestion、OCR、
 > retrieval 与 citation 的跨系统边界和演进方向。
 
 ## 快速理解
 
-`zeta-pdf` 是 Zeta 的 **PDF 原生处理边界**：它通过随安装包发布的
+`ash-pdf` 是 Ash 的 **PDF 原生处理边界**：它通过随安装包发布的
 PDFium 读取页面并提取原生文字。页面渲染是为 OCR 准备的 Proposed extension，当前尚未实现。
 
 它不是 PDF 知识库、RAG 或 Agent Memory。持久化的文档、chunk、索引和检索
-策略应由上层 document-library / app-server 领域服务拥有；`zeta-pdf` 只提供
+策略应由上层 document-library / app-server 领域服务拥有；`ash-pdf` 只提供
 可测试、可替换的 PDF 解析能力。
 
 ```text
@@ -19,7 +19,7 @@ Desktop 预览                   Agent 知识库
 Chromium PDF Viewer            document-library / App Server
 （用户查看）                         │
                                       ▼
-                         zeta-pdf（PDFium 原生边界）
+                         ash-pdf（PDFium 原生边界）
                            ├─ 原生文字提取
                            └─ 页面渲染（仅 OCR 需要时）
                                       │
@@ -27,7 +27,7 @@ Chromium PDF Viewer            document-library / App Server
                           OCR / chunk / FTS / 向量索引 / RAG
 ```
 
-Electron/Chromium 的 PDF Viewer 可以负责普通预览，不需要由 `zeta-pdf`
+Electron/Chromium 的 PDF Viewer 可以负责普通预览，不需要由 `ash-pdf`
 渲染页面。只有 Agent 入库、文字定位、扫描页 OCR 或生成缩略图等后端工作才
 使用 PDFium。
 
@@ -41,8 +41,8 @@ Electron/Chromium 的 PDF Viewer 可以负责普通预览，不需要由 `zeta-p
 
 ## 2. 当前基础与发布契约
 
-当前 crate 位于 [`zeta-rs/utils/pdf`](../zeta-rs/utils/pdf)，包名为
-`zeta-pdf`，Rust crate 名为 `zeta_pdf`。它已经提供：
+当前 crate 位于 [`ash-rs/utils/pdf`](../ash-rs/utils/pdf)，包名为
+`ash-pdf`，Rust crate 名为 `ash_pdf`。它已经提供：
 
 - `PdfiumRuntime::from_bundled_root()`：从发布目录解析当前平台的动态库；
 - `PdfTextExtractor::bind()`：进程启动时显式绑定 PDFium；
@@ -68,7 +68,7 @@ resources/native/pdfium/
 
 | 层 | 负责 | 不负责 |
 | --- | --- | --- |
-| `zeta-pdf` | Current：PDFium 绑定、原生文字、PDF 错误；Proposed：页级几何与渲染 | 文件持久化、OCR 模型、chunk、embedding、检索、Memory |
+| `ash-pdf` | Current：PDFium 绑定、原生文字、PDF 错误；Proposed：页级几何与渲染 | 文件持久化、OCR 模型、chunk、embedding、检索、Memory |
 | document-library（新增领域服务） | 文档身份、内容哈希、版本、页面记录、导入状态、chunk 与引用 | PDFium 动态库加载、浏览器预览 UI |
 | OCR worker | 仅对需要识别的渲染页做 OCR，返回文字与置信度 | 判断文档归属、写检索索引 |
 | 检索服务 | FTS / 向量检索、融合、rerank、过滤 | 修改源 PDF 或 Agent 记忆 |
@@ -80,7 +80,7 @@ resources/native/pdfium/
 
 ### 3.1 当前 Workbench 阅读器
 
-`zeta-ts/src/zeta/workbench/contrib/pdf` 是一个 Workbench contribution，不属于
+`ash-ts/src/ash/workbench/contrib/pdf` 是一个 Workbench contribution，不属于
 `editor` 的文本或结构化文档 engine。它匹配 `application/pdf` 和 `.pdf` resource；通过
 `IFileService.readFileBytes` 请求 App Server 的 workspace-relative `fs/readBinaryFile`，
 再创建 `application/pdf` Blob URL 并嵌入 Chromium 的原生 PDF Viewer。
@@ -110,7 +110,7 @@ DocumentId（持久、面向用户的文档） ── DocumentRevisionId / SHA-2
 - `DocumentId` 表示用户看到的一份逻辑文档；`DocumentRevisionId` 或内容
   SHA-256 表示一份不可变的源文件内容。内容哈希用于去重、重新索引和审计。
 - `PageNumber` 以 `NonZeroU32` 表示，一律一基。任何 PDFium 零基索引转换只能
-  留在 `zeta-pdf` 内部。
+  留在 `ash-pdf` 内部。
 - 引用只记录 durable source span，例如
   `{ document_id, revision_id, page_start, page_end, char_start, char_end }`；不要
   记录桌面文件路径或临时资源 ID。
@@ -136,7 +136,7 @@ materialize 到 app-owned staging（仍可读取 Resource 时完成）
 原子写入不可变 source store
           │
           ▼
-native extract（zeta-pdf）→ PageRecord
+native extract（ash-pdf）→ PageRecord
           │                         │
           │                  仅空白/低质量页
           │                         ▼
@@ -165,7 +165,7 @@ staging → hashing → extracting → ocr_pending? → chunking → indexing �
 
 ## 6. 内部接口
 
-### 6.1 `zeta-pdf` 保持窄接口
+### 6.1 `ash-pdf` 保持窄接口
 
 现有的 `PdfTextExtractor` 是 PDFium adapter。后续扩展应该围绕页面事实，而不是
 暴露 PDFium 的对象、FFI handle 或底层页索引给上层：
@@ -213,7 +213,7 @@ pub struct PdfPageRenderRequest {
 
 ### 6.2 document-library 拥有持久化与编排
 
-将导入服务放在上层 crate（建议 `zeta-document-library`），依赖 `zeta_pdf`，而非
+将导入服务放在上层 crate（建议 `ash-document-library`），依赖 `ash_pdf`，而非
 反向让工具 crate 依赖 App Server、数据库或向量库：
 
 ```rust
@@ -245,7 +245,7 @@ pub enum TextExtractionMode {
 ```
 
 App Server 的 Resource adapter 负责在调用此接口前把临时 resource materialize 成
-`StagedPdfPath`。如此 `zeta-pdf` 和 document-library 不依赖 connection lifecycle，
+`StagedPdfPath`。如此 `ash-pdf` 和 document-library 不依赖 connection lifecycle，
 也不会在 public API 中出现难以理解的 `Option<ResourceId>` 或行为不明的 bool。
 
 持久化记录至少应包含：

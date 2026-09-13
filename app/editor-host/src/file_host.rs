@@ -1,13 +1,13 @@
 use std::path::Path;
 
 #[cfg(test)]
-use zeta_editor::CodeEditorRowSource;
-use zeta_editor::{
+use ash_editor::CodeEditorRowSource;
+use ash_editor::{
     CodeEditorCommand, CodeEditorDocument, CodeEditorFoldControl, CodeEditorLanguage,
     CodeEditorNavigation, CodeEditorPosition, CodeEditorSearchQuery, CodeEditorSelectionMode,
     CodeEditorTextEdit, CodeEditorViewport,
 };
-use zeta_text_file::{
+use ash_text_file::{
     TextFileDiskVersion, TextFileLifecycle, TextFileSaveRequest, TextFileSnapshot, TextFileStatus,
 };
 use zui::ui::TextInputCompositionEvent;
@@ -185,7 +185,7 @@ impl FileEditorHost {
         true
     }
 
-    pub fn apply_language_completion(&mut self, edit: &zeta_lsp_manager::LanguageTextEdit) -> bool {
+    pub fn apply_language_completion(&mut self, edit: &ash_lsp_manager::LanguageTextEdit) -> bool {
         let Some(tab) = self.active_mut() else {
             return false;
         };

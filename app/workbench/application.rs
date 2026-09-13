@@ -29,32 +29,32 @@ use crate::{
     terminal_grid_size_for_bounds, terminal_grid_size_for_viewport,
     terminal_pane_bounds_for_viewport, terminal_pane_sash_for_viewport,
 };
-use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
-use zeta_editor::CodeEditorStyle;
-use zeta_editor_host::FILE_EDITOR_DOCUMENT;
-use zeta_editor_host::FileEditorHost;
-use zeta_editor_host::FileEditorInputState;
-use zeta_editor_host::FileEditorLanguageService;
-use zeta_editor_host::FileEditorSearchState;
-use zeta_files::{FilesAction, FilesState};
-use zeta_protocol::SessionId;
-use zeta_scm::{ScmDiff, ScmState};
-use zeta_session::SessionPaneState;
-use zeta_session::interaction::COMPOSER;
-use zeta_settings::RemoteConnectionManagerState;
-use zeta_settings::RemoteConnectionPickerState;
-use zeta_settings::RemoteTunnelManagerState;
-use zeta_settings::SettingsState;
-use zeta_terminal::{BlockStatus, GridSize, ScreenBuffer};
-use zeta_terminal_runtime::TerminalPaneViewState;
-use zeta_terminal_runtime::TerminalPaneViews;
-use zeta_terminal_runtime::{TerminalSession, TerminalSessionEvent, TerminalSessionKey};
-use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, default_device_root};
-use zeta_ui_components::SashOrientation;
-use zeta_ui_theme::DEFAULT_UI_THEME;
-use zeta_ui_theme::DEFAULT_UI_TYPOGRAPHY;
-use zeta_ui_theme::UiTheme;
-use zeta_ui_theme::UiTypography;
+use ash_app_server_protocol::protocol::config::FrontendConfigDto;
+use ash_editor::CodeEditorStyle;
+use ash_editor_host::FILE_EDITOR_DOCUMENT;
+use ash_editor_host::FileEditorHost;
+use ash_editor_host::FileEditorInputState;
+use ash_editor_host::FileEditorLanguageService;
+use ash_editor_host::FileEditorSearchState;
+use ash_files::{FilesAction, FilesState};
+use ash_protocol::SessionId;
+use ash_scm::{ScmDiff, ScmState};
+use ash_session::SessionPaneState;
+use ash_session::interaction::COMPOSER;
+use ash_settings::RemoteConnectionManagerState;
+use ash_settings::RemoteConnectionPickerState;
+use ash_settings::RemoteTunnelManagerState;
+use ash_settings::SettingsState;
+use ash_terminal::{BlockStatus, GridSize, ScreenBuffer};
+use ash_terminal_runtime::TerminalPaneViewState;
+use ash_terminal_runtime::TerminalPaneViews;
+use ash_terminal_runtime::{TerminalSession, TerminalSessionEvent, TerminalSessionKey};
+use ash_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, default_device_root};
+use ash_ui_components::SashOrientation;
+use ash_ui_theme::DEFAULT_UI_THEME;
+use ash_ui_theme::DEFAULT_UI_TYPOGRAPHY;
+use ash_ui_theme::UiTheme;
+use ash_ui_theme::UiTypography;
 use zui::ui::{
     CaretBlinkAdvance, CaretBlinkController, Color, FontFamily, Point, TextInputLayoutEngine,
     TextStyle,
@@ -62,8 +62,8 @@ use zui::ui::{
 use zui::ui::{SplitViewOrientation, SplitViewResizeSnapshot};
 
 type TerminalRuntime =
-    zeta_terminal_runtime::TerminalRuntime<TerminalSession, TerminalSessionEvent>;
-type TerminalReadyOutcome = zeta_terminal_runtime::TerminalReadyOutcome<TerminalSessionEvent>;
+    ash_terminal_runtime::TerminalRuntime<TerminalSession, TerminalSessionEvent>;
+type TerminalReadyOutcome = ash_terminal_runtime::TerminalReadyOutcome<TerminalSessionEvent>;
 use zui::app::AccessibilityAction;
 use zui::app::AccessibilityActionKind;
 use zui::app::App;
@@ -107,10 +107,10 @@ pub(crate) mod command;
 mod events;
 #[path = "editor/file_editor_input.rs"]
 pub(crate) mod file_editor_input;
-pub(crate) use zeta_editor_host as file_editor_pane;
+pub(crate) use ash_editor_host as file_editor_pane;
 #[path = "application/frame.rs"]
 mod frame;
-pub(crate) use zeta_scm as git_branch_picker;
+pub(crate) use ash_scm as git_branch_picker;
 #[path = "environment/git_branch_picker_input.rs"]
 pub(crate) mod git_branch_picker_input;
 #[path = "platform/input_method.rs"]
@@ -183,16 +183,16 @@ mod state;
 pub(crate) mod tab_context_menu;
 #[path = "platform/workbench_event.rs"]
 pub(crate) mod workbench_event;
-pub(crate) use zeta_terminal_runtime as terminal_blocks;
-pub(crate) use zeta_terminal_runtime as terminal_history;
+pub(crate) use ash_terminal_runtime as terminal_blocks;
+pub(crate) use ash_terminal_runtime as terminal_history;
 #[path = "terminal/terminal_input.rs"]
 pub(crate) mod terminal_input;
-pub(crate) use zeta_terminal_runtime as terminal_output_scroll_view;
+pub(crate) use ash_terminal_runtime as terminal_output_scroll_view;
 #[path = "terminal/terminal_pointer.rs"]
 pub(crate) mod terminal_pointer;
 #[path = "terminal/terminal_selection.rs"]
 pub(crate) mod terminal_selection;
-pub(crate) use zeta_terminal_runtime as terminal_session;
+pub(crate) use ash_terminal_runtime as terminal_session;
 #[path = "environment/directory_picker.rs"]
 pub(crate) mod directory_picker;
 #[path = "environment/directory_picker_input.rs"]

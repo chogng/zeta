@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 from .cargo import validate_input_binary
 from .cargo_paths import cargo_profile_directory
 from .cargo_paths import resolve_cargo_target_directory
-from build.lib.zeta_build.targets import TargetSpec
+from build.lib.ash_build.targets import TargetSpec
 
 
 REQUIRED_SOURCE_FILES = (
@@ -57,7 +57,7 @@ def resolve_bubblewrap(
             raise RuntimeError("--bwrap-bin is only supported for Linux packages")
         return None
 
-    source = load_vendored_source(repository_root / "zeta-rs" / "vendor" / "bubblewrap")
+    source = load_vendored_source(repository_root / "ash-rs" / "vendor" / "bubblewrap")
     if explicit_binary is not None:
         executable = validate_input_binary(
             explicit_binary, "Bubblewrap executable", "--bwrap-bin", False
@@ -83,7 +83,7 @@ def resolve_bubblewrap(
 
 
 def load_vendored_source(source_directory: Path) -> VendoredSource:
-    metadata_path = source_directory / "zeta-source.json"
+    metadata_path = source_directory / "ash-source.json"
     try:
         value = json.loads(metadata_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
@@ -140,7 +140,7 @@ def build_bubblewrap(
         "--manifest-path",
         str(repository_root / "Cargo.toml"),
         "--package",
-        "zeta-bwrap",
+        "ash-bwrap",
         "--bin",
         "bwrap",
         "--profile",

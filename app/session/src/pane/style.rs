@@ -1,8 +1,8 @@
 //! Host-resolved Session Pane colors.
 
-use zeta_ui_components::ScrollViewStyle;
-use zeta_ui_theme::TypographyStyle;
-use zeta_ui_theme::UiTheme;
+use ash_ui_components::ScrollViewStyle;
+use ash_ui_theme::TypographyStyle;
+use ash_ui_theme::UiTheme;
 use zui::ui::Color;
 
 #[derive(Clone, Copy)]

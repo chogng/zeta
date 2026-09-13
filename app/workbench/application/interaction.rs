@@ -143,7 +143,7 @@ impl WorkbenchApplication {
             .composer_interaction_view()
             .map(|view| view.items().len())
             .unwrap_or(0);
-        if let Some(index) = zeta_session::interaction::composer_interaction_item_index(
+        if let Some(index) = ash_session::interaction::composer_interaction_item_index(
             id,
             0..interaction_item_count,
         ) {
@@ -249,7 +249,7 @@ impl WorkbenchApplication {
         if !self.quick_access.shortcuts_open() {
             return false;
         }
-        if id == zeta_settings::KEYBOARD_SHORTCUTS_CLOSE {
+        if id == ash_settings::KEYBOARD_SHORTCUTS_CLOSE {
             self.quick_access.close();
             self.settings.reset_keyboard_shortcut_recording();
         } else if let Some(command) = self.quick_access.shortcut_command(id) {
@@ -267,9 +267,9 @@ impl WorkbenchApplication {
             return false;
         }
         match self.settings.activate(id) {
-            zeta_settings::SettingsActivation::Ignored => false,
-            zeta_settings::SettingsActivation::Changed => {
-                if self.settings.section() != zeta_settings::SettingsPageSection::Remote
+            ash_settings::SettingsActivation::Ignored => false,
+            ash_settings::SettingsActivation::Changed => {
+                if self.settings.section() != ash_settings::SettingsPageSection::Remote
                     && self.remote_connection_manager.is_settings()
                 {
                     self.dismiss_remote_connection_manager();
@@ -279,8 +279,8 @@ impl WorkbenchApplication {
                 self.request_redraw();
                 true
             }
-            zeta_settings::SettingsActivation::OpenRemote => self.open_remote_connection_settings(),
-            zeta_settings::SettingsActivation::Close => {
+            ash_settings::SettingsActivation::OpenRemote => self.open_remote_connection_settings(),
+            ash_settings::SettingsActivation::Close => {
                 self.close_settings_tab();
                 true
             }
@@ -415,9 +415,9 @@ impl WorkbenchApplication {
         self.apply_dispatch_outcome(outcome);
         if let Some((point, bounds)) = composer_click {
             let selection_mode = if self.modifiers.shift_key() {
-                zeta_editor::CodeEditorSelectionMode::Extend
+                ash_editor::CodeEditorSelectionMode::Extend
             } else {
-                zeta_editor::CodeEditorSelectionMode::Move
+                ash_editor::CodeEditorSelectionMode::Move
             };
             if self
                 .session_pane
@@ -495,14 +495,14 @@ impl WorkbenchApplication {
     pub(super) fn multi_diff_bounds(&self) -> Option<zui::ui::Rect> {
         self.presentation
             .as_ref()?
-            .element_bounds(zeta_scm::MULTI_DIFF_EDITOR)
+            .element_bounds(ash_scm::MULTI_DIFF_EDITOR)
     }
 
     pub(super) fn settings_keybindings_viewport(
         &self,
-    ) -> Option<zeta_settings::SettingsKeybindingsViewport> {
+    ) -> Option<ash_settings::SettingsKeybindingsViewport> {
         if !self.workbench.workbench().sidebar_part().is_settings()
-            || self.settings.section() != zeta_settings::SettingsPageSection::Keybindings
+            || self.settings.section() != ash_settings::SettingsPageSection::Keybindings
             || self.quick_access.shortcuts_open()
         {
             return None;
@@ -510,12 +510,12 @@ impl WorkbenchApplication {
         let bounds = self
             .presentation
             .as_ref()?
-            .element_bounds(zeta_settings::SETTINGS_KEYBINDINGS_LIST)?;
-        Some(zeta_settings::SettingsKeybindingsViewport::new(
+            .element_bounds(ash_settings::SETTINGS_KEYBINDINGS_LIST)?;
+        Some(ash_settings::SettingsKeybindingsViewport::new(
             bounds,
-            zeta_commands::AppCommandId::BINDABLE.len(),
+            ash_commands::AppCommandId::BINDABLE.len(),
             self.keybinding_diagnostics.len(),
-            zeta_settings::SettingsSectionStyle::from_theme(self.palette, &self.typography)
+            ash_settings::SettingsSectionStyle::from_theme(self.palette, &self.typography)
                 .scroll_view,
         ))
     }

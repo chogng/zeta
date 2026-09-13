@@ -1,7 +1,7 @@
 use super::UiTheme;
-use zeta_theme::ColorScheme;
-use zeta_theme::ThemeCatalog;
-use zeta_theme::ThemeDocument;
+use ash_theme::ColorScheme;
+use ash_theme::ThemeCatalog;
+use ash_theme::ThemeDocument;
 use zui::ui::Color;
 use zui::ui::FontFamily;
 use zui::ui::FontWeight;
@@ -59,7 +59,7 @@ fn snapshot_projection_resolves_layout_component_tokens_and_standard_sizes() {
 fn appearance_overrides_key_hint_colors_through_keybinding_label_tokens() {
     let document = ThemeDocument::parse(
         r##"{
-            "$schema": "https://zeta.dev/schemas/color-theme.schema.json",
+            "$schema": "https://ash.dev/schemas/color-theme.schema.json",
             "version": 1,
             "id": "key-hint-test",
             "label": "Key Hint Test",

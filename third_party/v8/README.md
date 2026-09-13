@@ -1,10 +1,10 @@
 # Code Mode V8 构建输入
 
-本目录拥有 Code Mode 使用的 `rusty_v8` 预编译输入锁定规则，不拥有 JavaScript 执行语义、工具审批或运行时生命周期。运行时实现由 `zeta-code-mode-runtime` crate 负责。
+本目录拥有 Code Mode 使用的 `rusty_v8` 预编译输入锁定规则，不拥有 JavaScript 执行语义、工具审批或运行时生命周期。运行时实现由 `ash-code-mode-runtime` crate 负责。
 
 ## 构建和打包行为
 
-`runtime-lock.json` 为每个 Zeta 发布目标锁定一份启用 V8 沙箱的静态库压缩包和对应 Rust binding，并记录 SHA-256。当前文件来自 OpenAI Codex 的 `rusty-v8-v150.4.0` release，因为 `rusty_v8` 上游没有发布这一版本的沙箱组合产物。
+`runtime-lock.json` 为每个 Ash 发布目标锁定一份启用 V8 沙箱的静态库压缩包和对应 Rust binding，并记录 SHA-256。当前文件来自 OpenAI Codex 的 `rusty-v8-v150.4.0` release，因为 `rusty_v8` 上游没有发布这一版本的沙箱组合产物。
 
 | 场景 | 下载位置 | 最终产品里有什么 |
 | --- | --- | --- |
@@ -20,7 +20,7 @@
 首次准备缺失的 V8 文件或需要校验缓存时使用：
 
 ```sh
-python3 -B scripts/cargo.py test -p zeta-code-mode-runtime
+python3 -B scripts/cargo.py test -p ash-code-mode-runtime
 ```
 
 包装脚本会读取 Cargo 参数中的 `--target`；没有指定时使用当前主机目标。它把锁定文件写入 `rusty_v8` 自己识别的本地镜像布局。缓存存在后，普通 `cargo test`、`cargo check` 和 `cargo build` 会通过 `.cargo/config.toml` 直接读取同一份文件，不需要包装脚本或手工环境变量。`just app`、`just app-check`、`just app-test`、共享开发包的 `prepareDevPackage.ts` 和发布构建负责在缓存缺失时下载并校验文件。
@@ -32,8 +32,8 @@ python3 -B scripts/cargo.py test -p zeta-code-mode-runtime
 验证入口：
 
 ```sh
-python3 -B -m unittest build.lib.zeta_build.test_v8
-node --test build/zeta-package/prepareDevPackage.test.ts
-python3 -B scripts/cargo.py test -p zeta-v8-poc --features sandbox
-bazel test //zeta-rs/v8-poc:v8-poc-unit-tests
+python3 -B -m unittest build.lib.ash_build.test_v8
+node --test build/ash-package/prepareDevPackage.test.ts
+python3 -B scripts/cargo.py test -p ash-v8-poc --features sandbox
+bazel test //ash-rs/v8-poc:v8-poc-unit-tests
 ```

@@ -1,11 +1,11 @@
 use std::time::Duration;
 use std::time::Instant;
 
-use zeta_commands::AppCommandId;
-use zeta_keybinding::Chord;
-use zeta_keybinding::HostPlatform;
-use zeta_keybinding::ShortcutModifiers;
-use zeta_keybinding::serialize_key_sequence;
+use ash_commands::AppCommandId;
+use ash_keybinding::Chord;
+use ash_keybinding::HostPlatform;
+use ash_keybinding::ShortcutModifiers;
+use ash_keybinding::serialize_key_sequence;
 use zui::ui::CaretVisibility;
 use zui::ui::Color;
 use zui::ui::InteractionFrame;

@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
-import { ZetaRendererDirectory } from "../../zeta-ts/src/zeta/code/common/application.js";
-import { WorkbenchModeRegistry } from "../../zeta-ts/src/zeta/workbench/common/workbenchMode.js";
+import { AshRendererDirectory } from "../../ash-ts/src/ash/code/common/application.js";
+import { WorkbenchModeRegistry } from "../../ash-ts/src/ash/workbench/common/workbenchMode.js";
 import { desktopBuildPath } from "../lib/paths.ts";
 import { hotReloadPlugin } from "./hotReloadPlugin.ts";
 import { productIconsPlugin } from "./productIconsPlugin.ts";
@@ -9,12 +9,12 @@ import { webAppServerVitePlugin } from "./webAppServerPlugin.ts";
 import { workbenchEntryPlugin } from "./workbenchEntryPlugin.ts";
 
 export default defineConfig(() => {
-  const desktopRoot = resolve(import.meta.dirname, "../../zeta-ts");
+  const desktopRoot = resolve(import.meta.dirname, "../../ash-ts");
   const repositoryRoot = resolve(desktopRoot, "..");
-  const workbenchModeId = WorkbenchModeRegistry.resolveModeId(process.env.ZETA_WORKBENCH_MODE);
-  const webAppServerEnabled = process.env.ZETA_WEB_APP_SERVER === "1";
+  const workbenchModeId = WorkbenchModeRegistry.resolveModeId(process.env.ASH_WORKBENCH_MODE);
+  const webAppServerEnabled = process.env.ASH_WEB_APP_SERVER === "1";
   const developmentPort = webAppServerEnabled ? 5174 : 5173;
-  const sourceRoot = resolve(desktopRoot, "src/zeta/code");
+  const sourceRoot = resolve(desktopRoot, "src/ash/code");
   const browserEntry = "browser/workbench/workbench";
   const electronEntry = "electron-browser/workbench/workbench";
   const dedicatedSessionsEntries = WorkbenchModeRegistry.definitions.flatMap(mode => mode.dedicatedSessions ? [mode.dedicatedSessions.rendererEntry] : []);
@@ -31,8 +31,8 @@ export default defineConfig(() => {
     root: sourceRoot,
     publicDir: resolve(repositoryRoot, "resources/server"),
     define: {
-      __ZETA_WORKBENCH_MODE__: JSON.stringify(workbenchModeId),
-      __ZETA_WEB_APP_SERVER__: JSON.stringify(webAppServerEnabled),
+      __ASH_WORKBENCH_MODE__: JSON.stringify(workbenchModeId),
+      __ASH_WEB_APP_SERVER__: JSON.stringify(webAppServerEnabled),
     },
     plugins: [hotReloadPlugin({ desktopRoot }), workbenchEntryPlugin(), productIconsPlugin(), ...(webAppServerEnabled ? [webAppServerVitePlugin()] : [])],
     optimizeDeps: {
@@ -44,7 +44,7 @@ export default defineConfig(() => {
       strictPort: true,
     },
     build: {
-      outDir: desktopBuildPath(repositoryRoot, "renderer", ZetaRendererDirectory),
+      outDir: desktopBuildPath(repositoryRoot, "renderer", AshRendererDirectory),
       emptyOutDir: true,
       rollupOptions: {
         input: {

@@ -1,6 +1,6 @@
 //! Host-resolved colors shared by editor overlays.
 
-use zeta_ui_theme::UiTheme;
+use ash_ui_theme::UiTheme;
 use zui::ui::Color;
 
 /// Colors required by editor search-adjacent popovers and diagnostic details.

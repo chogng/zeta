@@ -1,5 +1,5 @@
 [package]
-name = "zeta-session"
+name = "ash-session"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,27 +7,27 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "zeta_session"
+name = "ash_session"
 path = "src/lib.rs"
 
 [dependencies]
 message-history = { workspace = true }
 anyhow = { workspace = true }
 serde_json = { workspace = true }
-zeta-app-server-client = { workspace = true }
-zeta-app-server-protocol = { workspace = true }
-zeta-editor = { workspace = true }
-zeta-icons = { workspace = true }
-zeta-input-classifier = { workspace = true }
-zeta-protocol = { workspace = true }
-zeta-slash-commands = { workspace = true }
-zeta-thread-transcript = { workspace = true }
-zeta-ui-components = { workspace = true }
-zeta-ui-theme = { workspace = true }
+ash-app-server-client = { workspace = true }
+ash-app-server-protocol = { workspace = true }
+ash-editor = { workspace = true }
+ash-icons = { workspace = true }
+ash-input-classifier = { workspace = true }
+ash-protocol = { workspace = true }
+ash-slash-commands = { workspace = true }
+ash-thread-transcript = { workspace = true }
+ash-ui-components = { workspace = true }
+ash-ui-theme = { workspace = true }
 zui = { workspace = true, default-features = false }
 
 [dev-dependencies]
-state = { package = "zeta-state", path = "../../zeta-rs/state" }
+state = { package = "ash-state", path = "../../ash-rs/state" }
 tempfile = { workspace = true }
 
 [lints]

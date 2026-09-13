@@ -1,4 +1,4 @@
-"""Run Cargo with Zeta's checksum-verified Code Mode V8 inputs."""
+"""Run Cargo with Ash's checksum-verified Code Mode V8 inputs."""
 
 from __future__ import annotations
 
@@ -12,9 +12,9 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from build.lib.zeta_build.cargo_selection import cargo_command_uses_v8  # noqa: E402
-from build.lib.zeta_build.targets import TARGETS, default_target  # noqa: E402
-from build.lib.zeta_build.v8 import (  # noqa: E402
+from build.lib.ash_build.cargo_selection import cargo_command_uses_v8  # noqa: E402
+from build.lib.ash_build.targets import TARGETS, default_target  # noqa: E402
+from build.lib.ash_build.v8 import (  # noqa: E402
     DEFAULT_CACHE,
     DEFAULT_LOCK,
     resolve_v8_cargo_env,

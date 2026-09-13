@@ -4,8 +4,8 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use zeta_protocol::SessionId;
-use zeta_protocol::ThreadId;
+use ash_protocol::SessionId;
+use ash_protocol::ThreadId;
 
 /// Application content kind that can be mounted into one PaneGroup input.
 ///

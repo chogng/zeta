@@ -8,7 +8,7 @@ use crate::{
     ListItemStyle, PaintIcon, PaintRect, Point, Rect, ScrollAxis, ScrollMetrics, ScrollState,
     ScrollView, ScrollbarPresentation, Size, TextBlock, TextInput, TextInputLayoutEngine, UiScene,
 };
-use zeta_icons::icons;
+use ash_icons::icons;
 use zui::ui::AccessibilityExpansion;
 use zui::ui::AccessibilityRole;
 use zui::ui::AccessibilitySelection;

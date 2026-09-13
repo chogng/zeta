@@ -1,0 +1,280 @@
+.ash-settings-search {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  flex: 0 0 44px;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--ash-widget-border);
+  background: var(--ash-editor-background);
+}
+
+.ash-settings-search-input {
+  min-width: 0;
+  width: 100%;
+  flex: 1 1 auto;
+}
+
+.ash-settings-search-filter {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  color: var(--ash-description-foreground);
+}
+
+.ash-settings-search-filter:hover,
+.ash-settings-search-filter.is-open,
+.ash-settings-search-filter.checked {
+  color: var(--ash-foreground);
+  background: var(--ash-toolbar-hover-background);
+}
+
+.ash-settings-search-filter > .ash-button-content > .ash-button-label {
+  display: none;
+}
+
+.ash-settings-search-input input {
+  height: 30px;
+  padding: 4px 10px;
+  border: 1px solid var(--ash-input-border);
+  border-radius: 4px;
+  outline: none;
+  color: var(--ash-input-foreground);
+  background: var(--ash-input-background);
+}
+
+.ash-settings-search-input input:focus {
+  border-color: var(--ash-focus-border);
+}
+
+.ash-settings-search-input input::placeholder {
+  color: var(--ash-input-placeholder-foreground);
+}
+
+.ash-configuration-settings {
+  display: flex;
+  max-width: 760px;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.ash-configuration-settings-group h4 {
+  margin: 0;
+  color: var(--ash-foreground);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ash-configuration-settings-group-description {
+  margin: 5px 0 12px;
+  color: var(--ash-description-foreground);
+  line-height: 1.5;
+}
+
+.ash-configuration-settings-list {
+  overflow: visible;
+  border-radius: 8px;
+  background: var(--ash-settings-item-background);
+}
+
+.ash-settings-tree-group.is-settings-root > .ash-configuration-settings-list {
+  display: flex;
+  overflow: visible;
+  flex-direction: column;
+  border-radius: 0;
+  background: transparent;
+  gap: 30px;
+}
+
+.ash-settings-tree-group:not(.is-settings-root) > .ash-configuration-settings-list > * {
+	position: relative;
+}
+
+.ash-settings-tree-group:not(.is-settings-root) > .ash-configuration-settings-list > * + *::before {
+	position: absolute;
+	top: 0;
+	right: 14px;
+	left: 14px;
+	height: 1px;
+	background: var(--ash-settings-item-separator);
+	content: '';
+	pointer-events: none;
+}
+
+.ash-configuration-setting {
+  position: relative;
+  display: grid;
+  min-height: 68px;
+  box-sizing: border-box;
+  align-items: center;
+  padding: 12px 14px;
+  color: var(--ash-foreground);
+  gap: 18px;
+}
+
+.ash-configuration-setting:hover {
+  background: var(--ash-settings-row-hover-background);
+}
+
+.ash-configuration-setting:focus-within {
+  background: var(--ash-settings-focused-row-background);
+}
+
+.ash-configuration-setting > .ash-setting-item-actions {
+  top: 24px;
+}
+
+.ash-configuration-setting-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ash-configuration-setting-title {
+  font-weight: 600;
+}
+
+.ash-configuration-setting-description {
+  color: var(--ash-description-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ash-settings-indicators {
+  display: inline-flex;
+  min-height: 18px;
+  align-items: center;
+  color: var(--ash-description-foreground);
+  font-size: 11px;
+  gap: 5px;
+}
+
+.ash-settings-indicators.is-modified::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ash-settings-modified-item-indicator);
+  content: '';
+}
+
+.ash-settings-indicators.is-pending {
+  opacity: 0.8;
+}
+
+.ash-setting-item {
+	position: relative;
+}
+
+.ash-setting-item-actions {
+	position: absolute;
+	top: 50%;
+	left: -32px;
+	z-index: 1;
+	display: flex;
+	width: 32px;
+	height: 24px;
+	align-items: center;
+	justify-content: center;
+	transform: translateY(-50%);
+	opacity: 0;
+	pointer-events: none;
+}
+
+.ash-setting-item:hover > .ash-setting-item-actions,
+.ash-setting-item:focus-within > .ash-setting-item-actions,
+.ash-setting-item-actions.is-open {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.ash-setting-item-actions > .ash-setting-item-actions-trigger {
+	width: 24px;
+	min-width: 24px;
+	height: 24px;
+	min-height: 24px;
+	box-sizing: border-box;
+	padding: 0;
+	color: var(--ash-description-foreground);
+}
+
+.ash-setting-item-actions-trigger:hover {
+	color: var(--ash-foreground);
+	background: var(--ash-toolbar-hover-background);
+}
+
+.ash-setting-item-actions-trigger > .ash-button-content > .ash-button-label {
+	display: none;
+}
+
+.ash-general-setting {
+	grid-template-columns: minmax(0, 1fr) minmax(132px, 190px);
+}
+
+.ash-general-toggle-control,
+.ash-editor-toggle-control {
+	width: 100%;
+	grid-column: 1 / -1;
+}
+
+.ash-editor-toggle-control {
+	cursor: pointer;
+}
+
+.ash-general-setting-control,
+.ash-editor-setting-select,
+.ash-editor-setting-number,
+.ash-editor-setting-text {
+	width: 100%;
+	min-height: 30px;
+	box-sizing: border-box;
+}
+
+.ash-general-setting-control.ash-select-box {
+	justify-self: end;
+}
+
+.ash-general-setting-control:not(.ash-select-box),
+.ash-editor-setting-text {
+	padding: 4px 8px;
+	border: 1px solid var(--ash-input-border);
+	border-radius: 4px;
+	outline: none;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	font: inherit;
+}
+
+.ash-general-setting-control:not(.ash-select-box):focus-visible {
+	outline: 1px solid var(--ash-focus-border);
+	outline-offset: 1px;
+}
+
+.ash-editor-setting {
+	cursor: default;
+	grid-template-columns: minmax(0, 1fr) minmax(112px, 180px);
+}
+
+.ash-editor-setting-text:focus-visible {
+	border-color: var(--ash-focus-border);
+}
+
+.ash-configuration-settings-status {
+  min-height: 18px;
+  margin: -18px 0 0;
+  color: var(--ash-description-foreground);
+  font-size: 12px;
+}
+
+.ash-configuration-settings-status.is-error {
+  color: var(--ash-error-foreground);
+}
+
+@media (max-width: 720px) {
+  .ash-configuration-settings .ash-configuration-setting {
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

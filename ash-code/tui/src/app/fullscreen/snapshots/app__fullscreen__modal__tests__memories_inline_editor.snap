@@ -1,0 +1,34 @@
+---
+source: ash-code/tui/src/app/fullscreen/modal_tests.rs
+expression: frame_text(&app)
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+─ Memory content ───────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+  Ctrl+S save · Ctrl+A clear · Esc cancel                                                           
+  Use Rust                                                                                          
+  保 留   两 个 空 格                                                                                     
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+  Esc to close

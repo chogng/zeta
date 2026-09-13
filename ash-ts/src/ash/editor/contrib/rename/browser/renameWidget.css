@@ -1,0 +1,28 @@
+.stanza-editor-rename {
+  position: absolute;
+  z-index: 9;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px;
+  background: var(--ash-editor-widget-background, var(--ash-editor-background));
+  border: 1px solid var(--ash-editor-widget-border, var(--ash-editor-border));
+  border-radius: 4px;
+  box-shadow: 0 4px 14px var(--ash-editor-widget-shadow);
+}
+
+.stanza-editor-rename[hidden] {
+  display: none;
+}
+
+.stanza-editor-rename-input {
+  min-width: 220px;
+  color: var(--ash-editor-foreground);
+  background: var(--ash-editor-input-background, var(--ash-editor-background));
+  border: 1px solid var(--ash-editor-border);
+}
+
+.stanza-editor-rename-status {
+  color: var(--ash-editor-description-foreground, var(--ash-editor-foreground));
+  font-size: 12px;
+}

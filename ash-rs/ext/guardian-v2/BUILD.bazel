@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "guardian-v2",
+    crate_name = "ash_guardian_v2",
+)

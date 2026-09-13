@@ -1,9 +1,0 @@
-.zeta-multi-chat-tabs-control {
-  --zeta-tab-list-inactive-background: var(--zeta-chat-tab-background);
-
-  display: flex;
-  min-width: 0;
-  flex: 1 1 auto;
-  align-items: center;
-  overflow: hidden;
-}

@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use zeta_terminal::{ScreenBuffer, TerminalCore};
+use ash_terminal::{ScreenBuffer, TerminalCore};
 
 use crate::project_block_lines;
 

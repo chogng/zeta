@@ -1,6 +1,6 @@
-import { addDisposableListener } from "../../../zeta-ts/src/zeta/base/browser/dom.js";
-import { DisposableStore, toDisposable } from "../../../zeta-ts/src/zeta/base/common/lifecycle.js";
-import * as stanzaApi from "../../../zeta-ts/src/zeta/editor/editor.main.js";
+import { addDisposableListener } from "../../../ash-ts/src/ash/base/browser/dom.js";
+import { DisposableStore, toDisposable } from "../../../ash-ts/src/ash/base/common/lifecycle.js";
+import * as stanzaApi from "../../../ash-ts/src/ash/editor/editor.main.js";
 import "./style.css";
 
 declare global {
@@ -21,7 +21,7 @@ const sample: GeometrySample = {
 };
 
 export function describe(sample: GeometrySample): string {
-\tconst longLine = "Edit this deliberately long line to inspect wrapping, cursor placement, selections, horizontal geometry, and viewport updates without starting the Zeta Workbench.";
+\tconst longLine = "Edit this deliberately long line to inspect wrapping, cursor placement, selections, horizontal geometry, and viewport updates without starting the Ash Workbench.";
 \treturn \`\${sample.label}: \${sample.columns.join(", ")} — \${longLine}\`;
 }
 

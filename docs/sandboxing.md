@@ -1,6 +1,6 @@
 # 沙箱架构
 
-Zeta 的 `sandboxing` 拥有统一权限契约和执行前的后端选择。请求先确定最低隔离要求，再选择能实施该请求的后端；选择过程不得改变隔离模型。目标覆盖 Codex 的本地命令、交互终端、持续执行会话、文件权限及受管网络能力。本文维护长期契约与实现边界，MXC 文档依据、平台差异、实施与验收见 [Codex 本地执行对齐方案](../zeta-rs/docs/mxc-sandbox-windows-fallback.md)。
+Ash 的 `sandboxing` 拥有统一权限契约和执行前的后端选择。请求先确定最低隔离要求，再选择能实施该请求的后端；选择过程不得改变隔离模型。目标覆盖 Codex 的本地命令、交互终端、持续执行会话、文件权限及受管网络能力。本文维护长期契约与实现边界，MXC 文档依据、平台差异、实施与验收见 [Codex 本地执行对齐方案](../ash-rs/docs/mxc-sandbox-windows-fallback.md)。
 
 ## 调用与所有权
 
@@ -36,7 +36,7 @@ flowchart TD
 
 ## 选择与执行
 
-以下是执行契约。当前 SDK 的能力探测仍存在错误分类缺口，修复要求和完成状态见 [能力检查与错误分类](../zeta-rs/docs/mxc-sandbox-windows-fallback.md#能力检查与错误分类)。
+以下是执行契约。当前 SDK 的能力探测仍存在错误分类缺口，修复要求和完成状态见 [能力检查与错误分类](../ash-rs/docs/mxc-sandbox-windows-fallback.md#能力检查与错误分类)。
 
 1. Executor 为已授权请求建立代理，Manager 验证并解析工作目录。
 2. `SandboxBackends` 按注册顺序准备候选；每个候选收到完整且相同的策略和目录范围。
@@ -47,7 +47,7 @@ flowchart TD
 7. 结束时终止并等待进程树，排空输出，再释放隔离资源和代理。
 
 注册的候选必须完整实施请求。准备出普通进程不能满足受限请求；只有显式 `FullAccess + Allowed` 且单目录、无隐藏范围时使用普通进程。
-能力检查可以创建并释放临时 PSEC 环境，但不能启动用户命令、配置账户或修改持久 ACL/WFP 规则。失败和清理错误都需要保留。发布资格与运行时能力是两项独立要求，见方案的 [发布条件](../zeta-rs/docs/mxc-sandbox-windows-fallback.md#发布条件)。
+能力检查可以创建并释放临时 PSEC 环境，但不能启动用户命令、配置账户或修改持久 ACL/WFP 规则。失败和清理错误都需要保留。发布资格与运行时能力是两项独立要求，见方案的 [发布条件](../ash-rs/docs/mxc-sandbox-windows-fallback.md#发布条件)。
 
 ## 权限契约
 
@@ -77,8 +77,8 @@ flowchart TD
 ### 网络与本地进程通信目标
 
 - 保留 `Denied`、`Managed`、`Allowed` 作为产品的常用选择；完整请求分别表达外连、入站、宿主回环及本地进程通信。后端能力耦合不能成为修改授权的理由。
-- `Managed` 的目标授权由 Zeta 代理实施。MXC 负责使代理可达并限制其他出口，不会替外部代理安装域名规则，也不会把任意 TCP/UDP 客户端透明转换成 HTTP 代理客户端。
-- Windows PSEC 的代理身份、私有网络双向能力与 Zeta 默认禁止入站存在接入约束；当前 Windows 补丁生成的回环 IP 允许规则不等于 MXC 的代理模式。具体处理与未完成项见 [Windows 代理接入](../zeta-rs/docs/mxc-sandbox-windows-fallback.md#windows-代理接入)。
+- `Managed` 的目标授权由 Ash 代理实施。MXC 负责使代理可达并限制其他出口，不会替外部代理安装域名规则，也不会把任意 TCP/UDP 客户端透明转换成 HTTP 代理客户端。
+- Windows PSEC 的代理身份、私有网络双向能力与 Ash 默认禁止入站存在接入约束；当前 Windows 补丁生成的回环 IP 允许规则不等于 MXC 的代理模式。具体处理与未完成项见 [Windows 代理接入](../ash-rs/docs/mxc-sandbox-windows-fallback.md#windows-代理接入)。
 - Unix socket 是独立的 IPC 权限，不再用 IP 网络是否受限决定全部禁止。目标是在本次执行的私有临时目录中允许构建工具需要的 socket，并显式拒绝 Docker、SSH/GPG agent 及其他任务的 socket；不得通过授予整个共享临时目录来取得兼容性。
 - macOS 没有私有 TCP 回环；Seatbelt 的宿主回环限制也会影响同一任务的 TCP 服务。后台开发服务器须带明确监听授权，或采用可实施的 IPC/转发方案；不支持的入站组合应拒绝。
 
@@ -98,39 +98,39 @@ flowchart TD
 - 输入关闭、前台中断和整个进程树终止分别表达。输出需要有界缓存及明确的截断/缺口信息；PTY 的 stdout/stderr 合并，管道保持分离。终态在回收进程树及排空尾部输出后确定。
 - 复用执行进程的生命周期，不引入 MXC 命名容器来模拟会话。进程退出后本次隔离资源结束；不承诺 App Server 重启后仍可重新接入已退出或已回收的进程。
 
-目标能力与准确的 MXC Rust SDK 接入要求见 [执行会话与 PTY](../zeta-rs/docs/mxc-sandbox-windows-fallback.md#执行会话与-pty)。
+目标能力与准确的 MXC Rust SDK 接入要求见 [执行会话与 PTY](../ash-rs/docs/mxc-sandbox-windows-fallback.md#执行会话与-pty)。
 
 ## MXC 接入边界
 
 - 保留固定 revision 的 SDK、独立 ACL 授权、文件对象身份检查、目录例外及进程生命周期补丁。
-- Windows 的 Zeta 请求要求 MXC 只使用 PSEC；内部其他 ProcessContainer 实现不能代替它。准备阶段必须区分确定的能力不足与运行故障，不能把任意探测错误转换成 `UnsupportedPolicy`。
+- Windows 的 Ash 请求要求 MXC 只使用 PSEC；内部其他 ProcessContainer 实现不能代替它。准备阶段必须区分确定的能力不足与运行故障，不能把任意探测错误转换成 `UnsupportedPolicy`。
 - 按运行时能力检查 PSEC，不能用“24H2 以上”代替检查。
 - Linux 与 macOS 继续通过同一适配器接入 Bubblewrap 和 Seatbelt。
 - 本轮自写 `mxc-user` 账户运行器已退出源码、编译、打包、签名和 CI 配置；不再安装它。
 
-补丁来源与校验见 [MXC 依赖](../zeta-rs/vendor/mxc/README.md)。原型源码与校验清单保存在本机 `.build/acceptance/mxc-local/prototype-source`，历史测试与系统清理结果保留在 [Windows 验收手册](windows-sandbox-acceptance-runbook.md)。
+补丁来源与校验见 [MXC 依赖](../ash-rs/vendor/mxc/README.md)。原型源码与校验清单保存在本机 `.build/acceptance/mxc-local/prototype-source`，历史测试与系统清理结果保留在 [Windows 验收手册](windows-sandbox-acceptance-runbook.md)。
 
-固定 MXC `6cd3d58f05d3447e67109cfb75e042803b843ca4` 的 [上游说明](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/README.md) 明确指出存在生成策略过于宽松的已知情况，当前 MXC profiles 不能被当作安全边界。Zeta 的补丁和已有测试不自动消除该限制；产品只可声明经过审查和实机验证的具体保证，不能用 Seatbelt、Bubblewrap 或 PSEC 的名称代替策略验证。
+固定 MXC `6cd3d58f05d3447e67109cfb75e042803b843ca4` 的 [上游说明](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/README.md) 明确指出存在生成策略过于宽松的已知情况，当前 MXC profiles 不能被当作安全边界。Ash 的补丁和已有测试不自动消除该限制；产品只可声明经过审查和实机验证的具体保证，不能用 Seatbelt、Bubblewrap 或 PSEC 的名称代替策略验证。
 
-2026-09-12 另核对本地 MXC `567570084f1ebaca539b0a3186aeb68bca77788a` 的 SDK、平台及诊断文档。它用于发现接入限制和升级差异，不代表 Zeta 已升级。文档中的 JSON、Rust SDK、命令行和设计提案分别核对，不能把某个入口的能力当作所有入口已实现；依据与失败原因见 [MXC 文档复核](../zeta-rs/docs/mxc-sandbox-windows-fallback.md#mxc-文档复核与接入纠正)。
+2026-09-12 另核对本地 MXC `567570084f1ebaca539b0a3186aeb68bca77788a` 的 SDK、平台及诊断文档。它用于发现接入限制和升级差异，不代表 Ash 已升级。文档中的 JSON、Rust SDK、命令行和设计提案分别核对，不能把某个入口的能力当作所有入口已实现；依据与失败原因见 [MXC 文档复核](../ash-rs/docs/mxc-sandbox-windows-fallback.md#mxc-文档复核与接入纠正)。
 
 ## Windows 候选评估
 
-Codex 的专用账户实现是行为参考。Zeta 不直接注册其产品 crate：
+Codex 的专用账户实现是行为参考。Ash 不直接注册其产品 crate：
 
 - 固定的账户名、服务名、管道名和配置位置需要独立于用户现有 Codex 安装。
-- Codex Windows crate 依赖其协议、PTY 工具及遥测，并与产品网络代理协作；这些产品依赖和类型不进入 Zeta 的统一契约。
-- 自动安装、刷新 ACL、重试及较弱模式切换必须符合 Zeta 的独立授权和不自动重跑契约。
+- Codex Windows crate 依赖其协议、PTY 工具及遥测，并与产品网络代理协作；这些产品依赖和类型不进入 Ash 的统一契约。
+- 自动安装、刷新 ACL、重试及较弱模式切换必须符合 Ash 的独立授权和不自动重跑契约。
 - NUL 设备权限、可写目录扫描、隐藏父目录下的授权例外、PowerShell/PTY 和异常恢复需要同一套端到端测试。
 
-已核对本地 Codex `da20788df913189878ebca7f4963d8a363ee6bf2` 的实际调用链。接入范围包括执行器、安装程序和代理；仅复制命令运行器不能满足 Zeta 的契约。
+已核对本地 Codex `da20788df913189878ebca7f4963d8a363ee6bf2` 的实际调用链。接入范围包括执行器、安装程序和代理；仅复制命令运行器不能满足 Ash 的契约。
 
 该提交已包含 PSEC 请求与启动实现，但默认 Windows 平台选择仍是 `WindowsRestrictedToken`；`sandboxing/src/windows_mxc.rs` 只记录 PSEC 可用性，未见默认执行路径调用 MXC 启动器。因此不能把它作为“Codex 已在默认路径完成 PSEC 与账户选择验收”的证据。Codex 不提升权限的限制令牌路径不能实施同样的读限制，不能与专用账户路径合并评价。源码依据见 [默认选择](https://github.com/openai/codex/blob/da20788df913189878ebca7f4963d8a363ee6bf2/codex-rs/sandboxing/src/manager.rs)、[可用性记录](https://github.com/openai/codex/blob/da20788df913189878ebca7f4963d8a363ee6bf2/codex-rs/sandboxing/src/windows_mxc.rs) 和 [Windows 策略限制](https://github.com/openai/codex/blob/da20788df913189878ebca7f4963d8a363ee6bf2/codex-rs/sandboxing/src/windows.rs)。
 
-| Codex 源码 | 已确认的行为 | Zeta 接入要求 |
+| Codex 源码 | 已确认的行为 | Ash 接入要求 |
 | --- | --- | --- |
 | `windows-sandbox-rs/src/setup.rs`、`provisioning_protocol.rs`、`wfp.rs` | 固定账户、管道和 WFP 对象身份 | 安装身份统一生成并记录，不能复用 Codex 的账户、管道或 GUID；卸载只处理本安装记录的对象 |
-| `windows-sandbox-service/src/package_identity.rs`、`ipc/authentication.rs` | 校验客户端包身份、服务包身份及请求者用户 SID | 若采用服务式安装，必须建立 Zeta 自己的调用方认证；现有 helper 不因此引入 Codex 服务 |
+| `windows-sandbox-service/src/package_identity.rs`、`ipc/authentication.rs` | 校验客户端包身份、服务包身份及请求者用户 SID | 若采用服务式安装，必须建立 Ash 自己的调用方认证；现有 helper 不因此引入 Codex 服务 |
 | `windows-sandbox-rs/src/identity.rs` | 请求账户时可能启动提升权限的安装；每次执行前刷新 ACL | 安装、修复与命令执行分开；准备阶段只读检查；账户或规则失效时返回安装错误 |
 | `windows-sandbox-rs/src/elevated/runner_client.rs` | 部分账户、权限错误触发刷新与一次重试 | 启动失败原样返回，由上层决定是否重新授权；适配器不自动重跑 |
 | `windows-sandbox-rs/src/token.rs`、`audit.rs`、`acl.rs` | 限制 SID 包含账户、登录 SID 和 Everyone；执行前扫描可写路径，并可能修改 NUL 权限 | 明确采用账户模型；扫描遗漏不能证明 Strict，设备与 Grant 外的变更需要独立授权 |
@@ -139,7 +139,7 @@ Codex 的专用账户实现是行为参考。Zeta 不直接注册其产品 crate
 
 这里的宿主安装授权与 `HostAclChanges::Scoped` 不同：后者仍只覆盖 Grant 与隐藏目录，不能批准账户创建、持久网络规则、NUL 或其他宿主路径的修改。接入后也必须保留这一区别。
 
-独立实现位于 [`windows-sandbox`](../zeta-rs/windows-sandbox/README.md)，不复用 Codex 的账户、服务、管道或包身份。它从冻结的 InstallContext 获取 Zeta helper，使用路径和文件摘要绑定已授权的安装；安装和修复不进入普通执行路径。
+独立实现位于 [`windows-sandbox`](../ash-rs/windows-sandbox/README.md)，不复用 Codex 的账户、服务、管道或包身份。它从冻结的 InstallContext 获取 Ash helper，使用路径和文件摘要绑定已授权的安装；安装和修复不进入普通执行路径。
 
 2026-09-11 实机追踪确认：移除限制 SID 中的 Everyone 后，Windows PowerShell 的 CLR 调用 `NtCreatePrivateNamespace` 返回 `STATUS_ACCESS_DENIED`。该调用的边界描述符包含 Everyone。增加 `BaseNamedObjects` 目录权限不能替代这项检查；相关试验权限已撤销，产品安装清单不保留这些目录授权。
 

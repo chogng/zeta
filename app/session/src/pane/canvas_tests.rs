@@ -23,7 +23,7 @@ fn empty_session_header_shows_ready_environment_context() {
     let header = SessionHeader::new(
         Rect::from_xywh(0.0, 0.0, 700.0, 64.0),
         "",
-        "Local  ·  ~/Desktop/zeta  ·  main  ·  Changes 2".to_owned(),
+        "Local  ·  ~/Desktop/ash  ·  main  ·  Changes 2".to_owned(),
         None,
         SessionHeaderStyle::new(
             zui::ui::Color::WHITE,
@@ -51,6 +51,6 @@ fn empty_session_header_shows_ready_environment_context() {
     assert!(text.contains(&"Ready"));
     assert!(
         text.iter()
-            .any(|line| line.contains("~/Desktop/zeta") && line.contains("Changes 2"))
+            .any(|line| line.contains("~/Desktop/ash") && line.contains("Changes 2"))
     );
 }

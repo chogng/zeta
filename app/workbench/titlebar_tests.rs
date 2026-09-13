@@ -7,7 +7,7 @@ use crate::Point;
 use crate::Rect;
 use crate::sidebarpart::test_style;
 use crate::{CHANGES_PANE_BUTTON, TAB_CONTAINER_TOGGLE};
-use zeta_icons::icons;
+use ash_icons::icons;
 use zui::ui::InteractionFrame;
 use zui::ui::UiDispatch;
 use zui::ui::UiFrame;

@@ -10,13 +10,13 @@ use signal_hook::SigId;
 use signal_hook::consts::SIGINT;
 #[cfg(unix)]
 use signal_hook::consts::SIGTERM;
-use zeta_remote_connections::RemoteConnectionCatalog;
-use zeta_remote_connections::RemoteConnectionName;
-use zeta_remote_connections::SshTunnelDiagnostics;
-use zeta_remote_connections::SshTunnelOptions;
-use zeta_remote_connections::select_available_loopback_port;
-use zeta_remote_host::RemoteTunnelStartup;
-use zeta_remote_host::wait_for_remote_tunnel;
+use ash_remote_connections::RemoteConnectionCatalog;
+use ash_remote_connections::RemoteConnectionName;
+use ash_remote_connections::SshTunnelDiagnostics;
+use ash_remote_connections::SshTunnelOptions;
+use ash_remote_connections::select_available_loopback_port;
+use ash_remote_host::RemoteTunnelStartup;
+use ash_remote_host::wait_for_remote_tunnel;
 
 use crate::remote_connection_cli::RemoteConnectionCommandParseError;
 use crate::remote_connection_cli::load_connection;

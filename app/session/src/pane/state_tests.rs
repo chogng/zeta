@@ -2,19 +2,19 @@
 
 use super::classification_history_for_thread;
 use super::turn_command_was_not_found;
-use zeta_input_classifier::InputHistoryEntry;
-use zeta_protocol::ItemId;
-use zeta_protocol::SessionId;
-use zeta_protocol::Thread;
-use zeta_protocol::ThreadId;
-use zeta_protocol::ThreadItem;
-use zeta_protocol::ThreadStatus;
-use zeta_protocol::ToolCallId;
-use zeta_protocol::ToolName;
-use zeta_protocol::Turn;
-use zeta_protocol::TurnId;
-use zeta_protocol::TurnStatus;
-use zeta_thread_transcript::ThreadTranscriptSnapshot;
+use ash_input_classifier::InputHistoryEntry;
+use ash_protocol::ItemId;
+use ash_protocol::SessionId;
+use ash_protocol::Thread;
+use ash_protocol::ThreadId;
+use ash_protocol::ThreadItem;
+use ash_protocol::ThreadStatus;
+use ash_protocol::ToolCallId;
+use ash_protocol::ToolName;
+use ash_protocol::Turn;
+use ash_protocol::TurnId;
+use ash_protocol::TurnStatus;
+use ash_thread_transcript::ThreadTranscriptSnapshot;
 
 #[test]
 fn switching_threads_cancels_submission_even_with_identical_history() {
@@ -25,7 +25,7 @@ fn switching_threads_cancels_submission_even_with_identical_history() {
 
     let mut pane = super::SessionPaneState::default();
     let mut thread = Thread {
-        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id: SessionId::new("classification-session").unwrap(),
         thread_id: ThreadId::new("first-thread").unwrap(),
@@ -109,7 +109,7 @@ fn thread_snapshot_preserves_prompt_and_direct_shell_history_order() {
     let agent_turn_id = TurnId::new("turn-agent").unwrap();
     let shell_turn_id = TurnId::new("turn-shell").unwrap();
     let thread = Thread {
-        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id: SessionId::new("session-1").unwrap(),
         thread_id: ThreadId::new("thread-1").unwrap(),
@@ -125,12 +125,12 @@ fn thread_snapshot_preserves_prompt_and_direct_shell_history_order() {
             Turn {
                 turn_id: agent_turn_id.clone(),
                 status: TurnStatus::Completed,
-                kind: zeta_protocol::TurnKind::Coding,
+                kind: ash_protocol::TurnKind::Coding,
                 instructions: None,
                 model: None,
                 tool_profile: None,
                 tool_mode: Default::default(),
-                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 usage: Default::default(),
                 context_usage: None,
                 items: vec![ThreadItem::UserMessage {
@@ -145,12 +145,12 @@ fn thread_snapshot_preserves_prompt_and_direct_shell_history_order() {
             Turn {
                 turn_id: shell_turn_id.clone(),
                 status: TurnStatus::Completed,
-                kind: zeta_protocol::TurnKind::Coding,
+                kind: ash_protocol::TurnKind::Coding,
                 instructions: None,
                 model: None,
                 tool_profile: None,
                 tool_mode: Default::default(),
-                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 usage: Default::default(),
                 context_usage: None,
                 items: vec![ThreadItem::ToolCall {

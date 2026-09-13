@@ -1,21 +1,21 @@
 use super::*;
-use zeta_editor::CodeEditor;
-use zeta_editor::CodeEditorHeader;
-use zeta_editor::CodeEditorPresentation;
-use zeta_editor::CodeEditorStyle;
-use zeta_ui_components::Button;
-use zeta_ui_components::ButtonBackgrounds;
-use zeta_ui_components::ButtonState;
-use zeta_ui_components::ButtonStyle;
-use zeta_ui_components::Dialog;
-use zeta_ui_components::DialogIds;
-use zeta_ui_components::DialogStyle;
-use zeta_ui_components::InputBox;
-use zeta_ui_components::InputBoxState;
-use zeta_ui_components::InputBoxStateColors;
-use zeta_ui_components::InputBoxStyle;
-use zeta_ui_components::InteractionRegion;
-use zeta_ui_theme::UiTheme;
+use ash_editor::CodeEditor;
+use ash_editor::CodeEditorHeader;
+use ash_editor::CodeEditorPresentation;
+use ash_editor::CodeEditorStyle;
+use ash_ui_components::Button;
+use ash_ui_components::ButtonBackgrounds;
+use ash_ui_components::ButtonState;
+use ash_ui_components::ButtonStyle;
+use ash_ui_components::Dialog;
+use ash_ui_components::DialogIds;
+use ash_ui_components::DialogStyle;
+use ash_ui_components::InputBox;
+use ash_ui_components::InputBoxState;
+use ash_ui_components::InputBoxStateColors;
+use ash_ui_components::InputBoxStyle;
+use ash_ui_components::InteractionRegion;
+use ash_ui_theme::UiTheme;
 use zui::ui::*;
 
 pub(crate) fn list_bounds(panel: Rect) -> Rect {
@@ -58,7 +58,7 @@ pub(crate) fn body_editor<'a>(
         style.clone(),
     )
     .with_presentation(CodeEditorPresentation::Compact)
-    .with_line_wrapping(zeta_editor::CodeEditorLineWrapping::Soft)
+    .with_line_wrapping(ash_editor::CodeEditorLineWrapping::Soft)
     .with_caret_visibility(caret)
 }
 
@@ -182,7 +182,7 @@ pub(crate) fn draw(
             theme,
             dispatch,
         );
-        let list = zeta_ui_components::ListView::new(
+        let list = ash_ui_components::ListView::new(
             list_bounds(panel),
             state.entries.len(),
             28.0,

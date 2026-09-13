@@ -1,5 +1,5 @@
 ---
-description: Zeta documentation ownership, current specifications, change history and writing rules.
+description: Ash documentation ownership, current specifications, change history and writing rules.
 applyTo: "**/*.md"
 ---
 

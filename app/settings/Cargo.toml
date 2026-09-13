@@ -1,5 +1,5 @@
 [package]
-name = "zeta-settings"
+name = "ash-settings"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -9,15 +9,15 @@ publish.workspace = true
 path = "lib.rs"
 
 [dependencies]
-zeta-commands = { workspace = true }
-zeta-icons = { workspace = true }
-zeta-keybinding = { workspace = true }
-zeta-keybindings-host = { workspace = true }
-zeta-remote = { workspace = true }
-zeta-remote-connections = { workspace = true }
-zeta-remote-host = { workspace = true }
-zeta-ui-components = { workspace = true }
-zeta-ui-theme = { workspace = true }
+ash-commands = { workspace = true }
+ash-icons = { workspace = true }
+ash-keybinding = { workspace = true }
+ash-keybindings-host = { workspace = true }
+ash-remote = { workspace = true }
+ash-remote-connections = { workspace = true }
+ash-remote-host = { workspace = true }
+ash-ui-components = { workspace = true }
+ash-ui-theme = { workspace = true }
 zui = { workspace = true, default-features = false }
 
 [lints]

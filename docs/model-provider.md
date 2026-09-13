@@ -1,19 +1,19 @@
 # 模型调用系统
 
-> - 物理位置：`zeta-rs/model-provider/`
-> - Rust crate：`zeta_model_provider`
+> - 物理位置：`ash-rs/model-provider/`
+> - Rust crate：`ash_model_provider`
 > - 层次：Provider 运行时与选择层
-> - 当前状态：completion runtime 已直接组合 `zeta-api` endpoint profile、`zeta-client` operation
->   retry/stream framing 与 `zeta-http-client` transport；OpenAI Responses、OpenAI-compatible Chat
+> - 当前状态：completion runtime 已直接组合 `ash-api` endpoint profile、`ash-client` operation
+>   retry/stream framing 与 `ash-http-client` transport；OpenAI Responses、OpenAI-compatible Chat
 >   Completions、Anthropic Messages 已使用原生 wire streaming；semantic OpenAI API-key
 >   materialization 已有 host-injected `SecretStore` 路径；独立 WebSocket transport 与显式 provider
 >   capability 已落地，Responses WebSocket 和公共 Realtime GA 已提供显式 runtime 会话入口
-> - Crate 实现与 adapter 调用图：[`zeta-rs/model-provider/README.md`](../zeta-rs/model-provider/README.md)
+> - Crate 实现与 adapter 调用图：[`ash-rs/model-provider/README.md`](../ash-rs/model-provider/README.md)
 > - 声明配置层：[`model-provider-config.md`](model-provider-config.md)
-> - API 协议层：[`zeta-api.md`](zeta-api.md)
-> - Operation client：[`zeta-client.md`](zeta-client.md)
-> - 底层网络：[`zeta-http-client` README](../zeta-rs/http-client/README.md)
-> - WebSocket transport：[`zeta-websocket-client` README](../zeta-rs/websocket-client/README.md)
+> - API 协议层：[`ash-api.md`](ash-api.md)
+> - Operation client：[`ash-client.md`](ash-client.md)
+> - 底层网络：[`ash-http-client` README](../ash-rs/http-client/README.md)
+> - WebSocket transport：[`ash-websocket-client` README](../ash-rs/websocket-client/README.md)
 > - Secret persistence：[`secrets.md`](secrets.md)
 > - Interactive login control plane：[`login.md`](login.md)
 > - ChatGPT 订阅运行时：[`chatgpt-subscription.md`](chatgpt-subscription.md)
@@ -51,7 +51,7 @@ flowchart TD
 安全重试与分帧，网络层负责真实连接；任何一层都不能根据 URL 或模型名称重新猜测上层已经作出
 的选择。
 
-ChatGPT 与 Kimi 订阅在这里都只是一次模型调用：各自的 OAuth owner 提供已刷新的请求目标，模型调用系统完成协议适配，Zeta Core 继续拥有上下文、工具、批准和循环控制。订阅认证不得创建 Thread、推进 Turn 或实现 `TurnExecutionBackend`。
+ChatGPT 与 Kimi 订阅在这里都只是一次模型调用：各自的 OAuth owner 提供已刷新的请求目标，模型调用系统完成协议适配，Ash Core 继续拥有上下文、工具、批准和循环控制。订阅认证不得创建 Thread、推进 Turn 或实现 `TurnExecutionBackend`。
 
 一次绑定必须明确回答：
 
@@ -103,14 +103,14 @@ ChatGPT 与 Kimi 订阅在这里都只是一次模型调用：各自的 OAuth ow
 当前实现已经具备正确的基本方向：
 
 - `ModelProviderRuntime` 拥有配置 registry 和 lazy transport owner；
-- `zeta-chatgpt::ChatGptOAuth` 与 `zeta-kimi::KimiOAuth` 为各自的 subscription row 提供 request-time fresh `ResolvedApiTarget`；
+- `ash-chatgpt::ChatGptOAuth` 与 `ash-kimi::KimiOAuth` 为各自的 subscription row 提供 request-time fresh `ResolvedApiTarget`；
 - `Provider` 保存 normalized config、definition 和 adapter；
 - `ModelInvoker` 表达不可变 Provider/model selection；
 - `src/providers/` 按外部服务组织 runtime adapter；
 - `NormalizedModelProviderConfig::api_profile` 显式选择 `ApiEndpoint`；
 - `ProviderDefinition::websocket_api_profile` 显式声明 exact WebSocket wire profile，不从 HTTP compatibility 推断；
 - `SemanticRuntimeResolver` 将 OpenAI-compatible/OpenAI/Ollama 的 exact config 解析为 immutable embedding/rerank invoker；
-- `model-provider → zeta-api`、`zeta-client` 和 `zeta-http-client`，没有反向依赖。
+- `model-provider → ash-api`、`ash-client` 和 `ash-http-client`，没有反向依赖。
 
 已移除的重复分派为：
 
@@ -119,19 +119,19 @@ model-provider-config::ProviderAdapter
         ↓
 model-provider::providers::instantiate
         ↓
-zeta-api::Api::{OpenAi, DeepSeek, Google, ...}
+ash-api::Api::{OpenAi, DeepSeek, Google, ...}
 ```
 
-`zeta-api::Api` 曾复制了一次 Provider registry。现在 `zeta-api` 仅公开 endpoint profile；
+`ash-api::Api` 曾复制了一次 Provider registry。现在 `ash-api` 仅公开 endpoint profile；
 `model-provider::providers/` 保留唯一的 Provider runtime 选择，并把声明式 `ApiProfile` 映射为
 `ApiEndpoint`。
 
-`HttpClient` 和 `UreqHttpClient` 定义在 `zeta-http-client`；`WebSocketConnector` 和 crate-owned
-message/handshake types 定义在 `zeta-websocket-client`。两种 transport 共用
+`HttpClient` 和 `UreqHttpClient` 定义在 `ash-http-client`；`WebSocketConnector` 和 crate-owned
+message/handshake types 定义在 `ash-websocket-client`。两种 transport 共用
 `OutboundNetworkSnapshot`，因此 proxy、TLS/mTLS、connect timeout 和 target filtering 不会分叉。Runtime
 当前仍只持有共享 lazy HTTP operation client：
 App Server 启动不构造 socket/TLS backend，第一次真实 operation 才 fallibly 创建 transport；API codec
-构造 opaque byte request，`zeta-client` 组合 retry/framing，底层保留 status/header/body transport evidence。
+构造 opaque byte request，`ash-client` 组合 retry/framing，底层保留 status/header/body transport evidence。
 
 ## 4. 运行时解析流程
 
@@ -150,7 +150,7 @@ Provider runtime adapter
   ├─ resolve target/deployment
   ├─ choose API profile
   ├─ choose retry policy
-  └─ bind zeta-api endpoint + zeta-client
+  └─ bind ash-api endpoint + ash-client
         │
         ▼
 Arc<dyn ModelInvoker>
@@ -166,7 +166,7 @@ Provider 名称不能等同于 API 协议。同一 Provider 可以选择多个�
 | Provider | 可选 API profile 示例 |
 | --- | --- |
 | OpenAI Platform | Responses |
-| ChatGPT 订阅 | OpenAI Responses codec + `zeta-chatgpt` native OAuth target |
+| ChatGPT 订阅 | OpenAI Responses codec + `ash-chatgpt` native OAuth target |
 | Kimi Platform | OpenAI-compatible Chat Completions + API key |
 | Kimi Code 订阅 | Kimi Coding OpenAI-compatible Chat Completions + native OAuth target |
 | xAI | Responses、Chat Completions |
@@ -179,14 +179,14 @@ Provider 名称不能等同于 API 协议。同一 Provider 可以选择多个�
 
 核对日期：2026-09-10。这里的“支持 WebSocket”只表示当前文本/Agent 模型调用 API 有明确的官方
 WebSocket contract；某个供应商在语音、实时音视频或另一套模型 API 中使用 WebSocket，并不代表
-Zeta 当前 adapter 可以切换过去。OAuth 也只决定如何取得 credential，不会自动改变 transport。
+Ash 当前 adapter 可以切换过去。OAuth 也只决定如何取得 credential，不会自动改变 transport。
 
-| Provider / runtime | 官方公开能力 | 与当前 Zeta invocation profile 的关系 | 当前 Zeta 状态 |
+| Provider / runtime | 官方公开能力 | 与当前 Ash invocation profile 的关系 | 当前 Ash 状态 |
 | --- | --- | --- | --- |
 | OpenAI Platform | [Responses WebSocket](https://developers.openai.com/api/docs/guides/websocket-mode) | 独立 Responses 会话 | 显式 connect_responses 已实现；默认模型调用仍用 HTTP |
 | ChatGPT 订阅 | 本地 Codex 实现及 Luna／low 实连 | 专用认证 target 和握手 beta 头 | 两轮同连接调用与增量发送已实测 |
 | OpenAI Realtime GA | [Realtime GA](https://developers.openai.com/api/docs/guides/realtime) | 独立 realtimeApiProfile，不由 Luna 订阅授权 | connect_realtime 已实现；本地事件／PCM 验证，未实连语音模型 |
-| xAI | [Responses WebSocket mode](https://docs.x.ai/developers/advanced-api-usage/websocket-mode) 明确使用 `wss://api.x.ai/v1/responses` | 上游 exact Responses WS，但 Zeta 当前 xAI definition 仍是 Chat Completions | `Unavailable`；先迁移/验证 Responses adapter，再启用 |
+| xAI | [Responses WebSocket mode](https://docs.x.ai/developers/advanced-api-usage/websocket-mode) 明确使用 `wss://api.x.ai/v1/responses` | 上游 exact Responses WS，但 Ash 当前 xAI definition 仍是 Chat Completions | `Unavailable`；先迁移/验证 Responses adapter，再启用 |
 | Google Gemini | [Live API](https://ai.google.dev/api/live) 是 stateful WebSocket | 独立 `BidiGenerateContent`/Live 模型协议，不是当前 OpenAI-compatible Chat route | `Unavailable` |
 | Qwen | [文本流式输出](https://www.alibabacloud.com/help/en/model-studio/stream) 使用 SSE；[Realtime API](https://www.alibabacloud.com/help/en/model-studio/realtime) 另有 WebSocket | Realtime 属于 Omni/audio/ASR/TTS 等独立协议 | `Unavailable` |
 | MiniMax | [API overview](https://platform.minimax.io/docs/api-reference/api-overview) 的 WebSocket 面向 T2A；文本调用为独立 Chat API | 语音 WebSocket 不能替代当前 text Chat route | `Unavailable` |
@@ -199,7 +199,7 @@ Zeta 当前 adapter 可以切换过去。OAuth 也只决定如何取得 credenti
 | MiMo | [Responses API](https://mimo.mi.com/docs/en-US/api/chat/responses) 使用 SSE，且当前文档不支持 `previous_response_id` | 不能借用 OpenAI Responses WebSocket/session 假设 | `Unavailable` |
 | Generic OpenAI-compatible | 没有统一上游 authority | HTTP path/JSON 兼容不证明 handshake、event lifecycle、sticky state 或 prewarm 兼容 | `Unavailable`，fail closed |
 
-代码中的 `WebSocketApiProfile` 表达“Zeta 允许哪一种 exact wire codec”，不是“供应商公司是否在任意
+代码中的 `WebSocketApiProfile` 表达“Ash 允许哪一种 exact wire codec”，不是“供应商公司是否在任意
 产品里用过 WebSocket”。启用真实调用还需要 service target、model、credential scope、codec 与
 session lifecycle 同时匹配；显式请求不受支持的 WebSocket 服务会在连接前失败，不自动更换传输。
 
@@ -209,7 +209,7 @@ session lifecycle 同时匹配；显式请求不受支持的 WebSocket 服务会
 binding 都由 `ProviderDefinition.input_token_count` 明确声明 profile、target 和 model policy；未声明
 时 fail closed，不能因为 Chat Completions 外形兼容就推断存在 count endpoint。
 
-| Provider | 官方计量面 | 当前 Zeta 状态 | 边界 |
+| Provider | 官方计量面 | 当前 Ash 状态 | 边界 |
 | --- | --- | --- | --- |
 | OpenAI | [`POST /responses/input_tokens`](https://developers.openai.com/api/reference/resources/responses/subresources/input_tokens) | ✅ exact remote | 与 Responses request 同 codec；直接读取 `input_tokens` |
 | Anthropic | [`POST /v1/messages/count_tokens`](https://docs.anthropic.com/en/api/messages-count-tokens) | 部分具备：estimated remote | provider preflight 后按 1%/至少 32 tokens 保守记账 |
@@ -246,7 +246,7 @@ Thread 和 Turn 聚合保留每项的 `complete`，某次调用缺少字段时�
 
 ```rust
 let binding = ApiBinding::OpenAiChat {
-    endpoint: zeta_api::endpoint::OpenAiChat::deepseek(),
+    endpoint: ash_api::endpoint::OpenAiChat::deepseek(),
     target: resolved_target,
 };
 ```
@@ -254,21 +254,21 @@ let binding = ApiBinding::OpenAiChat {
 以上只是语义示例。关键约束：
 
 - Provider module 选择 endpoint/profile；
-- `zeta-api` 实现 request/response/event codec；
-- `zeta-client` 组织 operation attempt，并通过 `zeta-http-client` 执行；
+- `ash-api` 实现 request/response/event codec；
+- `ash-client` 组织 operation attempt，并通过 `ash-http-client` 执行；
 - runtime 不根据 URL 或 model ID 猜 profile；
 - profile 变化必须是显式配置或 built-in definition 变化；
 - 已有配置不能静默迁移到另一正式 API。
 
 ### 5.4 OpenAI 服务接口面不是 OpenAI-compatible 配置档案
 
-OpenAI Platform API 与 ChatGPT 订阅服务都可能使用 `responses` 这样的相对 path，但它们的 base URL、credential、entitlement 和可用 operation 不能由 path 推断。详见 [`zeta-api.md`](zeta-api.md#45-openai-platform-与-chatgpt-订阅服务端点清单)。
+OpenAI Platform API 与 ChatGPT 订阅服务都可能使用 `responses` 这样的相对 path，但它们的 base URL、credential、entitlement 和可用 operation 不能由 path 推断。详见 [`ash-api.md`](ash-api.md#45-openai-platform-与-chatgpt-订阅服务端点清单)。
 
 因此 direct-provider runtime binding 包含如下事实：
 
 ```rust
 pub struct OpenAiExecutionBinding {
-    endpoint: zeta_api::ApiEndpoint,
+    endpoint: ash_api::ApiEndpoint,
     target: ResolvedApiTarget,
     credential_scope: CredentialScope,
 }
@@ -276,20 +276,20 @@ pub struct OpenAiExecutionBinding {
 
 ChatGPT 订阅不是 `OpenAiCompatibleAdapter` 的用户自定义 base URL 选项。Platform API key、custom-compatible credential 与 ChatGPT 订阅运行时彼此不能复用或降级转换。
 
-ChatGPT 订阅由 [`zeta-chatgpt`](chatgpt-subscription.md) 构造固定 `ResolvedApiTarget + OAuth headers` binding。`zeta-model-provider` 使用同一个 OpenAI Responses adapter 执行单次模型 operation，Zeta Core 继续执行 Agent loop。
+ChatGPT 订阅由 [`ash-chatgpt`](chatgpt-subscription.md) 构造固定 `ResolvedApiTarget + OAuth headers` binding。`ash-model-provider` 使用同一个 OpenAI Responses adapter 执行单次模型 operation，Ash Core 继续执行 Agent loop。
 
 ## 6. 供应商凭据边界
 
-Provider 的共同点只到“调用前需要可用身份”为止。供应商提供并允许稳定的用户订阅 OAuth 时，账户生命周期必须通过 `zeta-login` 暴露；没有该能力但提供开发者 API 时，API key、AWS credential chain、Google ADC、Microsoft identity 和签名请求仍由本 crate 的 direct-provider runtime materialize。API key 不是 OAuth 登录方法或失败降级。交互式登录控制面不属于本 crate，但 provider-specific credential owner 可以向本 crate 提供已经刷新并绑定的 request target；Kimi Code 就使用这种窄边界。
+Provider 的共同点只到“调用前需要可用身份”为止。供应商提供并允许稳定的用户订阅 OAuth 时，账户生命周期必须通过 `ash-login` 暴露；没有该能力但提供开发者 API 时，API key、AWS credential chain、Google ADC、Microsoft identity 和签名请求仍由本 crate 的 direct-provider runtime materialize。API key 不是 OAuth 登录方法或失败降级。交互式登录控制面不属于本 crate，但 provider-specific credential owner 可以向本 crate 提供已经刷新并绑定的 request target；Kimi Code 就使用这种窄边界。
 
 ChatGPT 订阅使用本地 Agent loop：
 
 ```text
-zeta-app-server → zeta-login → zeta-chatgpt → OpenAI device OAuth / SecretStore
+ash-app-server → ash-login → ash-chatgpt → OpenAI device OAuth / SecretStore
                                       │
                                       └─ fresh ResolvedApiTarget
                                                ↓
-Zeta TurnExecutor → zeta-model-provider → OpenAI Responses codec → ChatGPT subscription service
+Ash TurnExecutor → ash-model-provider → OpenAI Responses codec → ChatGPT subscription service
 ```
 
 `runtime = chatgpt_subscription` row 的 provider 仍是 `openai`。运行时只选择 provider-specific authenticated target，不改变 Core backend，也不接受 arbitrary ChatGPT base URL。
@@ -297,16 +297,16 @@ Zeta TurnExecutor → zeta-model-provider → OpenAI Responses codec → ChatGPT
 Kimi Code 订阅使用本地 Agent loop：
 
 ```text
-zeta-app-server → zeta-login → zeta-kimi → Kimi device OAuth / SecretStore
+ash-app-server → ash-login → ash-kimi → Kimi device OAuth / SecretStore
                                   │
                                   └─ fresh ResolvedApiTarget
                                            ↓
-zeta-model-provider → KimiAdapter → zeta-api OpenAI Chat Completions → Kimi Coding API
+ash-model-provider → KimiAdapter → ash-api OpenAI Chat Completions → Kimi Coding API
 ```
 
 目录中的 `kimi/kimi-k2.7-code` 是 `access = subscription, runtime = kimi_code`，请求时映射为 Kimi Coding API model `kimi-for-coding`。现有 `kimi/kimi-k2.6` 保持 `access = api_key, runtime = provider_api`，因此 Kimi Platform API key 与 Kimi subscription OAuth 没有 fallback、token 转换或 endpoint 混用。
 
-401 recovery 也按身份所有者处理：direct-provider credential 可由其 provider runtime 做一次受限 refresh/rebuild；Kimi 与 ChatGPT token 分别由 `zeta-kimi`、`zeta-chatgpt` 在调用前按 expiry margin 刷新。`zeta-client` 不读取 secrets，也不自行刷新或重试认证。
+401 recovery 也按身份所有者处理：direct-provider credential 可由其 provider runtime 做一次受限 refresh/rebuild；Kimi 与 ChatGPT token 分别由 `ash-kimi`、`ash-chatgpt` 在调用前按 expiry margin 刷新。`ash-client` 不读取 secrets，也不自行刷新或重试认证。
 
 ## 7. 标头和目标
 
@@ -314,30 +314,30 @@ zeta-model-provider → KimiAdapter → zeta-api OpenAI Chat Completions → Kim
 | --- | --- |
 | Platform/default provider base URL | `model-provider-config` |
 | 用户 base URL override | 仅 Platform/custom-compatible provider；由 `model-provider-config` 声明、runtime 解析 |
-| ChatGPT 订阅服务目标 | `zeta-chatgpt` 固定 target；不接受 Zeta generic user override |
-| Kimi Code 订阅服务目标 | `zeta-kimi` 固定为 `https://api.kimi.com/coding/v1`；不接受 generic base URL override |
+| ChatGPT 订阅服务目标 | `ash-chatgpt` 固定 target；不接受 Ash generic user override |
+| Kimi Code 订阅服务目标 | `ash-kimi` 固定为 `https://api.kimi.com/coding/v1`；不接受 generic base URL override |
 | resolved absolute target | `model-provider` |
 | API key/cloud identity/tenant header | `model-provider` + direct-provider credential layer |
-| relative path、method、content type | `zeta-api::endpoint` |
-| API version、协议 beta header | `zeta-api::endpoint/requests` |
-| trace propagation、user agent | `zeta-http-client` |
-| operation attempt header | `zeta-client` |
+| relative path、method、content type | `ash-api::endpoint` |
+| API version、协议 beta header | `ash-api::endpoint/requests` |
+| trace propagation、user agent | `ash-http-client` |
+| operation attempt header | `ash-client` |
 
 Runtime 合并 headers 时必须使用 typed origin 和冲突规则。认证 header 不得被协议层覆盖，协议
 必需 header 不得被用户任意删除；所有 secret header 的 `Debug` 必须脱敏。
 
 ## 8. 重试分工
 
-`zeta-client` 拥有 retry 机制，但 runtime 选择 retry policy：
+`ash-client` 拥有 retry 机制，但 runtime 选择 retry policy：
 
 ```text
 model-provider
   选择 Never / SafeRead / ExplicitIdempotency 等策略
         ↓
-zeta-client
+ash-client
   执行 attempt loop、backoff、jitter、Retry-After 和 telemetry
         ↓
-zeta-api
+ash-api
   提供 provider error/status 的事实分类
 ```
 
@@ -347,19 +347,19 @@ Inference 通常是 POST，不能仅因“尚未收到 token”就假定安全�
 - catalog GET 可以使用有上限的 `SafeRead`；
 - 已产生 semantic output 后禁止透明 retry；
 - direct-provider credential error、validation error 不重试；
-- ChatGPT 订阅凭据刷新由 `zeta-chatgpt` 处理，不能套用 inference HTTP retry；
-- 模型替换由 `zeta-models-manager` 在运行创建前依据 Agent、Session 或工作流策略完成，不是 client retry；
+- ChatGPT 订阅凭据刷新由 `ash-chatgpt` 处理，不能套用 inference HTTP retry；
+- 模型替换由 `ash-models-manager` 在运行创建前依据 Agent、Session 或工作流策略完成，不是 client retry；
 - runtime 只选择 typed policy，不自己 sleep 或写 attempt loop。
 
 ## 9. 流式处理分工
 
 ```text
-zeta-client (direct-provider path)
-  从 zeta-http-client 消费 HTTP byte stream
+ash-client (direct-provider path)
+  从 ash-http-client 消费 HTTP byte stream
   → SSE/NDJSON framing
   → idle deadline / cancellation / backpressure
         ↓
-zeta-api::sse
+ash-api::sse
   provider event decode
   → ping/comment/terminal interpretation
   → canonical ModelStreamEvent
@@ -370,7 +370,7 @@ model-provider
 ```
 
 `ProviderDefinition.output_transport` 是该路径的能力声明。所有内置供应商显式声明流式输出，
-`Provider` 统一调用 `zeta-api` 的协议实现。私有 adapter 只提供 endpoint、模型名映射、固定
+`Provider` 统一调用 `ash-api` 的协议实现。私有 adapter 只提供 endpoint、模型名映射、固定
 Header 和专属计数差异，不实现生成请求的 `complete` 或 `stream` 转发。
 
 `ModelInvoker::stream_with_cancellation` 必须明确实现。只需要最终结果的调用复用同一次流式
@@ -392,7 +392,7 @@ DeepSeek `: keep-alive` 的 frame 边界由 client 识别，作为无 payload �
 
 ## 10. 目录来源
 
-`zeta-model-provider` 是 models manager 与实际 Provider network runtime 的连接点：
+`ash-model-provider` 是 models manager 与实际 Provider network runtime 的连接点：
 
 ```text
 models-manager::ModelCatalogSource
@@ -400,58 +400,58 @@ models-manager::ModelCatalogSource
 model-provider
   ├─ resolved catalog target
   ├─ credential scope
-  ├─ zeta-api catalog request codec
-  └─ zeta-client operation → zeta-http-client HTTP execution
+  ├─ ash-api catalog request codec
+  └─ ash-client operation → ash-http-client HTTP execution
 ```
 
 Runtime 负责 scope identity、credential revision 和 catalog API binding；manager 负责何时刷新、
 缓存、merge 和发布 snapshot。Runtime 不维护第二份 catalog cache。
 
-ChatGPT 订阅的账户 metadata 只由 `zeta-chatgpt` 从已验证登录 token 投影；它不使 models manager 直读或猜测远端动态 catalog。
+ChatGPT 订阅的账户 metadata 只由 `ash-chatgpt` 从已验证登录 token 投影；它不使 models manager 直读或猜测远端动态 catalog。
 
 ## 11. 依赖方向
 
 箭头表示“依赖”：
 
 ```text
-zeta-model-provider
-  ├──▶ zeta-model-provider-config
-  ├──▶ zeta-api ───▶ zeta-client
-  ├──▶ zeta-client
-  ├──▶ zeta-http-client
-  ├──▷ zeta-websocket-client        [ModelClientSession 接入后]
-  ├──▶ zeta-secrets
-  └──▶ zeta-protocol
+ash-model-provider
+  ├──▶ ash-model-provider-config
+  ├──▶ ash-api ───▶ ash-client
+  ├──▶ ash-client
+  ├──▶ ash-http-client
+  ├──▷ ash-websocket-client        [ModelClientSession 接入后]
+  ├──▶ ash-secrets
+  └──▶ ash-protocol
 
-zeta-chatgpt
-  ├──▶ zeta-login
-  ├──▶ zeta-client
-  └──▶ zeta-secrets
+ash-chatgpt
+  ├──▶ ash-login
+  ├──▶ ash-client
+  └──▶ ash-secrets
 
 App Server composition
-  ├──▶ zeta-model-provider
-  ├──▶ zeta-login
-  └──▶ zeta-chatgpt
+  ├──▶ ash-model-provider
+  ├──▶ ash-login
+  └──▶ ash-chatgpt
 ```
 
 更准确地说：
 
-- `zeta-client` 不依赖 Provider、API codec、Core 或 config；
-- `zeta-http-client` 不依赖 Provider、API codec、Core、config 或 secret store；
-- `zeta-websocket-client` 只依赖共享 outbound network policy，不依赖 Provider、API codec、Core 或 secret store；
-- `zeta-api` 可依赖 `zeta-client` 的 operation/SSE value；
-- `zeta-model-provider` 依赖 config、API、operation client、HTTP client、secrets 和 protocol；
+- `ash-client` 不依赖 Provider、API codec、Core 或 config；
+- `ash-http-client` 不依赖 Provider、API codec、Core、config 或 secret store；
+- `ash-websocket-client` 只依赖共享 outbound network policy，不依赖 Provider、API codec、Core 或 secret store；
+- `ash-api` 可依赖 `ash-client` 的 operation/SSE value；
+- `ash-model-provider` 依赖 config、API、operation client、HTTP client、secrets 和 protocol；
   它不定义或消费完整 Agent-loop backend；
 - config 不反向依赖 runtime；
 - API/client 都不反向依赖 model-provider。
-- `zeta-chatgpt` 实现 interactive login、refresh 与 authenticated target；
-- Zeta App Server 只组合和映射 redacted control-plane DTO；
+- `ash-chatgpt` 实现 interactive login、refresh 与 authenticated target；
+- Ash App Server 只组合和映射 redacted control-plane DTO；
 - model-provider 不依赖 App Server、Desktop、CLI 或 TUI。
 
 ## 12. 目标目录
 
 ```text
-zeta-rs/model-provider/
+ash-rs/model-provider/
 ├── BUILD.bazel
 ├── Cargo.toml
 ├── README.md
@@ -510,37 +510,37 @@ Provider adapter trait 默认 crate-private。新 public trait 必须写 doc com
 credential、cancellation、retry 和 secret redaction 责任。
 
 Public API 不导出 ChatGPT token、PKCE verifier、通用 secret header map 或 `SecretStore`。登录账户
-projection 由 [`zeta-login`](login.md) 提供；App Server 只读取该 redacted projection。
+projection 由 [`ash-login`](login.md) 提供；App Server 只读取该 redacted projection。
 
 ## 14. 迁移顺序
 
-1. 建立 `zeta-http-client` 的 unary request/response/config port；
-2. 将当前 `zeta-client::UreqHttpClient` 和 raw transport value 迁入底层 crate；
-3. 让 `zeta-client` 通过共享 transport 执行 operation retry/framing；
-4. 将 `zeta-api::Api` 改为 endpoint/profile API；
+1. 建立 `ash-http-client` 的 unary request/response/config port；
+2. 将当前 `ash-client::UreqHttpClient` 和 raw transport value 迁入底层 crate；
+3. 让 `ash-client` 通过共享 transport 执行 operation retry/framing；
+4. 将 `ash-api::Api` 改为 endpoint/profile API；
 5. `model-provider/src/providers/*` 直接选择 endpoint/profile；
 6. 增加 streaming binding；
 7. 以 OpenAI API key 建立第一个 direct-provider credential vertical slice；
-8. 建立 `zeta-login` 与 `zeta-chatgpt`，以 native ChatGPT OAuth 和本地 `TurnExecutor` 接入 subscription vertical slice；
+8. 建立 `ash-login` 与 `ash-chatgpt`，以 native ChatGPT OAuth 和本地 `TurnExecutor` 接入 subscription vertical slice；
 9. 实现 models manager 的 catalog source；
 10. 删除旧 Provider 级双重 dispatch。
-11. 已建立 Responses WebSocket 与 Realtime GA 会话及显式 runtime 工厂；每个调用者拥有连接，Responses 按精确前缀续接，失败不自动推理重放。详细能力和未覆盖项见[端点实现](zeta-api.md#46-端点归属与-websocket-实现)。
+11. 已建立 Responses WebSocket 与 Realtime GA 会话及显式 runtime 工厂；每个调用者拥有连接，Responses 按精确前缀续接，失败不自动推理重放。详细能力和未覆盖项见[端点实现](ash-api.md#46-端点归属与-websocket-实现)。
 
 迁移期间不创建空模块，也不同时保留两套长期 public facade。
 
 ## 15. 固定决策
 
-1. Provider registry 只存在于 `zeta-model-provider`。
+1. Provider registry 只存在于 `ash-model-provider`。
 2. Runtime 选择 API endpoint，但不实现 wire codec。
-3. Runtime 选择 retry policy，但 retry attempt loop 属于 `zeta-client`。
+3. Runtime 选择 retry policy，但 retry attempt loop 属于 `ash-client`。
 4. Direct-provider runtime 解析自己的 credential；secret 不进入 config、普通 inference DTO 或
-   telemetry。ChatGPT 订阅凭据由 `zeta-chatgpt` 从 Codex 用户存储加载，并按管理模式续期，不复制到 Zeta SecretStore。
+   telemetry。ChatGPT 订阅凭据由 `ash-chatgpt` 从 Codex 用户存储加载，并按管理模式续期，不复制到 Ash SecretStore。
 5. Runtime 不解析 SSE/NDJSON framing。
 6. 动态 catalog cache 属于 models manager。
-7. `zeta-api` 和 `zeta-client` 不反向依赖 runtime。
-8. direct-provider credential lifecycle 属于本 crate；`zeta-secrets` 只持久化 opaque secret。
-9. interactive login lifecycle 属于 `zeta-login`；ChatGPT subscription OAuth wire 与 token lifecycle 属于 `zeta-chatgpt`。
-10. 用户订阅 OAuth 统一进入 `zeta-login` 控制面，但 OAuth wire、token 和持久化仍由精确 provider adapter 拥有；无受支持 OAuth 的供应商才走 API key 等 direct-provider credential，二者不互相 fallback。
-11. `model-provider` 只消费 ChatGPT authenticated target；产品始终使用 Zeta Core `TurnExecutor`。
+7. `ash-api` 和 `ash-client` 不反向依赖 runtime。
+8. direct-provider credential lifecycle 属于本 crate；`ash-secrets` 只持久化 opaque secret。
+9. interactive login lifecycle 属于 `ash-login`；ChatGPT subscription OAuth wire 与 token lifecycle 属于 `ash-chatgpt`。
+10. 用户订阅 OAuth 统一进入 `ash-login` 控制面，但 OAuth wire、token 和持久化仍由精确 provider adapter 拥有；无受支持 OAuth 的供应商才走 API key 等 direct-provider credential，二者不互相 fallback。
+11. `model-provider` 只消费 ChatGPT authenticated target；产品始终使用 Ash Core `TurnExecutor`。
 12. WebSocket transport 不拥有 Agent loop；连接/session/turn routing 属于 model client，是否允许
     WebSocket 由 exact profile 与 runtime target capability 共同决定。

@@ -2,31 +2,31 @@ use std::fmt;
 use std::path::Path;
 use std::path::PathBuf;
 
-use zeta_app_server_protocol::protocol::common::ClientCapabilities;
-use zeta_app_server_protocol::protocol::common::ClientInfo;
-use zeta_remote::RemoteAddressError;
-use zeta_remote::RemoteDirPath;
-use zeta_remote::RemoteProfile;
-use zeta_remote::RemoteRuntime;
-use zeta_remote::SshHost;
-use zeta_remote::SshTarget;
-use zeta_remote_connections::RemoteConnectionError;
-use zeta_remote_connections::RemoteConnectionFailureKind;
-use zeta_remote_connections::RemoteConnectionProfileRecord;
-use zeta_remote_connections::RemoteConnectionProfileStore;
-use zeta_remote_connections::RemoteRuntimeCatalog;
-use zeta_remote_connections::RemoteRuntimeCatalogRelease;
-use zeta_remote_connections::RemoteRuntimeCatalogUpdater;
-use zeta_remote_connections::RemoteRuntimeDownloadCache;
-use zeta_remote_connections::RemoteRuntimeDownloadProgress;
-use zeta_remote_connections::RemoteRuntimeInstallProgress;
-use zeta_remote_connections::SshAppServerConnectionOptions;
-use zeta_remote_connections::SshRemoteRuntimeInstaller;
+use ash_app_server_protocol::protocol::common::ClientCapabilities;
+use ash_app_server_protocol::protocol::common::ClientInfo;
+use ash_remote::RemoteAddressError;
+use ash_remote::RemoteDirPath;
+use ash_remote::RemoteProfile;
+use ash_remote::RemoteRuntime;
+use ash_remote::SshHost;
+use ash_remote::SshTarget;
+use ash_remote_connections::RemoteConnectionError;
+use ash_remote_connections::RemoteConnectionFailureKind;
+use ash_remote_connections::RemoteConnectionProfileRecord;
+use ash_remote_connections::RemoteConnectionProfileStore;
+use ash_remote_connections::RemoteRuntimeCatalog;
+use ash_remote_connections::RemoteRuntimeCatalogRelease;
+use ash_remote_connections::RemoteRuntimeCatalogUpdater;
+use ash_remote_connections::RemoteRuntimeDownloadCache;
+use ash_remote_connections::RemoteRuntimeDownloadProgress;
+use ash_remote_connections::RemoteRuntimeInstallProgress;
+use ash_remote_connections::SshAppServerConnectionOptions;
+use ash_remote_connections::SshRemoteRuntimeInstaller;
 
 use crate::app_server::AppServerHost;
 
-const DEFAULT_REMOTE_RUNTIME: &str = "zeta-remote-server";
-const BUNDLED_REMOTE_RUNTIME_CATALOG: &str = "zeta-remote-runtimes/catalog.json";
+const DEFAULT_REMOTE_RUNTIME: &str = "ash-remote-server";
+const BUNDLED_REMOTE_RUNTIME_CATALOG: &str = "ash-remote-runtimes/catalog.json";
 const BUNDLED_REMOTE_RUNTIME_CATALOG_SHA256: Option<&str> =
     option_env!("APP_REMOTE_RUNTIME_CATALOG_SHA256");
 const BUNDLED_REMOTE_RUNTIME_CATALOG_URL: Option<&str> =
@@ -226,7 +226,7 @@ impl AppLaunch {
         report_progress: &mut dyn FnMut(RemoteRuntimePreparationProgress),
     ) -> Result<(), String> {
         let store = RemoteConnectionProfileStore::from_profile_root(
-            zeta_utils_home_dir::find_zeta_home().map_err(|error| error.to_string())?,
+            ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?,
         );
         self.prepare_remote_runtime_with_store_and_progress(&store, report_progress)
     }
@@ -501,7 +501,7 @@ fn bundled_remote_runtime_catalog_source() -> Result<Option<RemoteRuntimeCatalog
 }
 
 fn default_remote_runtime_download_cache() -> Result<PathBuf, String> {
-    Ok(zeta_utils_home_dir::find_zeta_home()
+    Ok(ash_utils_home_dir::find_ash_home()
         .map_err(|error| error.to_string())?
         .join(REMOTE_RUNTIME_DOWNLOAD_CACHE))
 }

@@ -3,13 +3,13 @@ use std::path::PathBuf;
 
 use super::AppServerHost;
 use super::local_app_server_command;
-use zeta_app_server_client::StdioAppServerCommand;
-use zeta_app_server_daemon::APP_SERVER_PATH_ENV;
-use zeta_remote::RemoteDirPath;
-use zeta_remote::RemoteProfile;
-use zeta_remote::RemoteRuntime;
-use zeta_remote::SshHost;
-use zeta_remote::SshTarget;
+use ash_app_server_client::StdioAppServerCommand;
+use ash_app_server_daemon::APP_SERVER_PATH_ENV;
+use ash_remote::RemoteDirPath;
+use ash_remote::RemoteProfile;
+use ash_remote::RemoteRuntime;
+use ash_remote::SshHost;
+use ash_remote::SshTarget;
 
 #[test]
 fn ssh_app_server_host_retargets_the_same_backend_to_another_dir() {
@@ -17,14 +17,14 @@ fn ssh_app_server_host_retargets_the_same_backend_to_another_dir() {
         RemoteProfile::new(
             SshTarget::new(
                 SshHost::parse("build-linux").unwrap(),
-                RemoteDirPath::parse("/srv/zeta").unwrap(),
+                RemoteDirPath::parse("/srv/ash").unwrap(),
             ),
-            RemoteRuntime::new("zeta-remote-server").unwrap(),
+            RemoteRuntime::new("ash-remote-server").unwrap(),
         ),
         None,
     );
 
-    assert_eq!(host.cwd(), Path::new("/srv/zeta"));
+    assert_eq!(host.cwd(), Path::new("/srv/ash"));
     let (ssh_host, ssh_executable) = host.ssh_transport().unwrap();
     assert_eq!(ssh_host.as_str(), "build-linux");
     assert_eq!(ssh_executable, Path::new("ssh"));
@@ -36,9 +36,9 @@ fn ssh_app_server_host_retargets_the_same_backend_to_another_dir() {
 
 #[test]
 fn local_app_server_host_connects_through_the_profile_dir_broker() {
-    let executable = PathBuf::from("/opt/zeta/app");
-    let backend = PathBuf::from("/opt/zeta/zeta-app-server");
-    let profile = PathBuf::from("/profiles/zeta");
+    let executable = PathBuf::from("/opt/ash/app");
+    let backend = PathBuf::from("/opt/ash/ash-app-server");
+    let profile = PathBuf::from("/profiles/ash");
     let dir = PathBuf::from("/dirs/project");
     let command = local_app_server_command(
         executable.clone(),
@@ -54,11 +54,11 @@ fn local_app_server_host_connects_through_the_profile_dir_broker() {
     );
     assert_eq!(
         command,
-        StdioAppServerCommand::new("/opt/zeta/app")
+        StdioAppServerCommand::new("/opt/ash/app")
             .with_argument("app-server-daemon")
             .with_argument("connect")
-            .with_environment_variable("ZETA_HOME", profile.into_os_string())
-            .with_environment_variable("ZETA_WORKSPACE_ROOT", "/dirs/project")
+            .with_environment_variable("ASH_HOME", profile.into_os_string())
+            .with_environment_variable("ASH_WORKSPACE_ROOT", "/dirs/project")
             .with_environment_variable(APP_SERVER_PATH_ENV, backend.into_os_string()),
     );
     assert_eq!(

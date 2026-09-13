@@ -209,11 +209,11 @@ impl App<WorkbenchEvent> for WorkbenchApplication {
             WorkbenchEvent::InputClassified(result) => {
                 self.classification_task = None;
                 match self.session_pane.finish_composer_classification(result) {
-                    zeta_session::ComposerClassificationUpdate::Stale => {}
-                    zeta_session::ComposerClassificationUpdate::Updated => {
+                    ash_session::ComposerClassificationUpdate::Stale => {}
+                    ash_session::ComposerClassificationUpdate::Updated => {
                         self.rebuild_presentation_on_next_redraw();
                     }
-                    zeta_session::ComposerClassificationUpdate::Submit => {
+                    ash_session::ComposerClassificationUpdate::Submit => {
                         self.submit_composer();
                         self.rebuild_presentation_on_next_redraw();
                     }

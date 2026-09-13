@@ -99,7 +99,7 @@ function validateCheckpoint(state, gitRoot) {
 		else ids.add(finding.id);
 		if (!isCommit(finding.introducedBy)) errors.push(`Pending ${finding.id ?? '<unknown>'} needs a full introducedBy commit.`);
 		if (!['apply', 'decision'].includes(finding.kind)) errors.push(`Pending ${finding.id ?? '<unknown>'} kind must be apply or decision.`);
-		if (!Array.isArray(finding.upstreamPaths) || !Array.isArray(finding.zetaPaths)) errors.push(`Pending ${finding.id ?? '<unknown>'} paths must be arrays.`);
+		if (!Array.isArray(finding.upstreamPaths) || !Array.isArray(finding.ashPaths)) errors.push(`Pending ${finding.id ?? '<unknown>'} paths must be arrays.`);
 		if (typeof finding.summary !== 'string' || !finding.summary) errors.push(`Pending ${finding.id ?? '<unknown>'} needs a summary.`);
 		if (isCommit(finding.introducedBy)) {
 			try {
@@ -141,7 +141,7 @@ function readChange(line) {
 
 function readScope(path) {
 	const match = /^src\/vs\/(base|platform|editor|workbench|code|sessions)(?:\/|$)/u.exec(path);
-	return match ? `zeta-ts/src/zeta/${match[1]}` : 'other';
+	return match ? `ash-ts/src/ash/${match[1]}` : 'other';
 }
 
 function printResult(result, state) {

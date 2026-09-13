@@ -1,0 +1,10 @@
+.ash-workbench-auxiliarybar {
+  border: 0;
+  border-left: 1px solid var(--ash-border);
+  border-radius: 0;
+  background: var(--ash-auxiliary-bar-background);
+}
+
+.ash-workbench-auxiliarybar > .ash-auxiliarybar-content {
+  overflow: hidden;
+}

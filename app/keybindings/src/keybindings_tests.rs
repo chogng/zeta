@@ -2,14 +2,14 @@ use std::time::Duration;
 use std::time::Instant;
 
 use serde_json::json;
-use zeta_keybinding::BindingPriority;
-use zeta_keybinding::BindingSet;
-use zeta_keybinding::BindingSource;
-use zeta_keybinding::Chord;
-use zeta_keybinding::HostPlatform;
-use zeta_keybinding::KeySequence;
-use zeta_keybinding::KeyStroke;
-use zeta_keybinding::Modifiers;
+use ash_keybinding::BindingPriority;
+use ash_keybinding::BindingSet;
+use ash_keybinding::BindingSource;
+use ash_keybinding::Chord;
+use ash_keybinding::HostPlatform;
+use ash_keybinding::KeySequence;
+use ash_keybinding::KeyStroke;
+use ash_keybinding::Modifiers;
 
 use super::KeybindingCatalog;
 use super::KeybindingResolution;
@@ -43,7 +43,7 @@ impl KeybindingCatalog for Catalog {
         let mut bindings = BindingSet::default();
         bindings.register_command(
             KeySequence::single(
-                Chord::logical("k", zeta_keybinding::ShortcutModifiers::control()).expect("key"),
+                Chord::logical("k", ash_keybinding::ShortcutModifiers::control()).expect("key"),
             ),
             Command::Toggle,
             Condition::Always,
@@ -92,7 +92,7 @@ fn resolves_builtin_and_user_chord_rules() {
     );
 
     keybindings.replace_user_bindings(vec![UserBinding {
-        keybinding: zeta_keybinding::parse_key_sequence("ctrl+x ctrl+c").expect("chord"),
+        keybinding: ash_keybinding::parse_key_sequence("ctrl+x ctrl+c").expect("chord"),
         target: UserBindingTarget::Command(Command::Toggle),
         when: Condition::Always,
         when_source: None,
@@ -144,7 +144,7 @@ fn recorder_edit_replaces_only_the_commands_rules() {
         {"key":"ctrl+b","command":"test.toggle"},
         {"key":"ctrl+x","block":true}
     ]);
-    let sequence = zeta_keybinding::parse_key_sequence("primary+k primary+b").unwrap();
+    let sequence = ash_keybinding::parse_key_sequence("primary+k primary+b").unwrap();
 
     let edited = edited_user_bindings::<Catalog>(
         Some(&existing),
@@ -161,7 +161,7 @@ fn recorder_edit_replaces_only_the_commands_rules() {
 
 fn stroke(key: &str, modifiers: Modifiers) -> KeyStroke {
     KeyStroke::new(
-        zeta_keybinding::LogicalKey::new(key).expect("logical key"),
+        ash_keybinding::LogicalKey::new(key).expect("logical key"),
         None,
         modifiers,
     )

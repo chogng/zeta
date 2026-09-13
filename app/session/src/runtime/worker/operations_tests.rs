@@ -3,16 +3,16 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use zeta_app_server_protocol::protocol::session::SessionSubscribeResult;
-use zeta_app_server_protocol::protocol::session::SessionThreadProjection;
-use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
-use zeta_protocol::Session;
-use zeta_protocol::SessionId;
-use zeta_protocol::SessionStatus;
-use zeta_protocol::SessionThread;
-use zeta_protocol::Thread;
-use zeta_protocol::ThreadId;
-use zeta_protocol::ThreadStatus;
+use ash_app_server_protocol::protocol::session::SessionSubscribeResult;
+use ash_app_server_protocol::protocol::session::SessionThreadProjection;
+use ash_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
+use ash_protocol::Session;
+use ash_protocol::SessionId;
+use ash_protocol::SessionStatus;
+use ash_protocol::SessionThread;
+use ash_protocol::Thread;
+use ash_protocol::ThreadId;
+use ash_protocol::ThreadStatus;
 
 use super::cwd_title;
 use super::publish_subscription;
@@ -44,7 +44,7 @@ fn subscription_publishes_the_authoritative_thread_snapshot() {
         },
         thread_projections: vec![SessionThreadProjection {
             thread: Thread {
-                agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+                agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
                 origin: Default::default(),
                 session_id: session_id.clone(),
                 thread_id: thread_id.clone(),
@@ -94,7 +94,7 @@ fn subscription_publishes_the_authoritative_thread_snapshot() {
 
 #[test]
 fn cwd_title_uses_the_last_component_and_root_fallback() {
-    assert_eq!(cwd_title(std::path::Path::new("/work/zeta")), "zeta");
+    assert_eq!(cwd_title(std::path::Path::new("/work/ash")), "ash");
     assert_eq!(cwd_title(std::path::Path::new("/")), "Session");
 }
 

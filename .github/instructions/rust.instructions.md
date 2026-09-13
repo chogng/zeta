@@ -1,5 +1,5 @@
 ---
-description: Zeta Rust API, module, import, documentation, ownership, and file-size conventions.
+description: Ash Rust API, module, import, documentation, ownership, and file-size conventions.
 applyTo: "**/*.rs"
 ---
 

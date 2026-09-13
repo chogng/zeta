@@ -1,4 +1,4 @@
 interface:
   display_name: "VS Code API Alignment"
-  short_description: "Align Zeta TypeScript APIs, CSS behavior, and ownership"
-  default_prompt: "Use $vscode-api-alignment to align Zeta TypeScript APIs and owned CSS behavior with VS Code without copying upstream implementation or product branding."
+  short_description: "Align Ash TypeScript APIs, CSS behavior, and ownership"
+  default_prompt: "Use $vscode-api-alignment to align Ash TypeScript APIs and owned CSS behavior with VS Code without copying upstream implementation or product branding."

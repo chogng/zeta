@@ -1,4 +1,4 @@
-# Zeta 领域模型与命名
+# Ash 领域模型与命名
 
 > 本文是 Agent、Project、Session、Thread、Environment、Workspace、目录与授权概念的长期架构契约。
 >

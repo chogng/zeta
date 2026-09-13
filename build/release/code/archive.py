@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a deterministic managed Zeta Code archive and SHA-256 sidecar."""
+"""Create a deterministic managed Ash Code archive and SHA-256 sidecar."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from build.lib.zeta_build.targets import target_spec  # noqa: E402
+from build.lib.ash_build.targets import target_spec  # noqa: E402
 from build.release.archive import open_tar_gz  # noqa: E402
 from build.release.package.layout import require_verified_system_signing  # noqa: E402
 from build.release.package.layout import validate_package_directory  # noqa: E402
@@ -30,21 +30,21 @@ def create_archive(package: Path, output: Path) -> Path:
         raise RuntimeError(
             f"Refusing to replace an existing release artifact: {output}"
         )
-    metadata = json.loads((package / "zeta-package.json").read_text(encoding="utf-8"))
+    metadata = json.loads((package / "ash-package.json").read_text(encoding="utf-8"))
     target = metadata.get("target")
     components = metadata.get("components")
     if not isinstance(target, str):
-        raise RuntimeError("Zeta Code release package identity is invalid")
+        raise RuntimeError("Ash Code release package identity is invalid")
     spec = target_spec(target)
     suffix = ".zip" if spec.operating_system.value == "darwin" else ".tar.gz"
-    expected_name = f"zeta-code-{target}{suffix}"
+    expected_name = f"ash-code-{target}{suffix}"
     if (
         metadata.get("layoutVersion") != 2
         or not isinstance(components, dict)
         or "cli" not in components
         or output.name != expected_name
     ):
-        raise RuntimeError("Zeta Code release package identity is invalid")
+        raise RuntimeError("Ash Code release package identity is invalid")
     validate_package_directory(package, spec)
     require_verified_system_signing(package, spec)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -150,7 +150,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
     checksum = create_archive(arguments.package_dir, arguments.output)
-    print(f"Built Zeta Code archive at {arguments.output.resolve()}")
+    print(f"Built Ash Code archive at {arguments.output.resolve()}")
     print(f"Built checksum at {checksum}")
     return 0
 

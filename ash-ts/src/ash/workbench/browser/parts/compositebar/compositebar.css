@@ -1,0 +1,165 @@
+.ash-composite-bar {
+  box-sizing: border-box;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ash-composite-bar > .ash-action-bar {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 2px;
+  padding: 0 var(--ash-composite-bar-content-inset);
+  overflow: hidden;
+}
+
+.ash-composite-bar-overflow {
+  display: flex;
+  align-items: center;
+  flex: 0 0 var(--ash-toolbar-action-size);
+}
+
+.ash-composite-bar-overflow > .ash-composite-bar-action {
+  width: var(--ash-toolbar-action-size);
+  min-width: var(--ash-toolbar-action-size);
+  height: var(--ash-toolbar-action-size);
+  min-height: var(--ash-toolbar-action-size);
+  padding: 3px;
+  border: 0;
+  color: var(--ash-composite-bar-inactive-foreground);
+}
+
+.ash-composite-bar-overflow > .ash-composite-bar-action .ash-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.ash-composite-bar-overflow .ash-icon-label-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.ash-composite-bar > .ash-action-bar > .ash-composite-bar-item {
+  position: relative;
+  flex: 0 0 auto;
+  height: var(--ash-tab-height);
+  min-height: var(--ash-tab-height);
+  border: 0;
+  border-radius: 0;
+  color: var(--ash-composite-bar-inactive-foreground);
+  cursor: pointer;
+}
+
+.ash-composite-bar-item.ash-dnd-draggable:active {
+  cursor: grabbing;
+}
+
+.ash-composite-bar-icon > .ash-action-bar > .ash-composite-bar-item {
+  width: 24px;
+  min-width: 24px;
+  padding: 0;
+}
+
+.ash-composite-bar-label > .ash-action-bar {
+  font-size: var(--ash-font-size-body1);
+  line-height: 20px;
+}
+
+.ash-composite-bar-label > .ash-action-bar > .ash-composite-bar-item {
+  width: auto;
+  min-width: 0;
+}
+
+.ash-composite-bar-item:hover > .ash-composite-bar-action,
+.ash-composite-bar-item.checked > .ash-composite-bar-action {
+  opacity: 1;
+}
+
+.ash-composite-bar-item.checked {
+  color: var(--ash-composite-bar-foreground);
+  background: var(--ash-tab-list-active-background);
+}
+
+.ash-composite-bar-action {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  outline: none;
+  color: inherit;
+  background: transparent;
+  text-decoration: none;
+  opacity: 0.6;
+  cursor: inherit;
+  font: inherit;
+  font-weight: var(--ash-font-weight-semi-bold);
+}
+
+.ash-composite-bar-item:focus-visible {
+  outline: 1px solid var(--ash-focus-border);
+  outline-offset: -1px;
+}
+
+.ash-composite-bar-icon .ash-composite-bar-item.icon .ash-icon-label-text {
+  display: none;
+}
+
+.ash-composite-bar-icon .ash-composite-bar-action {
+  padding: 0;
+}
+
+.ash-composite-bar-label .ash-composite-bar-action {
+  width: auto;
+}
+
+.ash-composite-bar-label .ash-icon-label-text {
+  display: block;
+  white-space: nowrap;
+}
+
+.ash-composite-bar-action .ash-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Keep the visual gap inside a Composite action's native drop hit area. */
+.ash-composite-bar > .ash-action-bar.ash-action-bar-dnd.horizontal > .ash-composite-bar-item:not(:last-child)::after {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  width: var(--ash-action-bar-gap);
+  height: 100%;
+  content: "";
+  pointer-events: auto;
+}
+
+.ash-composite-bar-item.ash-dnd-drop-before::before,
+.ash-composite-bar-item.ash-dnd-drop-after::before {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  width: 2px;
+  height: 100%;
+  content: "";
+  pointer-events: none;
+  background: var(--ash-focus-border);
+}
+
+.ash-composite-bar-item.ash-dnd-drop-before::before {
+  left: -2px;
+}
+
+.ash-composite-bar-item.ash-dnd-drop-after::before {
+  right: -2px;
+}

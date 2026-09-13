@@ -47,8 +47,8 @@ fn zui_backend_neutral_modules_remain_platform_independent() {
                 "wgpu::",
                 "winit::",
                 "glyphon::",
-                "zeta_ui_components::",
-                "zeta_workbench::",
+                "ash_ui_components::",
+                "ash_workbench::",
             ] {
                 if source.contains(forbidden) {
                     violations.push(format!("{} contains `{forbidden}`", path.display()));
@@ -77,10 +77,10 @@ fn public_zui_facade_owns_desktop_framework_composition() {
         );
     }
     for forbidden in [
-        "zeta-ui-components =",
-        "zeta-workbench =",
-        "zeta-terminal =",
-        "zeta-app-server",
+        "ash-ui-components =",
+        "ash-workbench =",
+        "ash-terminal =",
+        "ash-app-server",
     ] {
         assert!(
             !manifest
@@ -107,7 +107,7 @@ fn ui_crates_have_one_way_dependencies_while_backends_stay_internal_modules() {
             .any(|line| line.trim_start().starts_with("zui =")),
         "components must consume the public zui facade"
     );
-    for forbidden in ["zeta-workbench ="] {
+    for forbidden in ["ash-workbench ="] {
         assert!(
             !components_manifest
                 .lines()
@@ -117,7 +117,7 @@ fn ui_crates_have_one_way_dependencies_while_backends_stay_internal_modules() {
     }
     let workbench_manifest = fs::read_to_string(workspace.join("workbench").join("Cargo.toml"))
         .expect("Workbench manifest should be readable");
-    for required in ["zeta-ui-components =", "zui ="] {
+    for required in ["ash-ui-components =", "zui ="] {
         assert!(
             workbench_manifest
                 .lines()
@@ -179,7 +179,7 @@ fn component_crate_remains_graphics_backend_neutral() {
             !manifest
                 .lines()
                 .any(|line| line.trim_start().starts_with(forbidden)),
-            "zeta-ui-components must not depend on {forbidden}; graphics backends consume zui scenes"
+            "ash-ui-components must not depend on {forbidden}; graphics backends consume zui scenes"
         );
     }
 
@@ -193,7 +193,7 @@ fn component_crate_remains_graphics_backend_neutral() {
     });
     assert!(
         violations.is_empty(),
-        "zeta-ui-components must remain graphics-backend neutral:\n{}",
+        "ash-ui-components must remain graphics-backend neutral:\n{}",
         violations.join("\n")
     );
 }
@@ -212,10 +212,10 @@ fn application_uses_only_zui_for_desktop_framework_hosting() {
     for forbidden in [
         "zui-app =",
         "zui-core =",
-        "zeta-icon =",
-        "zeta-renderer =",
-        "zeta-wgpu =",
-        "zeta-winit =",
+        "ash-icon =",
+        "ash-renderer =",
+        "ash-wgpu =",
+        "ash-winit =",
     ] {
         assert!(
             !workbench_manifest
@@ -231,7 +231,7 @@ fn application_uses_only_zui_for_desktop_framework_hosting() {
 }
 
 #[test]
-fn workbench_app_server_adapter_owns_the_zeta_rs_client_boundary() {
+fn workbench_app_server_adapter_owns_the_ash_rs_client_boundary() {
     let workspace = app_root();
     let source_root = workspace.join("workbench");
     let app_server_file = source_root.join("app_server.rs");
@@ -241,7 +241,7 @@ fn workbench_app_server_adapter_owns_the_zeta_rs_client_boundary() {
         if path == app_server_file || path.starts_with(&app_server_root) || is_test_source(path) {
             return;
         }
-        if source.contains("zeta_app_server_client") {
+        if source.contains("ash_app_server_client") {
             violations.push(
                 path.strip_prefix(workspace)
                     .unwrap_or(path)
@@ -252,7 +252,7 @@ fn workbench_app_server_adapter_owns_the_zeta_rs_client_boundary() {
     });
     assert!(
         violations.is_empty(),
-        "Workbench modules must access zeta-rs App Server client through crate::app_server:\n{}",
+        "Workbench modules must access ash-rs App Server client through crate::app_server:\n{}",
         violations.join("\n")
     );
 
@@ -261,8 +261,8 @@ fn workbench_app_server_adapter_owns_the_zeta_rs_client_boundary() {
     assert!(
         workbench_manifest
             .lines()
-            .any(|line| line.trim_start().starts_with("zeta-app-server-client =")),
-        "Workbench must own the shared zeta-rs App Server client dependency"
+            .any(|line| line.trim_start().starts_with("ash-app-server-client =")),
+        "Workbench must own the shared ash-rs App Server client dependency"
     );
 
     for relative_manifest in [
@@ -276,7 +276,7 @@ fn workbench_app_server_adapter_owns_the_zeta_rs_client_boundary() {
         assert!(
             !manifest
                 .lines()
-                .any(|line| line.trim_start().starts_with("zeta-app-server-client =")),
+                .any(|line| line.trim_start().starts_with("ash-app-server-client =")),
             "UI crate {relative_manifest} must not depend on the App Server client"
         );
     }

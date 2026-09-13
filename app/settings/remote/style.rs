@@ -1,8 +1,8 @@
 //! Host-resolved colors and shared component styles for Remote overlays.
 
-use zeta_icons::icons;
-use zeta_ui_components::{InputBoxStateColors, InputBoxStyle, ScrollViewStyle, SearchBoxStyle};
-use zeta_ui_theme::UiTheme;
+use ash_icons::icons;
+use ash_ui_components::{InputBoxStateColors, InputBoxStyle, ScrollViewStyle, SearchBoxStyle};
+use ash_ui_theme::UiTheme;
 use zui::ui::{CornerRadii, Edges, TextStyle};
 
 /// Colors and shared component styles needed by Remote overlays.

@@ -1,21 +1,21 @@
-use zeta_ui_components::ScrollCommand;
-use zeta_ui_components::ScrollDelta;
+use ash_ui_components::ScrollCommand;
+use ash_ui_components::ScrollDelta;
 use zui::input::MouseScrollDelta;
 use zui::ui::ElementId;
 
-use zeta_settings::REMOTE_CONNECTION_MANAGER;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_CLOSE;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_CONNECT;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_DELETE;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_DIRECTORY;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_HOST;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_ITEM_HEIGHT;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_LIST;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_NAME;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_NEW;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_SAVE;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_STATUS;
-use zeta_settings::remote_connection_manager_item_index;
+use ash_settings::REMOTE_CONNECTION_MANAGER;
+use ash_settings::REMOTE_CONNECTION_MANAGER_CLOSE;
+use ash_settings::REMOTE_CONNECTION_MANAGER_CONNECT;
+use ash_settings::REMOTE_CONNECTION_MANAGER_DELETE;
+use ash_settings::REMOTE_CONNECTION_MANAGER_DIRECTORY;
+use ash_settings::REMOTE_CONNECTION_MANAGER_HOST;
+use ash_settings::REMOTE_CONNECTION_MANAGER_ITEM_HEIGHT;
+use ash_settings::REMOTE_CONNECTION_MANAGER_LIST;
+use ash_settings::REMOTE_CONNECTION_MANAGER_NAME;
+use ash_settings::REMOTE_CONNECTION_MANAGER_NEW;
+use ash_settings::REMOTE_CONNECTION_MANAGER_SAVE;
+use ash_settings::REMOTE_CONNECTION_MANAGER_STATUS;
+use ash_settings::remote_connection_manager_item_index;
 
 const MANAGER_ROWS_PER_WHEEL_STEP: f32 = 3.0;
 

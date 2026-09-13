@@ -2,7 +2,7 @@ load("//app:defs.bzl", "app_rust_library")
 
 app_rust_library(
     name = "workbench",
-    crate_name = "zeta_workbench",
+    crate_name = "ash_workbench",
     crate_root = "lib.rs",
     package_name = "app/workbench",
     source_files = ["README.md"],

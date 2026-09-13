@@ -1,5 +1,5 @@
-use zeta_icons::icons;
-use zeta_ui_components::{
+use ash_icons::icons;
+use ash_ui_components::{
     ActionBar, ActionBarItem, ActionBarOrientation, ActionBarStyle, ActionViewItem,
     ButtonSelection, ButtonState, InteractionRegion, SearchBox,
 };
@@ -95,11 +95,11 @@ impl FilesToolbar {
                 (bounds.size.height - 12.0).max(1.0),
             );
             let search_state = if dispatch.is_focused(FILE_SEARCH_INPUT) {
-                zeta_ui_components::InputBoxState::Focused(caret_visibility)
+                ash_ui_components::InputBoxState::Focused(caret_visibility)
             } else if dispatch.is_hovered(FILE_SEARCH_INPUT) {
-                zeta_ui_components::InputBoxState::Hovered
+                ash_ui_components::InputBoxState::Hovered
             } else {
-                zeta_ui_components::InputBoxState::Resting
+                ash_ui_components::InputBoxState::Resting
             };
             SearchBox::new(
                 search_bounds,

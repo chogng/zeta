@@ -1,8 +1,8 @@
-use zeta_ui_components::ScrollState;
-use zeta_ui_components::ScrollViewStyle;
-use zeta_ui_components::ScrollbarPresentation;
-use zeta_ui_theme::UiTheme;
-use zeta_ui_theme::UiTypography;
+use ash_ui_components::ScrollState;
+use ash_ui_components::ScrollViewStyle;
+use ash_ui_components::ScrollbarPresentation;
+use ash_ui_theme::UiTheme;
+use ash_ui_theme::UiTypography;
 use zui::ui::AccessibilityRole;
 use zui::ui::Border;
 use zui::ui::Component;
@@ -168,22 +168,22 @@ impl<'a> SettingsSectionPane<'a> {
             34.0,
         )
     }
-    fn memories_button(&self) -> zeta_ui_components::Button {
+    fn memories_button(&self) -> ash_ui_components::Button {
         let state = if self.dispatch.is_pressed(OPEN_MEMORIES) {
-            zeta_ui_components::ButtonState::Pressed
+            ash_ui_components::ButtonState::Pressed
         } else if self.dispatch.is_hovered(OPEN_MEMORIES) {
-            zeta_ui_components::ButtonState::Hovered
+            ash_ui_components::ButtonState::Hovered
         } else if self.dispatch.is_focused(OPEN_MEMORIES) {
-            zeta_ui_components::ButtonState::Focused
+            ash_ui_components::ButtonState::Focused
         } else {
-            zeta_ui_components::ButtonState::Resting
+            ash_ui_components::ButtonState::Resting
         };
-        zeta_ui_components::Button::new(
+        ash_ui_components::Button::new(
             self.memories_bounds(),
             "Manage memories",
             state,
-            zeta_ui_components::ButtonStyle::new(
-                zeta_ui_components::ButtonBackgrounds::new(self.style.surface_raised)
+            ash_ui_components::ButtonStyle::new(
+                ash_ui_components::ButtonBackgrounds::new(self.style.surface_raised)
                     .with_hovered(self.style.surface_hovered)
                     .with_focused(self.style.surface_hovered),
                 self.style.control_text.clone(),
@@ -348,7 +348,7 @@ impl Component for SettingsSectionPane<'_> {
         self.paint_section(context.scene_mut());
         if self.section == SettingsPageSection::General {
             context.draw_component(
-                &zeta_ui_components::InteractionRegion::new(
+                &ash_ui_components::InteractionRegion::new(
                     "OpenMemories",
                     OPEN_MEMORIES,
                     self.memories_bounds(),

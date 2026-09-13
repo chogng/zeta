@@ -2,13 +2,13 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::time::Instant;
 
-use zeta_editor::{
+use ash_editor::{
     DiffEditorDocument, DiffEditorLabels, DiffEditorPresentation, DiffEditorState, MultiDiffEditor,
     MultiDiffEditorHeaderAction, MultiDiffEditorItem, MultiDiffEditorItemIdentity,
     MultiDiffEditorLayout, MultiDiffEditorStyle,
 };
-use zeta_icons::icons;
-use zeta_ui_components::{
+use ash_icons::icons;
+use ash_ui_components::{
     ButtonSelection, ButtonState, ScrollAxis, ScrollCommand, ScrollDelta, ScrollMetrics,
     ScrollState, ScrollbarController, ScrollbarInteractionOutcome, ScrollbarPresentation,
 };
@@ -320,7 +320,7 @@ impl EditorPaneState {
         file_name: impl Into<String>,
         original_label: impl Into<String>,
         modified_label: impl Into<String>,
-        document: zeta_diff::DiffDocument,
+        document: ash_diff::DiffDocument,
     ) {
         let file_name = file_name.into();
         let identity = self.identity_for_path(&file_name);
@@ -329,7 +329,7 @@ impl EditorPaneState {
             file_name,
             original_label: original_label.into(),
             modified_label: modified_label.into(),
-            document: DiffEditorDocument::new(document, zeta_editor::CodeEditorLanguage::PlainText),
+            document: DiffEditorDocument::new(document, ash_editor::CodeEditorLanguage::PlainText),
             editor_state: DiffEditorState::default(),
             staging: ScmStaging::Unstaged,
             expanded: true,
@@ -341,7 +341,7 @@ impl EditorPaneState {
     #[cfg(test)]
     pub(crate) fn replace_test_diffs(
         &mut self,
-        diffs: Vec<(String, zeta_diff::DiffDocument)>,
+        diffs: Vec<(String, ash_diff::DiffDocument)>,
     ) -> Vec<MultiDiffEditorItemIdentity> {
         let mut next_diffs = Vec::with_capacity(diffs.len());
         for (file_name, document) in diffs {
@@ -352,7 +352,7 @@ impl EditorPaneState {
                 modified_label: "Working Tree".to_string(),
                 document: DiffEditorDocument::new(
                     document,
-                    zeta_editor::CodeEditorLanguage::PlainText,
+                    ash_editor::CodeEditorLanguage::PlainText,
                 ),
                 editor_state: DiffEditorState::default(),
                 staging: ScmStaging::Unstaged,
@@ -432,7 +432,7 @@ impl EditorPaneState {
         self.scrollbar.presentation()
     }
 
-    fn scroll_view(&self, bounds: Rect) -> zeta_ui_components::ScrollView {
+    fn scroll_view(&self, bounds: Rect) -> ash_ui_components::ScrollView {
         let dispatch = UiDispatch::default();
         let items = self.items(&dispatch);
         MultiDiffEditor::new(bounds, &items, self.scroll_state, self.style())
@@ -570,7 +570,7 @@ impl EditorPaneState {
         self.restore_scroll_anchor(anchor);
     }
 
-    fn restore_scroll_anchor(&mut self, anchor: zeta_ui_components::ListScrollAnchor) {
+    fn restore_scroll_anchor(&mut self, anchor: ash_ui_components::ListScrollAnchor) {
         let Some(command) = self.measured_layout.command_for_anchor(anchor) else {
             return;
         };

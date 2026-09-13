@@ -41,7 +41,7 @@ fn toolbar_fills_the_container_row_with_search_and_add_action() {
         vec!["SessionsToolbar", "SearchBox", "InputBox"]
     );
     assert_eq!(scene.icons().len(), 2);
-    assert_eq!(scene.icons()[1].icon(), zeta_icons::icons::ADD);
+    assert_eq!(scene.icons()[1].icon(), ash_icons::icons::ADD);
     assert!(
         scene
             .icons()

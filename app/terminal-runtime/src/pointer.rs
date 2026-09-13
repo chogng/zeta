@@ -1,4 +1,4 @@
-use zeta_terminal::{
+use ash_terminal::{
     MouseModifiers, MouseTrackingMode, ScreenBuffer, TerminalCore, TerminalMouseButton,
     TerminalMouseButtonState, TerminalMouseEvent, TerminalMousePosition,
 };

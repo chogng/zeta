@@ -1,0 +1,26 @@
+[package]
+name = "ash-tools"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "ash_tools"
+path = "src/lib.rs"
+
+[dependencies]
+network-proxy = { workspace = true }
+bm25 = { workspace = true }
+regex = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+ash-async-utils = { workspace = true }
+ash-utils-output-truncation = { workspace = true }
+ash-protocol = { workspace = true }
+ash-sandboxing = { workspace = true }
+ash-environment = { workspace = true }
+
+[lints]
+workspace = true

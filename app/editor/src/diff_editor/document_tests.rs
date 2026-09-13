@@ -1,4 +1,4 @@
-use zeta_diff::DiffDocument;
+use ash_diff::DiffDocument;
 
 use super::*;
 use crate::CodeEditorFoldState;

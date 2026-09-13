@@ -1,0 +1,13 @@
+load("//:defs.bzl", "ash_rust_binary", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "package-store",
+    crate_name = "ash_package_store",
+)
+
+ash_rust_binary(
+    name = "ash-package-store",
+    crate_name = "ash_package_store_cli",
+    crate_root = "src/main.rs",
+    deps = [":package-store"],
+)

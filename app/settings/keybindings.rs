@@ -6,11 +6,11 @@ pub use view::KeyboardShortcutRow;
 
 use state::KeyboardShortcutsState as ShortcutRecorderState;
 use view::KeyboardShortcuts;
-use zeta_commands::AppCommandId;
-use zeta_keybinding::HostPlatform;
-use zeta_keybinding::KeySequence;
-use zeta_keybinding::format_key_sequence;
-use zeta_ui_components::QuickInputIds;
+use ash_commands::AppCommandId;
+use ash_keybinding::HostPlatform;
+use ash_keybinding::KeySequence;
+use ash_keybinding::format_key_sequence;
+use ash_ui_components::QuickInputIds;
 use zui::ui::CaretVisibility;
 use zui::ui::ElementId;
 use zui::ui::InteractionFrame;

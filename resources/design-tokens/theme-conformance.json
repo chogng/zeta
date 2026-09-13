@@ -1,6 +1,6 @@
 {
   "theme": {
-    "$schema": "https://zeta.dev/schemas/color-theme.schema.json",
+    "$schema": "https://ash.dev/schemas/color-theme.schema.json",
     "version": 1,
     "id": "shared-conformance",
     "label": "Shared Conformance",

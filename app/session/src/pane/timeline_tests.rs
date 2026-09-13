@@ -2,17 +2,17 @@
 
 use super::{ThreadTimeline, ThreadTimelineStyle};
 use crate::TranscriptState;
-use zeta_protocol::{
+use ash_protocol::{
     ItemId, SessionId, StableTurnError, Thread, ThreadId, ThreadItem, ThreadStatus, ToolCallId,
     ToolName, Turn, TurnId, TurnStatus,
 };
-use zeta_thread_transcript::ThreadTranscriptSnapshot;
+use ash_thread_transcript::ThreadTranscriptSnapshot;
 use zui::ui::{Color, Rect};
 
 #[test]
 fn timeline_groups_shell_result_under_its_tool_call() {
     let thread = Thread {
-        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id: SessionId::new("session").unwrap(),
         thread_id: ThreadId::new("thread").unwrap(),
@@ -27,12 +27,12 @@ fn timeline_groups_shell_result_under_its_tool_call() {
         turns: vec![Turn {
             turn_id: TurnId::new("turn").unwrap(),
             status: TurnStatus::Completed,
-            kind: zeta_protocol::TurnKind::Coding,
+            kind: ash_protocol::TurnKind::Coding,
             instructions: None,
             model: None,
             tool_profile: None,
             tool_mode: Default::default(),
-            approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+            approval_mode: ash_protocol::ApprovalMode::AskPermissions,
             usage: Default::default(),
             context_usage: None,
             items: vec![

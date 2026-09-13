@@ -1,11 +1,11 @@
 ---
-description: Zeta editor ownership, projection, input, layout, and rendering rules.
-applyTo: "**/src/zeta/editor/**/*.ts,**/test/editor/**"
+description: Ash editor ownership, projection, input, layout, and rendering rules.
+applyTo: "**/src/ash/editor/**/*.ts,**/test/editor/**"
 ---
 
 # Editor Implementation Guidelines
 
-See [`src/zeta/editor/README.md`](../../zeta-ts/src/zeta/editor/README.md), [`text-engine.md`](../../zeta-ts/src/zeta/editor/text-engine.md), and [`document-engine.md`](../../zeta-ts/src/zeta/editor/document-engine.md).
+See [`src/ash/editor/README.md`](../../ash-ts/src/ash/editor/README.md), [`text-engine.md`](../../ash-ts/src/ash/editor/text-engine.md), and [`document-engine.md`](../../ash-ts/src/ash/editor/document-engine.md).
 
 ## Ownership
 

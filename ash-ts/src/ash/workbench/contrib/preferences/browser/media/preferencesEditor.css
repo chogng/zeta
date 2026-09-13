@@ -1,0 +1,402 @@
+.ash-settings-editor {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.ash-preferences-editor-body {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.ash-settings-layout {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
+  grid-template-columns: 232px minmax(0, 1fr);
+}
+
+.ash-settings-sidebar {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--ash-widget-border);
+  background: var(--ash-side-bar-background);
+}
+
+.ash-settings-sidebar-scrollable,
+.ash-settings-page-scrollable {
+  width: 100%;
+  height: 100%;
+}
+
+.ash-settings-navigation-tree {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 18px 12px;
+}
+
+.ash-settings-navigation-empty {
+  margin: 0;
+  padding: 18px 24px;
+  color: var(--ash-description-foreground);
+  line-height: 1.5;
+}
+
+.ash-settings-navigation-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ash-settings-page {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ash-settings-page-inner {
+  padding: 32px 40px;
+}
+
+.ash-settings-page h3 {
+  margin: 0 0 8px;
+  color: var(--ash-settings-header-foreground);
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.ash-settings-page.has-navigation-target h3 {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  background: var(--ash-editor-background);
+  border-bottom: 1px solid var(--ash-settings-header-border);
+}
+
+.ash-settings-description {
+  max-width: 680px;
+  margin: 0 0 28px;
+  color: var(--ash-description-foreground);
+  line-height: 1.5;
+}
+
+.ash-settings-content {
+  min-height: 1px;
+}
+
+.ash-theme-setting-item,
+.ash-indexing-setting-item,
+.ash-localization-setting {
+  max-width: 760px;
+}
+
+.ash-theme-setting,
+.ash-indexing-setting {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  box-sizing: border-box;
+}
+
+.ash-indexing-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ash-indexing-setting-item + .ash-indexing-setting-item {
+  margin-top: 28px;
+}
+
+.ash-localization-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ash-theme-setting-item > .ash-setting-item-actions,
+.ash-indexing-setting-item > .ash-setting-item-actions,
+.ash-localization-setting > .ash-setting-item-actions {
+  top: -3px;
+  transform: none;
+}
+
+.ash-indexing-setting legend {
+  padding: 0;
+  color: var(--ash-foreground);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ash-indexing-toggle {
+  display: flex;
+  align-items: center;
+  color: var(--ash-foreground);
+  gap: 8px;
+}
+
+.ash-settings-text-input {
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid var(--ash-input-border);
+  border-radius: 4px;
+  outline: none;
+  color: var(--ash-input-foreground);
+  background: var(--ash-input-background);
+  font: inherit;
+}
+
+.ash-settings-text-input:focus {
+  border-color: var(--ash-focus-border);
+}
+
+.ash-settings-message {
+  color: var(--ash-description-foreground);
+}
+
+.ash-theme-setting legend {
+  margin: 0;
+  padding: 0;
+  color: var(--ash-foreground);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ash-theme-setting-hint {
+  margin: 6px 0 14px;
+  color: var(--ash-description-foreground);
+  line-height: 1.5;
+}
+
+.ash-theme-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ash-theme-option {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--ash-widget-border);
+  border-radius: 8px;
+  background: var(--ash-editor-background);
+  cursor: pointer;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ash-theme-option:hover {
+  background: var(--ash-list-hover-background);
+}
+
+.ash-theme-option:has(input:checked) {
+  border-color: var(--ash-focus-border);
+  box-shadow: inset 0 0 0 1px var(--ash-focus-border);
+}
+
+.ash-theme-option:has(input:focus-visible) {
+  outline: 1px solid var(--ash-focus-border);
+  outline-offset: 2px;
+}
+
+.ash-theme-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  margin: -1px;
+  padding: 0;
+  clip-path: inset(50%);
+  border: 0;
+  white-space: nowrap;
+}
+
+.ash-theme-preview {
+  display: grid;
+  height: 72px;
+  overflow: hidden;
+  border: 1px solid var(--ash-widget-border);
+  border-radius: 5px;
+  background: var(--theme-preview-editor);
+  grid-column: 1 / -1;
+  grid-template-columns: 30% 70%;
+}
+
+.ash-theme-preview::before,
+.ash-theme-preview::after {
+  content: "";
+  margin: 12px;
+  border-radius: 3px;
+  background: var(--theme-preview-control);
+}
+
+.ash-theme-preview::before {
+  background: var(--theme-preview-sidebar);
+}
+
+.ash-theme-option-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  grid-column: 1 / -1;
+  gap: 3px;
+}
+
+.ash-theme-option-title {
+  color: var(--ash-foreground);
+  font-weight: 600;
+}
+
+.ash-theme-option-description {
+  color: var(--ash-description-foreground);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.ash-theme-setting:disabled .ash-theme-option {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.ash-theme-setting-status {
+  min-height: 18px;
+  margin: 10px 0 0;
+  color: var(--ash-error-foreground);
+  font-size: 12px;
+}
+
+.ash-theme-setting-status.is-success {
+  color: var(--ash-description-foreground);
+}
+
+.ash-theme-customization {
+  display: flex;
+  margin-top: 4px;
+  gap: 8px;
+}
+
+.ash-theme-json {
+  display: flex;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--ash-widget-border);
+  border-radius: 6px;
+  background: var(--ash-editor-background);
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ash-theme-json h4,
+.ash-theme-json p {
+  margin: 0;
+}
+
+.ash-theme-json h4 {
+  color: var(--ash-foreground);
+  font-size: 14px;
+}
+
+.ash-theme-json p {
+  color: var(--ash-description-foreground);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ash-theme-json-editor {
+  width: 100%;
+  min-height: 320px;
+  padding: 10px 12px;
+  resize: vertical;
+  border: 1px solid var(--ash-input-border);
+  border-radius: 4px;
+  outline: none;
+  color: var(--ash-editor-foreground);
+  background: var(--ash-input-background);
+  box-sizing: border-box;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.ash-theme-json-editor:focus {
+  border-color: var(--ash-focus-border);
+}
+
+.ash-theme-json-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ash-user-theme-status {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--ash-widget-border);
+  border-radius: 6px;
+  color: var(--ash-description-foreground);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.ash-user-theme-status p {
+  margin: 0;
+}
+
+.ash-user-theme-status p + p,
+.ash-user-theme-status p + ul {
+  margin-top: 6px;
+}
+
+.ash-user-theme-status ul {
+  margin-bottom: 0;
+  padding-left: 20px;
+  color: var(--ash-error-foreground);
+}
+
+@media (max-width: 720px) {
+  .ash-settings-layout {
+    grid-template-columns: minmax(164px, 36%) minmax(0, 1fr);
+  }
+
+  .ash-settings-page-inner {
+    padding: 24px;
+  }
+
+  .ash-theme-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .ash-settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(132px, 36%) minmax(0, 1fr);
+  }
+
+  .ash-settings-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--ash-widget-border);
+  }
+
+  .ash-settings-navigation-tree {
+    padding: 10px;
+  }
+
+  .ash-settings-page-inner {
+    padding: 20px;
+  }
+}

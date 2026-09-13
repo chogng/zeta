@@ -1,10 +1,10 @@
-# Zeta Core
+# Ash Core
 
-> 本文说明 `zeta-core` 的长期职责。领域身份见 [`domain-model.md`](domain-model.md)，事件契约见 [`protocol.md`](protocol.md)。
+> 本文说明 `ash-core` 的长期职责。领域身份见 [`domain-model.md`](domain-model.md)，事件契约见 [`protocol.md`](protocol.md)。
 
 ## 1. 结论
 
-`zeta-core` 以 Thread 为恢复、顺序和执行边界。它没有 SessionCoordinator，也不维护独立 Session 状态：同一 `session_id` 下的 Thread 组成一棵会话树，需要树级操作时由 `ThreadController` 枚举和协调这些 Thread。
+`ash-core` 以 Thread 为恢复、顺序和执行边界。它没有 SessionCoordinator，也不维护独立 Session 状态：同一 `session_id` 下的 Thread 组成一棵会话树，需要树级操作时由 `ThreadController` 枚举和协调这些 Thread。
 
 ```text
 App Server
@@ -94,15 +94,15 @@ Environment 是执行位置；`cwd`、dirs 与 grants 是该位置内的有效�
 ## 7. 依赖边界
 
 ```text
-zeta-protocol / zeta-history
+ash-protocol / ash-history
               ▲
               │
-          zeta-core ──► zeta-thread-store (trait)
+          ash-core ──► ash-thread-store (trait)
               ▲
               │
               app-server
 
-zeta-state ── implements ──► zeta-thread-store
+ash-state ── implements ──► ash-thread-store
 ```
 
 新增能力时先判断它属于 Thread 行为、Turn 执行、环境访问还是产品组织。只有 Thread 行为进入 Core；Project 归类、窗口导航和编辑器 Workspace 由产品层拥有。

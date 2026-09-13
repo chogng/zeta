@@ -1,6 +1,6 @@
-# Zeta UI localization
+# Ash UI localization
 
-Zeta treats UI localization as a data catalog capability, separate from programming-language
+Ash treats UI localization as a data catalog capability, separate from programming-language
 packages. The product owns the catalog contract it consumes; the remote Marketplace only validates,
 signs, and distributes product-independent static locale payloads.
 
@@ -11,14 +11,14 @@ signs, and distributes product-independent static locale payloads.
 | Built-in English and Simplified Chinese | `workbench/services/localization/common/localizationCatalogs.ts` | Always available without Marketplace access |
 | Language-pack discovery, acquisition, leases, and catalog projection | `platform/languagePacks` | `ILanguagePackService`; Marketplace `packageType: "localization"` |
 | Locale selection and persistence | `workbench/services/localization/common/locale.ts` | `ILocaleService`, client/window-local `workbench.locale` |
-| Message lookup and NLS projection | `workbench/services/localization` + `zeta-ts/src/zeta/nls.ts` | Selected catalog → English catalog → caller fallback |
+| Message lookup and NLS projection | `workbench/services/localization` + `ash-ts/src/ash/nls.ts` | Selected catalog → English catalog → caller fallback |
 | Remote package discovery and distribution | `../marketplace` | `packageType: "localization"` and `localization/package.json` |
-| Installed package lease and resource reads | Zeta Marketplace Manager | A localization capability exposes one static JSON catalog |
+| Installed package lease and resource reads | Ash Marketplace Manager | A localization capability exposes one static JSON catalog |
 
-The Marketplace does not know Zeta bundle IDs, does not execute localization packages, and does not
+The Marketplace does not know Ash bundle IDs, does not execute localization packages, and does not
 install them into the renderer. The App Server/Marketplace Manager acquires and leases the validated
 capability resource. Each client window's `platform/languagePacks` adapter reads that path-free
-resource, validates the Zeta catalog contract, and projects the result to its own Workbench services.
+resource, validates the Ash catalog contract, and projects the result to its own Workbench services.
 
 ## Catalog shape
 
@@ -30,18 +30,18 @@ The Marketplace manifest declares one locale per package. Its payload uses:
   "locale": "fr",
   "languageName": "French",
   "localizedLanguageName": "Français",
-  "catalogVersion": "zeta-1",
+  "catalogVersion": "ash-1",
   "bundles": {
-    "zeta.settings": {
+    "ash.settings": {
       "displayLanguage.title": "Display Language"
     }
   }
 }
 ```
 
-Bundle IDs and keys remain data owned by the consuming product. The Zeta renderer accepts only
-`catalogVersion: "zeta-1"`, validates locale/name/message bounds, and ignores malformed or
-product-mismatched catalogs without preventing other installed locales from loading. A future Zeta
+Bundle IDs and keys remain data owned by the consuming product. The Ash renderer accepts only
+`catalogVersion: "ash-1"`, validates locale/name/message bounds, and ignores malformed or
+product-mismatched catalogs without preventing other installed locales from loading. A future Ash
 catalog contract can reject a catalog without changing the generic Marketplace schema.
 
 ## Runtime behavior

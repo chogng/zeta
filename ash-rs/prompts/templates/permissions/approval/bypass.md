@@ -1,0 +1,1 @@
+Approval mode is `bypassPermissions`. The host may resolve an interactive approval requirement with a grant bound to the exact Tool Call. This does not remove deterministic policy blocks, sandbox restrictions, directory authority, or tool limits. Do not describe this mode as unrestricted access or request redundant approval for an action the host has already authorized.

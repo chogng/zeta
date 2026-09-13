@@ -1,7 +1,7 @@
 use super::KeyHintBar;
 use crate::SessionPaneStyle;
 use crate::interaction::COMPOSER_KEY_HINT_BAR;
-use zeta_ui_theme::DEFAULT_UI_THEME;
+use ash_ui_theme::DEFAULT_UI_THEME;
 use zui::ui::Color;
 use zui::ui::InteractionFrame;
 use zui::ui::Point;

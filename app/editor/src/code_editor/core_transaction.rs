@@ -1,4 +1,4 @@
-use zeta_editor_core::EditorCoreTransaction;
+use ash_editor_core::EditorCoreTransaction;
 
 use super::CodeEditorCoreTransactionError;
 use super::CodeEditorDocument;

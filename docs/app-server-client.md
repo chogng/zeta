@@ -1,11 +1,11 @@
 # App Server 客户端架构与演进方案
 
-> 物理位置：`zeta-rs/app-server-client/`  
-> 主要消费者：`zeta-exec` 非交互执行宿主、`zeta-tui`、`app`
-> Wire contract：[`zeta-app-server-api.md`](zeta-app-server-api.md)  
+> 物理位置：`ash-rs/app-server-client/`  
+> 主要消费者：`ash-exec` 非交互执行宿主、`ash-tui`、`app`
+> Wire contract：[`ash-app-server-api.md`](ash-app-server-api.md)  
 > Canonical 产品模型：[`protocol.md`](protocol.md)  
 > Headless 与远程调度：[`exec.md`](exec.md)
-> 当前 crate contract：[`zeta-rs/app-server-client/README.md`](../zeta-rs/app-server-client/README.md)
+> 当前 crate contract：[`ash-rs/app-server-client/README.md`](../ash-rs/app-server-client/README.md)
 
 ## 快速理解
 
@@ -23,8 +23,8 @@ App Server 客户端把“启动后端、初始化连接、配对请求、转发
 
 ## 1. 结论
 
-`zeta-app-server-client` 存在的原因，不只是复用一组 typed RPC method。`zeta-exec` 与
-`zeta-tui` 都需要完成同一套本地 App Server 宿主流程：
+`ash-app-server-client` 存在的原因，不只是复用一组 typed RPC method。`ash-exec` 与
+`ash-tui` 都需要完成同一套本地 App Server 宿主流程：
 
 1. 根据启动配置创建并启动 App Server；
 2. 建立 client 到 App Server 的请求通道；
@@ -34,27 +34,27 @@ App Server 客户端把“启动后端、初始化连接、配对请求、转发
 6. 运行期间正确配对请求结果，并持续转发 server notification；
 7. 退出时关闭 connection、结束 pending 请求并等待后台任务停止。
 
-这套启动、连接和关闭逻辑不能在 `zeta-exec` 与 `zeta-tui` 中各写一份，因此抽成共享 crate。
+这套启动、连接和关闭逻辑不能在 `ash-exec` 与 `ash-tui` 中各写一份，因此抽成共享 crate。
 
 ```text
-zeta-exec ─┐
-           ├─► zeta-app-server-client ─► start App Server
-zeta-tui ──┘             │
+ash-exec ─┐
+           ├─► ash-app-server-client ─► start App Server
+ash-tui ──┘             │
                          ├─ request channel ──► App Server
                          └─ result/event  ◄──── App Server
 ```
 
-直接依赖和启动 `zeta-app-server` 是 embedded backend 的职责，不是依赖方向错误。当前
+直接依赖和启动 `ash-app-server` 是 embedded backend 的职责，不是依赖方向错误。当前
 `AppServerSession::start_stdio` 已能在同一 public facade 下连接 product-selected child，`app`
 用它承载 SSH Remote App Server；它仍只连接相同的 App Server contract，不是 scheduler protocol，
 也不是 remote process executor。Desktop 的 JSONL/stdio client 仍不要求复用这个 Rust crate。
 
-`zeta-exec` 是无交互界面的 Agent 执行宿主。当前它启动 embedded App Server；交互式 TUI 则通过
+`ash-exec` 是无交互界面的 Agent 执行宿主。当前它启动 embedded App Server；交互式 TUI 则通过
 stdio 连接 profile-scoped local App Server，并把初始 `cwd` 作为执行位置交给服务端。
 后续远程调度系统以它作为 headless execution entry。Job/Attempt/lease/event cursor 属于
 [`exec.md`](exec.md) 定义的 scheduler adapter，不进入 App Server Client。
 
-当前 `zeta-cli` 的交互式和无界面提示词路径已经使用自有
+当前 `ash-cli` 的交互式和无界面提示词路径已经使用自有
 `AppServerSession`、可克隆请求句柄、独立 `AppServerEvents` 与显式关闭。
 ## 2. 抽象单位：一个运行中的 App Server Session
 
@@ -78,7 +78,7 @@ pub struct AppServerSession {
 - initialize/ready/closing/closed 生命周期；
 - 显式 shutdown 与 task join。
 
-Windows stdio 输出通过 `zeta-utils-pty::CancellablePipeReader` 读取，连接关闭标记可以停止等待；即使后台服务仍持有管道写端，也不能阻塞客户端 shutdown。系统调用只保留在 PTY/管道工具 crate，客户端继续保持安全 Rust 边界。
+Windows stdio 输出通过 `ash-utils-pty::CancellablePipeReader` 读取，连接关闭标记可以停止等待；即使后台服务仍持有管道写端，也不能阻塞客户端 shutdown。系统调用只保留在 PTY/管道工具 crate，客户端继续保持安全 Rust 边界。
 
 它向宿主提供两个运行时端点：
 
@@ -106,7 +106,7 @@ impl AppServerSession {
 
 ## 3. 为什么由这个 crate 统一连接 App Server
 
-`zeta-exec` 和 `zeta-tui` 都是本地 App Server 的宿主，而不是已经存在的外部 server 的普通
+`ash-exec` 和 `ash-tui` 都是本地 App Server 的宿主，而不是已经存在的外部 server 的普通
 调用方。两者需要相同的 composition：
 
 - 用户 profile root 与本地 SQLite state repository；
@@ -124,24 +124,24 @@ connection。
 依赖方向应是：
 
 ```text
-zeta-exec / zeta-tui
+ash-exec / ash-tui
           │
           ▼
-zeta-app-server-client
-   ├─► zeta-app-server
-   ├─► zeta-app-server-protocol
+ash-app-server-client
+   ├─► ash-app-server
+   ├─► ash-app-server-protocol
    └─► channel/task runtime
 ```
 
 Consumer 不直接创建 `AppServer`、`ConnectionState`、dispatcher 或 notification broker。
-这些类型可以在 client crate 内部使用，但不能泄漏到 `zeta-exec` 或 TUI 的业务代码。
+这些类型可以在 client crate 内部使用，但不能泄漏到 `ash-exec` 或 TUI 的业务代码。
 
-当前 `zeta-exec` 已是非交互 Agent 宿主，并通过本 crate 启动 embedded App Server；底层 process
-execution 已迁移到独立 `zeta-tool-executor`。后续 remote scheduler 仍位于 `zeta-exec` 上层，不能让
+当前 `ash-exec` 已是非交互 Agent 宿主，并通过本 crate 启动 embedded App Server；底层 process
+execution 已迁移到独立 `ash-tool-executor`。后续 remote scheduler 仍位于 `ash-exec` 上层，不能让
 “执行一个 tool process”和“宿主化完整 App Server”重新共享同一个模块或协议。
 
 backend 选择应由产品宿主显式建模，但不应把 Remote 再做成
-`zeta-app-server-client` 的上层入口。客户端只负责统一的 session contract；例如 `app`
+`ash-app-server-client` 的上层入口。客户端只负责统一的 session contract；例如 `app`
 在自己的 `AppServerHost` 中选择 Local 或 Remote backend，然后把两者都转换为
 `AppServerSession`：
 
@@ -156,15 +156,15 @@ pub(crate) enum AppServerBackend {
 ```
 
 - Local backend 通过 `StdioAppServerCommand` 连接 profile-scoped local App Server，并传入初始 `cwd`；
-- Remote backend 由 `zeta-remote-connections` 建立 SSH/stdio 连接，再交给相同的
+- Remote backend 由 `ash-remote-connections` 建立 SSH/stdio 连接，再交给相同的
   `AppServerSession`；
 - 两者暴露相同 typed request handle、event stream 与 shutdown contract；
-- `AppServerHost` 是 `app` 的产品级横向协调层，不是 `zeta-rs` 的通用 App Server API；
-- remote scheduler 仍位于 `zeta-exec` 上层，不属于 App Server backend。
+- `AppServerHost` 是 `app` 的产品级横向协调层，不是 `ash-rs` 的通用 App Server API；
+- remote scheduler 仍位于 `ash-exec` 上层，不属于 App Server backend。
 
 在 app 中，这个产品边界位于 `app/workbench/app_server/`。Agent、Language 和 Terminal 通过
-Workbench 的 App Server host 使用它导出的 session/event contract；`zui`、`zeta-ui-components`、Agent Sidebar
-等 UI crate 不依赖 App Server client。这样 `zeta-rs` 提供核心协议和通用 client，app 提供
+Workbench 的 App Server host 使用它导出的 session/event contract；`zui`、`ash-ui-components`、Agent Sidebar
+等 UI crate 不依赖 App Server client。这样 `ash-rs` 提供核心协议和通用 client，app 提供
 产品启动、本地/Remote backend 与重连协调，两边不会再各自复制一套 client。
 
 ## 4. 启动流程
@@ -229,7 +229,7 @@ pub struct AppServerStartOptions {
 }
 ```
 
-若 `zeta-exec` 与 TUI 的 capability 不同，可以分别构造 typed
+若 `ash-exec` 与 TUI 的 capability 不同，可以分别构造 typed
 `RequiredCapabilities`，不能用 `start(..., true, false)` 表达。
 
 ## 5. 请求通道与结果配对
@@ -340,7 +340,7 @@ Event channel 不负责：
 - 将 notification 变成日志文本；
 - 合并不同 aggregate 的 sequence。
 
-这些属于 `zeta-exec` 的输出/终态协调或 TUI 展示状态。
+这些属于 `ash-exec` 的输出/终态协调或 TUI 展示状态。
 
 各消费端的数据流向是：
 
@@ -405,7 +405,7 @@ source；client event pump 与 request driver 独立，因此空闲连接和长 
 8. 返回 shutdown 期间发生的错误。
 
 关闭 connection 不等于 `session/request` 的 `InterruptTurn`。若产品要求退出前中断某个 Turn，
-`zeta-exec` 或 TUI 必须先发送 typed `session/request` 并等待所需终态，再调用 session shutdown。Client session
+`ash-exec` 或 TUI 必须先发送 typed `session/request` 并等待所需终态，再调用 session shutdown。Client session
 不能猜测要中断哪个 Thread/Turn。
 
 `Drop` 只能做 best-effort cancellation，不能替代显式 shutdown，因为 `Drop` 无法可靠等待
@@ -423,7 +423,7 @@ source；client event pump 与 request driver 独立，因此空闲连接和长 
 
 ## 9. 消费方使用方式
 
-### 9.1 `zeta-exec`
+### 9.1 `ash-exec`
 
 非交互宿主：
 
@@ -440,7 +440,7 @@ source；client event pump 与 request driver 独立，因此空闲连接和长 
 event ack 属于 [`exec.md`](exec.md)。App Server Client 只提供 embedded/remote App Server
 connection，不理解 scheduler Job。
 
-### 9.2 `zeta-tui`
+### 9.2 `ash-tui`
 
 TUI：
 
@@ -493,7 +493,7 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 | `start_in_process_client` / generic `AppServerClient<T>` | rust-app 与 contract tests 的同步适配面；TUI/CLI 不再依赖 drain |
 | typed method 同步等待 completion | shared handle 保持同步 typed API；TUI 已用 `RequestTask` 把等待移出单写者 loop |
 | bounded event/data plane | Current：1024 event + 4096 server queue；显式 `Lagged` event 尚未提供 |
-| stdio child backend | 已实现；`AppServerSession::start_stdio` 完成 initialize/schema gate 与同一 request/event contract；本地与 Remote `zeta code` 的 30 秒有界重连和 snapshot 恢复由 CLI 宿主负责 |
+| stdio child backend | 已实现；`AppServerSession::start_stdio` 完成 initialize/schema gate 与同一 request/event contract；本地与 Remote `ash code` 的 30 秒有界重连和 snapshot 恢复由 CLI 宿主负责 |
 | initialize gate 只存在于一个 helper | 裸 `AppServerClient::new` 可以在未初始化时发送业务请求 |
 | server error 被压成 code/string | 丢失 typed error name/data |
 
@@ -532,7 +532,7 @@ app-server-client/src/
 - `error.rs`：startup/client/protocol/server/shutdown error。
 
 不创建第二套 Session/Thread/Turn DTO，也不按 method 建大量重复 wrapper 模块。Wire Params、
-Result、Notification 与 error 的 source of truth 仍是 `zeta-app-server-protocol`。
+Result、Notification 与 error 的 source of truth 仍是 `ash-app-server-protocol`。
 新增 test module 使用显式 `#[path = "..._tests.rs"]` 引入相邻测试文件。
 
 ## 12. 验证要求
@@ -542,7 +542,7 @@ Result、Notification 与 error 的 source of truth 仍是 `zeta-app-server-prot
 - `start` 创建 App Server 并只在 initialize/schema gate 成功后返回；
 - initialize 是 dispatcher 收到的首个 request；
 - startup 任一步失败都会关闭 channel 并 join 已启动 task；
-- `zeta-exec` 与 TUI 使用相同 start path；
+- `ash-exec` 与 TUI 使用相同 start path；
 - embedded 与 remote backend 通过相同 request/event contract suite；
 - 多个 client clone 可以并发发送 request，result 按 request ID 正确配对；
 - request 执行期间 event stream 可以持续收到 notification；
@@ -560,9 +560,9 @@ Result、Notification 与 error 的 source of truth 仍是 `zeta-app-server-prot
 验证入口：
 
 ```bash
-cargo test --manifest-path Cargo.toml -p zeta-app-server-client
+cargo test --manifest-path Cargo.toml -p ash-app-server-client
 ```
 
 修改 wire contract 时，还必须按
-[`zeta-app-server-api.md`](zeta-app-server-api.md#11-source-of-truth) 重新生成 schema 与
+[`ash-app-server-api.md`](ash-app-server-api.md#11-source-of-truth) 重新生成 schema 与
 TypeScript，并验证所有 consumer。

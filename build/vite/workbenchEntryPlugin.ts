@@ -6,16 +6,16 @@ interface WorkbenchEntryServer {
   };
 }
 
-export type ZetaWorkbenchEntryPlugin = Omit<Plugin, "configureServer"> & {
+export type AshWorkbenchEntryPlugin = Omit<Plugin, "configureServer"> & {
   readonly configureServer: (server: WorkbenchEntryServer) => void;
 };
 
 /**
  * Redirects the development server root to the shared Browser Workbench.
  */
-export function workbenchEntryPlugin(): ZetaWorkbenchEntryPlugin {
+export function workbenchEntryPlugin(): AshWorkbenchEntryPlugin {
   return {
-    name: "zeta-workbench-entry",
+    name: "ash-workbench-entry",
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
         const method = request.method;

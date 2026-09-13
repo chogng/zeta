@@ -5,7 +5,7 @@
 > 失败弹性、steering、提示词组织、工具选择与注册时机、上下文裁剪压缩、prompt cache、评测。
 >
 > 分工：执行内核（单写者、durable commit、恢复、取消）由
-> [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) 负责；上下文生命
+> [`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md) 负责；上下文生命
 > 周期抽象（ContextPlan/Manager/checkpoint）由 [`core-context.md`](core-context.md) 负责；
 > 工具三层契约（定义/绑定/执行接口）由 [`tools.md`](tools.md) 负责；**逐工具规格（schema、
 > 描述正文、错误文案）由
@@ -26,18 +26,18 @@
 
 ## 1. 现状差距
 
-一个可用的 coding agent harness 需要的每个环节，对照 Zeta 当前实现：
+一个可用的 coding agent harness 需要的每个环节，对照 Ash 当前实现：
 
-| 环节 | 可用 harness 需要 | Zeta 现状 |
+| 环节 | 可用 harness 需要 | Ash 现状 |
 | --- | --- | --- |
-| Model instructions | 每次调用注入身份、策略和通用工作行为 | ✅ `zeta-prompts::AGENT_INSTRUCTIONS` 与所选模型指导在 Turn 创建前冻结，Core 通过 `ContextPlan` 与当前 Role 组合 |
-| 环境上下文 | cwd、平台、日期、git 状态、目录指令 | ✅ Local Environment host 在 model safe point 提供环境与 `.zeta/instructions` snapshot |
+| Model instructions | 每次调用注入身份、策略和通用工作行为 | ✅ `ash-prompts::AGENT_INSTRUCTIONS` 与所选模型指导在 Turn 创建前冻结，Core 通过 `ContextPlan` 与当前 Role 组合 |
+| 环境上下文 | cwd、平台、日期、git 状态、目录指令 | ✅ Local Environment host 在 model safe point 提供环境与 `.ash/instructions` snapshot |
 | 工具面 | 读/搜/改/执行闭环 | ✅ `coding-v1` 在 Turn 接受时冻结模型中立的 exact 工具定义；canonical direct 文件工具、`apply_patch`、shell 与 durable `update_plan` 已进入本地闭环 |
 | 模型失败弹性 | 429/5xx 退避重试、溢出压缩重试、空响应处理 | ✅ 类型化错误、退避、单次溢出恢复、空响应重试、Refusal 完成语义和对话内错误动作已接通 |
 | Steering | 运行中排队注入用户消息 | ✅ typed command、receipt、delivery fact、App Server、Desktop 与本地重规划均已接通 |
 | 工具结果限幅 | 模型侧截断 + 保留头尾 | 已实现：ContextPlan 为 shell、read、search、MCP 生成带 continuation 的 bounded clone，durable 原值不改写 |
 | 上下文预算 | 窗口估算、溢出显式处理 | ✅ 已知/配置窗口走确定性预算；未知窗口明确退回 provider-managed |
-| 压缩 | 阈值触发、durable checkpoint | ✅ `zeta-prompts` 共享 compaction 提示词、source digest、原子 commit、恢复校验与 commit 后重规划已接通 |
+| 压缩 | 阈值触发、durable checkpoint | ✅ `ash-prompts` 共享 compaction 提示词、source digest、原子 commit、恢复校验与 commit 后重规划已接通 |
 | Prompt cache | 前缀稳定 + 断点标注 | 已实现：Anthropic tools/system/滚动 user 三断点、cached usage 与 scope 回归已接通 |
 | 多 Tool Call/响应 | 模型一次响应多个调用 | 已实现：`parallel_tool_calls: true`，调用先完整持久化再按顺序执行，避免并行写副作用 |
 | 计划工具 | 长任务显式计划状态 | ✅ `update_plan` 提交 durable `PlanUpdated`；Turn 与 Desktop 只投影最新 canonical plan，恢复/replay 保持一致 |
@@ -51,7 +51,7 @@ ModelRequest
 │  ├─ 模型基础 instructions                 （models-manager，按冻结模型选择）
 │  └─ Product fragments                    （Goal、Agent 与 system/product extension）
 ├─ input
-│  ├─ [0] Directory/Skill fragments        （`.zeta/instructions`、Skill 与对应 extension）
+│  ├─ [0] Directory/Skill fragments        （`.ash/instructions`、Skill 与对应 extension）
 │  ├─ [1..] durable history                （append-only，语义单元完整，
 │  │                                        可含 checkpoint summary 替代更早历史）
 │  ├─ 当前 Turn 输入 / steering 消息        （+ append-only reminder 块）
@@ -94,14 +94,14 @@ loop:
 
 | 层 | 内容 | 变化频率 | 存放位置 |
 | --- | --- | --- | --- |
-| 模型基础 instructions | 身份、指令优先级、注入防护、通用工作行为和输出风格 | 新 Turn 创建时冻结；已开始 Turn 永不变化 | `zeta-models-manager` 拥有资产；App Server 冻结到 durable `TurnInstructions` |
+| 模型基础 instructions | 身份、指令优先级、注入防护、通用工作行为和输出风格 | 新 Turn 创建时冻结；已开始 Turn 永不变化 | `ash-models-manager` 拥有资产；App Server 冻结到 durable `TurnInstructions` |
 | 工具契约 | exact schema、描述、使用边界和错误语义 | 随 tool profile | 各工具 owner；随冻结的 `ToolDefinition` 进入请求，不复制进基础 instructions |
-| 环境快照 | 见 §4.2 | 环境连接时采集静态字段；accessible dirs 在每次模型调用时读取 | `zeta-agent-environment` 定义值和渲染，App Server 采集，Core 放在请求尾部 |
-| 目录与功能指令 | Global `.zeta/instructions`、Goal、Skill、extension fragment | model invocation 内冻结；对应状态变化影响后续调用 | 各功能 owner 提供，Core 按 layer 和 provenance 组装 |
+| 环境快照 | 见 §4.2 | 环境连接时采集静态字段；accessible dirs 在每次模型调用时读取 | `ash-agent-environment` 定义值和渲染，App Server 采集，Core 放在请求尾部 |
+| 目录与功能指令 | Global `.ash/instructions`、Goal、Skill、extension fragment | model invocation 内冻结；对应状态变化影响后续调用 | 各功能 owner 提供，Core 按 layer 和 provenance 组装 |
 
-`zeta-prompts` 只拥有公共设施和共享产品提示词。目前 context compaction 与通用代码 review 在这里；模型基础 instructions 留在 `zeta-models-manager`，Goal 提示归 `ext/goal`，Core 负责最终组装，动作授权审查提示词留在 `zeta-guardian-reviewer`。
+`ash-prompts` 只拥有公共设施和共享产品提示词。目前 context compaction 与通用代码 review 在这里；模型基础 instructions 留在 `ash-models-manager`，Goal 提示归 `ext/goal`，Core 负责最终组装，动作授权审查提示词留在 `ash-guardian-reviewer`。
 
-外部产品如何组织目录指令只是参照系；Zeta 的 artifact、目录和加载策略由
+外部产品如何组织目录指令只是参照系；Ash 的 artifact、目录和加载策略由
 [`agent-customizations.md`](agent-customizations.md) 定义。共同点是**静态与动态严格分离**——
 这决定缓存命中率，比放 system 还是首条消息更重要。
 
@@ -133,12 +133,12 @@ loop:
 user-role context 放在 durable Thread history 之后，因此目录变化只改请求尾部，不改 system instructions，
 也不制造持久用户消息。
 
-职责边界：`zeta-agent-environment` 只拥有不可变值、目录不变量和确定性渲染；App Server 采集平台与 Git 信息，并通过 `DirGrants` 读取 Session tree 的有效 Authorization；Core 的 `HarnessContextProvider` 在每次模型调用边界冻结两者，并由 Context Planner 负责预算与位置。环境 crate 不执行命令、不保存 Session、不签发 Grant，也不参与工具路径判定。
+职责边界：`ash-agent-environment` 只拥有不可变值、目录不变量和确定性渲染；App Server 采集平台与 Git 信息，并通过 `DirGrants` 读取 Session tree 的有效 Authorization；Core 的 `HarnessContextProvider` 在每次模型调用边界冻结两者，并由 Context Planner 负责预算与位置。环境 crate 不执行命令、不保存 Session、不签发 Grant，也不参与工具路径判定。
 
 ### 4.3 Directory Instruction 发现与注入
 
-- 发现：只读取已授权目录的 `.zeta/instructions/*.md` 文件；`AGENTS.md` 和其他生态
-  格式必须经 `zeta-agent-import`，原生 loader 不兼容扫描；
+- 发现：只读取已授权目录的 `.ash/instructions/*.md` 文件；`AGENTS.md` 和其他生态
+  格式必须经 `ash-agent-import`，原生 loader 不兼容扫描；
 - 注入：当前只把 `load: global` 条目渲染为 `input[0]` user message，并标注其优先级低于
   system 与安全策略；
 - 大小：每个文件最多 32 KiB、直接条目最多 128，非法条目产生隔离 diagnostic；
@@ -160,13 +160,13 @@ reminder 声明自己是背景信息而非用户指令。这是 Skill 激活、h
 
 1. **`apply_patch` 是默认代码变更协议**：一次表达一个完整的逻辑变更，可包含多个 hunk 和多个文件，便于展示 diff、审批、记录、失败诊断和恢复核验，也减少连续微编辑暴露的中间状态。
 2. **`edit` 是微编辑与降级原语**：只在修改唯一字符串、单个常量等小范围确定性变更时使用，或在窄 patch 上下文无法匹配时作为降级；它不是与 `apply_patch` 并列竞争的默认入口。
-3. **结构化优于 shell 万能**：结构化工具才能给 `zeta-action-policy` 精确的审查材料（参数级 capability、路径级沙箱判定），审批 UX 与 diff 展示也依赖结构。
+3. **结构化优于 shell 万能**：结构化工具才能给 `ash-action-policy` 精确的审查材料（参数级 capability、路径级沙箱判定），审批 UX 与 diff 展示也依赖结构。
 4. **工具描述就是提示词**：进入每次调用的 tools 前缀，与 system prompt 同级打磨。
 5. **少而精**：v1 ≤ 10 个。
 
 `apply_patch` 能把多文件变更表达为一个逻辑请求，但这不等于存储层事务。执行器应在第一次写入前完成全部解析、读取和上下文校验；在事务提交或回滚能力落地前，提交阶段若可能已写入部分文件，必须返回 unknown outcome、禁止自动重放，并要求重新检查工作树状态。
 
-外部 harness 的具体工具形式只能作为 schema 和交互设计参考，不能证明某个模型家族必须绑定某种编辑工具。Zeta 只有在版本控制的评测或明确启用、去内容化且达到最小样本门槛的用户聚合数据支持时，才考虑新增按模型细分的候选 profile。
+外部 harness 的具体工具形式只能作为 schema 和交互设计参考，不能证明某个模型家族必须绑定某种编辑工具。Ash 只有在版本控制的评测或明确启用、去内容化且达到最小样本门槛的用户聚合数据支持时，才考虑新增按模型细分的候选 profile。
 
 ### 5.2 工具面与配置档案
 
@@ -297,7 +297,7 @@ session/request::SteerTurn { command_id, expected_sequence, thread_id, turn_id, 
 - 窗口与阈值来自 `ModelInfo`，或用户按模型 ID 配置的
   `ModelProviderConfig.model_context`；自动压缩阈值不超过窗口的 90%；
 - `ContextWindow::Unknown` 不猜 128k，而是明确使用 `ContextBudget::ProviderManaged`；
-- `zeta-context-engine` 已统一压力线、模型硬窗口、精准计量与带保守记账余量的估算结果；
+- `ash-context-engine` 已统一压力线、模型硬窗口、精准计量与带保守记账余量的估算结果；
 - 生产 planner 仍由 `deterministic-bytes-v1` 以 bytes/4 加结构开销做确定性估算，并在诊断中记录
   revision；最终 request 接近压力线或 compaction 后会调用声明式 model binding 对应的 remote
   preflight：OpenAI exact，Anthropic、Google、Kimi、Z.AI estimated；DeepSeek/Hugging Face 可按
@@ -334,7 +334,7 @@ session/request::SteerTurn { command_id, expected_sequence, thread_id, turn_id, 
 
 - **tail 选择**：从最新 Turn 向前按完整 Turn 单元保留；当前 Turn 无条件保留，checkpoint 只
   覆盖 durable 前缀；
-- **压缩调用**：独立模型调用使用被吸收前缀、上一个 checkpoint 和 `zeta-prompts` 的共享 compaction 提示词；不带
+- **压缩调用**：独立模型调用使用被吸收前缀、上一个 checkpoint 和 `ash-prompts` 的共享 compaction 提示词；不带
   tools，summary target 在剩余预算内有界；
 - **分批处理**：压缩请求本身也必须装入同一模型窗口。过长前缀分批提交 checkpoint；若单个
   新 Turn 连同 compaction envelope 都无法装入，则返回 `CompactionSourceTooLarge`，不循环重试；
@@ -377,17 +377,17 @@ instructions（下一个 model safe point 重新冻结）
 
 ### 11.3 落点
 
-`cache_control` 不进 canonical `ModelRequest`，由 `zeta-api` 的 `anthropic_messages` 构造器
+`cache_control` 不进 canonical `ModelRequest`，由 `ash-api` 的 `anthropic_messages` 构造器
 注入：断点 1 = tools 末尾；断点 2 = system 末尾；断点 3 = 最新一条 user 消息末尾。下一 Turn
 把断点向前滚动时，Anthropic 在新断点前回看已缓存的稳定前缀。观测：`cached_input_tokens` 已解析；
 在 TTL 内且达到供应商最小 token 条件的连续 Turn 应出现 cache read；fixture 用稳定序列化防止组装层引入前缀抖动（§14）。
 
 ## 12. Skills 与命令入口
 
-- **slash commands**（`zeta-rs/slash-commands` 已有 catalog）：在 `session/request` StartTurn 之前由
+- **slash commands**（`ash-rs/slash-commands` 已有 catalog）：在 `session/request` StartTurn 之前由
   App Server 展开，展开后的正文作为 durable UserMessage 进入 Turn 输入；消息内保留
   `<command-name>` 标注供模型识别来源。不在模型侧解析斜杠语法。
-- **Skills**（`zeta-rs/skills` 已有 runtime；发现/信任归 [`skills.md`](skills.md)）：
+- **Skills**（`ash-rs/skills` 已有 runtime；发现/信任归 [`skills.md`](skills.md)）：
   - 用户入口使用独立 `$name` selector；`/` 只触发产品和服务命令，`@` 留给文件与 Plugin 上下文；
   - v1 已实现：用户提交 exact `SkillRef`，App Server 冻结 digest/generation/reason，Core 在每个
     model safe point 重载 exact `SKILL.md`，以 `ActivatedSkill` instruction layer 注入；raw path
@@ -398,7 +398,7 @@ instructions（下一个 model safe point 重新冻结）
 
 ## 13. 供应商差异矩阵
 
-canonical 层（`ModelRequest`）保持 provider 中立，差异全部压进 `zeta-api` 的 endpoint 请求构造器。
+canonical 层（`ModelRequest`）保持 provider 中立，差异全部压进 `ash-api` 的 endpoint 请求构造器。
 authoring 规则以最严格交集为准：
 
 | 维度 | Anthropic Messages | OpenAI Responses | canonical 规则 |
@@ -459,7 +459,7 @@ M0–M6 是本文行为规格的覆盖总账，不再充当阶段性构建计划
 
 | 里程碑 | 内容 | 关键改动点 | 前置接线 |
 | --- | --- | --- | --- |
-| M0（完成）提示词接线 | 模型基础 instructions 在 Turn 创建时持久化，review 使用独立 rubric，环境快照、Global `.zeta/instructions`、功能 fragments 与稳定组装已接线；工具契约随各自 definition 注入 | `zeta-models-manager`、`zeta-prompts`、`TurnInstructions`、`ContextAssembler`、host 环境快照、`DirContributions` | 无 |
+| M0（完成）提示词接线 | 模型基础 instructions 在 Turn 创建时持久化，review 使用独立 rubric，环境快照、Global `.ash/instructions`、功能 fragments 与稳定组装已接线；工具契约随各自 definition 注入 | `ash-models-manager`、`ash-prompts`、`TurnInstructions`、`ContextAssembler`、host 环境快照、`DirContributions` | 无 |
 | M1（实现完成）工具最小闭环 | canonical 文件工具、`apply_patch`、shell、模型中立的 `coding-v1` ToolProfile、durable `update_plan` 与模型输入逐项限幅已接线；确定性行为由现有测试覆盖 | 本地工具组合、executor contributions、profile 声明层 | 现有行为测试 |
 | M2（完成）失败弹性 + steering | Provider 错误分类、退避、空响应、Refusal、overflow 恢复、steering、重复失败工具熔断和对话内错误动作已实现 | executor 重试层、Thread command、App Server protocol | protocol/schema/Desktop 同批同步 |
 | M3（实现完成）限幅/预算/压缩 | ContextPlan、逐项输入限幅、配置窗口、preflight、自动/手动 durable compaction、模型调用 usage 账本、跨 Turn 累计的 Thread Goal token 预算已实现；限幅、预算和压缩由现有测试覆盖 | ContextPlan 选入路径、checkpoint、usage 与 Goal 持久化 | 现有行为测试 |
@@ -472,8 +472,8 @@ M0–M6 是本文行为规格的覆盖总账，不再充当阶段性构建计划
 ## 16. 参考
 
 - [`agent-tools-spec.md`](agent-tools-spec.md) — 逐工具规格与提示词正文
-- [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) — 执行内核与阶段计划
+- [`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md) — 执行内核与阶段计划
 - [`core-context.md`](core-context.md) — ContextPlan / checkpoint 机制
 - [`tools.md`](tools.md) — 工具三层契约与 registry snapshot
-- [`skills.md`](skills.md) / [`slash-commands` crate](../zeta-rs/slash-commands/) — 扩展来源
-- [`zeta-prompts` README](../zeta-rs/prompts/README.md) — 共享提示词资产契约与分域 ownership
+- [`skills.md`](skills.md) / [`slash-commands` crate](../ash-rs/slash-commands/) — 扩展来源
+- [`ash-prompts` README](../ash-rs/prompts/README.md) — 共享提示词资产契约与分域 ownership

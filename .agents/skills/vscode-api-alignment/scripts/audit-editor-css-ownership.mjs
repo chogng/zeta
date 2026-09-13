@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../../..');
-const localRoot = resolve(repositoryRoot, 'zeta-ts/src/zeta/editor');
+const localRoot = resolve(repositoryRoot, 'ash-ts/src/ash/editor');
 const upstreamRoot = resolve(repositoryRoot, '../vscode/src/vs/editor');
 const sourceExtension = /\.(?:css|js|ts|tsx)$/u;
 const upstreamBrand = /(?:\bmonaco-[a-z0-9_-]+\b|--vscode-[a-z0-9_-]+)/giu;
@@ -14,7 +14,7 @@ const gitOutputBuffer = 64 * 1024 * 1024;
 export function normalizeCssBranding(source) {
 	return stripMicrosoftLicenseHeader(source)
 		.replaceAll('stanza-editor', 'monaco-editor')
-		.replaceAll('--zeta-', '--vscode-');
+		.replaceAll('--ash-', '--vscode-');
 }
 
 export function classifyCssPair(localSource, upstreamSource) {
@@ -67,7 +67,7 @@ export function findChangedPaths(diff) {
 
 export function auditEditorCssOwnership(options = {}) {
 	const resolvedRepositoryRoot = options.repositoryRoot ?? repositoryRoot;
-	const resolvedLocalRoot = options.localRoot ?? resolve(resolvedRepositoryRoot, 'zeta-ts/src/zeta/editor');
+	const resolvedLocalRoot = options.localRoot ?? resolve(resolvedRepositoryRoot, 'ash-ts/src/ash/editor');
 	const resolvedUpstreamRoot = options.upstreamRoot ?? resolve(resolvedRepositoryRoot, '../vscode/src/vs/editor');
 	const productionFiles = readProductionFiles(resolvedLocalRoot);
 	const cssFiles = productionFiles.filter(file => file.endsWith('.css'));

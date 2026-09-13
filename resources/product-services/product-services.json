@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "marketplaces": [
     {
-      "name": "zeta",
+      "name": "ash",
       "metadataBaseUrl": "https://chogng.github.io/marketplace/metadata/",
       "targetsBaseUrl": "https://chogng.github.io/marketplace/targets/",
       "trustedRoot": "marketplace-root.json",

@@ -1,7 +1,7 @@
-use zeta_editor::{
+use ash_editor::{
     CodeEditorCommand, CodeEditorDiagnostic, CodeEditorDiagnosticSeverity, CodeEditorStyle,
 };
-use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
+use ash_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
 use zui::ui::{
     CaretVisibility, Color, Component, Rect, TextInputCommand, TextInputLayoutEngine, UiScene,
 };
@@ -12,7 +12,7 @@ use crate::interaction::{
     FILE_EDITOR_REPLACE_INPUT, FILE_EDITOR_TABS, FileEditorAction, file_editor_close_id,
     file_editor_tab_id,
 };
-use zeta_ui_theme::DEFAULT_UI_THEME;
+use ash_ui_theme::DEFAULT_UI_THEME;
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame, UiNode};
 
 const WINDOW: zui::ui::ElementId = zui::ui::ElementId::scoped(90, 1);
@@ -351,7 +351,7 @@ fn file_pane_soft_wrap_drives_visual_viewport_and_caret_reveal() {
     open(&mut host, "notes.txt", "abcdefghijklmnopqrstuvwxyz1234");
     host.apply(CodeEditorCommand::SelectAll);
     host.apply(CodeEditorCommand::MoveRight(
-        zeta_editor::CodeEditorSelectionMode::Move,
+        ash_editor::CodeEditorSelectionMode::Move,
     ));
     let pane = FileEditorPane::new(
         Rect::from_xywh(0.0, 0.0, 160.0, 72.0),

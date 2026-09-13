@@ -163,8 +163,8 @@ env dir remove <env-id> <dir-id>
 
 | 所有者 | 负责什么 |
 | --- | --- |
-| `zeta-environment` | 环境身份与执行位置 |
-| `zeta-file-access` | `Dir`、`Permission`、`Grant`、撤销、快照与授权决定 |
+| `ash-environment` | 环境身份与执行位置 |
+| `ash-file-access` | `Dir`、`Permission`、`Grant`、撤销、快照与授权决定 |
 | 权限策略 | 判断动作应允许、询问还是拒绝 |
 | 批准交互 | 收集用户决定 |
 | 沙箱 | 强制文件、网络和进程边界 |

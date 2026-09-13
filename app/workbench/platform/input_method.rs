@@ -1,9 +1,9 @@
 use std::time::Instant;
 
-use zeta_settings::REMOTE_CONNECTION_SEARCH_INPUT;
-use zeta_settings::REMOTE_TUNNEL_REMOTE_PORT;
-use zeta_settings::RemoteConnectionManagerField;
-use zeta_terminal::{KeyModifiers, TerminalCore, TerminalKey};
+use ash_settings::REMOTE_CONNECTION_SEARCH_INPUT;
+use ash_settings::REMOTE_TUNNEL_REMOTE_PORT;
+use ash_settings::RemoteConnectionManagerField;
+use ash_terminal::{KeyModifiers, TerminalCore, TerminalKey};
 use zui::input::Ime;
 use zui::ui::{TextInputCompositionCursor, TextInputCompositionEvent};
 use zui::window::ImeCursorArea;
@@ -14,12 +14,12 @@ use crate::TAB_RENAME_INPUT;
 use crate::WorkbenchApplication;
 use crate::directory_picker::DIRECTORY_SEARCH_INPUT;
 use crate::git_branch_picker::GIT_BRANCH_SEARCH_INPUT;
-use zeta_editor_host::{FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT};
-use zeta_files::FILE_SEARCH_INPUT;
-use zeta_scm::COMMIT_MESSAGE_EDITOR;
-use zeta_session::interaction::COMPOSER;
-use zeta_settings::KEYBOARD_SHORTCUTS_SEARCH;
-use zeta_settings::SETTINGS_SEARCH_INPUT;
+use ash_editor_host::{FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT};
+use ash_files::FILE_SEARCH_INPUT;
+use ash_scm::COMMIT_MESSAGE_EDITOR;
+use ash_session::interaction::COMPOSER;
+use ash_settings::KEYBOARD_SHORTCUTS_SEARCH;
+use ash_settings::SETTINGS_SEARCH_INPUT;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum InputMethodTarget {
@@ -436,7 +436,7 @@ impl WorkbenchApplication {
             composer_focused: self.ui_dispatch.is_focused(COMPOSER),
             file_editor_focused: self
                 .ui_dispatch
-                .is_focused(zeta_editor_host::FILE_EDITOR_DOCUMENT),
+                .is_focused(ash_editor_host::FILE_EDITOR_DOCUMENT),
             file_editor_find_focused: self.ui_dispatch.is_focused(FILE_EDITOR_FIND_INPUT),
             file_editor_replace_focused: self.ui_dispatch.is_focused(FILE_EDITOR_REPLACE_INPUT),
             session_search_focused: self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT),

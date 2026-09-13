@@ -7,11 +7,11 @@ use super::SETTINGS_NAV_REMOTE;
 use super::SettingsPageLayout;
 use super::SettingsPageSection;
 
-use zeta_icons::icons;
-use zeta_ui_components::Button;
-use zeta_ui_components::ButtonSelection;
-use zeta_ui_components::ButtonState;
-use zeta_ui_components::ButtonStyle;
+use ash_icons::icons;
+use ash_ui_components::Button;
+use ash_ui_components::ButtonSelection;
+use ash_ui_components::ButtonState;
+use ash_ui_components::ButtonStyle;
 use zui::ui::ElementId;
 use zui::ui::UiDispatch;
 
@@ -64,7 +64,7 @@ pub(super) fn navigation_buttons(
 fn navigation_button(
     bounds: zui::ui::Rect,
     id: ElementId,
-    icon: zeta_icons::Icon,
+    icon: ash_icons::Icon,
     label: &str,
     selected: bool,
     dispatch: &UiDispatch,

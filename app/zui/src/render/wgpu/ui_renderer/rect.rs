@@ -56,11 +56,11 @@ impl RectRenderer {
         depth_stencil: wgpu::DepthStencilState,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("zeta-ui rect shader"),
+            label: Some("ash-ui rect shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("rect.wgsl").into()),
         });
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("zeta-ui rect pipeline"),
+            label: Some("ash-ui rect pipeline"),
             layout: None,
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -171,7 +171,7 @@ impl RectRenderer {
 
 fn create_instance_buffer(device: &wgpu::Device, capacity: usize) -> wgpu::Buffer {
     device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("zeta-ui rect instances"),
+        label: Some("ash-ui rect instances"),
         size: (capacity * mem::size_of::<RectInstance>()) as wgpu::BufferAddress,
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,

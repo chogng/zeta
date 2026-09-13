@@ -1,0 +1,27 @@
+[package]
+name = "ash-collaboration-server"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "ash-collaboration-server"
+path = "src/main.rs"
+
+[lib]
+doctest = false
+name = "ash_collaboration_server"
+path = "src/lib.rs"
+
+[dependencies]
+process-hardening = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+ash-collaboration = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

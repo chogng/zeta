@@ -11,7 +11,7 @@ The TypeScript target is a plain `settings.json` object parsed as JSONC. It does
   // Profile setting interpreted by the TypeScript UI.
   "editor.fontSize": 15,
   "editor.tabSize": 2,
-  "workbench.colorTheme": "zeta-aurora"
+  "workbench.colorTheme": "ash-aurora"
 }
 ```
 
@@ -23,7 +23,7 @@ Bounded Rust UI preferences share profile `config.toml` while remaining independ
 
 ```toml
 [gui]
-theme = "zeta-aurora"
+theme = "ash-aurora"
 interfaceFontFamily = "sans-serif"
 interfaceFontSize = 13
 editorFontFamily = "monospace"
@@ -31,7 +31,7 @@ editorFontSize = 14
 editorLineHeight = 21
 
 [tui]
-theme = "zeta-code-dark"
+theme = "ash-code-dark"
 mouseInteractions = true
 followUpMode = "queue"
 inputMode = "standard"
@@ -39,7 +39,7 @@ statusLine = ["permissions", "model", "git-branch"]
 
 [[tui.keybindings]]
 key = "ctrl+y"
-command = "zetaCode.action.copyLastResponse"
+command = "ashCode.action.copyLastResponse"
 when = "inputFocus"
 ```
 
@@ -47,14 +47,14 @@ The GUI validates only the fields it owns under `[gui]`; the TUI does the same u
 
 ## Theme selection and theme contents
 
-The GUI example above persists only the selected identity `zeta-aurora`. The resource contents have a separate lifecycle under `themes/zeta-aurora.json`:
+The GUI example above persists only the selected identity `ash-aurora`. The resource contents have a separate lifecycle under `themes/ash-aurora.json`:
 
 ```json
 {
-  "$schema": "https://zeta.dev/schemas/color-theme.schema.json",
+  "$schema": "https://ash.dev/schemas/color-theme.schema.json",
   "version": 1,
-  "id": "zeta-aurora",
-  "label": "Zeta Aurora",
+  "id": "ash-aurora",
+  "label": "Ash Aurora",
   "colorScheme": "dark",
   "colors": {
     "workbench.background": "#0b1020",
@@ -117,7 +117,7 @@ Legacy `configuration.json` may contain a wrapper:
   "version": 1,
   "values": {
     "editor.fontSize": 15,
-    "workbench.colorTheme": "zeta-aurora"
+    "workbench.colorTheme": "ash-aurora"
   }
 }
 ```
@@ -127,7 +127,7 @@ The target `settings.json` contains only registered settings:
 ```jsonc
 {
   "editor.fontSize": 15,
-  "workbench.colorTheme": "zeta-aurora"
+  "workbench.colorTheme": "ash-aurora"
 }
 ```
 

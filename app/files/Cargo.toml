@@ -1,5 +1,5 @@
 [package]
-name = "zeta-files"
+name = "ash-files"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,14 +7,14 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "zeta_files"
+name = "ash_files"
 path = "src/lib.rs"
 
 [dependencies]
-zeta-file-search = { workspace = true }
-zeta-icons = { workspace = true }
-zeta-ui-components = { workspace = true }
-zeta-ui-theme = { workspace = true }
+ash-file-search = { workspace = true }
+ash-icons = { workspace = true }
+ash-ui-components = { workspace = true }
+ash-ui-theme = { workspace = true }
 zui = { workspace = true, default-features = false }
 
 [lints]

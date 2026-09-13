@@ -1,0 +1,289 @@
+use crate::app::App;
+use crate::app::AppCommand;
+use crate::app::fullscreen::pointer::PointerTarget;
+use crate::sessions::Command as SessionCommand;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
+use ratatui::buffer::Buffer;
+use ratatui::style::Modifier;
+
+fn unstarted_app() -> App {
+    App::for_dir_with_input_catalog_and_startup_context(
+        std::path::Path::new("."),
+        crate::thread::composer::ChatInputCatalog::default(),
+        crate::TuiStartupContext::new("."),
+    )
+}
+
+fn key(code: KeyCode) -> KeyEvent {
+    KeyEvent::new(code, KeyModifiers::NONE)
+}
+
+fn render(app: &App, width: u16, height: u16) -> Buffer {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, app))
+        .unwrap();
+    terminal.backend().buffer().clone()
+}
+
+fn text(buffer: &Buffer) -> String {
+    buffer
+        .content
+        .chunks(usize::from(buffer.area.width))
+        .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn home_keeps_actions_above_the_fixed_composer() {
+    let mut app = unstarted_app();
+    app.open_home();
+    assert!(app.fullscreen_home_visible());
+    assert!(app.messages().is_empty());
+    app.handle_key(key(KeyCode::Tab));
+    assert_eq!(app.fullscreen.home.selected, Some(0));
+    let terminal = ratatui::layout::Rect::new(0, 0, 140, 30);
+    let area = crate::app::fullscreen::layout(&app, terminal);
+    let actions = super::layout(area.session.transcript).actions;
+    let buffer = render(&app, terminal.width, terminal.height);
+    assert_eq!(buffer[(actions.x, actions.y)].symbol(), ">");
+    assert_eq!(buffer[(actions.x + 2, actions.y)].symbol(), "R");
+    assert_eq!(
+        buffer[(actions.x, actions.y)].bg,
+        app.render_context().selection_background()
+    );
+    assert!(
+        buffer[(actions.x + 2, actions.y)]
+            .modifier
+            .contains(Modifier::BOLD)
+    );
+    crate::tui_assert_snapshot!("home_actions", text(&buffer));
+    app.handle_key(key(KeyCode::Esc));
+    assert_eq!(app.fullscreen.home.selected, None);
+    app.insert_text("检查项目结构");
+    assert!(app.fullscreen_home_visible());
+    assert!(!app.fullscreen_welcome_visible());
+    crate::tui_assert_snapshot!(
+        "home_draft",
+        text(&render(&app, terminal.width, terminal.height))
+    );
+    assert!(app.messages().is_empty());
+}
+
+#[test]
+fn first_character_clears_welcome_and_keeps_the_workspace_header() {
+    let mut app = unstarted_app();
+    app.open_home();
+    assert!(app.fullscreen_welcome_visible());
+
+    app.handle_key(key(KeyCode::Char('x')));
+
+    assert!(app.fullscreen_home_visible());
+    assert!(!app.fullscreen_welcome_visible());
+    let rendered = text(&render(&app, 80, 24));
+    assert!(rendered.lines().next().unwrap().contains("  ."));
+    assert!(!rendered.contains("Ash Code v"));
+    assert!(!rendered.contains("Resume session"));
+    assert!(rendered.contains("> x"));
+    crate::tui_assert_snapshot!("home_after_first_character", rendered);
+
+    app.handle_key(key(KeyCode::Backspace));
+
+    assert_eq!(app.input(), "");
+    assert!(!app.fullscreen_welcome_visible());
+
+    let mut whitespace = unstarted_app();
+    whitespace.open_home();
+    whitespace.handle_key(key(KeyCode::Char(' ')));
+    assert_eq!(whitespace.input(), " ");
+    assert!(!whitespace.fullscreen_welcome_visible());
+}
+
+#[test]
+fn home_slash_command_starts_a_new_session_from_the_initial_page() {
+    let mut app = App::new();
+    app.update(crate::thread::Event::ContextChanged {
+        session_id: ash_protocol::SessionId::new("existing-session").unwrap(),
+        thread_id: ash_protocol::ThreadId::new("existing-thread").unwrap(),
+    });
+    assert!(!app.fullscreen_home_visible());
+
+    for character in "/home".chars() {
+        app.handle_key(key(KeyCode::Char(character)));
+    }
+    assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
+
+    assert_eq!(app.input(), "");
+    assert!(app.fullscreen_home_visible());
+    assert!(app.fullscreen_welcome_visible());
+    let rendered = text(&render(&app, 80, 24));
+    assert!(rendered.lines().next().unwrap().contains("  ."));
+    assert!(rendered.contains("Ash Code v"));
+    assert!(rendered.contains("Resume session"));
+    crate::tui_assert_snapshot!("home_restored_by_slash_command", rendered);
+
+    for character in "start a fresh task".chars() {
+        app.handle_key(key(KeyCode::Char(character)));
+    }
+    let Some(AppCommand::Sessions(SessionCommand::CreateAndEnter { submission })) =
+        app.handle_key(key(KeyCode::Enter))
+    else {
+        panic!("the first task after /home must create a new session");
+    };
+    assert_eq!(submission.display_text, "start a fresh task");
+}
+
+#[test]
+fn home_card_uses_the_page_width_without_an_empty_top_band() {
+    let mut app = unstarted_app();
+    app.open_home();
+    let terminal = ratatui::layout::Rect::new(0, 0, 180, 30);
+    let transcript = crate::app::fullscreen::layout(&app, terminal)
+        .session
+        .transcript;
+    let card = super::layout(transcript).card;
+
+    assert_eq!(card.x, transcript.x + 2);
+    assert_eq!(card.right(), transcript.right() - 2);
+    assert_eq!(card.y, transcript.y);
+}
+
+#[test]
+fn home_action_hover_and_press_do_not_change_keyboard_selection() {
+    let mut app = unstarted_app();
+    app.open_home();
+    app.handle_key(key(KeyCode::Tab));
+    let terminal = ratatui::layout::Rect::new(0, 0, 100, 30);
+    let actions = super::layout(
+        crate::app::fullscreen::layout(&app, terminal)
+            .session
+            .transcript,
+    )
+    .actions;
+    app.fullscreen
+        .pointer
+        .update_hover(Some(PointerTarget::HomeAction(super::Action::Settings)));
+
+    let hovered = render(&app, terminal.width, terminal.height);
+    assert_eq!(app.fullscreen.home.selected, Some(0));
+    assert_eq!(hovered[(actions.x, actions.y)].symbol(), ">");
+    assert_eq!(
+        hovered[(actions.x + 2, actions.y)].bg,
+        app.render_context().selection_background()
+    );
+    assert_eq!(hovered[(actions.x, actions.y + 2)].symbol(), " ");
+    assert_eq!(hovered[(actions.x + 2, actions.y + 2)].symbol(), "S");
+    for row in 0..actions.height {
+        assert!(
+            hovered[(actions.x + 2, actions.y + row)]
+                .modifier
+                .contains(Modifier::BOLD),
+            "home action row {row} should be bold"
+        );
+    }
+    for x in actions.x..actions.right() {
+        assert_eq!(
+            hovered[(x, actions.y + 2)].bg,
+            app.render_context().hover_background()
+        );
+    }
+    assert_eq!(
+        super::action_at(
+            &app,
+            crate::app::fullscreen::layout(&app, terminal)
+                .session
+                .transcript,
+            ratatui::layout::Position::new(actions.right() - 1, actions.y + 2),
+        ),
+        Some(super::Action::Settings)
+    );
+
+    app.fullscreen
+        .pointer
+        .update_pressed(Some(PointerTarget::HomeAction(super::Action::Settings)));
+    let pressed = render(&app, terminal.width, terminal.height);
+    for x in actions.x..actions.right() {
+        assert_eq!(
+            pressed[(x, actions.y + 2)].bg,
+            app.render_context().pressed_background()
+        );
+    }
+    assert_eq!(app.fullscreen.home.selected, Some(0));
+}
+
+#[test]
+fn home_submission_failure_restores_the_complete_draft() {
+    let mut app = unstarted_app();
+    app.open_home();
+    let pasted = "长粘贴内容".repeat(300);
+    app.handle_paste(pasted.clone());
+    let draft = app.input().to_owned();
+    let Some(AppCommand::Sessions(SessionCommand::CreateAndEnter { submission })) =
+        app.handle_key(key(KeyCode::Enter))
+    else {
+        panic!("home input must create a conversation");
+    };
+    assert!(submission.input.iter().any(|item| matches!(item, crate::thread::composer::ChatInputItem::Text(text) if text.contains(&pasted))));
+    assert!(app.sessions.pending_submission.is_some());
+    assert!(!app.accepts_input());
+    assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
+    app.fail_session_creation("Could not create session".into());
+    assert_eq!(app.input(), draft);
+    assert!(app.accepts_input());
+    assert!(app.fullscreen_home_visible());
+    assert!(!app.fullscreen_welcome_visible());
+    crate::tui_assert_snapshot!("home_submission_failed", text(&render(&app, 80, 24)));
+}
+
+#[test]
+fn home_menu_scrolls_to_every_action_on_short_terminals() {
+    let mut app = unstarted_app();
+    app.open_home();
+    for _ in 0..5 {
+        app.handle_key(key(KeyCode::Tab));
+    }
+    assert_eq!(app.fullscreen.home.selected, Some(4));
+    crate::tui_assert_snapshot!("home_narrow", text(&render(&app, 40, 16)));
+    assert_eq!(app.handle_key(key(KeyCode::Enter)), Some(AppCommand::Quit));
+}
+
+#[test]
+fn returning_home_preserves_the_running_task_and_conversation_draft() {
+    let mut app = App::new();
+    let turn = ash_protocol::TurnId::new("running-turn").unwrap();
+    app.set_active_turn(turn.clone());
+    app.update(crate::thread::Event::TurnActivityChanged(
+        crate::thread::TurnActivity::Working,
+    ));
+    app.insert_text("next message");
+    app.open_home();
+    assert_eq!(app.active_turn(), Some(&turn));
+    assert!(app.fullscreen_home_visible());
+    app.handle_key(key(KeyCode::Esc));
+    assert!(!app.fullscreen_home_visible());
+    assert_eq!(app.active_turn(), Some(&turn));
+    assert_eq!(app.input(), "next message");
+}
+
+#[test]
+fn short_home_keeps_the_input_and_selected_action_visible() {
+    let mut app = unstarted_app();
+    app.open_home();
+    let terminal = ratatui::layout::Rect::new(0, 0, 40, 12);
+    for _ in 0..5 {
+        app.handle_key_in_area(key(KeyCode::Tab), terminal);
+    }
+    let areas = crate::app::fullscreen::layout(&app, terminal);
+    assert_eq!(areas.input.height, 3);
+    let buffer = render(&app, 40, 12);
+    assert!(text(&buffer).contains("> Quit"));
+    assert!(text(&buffer).contains("Ash Code"));
+    assert!(!text(&buffer).contains("Quit Code"));
+    assert_eq!(buffer[(areas.input.x + 2, areas.input.y)].symbol(), "╭");
+    crate::tui_assert_snapshot!("home_short", text(&buffer));
+}

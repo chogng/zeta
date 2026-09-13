@@ -117,12 +117,12 @@ pub struct CodeEditorSelection {
 /// Rejection reported when a shared document-core transaction cannot be projected by Native.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CodeEditorCoreTransactionError {
-    Core(zeta_editor_core::EditorCoreEditError),
+    Core(ash_editor_core::EditorCoreEditError),
     MultipleSelectionsUnsupported,
 }
 
-impl From<zeta_editor_core::EditorCoreEditError> for CodeEditorCoreTransactionError {
-    fn from(error: zeta_editor_core::EditorCoreEditError) -> Self {
+impl From<ash_editor_core::EditorCoreEditError> for CodeEditorCoreTransactionError {
+    fn from(error: ash_editor_core::EditorCoreEditError) -> Self {
         Self::Core(error)
     }
 }

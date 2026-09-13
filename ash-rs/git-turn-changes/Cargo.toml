@@ -1,0 +1,29 @@
+[package]
+name = "git-turn-changes"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "git_turn_changes"
+path = "src/lib.rs"
+
+[dependencies]
+log = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+sha2 = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
+ash-file-watcher = { workspace = true }
+ash-git = { workspace = true }
+ash-protocol = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

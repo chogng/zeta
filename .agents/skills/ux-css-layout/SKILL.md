@@ -1,6 +1,6 @@
 ---
 name: ux-css-layout
-description: Apply repository-aware CSS layout rules, file organization, naming, scrolling, responsive layout, and text overflow patterns to VS Code or Zeta UI. Use when writing CSS, building layouts, or fixing text truncation; in Zeta, preserve its DOM owners and naming instead of importing VS Code structure or branding.
+description: Apply repository-aware CSS layout rules, file organization, naming, scrolling, responsive layout, and text overflow patterns to VS Code or Ash UI. Use when writing CSS, building layouts, or fixing text truncation; in Ash, preserve its DOM owners and naming instead of importing VS Code structure or branding.
 ---
 
 This skill covers CSS file organization, naming, standard sizes, programmatic layout (SplitView, Grid, scrollable), responsive patterns, and text overflow handling.
@@ -10,25 +10,25 @@ This skill covers CSS file organization, naming, standard sizes, programmatic la
 Determine the target repository before applying any selector, token, DOM, or widget example in this skill:
 
 - In `../vscode`, the `src/vs`, `.monaco-*`, and `--vscode-*` examples below are literal repository conventions.
-- In Zeta, those names are upstream reference syntax only. Apply the layout principle to the existing Zeta component and use its registered names and owners; never paste the example and replace prefixes.
+- In Ash, those names are upstream reference syntax only. Apply the layout principle to the existing Ash component and use its registered names and owners; never paste the example and replace prefixes.
 
-### Zeta upstream-alignment guard
+### Ash upstream-alignment guard
 
-When this skill is used in Zeta together with `vscode-api-alignment`, the VS Code snippets below are convention examples, not implementation templates. Do not introduce `monaco-*` selectors, `--vscode-*` variables, VS Code DOM wrappers, or a matching private class hierarchy into Zeta merely to reuse an upstream rule. Establish the existing Zeta DOM owner, state classes, layout owner, input path, theme tokens, and browser behavior first; then implement only the required behavior with Zeta-owned names and structure.
+When this skill is used in Ash together with `vscode-api-alignment`, the VS Code snippets below are convention examples, not implementation templates. Do not introduce `monaco-*` selectors, `--vscode-*` variables, VS Code DOM wrappers, or a matching private class hierarchy into Ash merely to reuse an upstream rule. Establish the existing Ash DOM owner, state classes, layout owner, input path, theme tokens, and browser behavior first; then implement only the required behavior with Ash-owned names and structure.
 
-Never change a Zeta DOM hierarchy or scrolling/focus owner simply because an upstream CSS selector expects that hierarchy. A first change to DOM nesting, scroll ownership, focus handling, or programmatic layout must be verified in one minimal real-browser slice before migrating additional callers. Type checking, selector presence, screenshots, and file-count progress do not prove layout or interaction quality.
+Never change a Ash DOM hierarchy or scrolling/focus owner simply because an upstream CSS selector expects that hierarchy. A first change to DOM nesting, scroll ownership, focus handling, or programmatic layout must be verified in one minimal real-browser slice before migrating additional callers. Type checking, selector presence, screenshots, and file-count progress do not prove layout or interaction quality.
 
-Keep the surrounding Zeta TypeScript and CSS style readable even when the upstream API has many options: do not compress option objects, methods, selectors, or declarations to increase batch size. If the result could be produced by copying upstream and replacing prefixes, stop and redesign from the local owner and behavior contract.
+Keep the surrounding Ash TypeScript and CSS style readable even when the upstream API has many options: do not compress option objects, methods, selectors, or declarations to increase batch size. If the result could be produced by copying upstream and replacing prefixes, stop and redesign from the local owner and behavior contract.
 
 Only modify CSS that is required by the current verified behavior slice. A missing upstream CSS file, a selector diff, or an API-alignment batch does not authorize replacing an existing stylesheet, renaming unrelated selectors, rebuilding DOM wrappers, or importing the whole upstream visual system.
 
-For an upstream-alignment task, validate the same semantic scenario in Zeta and VS Code before calling layout work complete: use the same viewport and input sequence, then compare focus ownership, scroll offsets, clipping, wrapping, hit targets, and computed geometry. A visually similar still image is insufficient, and a Zeta result that loses an upstream behavior remains pending; do not compensate by copying the upstream stylesheet or DOM nesting.
+For an upstream-alignment task, validate the same semantic scenario in Ash and VS Code before calling layout work complete: use the same viewport and input sequence, then compare focus ownership, scroll offsets, clipping, wrapping, hit targets, and computed geometry. A visually similar still image is insufficient, and a Ash result that loses an upstream behavior remains pending; do not compensate by copying the upstream stylesheet or DOM nesting.
 
 ---
 
 ## 1. File Organization
 
-The `src/vs` paths in this section are literal only for the VS Code repository. In Zeta, keep the same co-location principle but use the owning Zeta component path; do not create a parallel `src/vs`-shaped style tree.
+The `src/vs` paths in this section are literal only for the VS Code repository. In Ash, keep the same co-location principle but use the owning Ash component path; do not create a parallel `src/vs`-shaped style tree.
 
 CSS files are **co-located** with their TypeScript components:
 
@@ -54,7 +54,7 @@ Workbench-level global styles live in `src/vs/workbench/browser/media/`.
 ## 2. Class Naming
 
 - **VS Code repository:** use its established `monaco-` component roots such as `.monaco-workbench`, `.monaco-split-view2`, and `.monaco-scrollable-element`; use its existing modifier and state-class conventions.
-- **Zeta repository:** preserve the owning component's existing Zeta root and feature vocabulary. Never introduce or retain a new `.monaco-*` selector to claim alignment, and never rename unrelated local selectors merely to resemble VS Code.
+- **Ash repository:** preserve the owning component's existing Ash root and feature vocabulary. Never introduce or retain a new `.monaco-*` selector to claim alignment, and never rename unrelated local selectors merely to resemble VS Code.
 - In either repository, feature-specific classes use readable kebab-case and state classes describe real component state rather than an upstream selector that the local DOM does not produce.
 
 ## 3. Standard Sizes
@@ -282,7 +282,7 @@ For `IconLabel` and list/tree renderers, this is handled automatically. For cust
 
 ## 10. Design-System Size Tokens (spacing, radius, font, codicon, stroke)
 
-This section documents the VS Code repository's literal `--vscode-*` size-token system. In Zeta, use a size token only if Zeta already registers and owns the equivalent token; do not copy the variable, mechanically rename it to `--zeta-*`, or create a token solely because VS Code has one. Otherwise preserve the local component's established sizing rules and validate the resulting geometry in the browser.
+This section documents the VS Code repository's literal `--vscode-*` size-token system. In Ash, use a size token only if Ash already registers and owns the equivalent token; do not copy the variable, mechanically rename it to `--ash-*`, or create a token solely because VS Code has one. Otherwise preserve the local component's established sizing rules and validate the resulting geometry in the browser.
 
 VS Code ships a design-system **size** ramp, registered in
 `src/vs/platform/theme/common/sizes/baseSizes.ts` and emitted as `--vscode-*` CSS

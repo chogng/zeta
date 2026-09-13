@@ -1,0 +1,28 @@
+[package]
+name = "ash-tool-executor"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "ash_tool_executor"
+path = "src/lib.rs"
+
+[dependencies]
+getrandom = { workspace = true }
+network-proxy = { workspace = true, features = ["server"] }
+tempfile = { workspace = true }
+ash-async-utils = { workspace = true }
+ash-protocol = { workspace = true }
+ash-sandboxing = { workspace = true }
+ash-file-access = { workspace = true }
+ash-utils-pty = { workspace = true }
+
+[dev-dependencies]
+mxc-sandbox = { workspace = true }
+ash-install-context = { workspace = true }
+
+[lints]
+workspace = true

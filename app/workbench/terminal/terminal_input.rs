@@ -1,10 +1,10 @@
 use std::time::Instant;
 
-use zeta_editor::CodeEditorCommand;
-use zeta_editor::CodeEditorSelectionMode;
-use zeta_terminal::KeyModifiers;
-use zeta_terminal::TerminalCore;
-use zeta_terminal::TerminalKey;
+use ash_editor::CodeEditorCommand;
+use ash_editor::CodeEditorSelectionMode;
+use ash_terminal::KeyModifiers;
+use ash_terminal::TerminalCore;
+use ash_terminal::TerminalKey;
 use zui::input::ElementState;
 use zui::input::Key;
 use zui::input::KeyEvent;
@@ -20,14 +20,14 @@ use crate::keybindings::{
     WorkbenchKeybindingContext, WorkbenchKeybindingFacts, WorkbenchKeybindingResolution,
 };
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
-use zeta_editor_host::{FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT};
-use zeta_files::FILE_SEARCH_INPUT;
-use zeta_files::FilesAction;
-use zeta_session::interaction::{COMPOSER, COMPOSER_INTERACTION};
-use zeta_session::{ComposerInteractionActivation, SelectionDirection};
-use zeta_session::{ComposerRoute, ComposerSubmission};
-use zeta_settings::KEYBOARD_SHORTCUTS_SEARCH;
-use zeta_settings::SETTINGS_SEARCH_INPUT;
+use ash_editor_host::{FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT};
+use ash_files::FILE_SEARCH_INPUT;
+use ash_files::FilesAction;
+use ash_session::interaction::{COMPOSER, COMPOSER_INTERACTION};
+use ash_session::{ComposerInteractionActivation, SelectionDirection};
+use ash_session::{ComposerRoute, ComposerSubmission};
+use ash_settings::KEYBOARD_SHORTCUTS_SEARCH;
+use ash_settings::SETTINGS_SEARCH_INPUT;
 use zui::ui::{FocusDirection, NavigationAxis};
 
 impl WorkbenchApplication {
@@ -512,9 +512,9 @@ impl WorkbenchApplication {
         else {
             return;
         };
-        let viewport = zeta_session::interaction_list_bounds(interaction_bounds);
-        let content = zeta_session::interaction_content_size(viewport, view.items().len());
-        let Some(command) = zeta_session::interaction_selection_scroll_command(
+        let viewport = ash_session::interaction_list_bounds(interaction_bounds);
+        let content = ash_session::interaction_content_size(viewport, view.items().len());
+        let Some(command) = ash_session::interaction_selection_scroll_command(
             view.selected(),
             view.items().len(),
             content.width,

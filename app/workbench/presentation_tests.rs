@@ -16,27 +16,27 @@ use crate::{
     terminal_pane_sash_for_viewport,
 };
 use crate::{MainSurfaceKind, TabContextMenuState, WorkbenchKeybindings};
-use zeta_commands::AppCommandId;
-use zeta_diff::DiffDocument;
-use zeta_editor::{CodeEditorLanguage, CodeEditorStyle, DiffEditorDocument};
-use zeta_editor_host::{FILE_EDITOR_DOCUMENT, FILE_EDITOR_PANE, FILE_EDITOR_TABS, FileEditorHost};
-use zeta_files::{
+use ash_commands::AppCommandId;
+use ash_diff::DiffDocument;
+use ash_editor::{CodeEditorLanguage, CodeEditorStyle, DiffEditorDocument};
+use ash_editor_host::{FILE_EDITOR_DOCUMENT, FILE_EDITOR_PANE, FILE_EDITOR_TABS, FileEditorHost};
+use ash_files::{
     DirectoryEntry, FILES_PANE, FILES_REFRESH, FILES_SEARCH, FILES_TOOLBAR, FilesState,
 };
-use zeta_keybinding::{HostPlatform, KeySequence};
-use zeta_scm::GitBranchPickerState;
-use zeta_scm::{CHANGES_PANE, CHANGES_TOOLBAR, MULTI_DIFF_EDITOR, ScmDiff, ScmState};
-use zeta_session::SessionPaneState;
-use zeta_session::interaction::{
+use ash_keybinding::{HostPlatform, KeySequence};
+use ash_scm::GitBranchPickerState;
+use ash_scm::{CHANGES_PANE, CHANGES_TOOLBAR, MULTI_DIFF_EDITOR, ScmDiff, ScmState};
+use ash_session::SessionPaneState;
+use ash_session::interaction::{
     COMPOSER, COMPOSER_KEY_HINT_BAR, COMPOSER_PANEL, ContextAction, SESSION_HEADER, THREAD_TIMELINE,
 };
-use zeta_settings::RemoteConnectionManagerState;
-use zeta_settings::RemoteConnectionPickerState;
-use zeta_settings::RemoteTunnelManagerState;
-use zeta_settings::SettingsState;
-use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore};
-use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
-use zeta_ui_components::ScrollbarPresentation;
+use ash_settings::RemoteConnectionManagerState;
+use ash_settings::RemoteConnectionPickerState;
+use ash_settings::RemoteTunnelManagerState;
+use ash_settings::SettingsState;
+use ash_terminal::{GridSize, ScreenBuffer, TerminalCore};
+use ash_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
+use ash_ui_components::ScrollbarPresentation;
 use zui::runtime::AccessibilityNode;
 use zui::ui::{AccessibilityRole, CursorFeedback, DispatchInvalidation, UiDispatch, UiIntent};
 use zui::ui::{
@@ -137,9 +137,9 @@ fn environment_context_view(context: &TestEnvironmentContext) -> EnvironmentCont
 #[test]
 fn inspector_part_outer_border_is_owned_by_workbench() {
     let bounds = Rect::from_xywh(680.0, 40.0, 320.0, 660.0);
-    let mut scene = UiScene::new(zeta_ui_theme::DEFAULT_UI_THEME.workbench_background);
+    let mut scene = UiScene::new(ash_ui_theme::DEFAULT_UI_THEME.workbench_background);
 
-    crate::draw_inspector_border(&mut scene, bounds, zeta_ui_theme::DEFAULT_UI_THEME);
+    crate::draw_inspector_border(&mut scene, bounds, ash_ui_theme::DEFAULT_UI_THEME);
 
     let frame = scene.rects().first().copied().expect("Inspector frame");
     assert_eq!(frame.bounds(), bounds);
@@ -147,7 +147,7 @@ fn inspector_part_outer_border_is_owned_by_workbench() {
     assert_eq!(frame.border().widths(), Edges::new(0.0, 0.0, 0.0, 1.0));
     assert_eq!(
         frame.border().color(),
-        zeta_ui_theme::DEFAULT_UI_THEME.border
+        ash_ui_theme::DEFAULT_UI_THEME.border
     );
 }
 
@@ -271,12 +271,12 @@ fn presentation_with_active_tab_input(
     let session_pane = SessionPaneState::default();
     let session_search = SessionSearchState::default();
     let environment_context =
-        TestEnvironmentContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
+        TestEnvironmentContext::fixture("~/Desktop/ash", Some("main"), Some(0));
     let mut text_layout = TextInputLayoutEngine::new();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
     let dir_tab_key = TabInputKey::session(
-        zeta_protocol::SessionId::new("files-input-session").expect("test session ID is non-empty"),
+        ash_protocol::SessionId::new("files-input-session").expect("test session ID is non-empty"),
     );
     let files_input_enabled = inspector_part.is_expanded() && active_tab_input.is_none();
     let inspector_part = files_input_enabled
@@ -313,8 +313,8 @@ fn presentation_with_active_tab_input(
         viewport(),
         WorkbenchPresentationModel {
             app_name: APP_DISPLAY_NAME,
-            palette: zeta_ui_theme::DEFAULT_UI_THEME,
-            typography: zeta_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
+            palette: ash_ui_theme::DEFAULT_UI_THEME,
+            typography: ash_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
             terminal,
             terminal_panes: &[],
             pane_group,
@@ -331,8 +331,8 @@ fn presentation_with_active_tab_input(
                 MainSurfaceKind::Agent
             },
             file_editor_host: &file_editor_host,
-            file_editor_prompt: zeta_editor_host::FileEditorPrompt::None,
-            file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
+            file_editor_prompt: ash_editor_host::FileEditorPrompt::None,
+            file_editor_search: &ash_editor_host::FileEditorSearchState::default(),
             file_editor_diagnostics: &[],
             language_hover: None,
             language_completions: None,
@@ -361,7 +361,7 @@ fn presentation_with_active_tab_input(
             quick_access: &QuickAccess::default(),
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
-            theme_scheme: zeta_theme::ColorScheme::Light,
+            theme_scheme: ash_theme::ColorScheme::Light,
             theme_follows_system: true,
             window_control_insets: WindowControlInsets::NONE,
             pointer_position: None,
@@ -373,8 +373,8 @@ fn presentation_with_active_tab_input(
         viewport(),
         WorkbenchPresentationModel {
             app_name: APP_DISPLAY_NAME,
-            palette: zeta_ui_theme::DEFAULT_UI_THEME,
-            typography: zeta_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
+            palette: ash_ui_theme::DEFAULT_UI_THEME,
+            typography: ash_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
             terminal,
             terminal_panes: &[],
             pane_group,
@@ -391,8 +391,8 @@ fn presentation_with_active_tab_input(
                 MainSurfaceKind::Agent
             },
             file_editor_host: &file_editor_host,
-            file_editor_prompt: zeta_editor_host::FileEditorPrompt::None,
-            file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
+            file_editor_prompt: ash_editor_host::FileEditorPrompt::None,
+            file_editor_search: &ash_editor_host::FileEditorSearchState::default(),
             file_editor_diagnostics: &[],
             language_hover: None,
             language_completions: None,
@@ -421,7 +421,7 @@ fn presentation_with_active_tab_input(
             quick_access: &QuickAccess::default(),
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
-            theme_scheme: zeta_theme::ColorScheme::Light,
+            theme_scheme: ash_theme::ColorScheme::Light,
             theme_follows_system: true,
             window_control_insets: WindowControlInsets::NONE,
             pointer_position: None,
@@ -463,7 +463,7 @@ fn settings_tab_input_renders_a_dialog_and_selects_the_tab_container_entry() {
             .scene()
             .icons()
             .iter()
-            .any(|icon| icon.icon() == zeta_icons::icons::GEAR)
+            .any(|icon| icon.icon() == ash_icons::icons::GEAR)
     );
     let node = accessibility_nodes
         .iter()
@@ -479,7 +479,7 @@ fn settings_tab_input_renders_a_dialog_and_selects_the_tab_container_entry() {
     );
     assert_eq!(
         interaction
-            .node(zeta_settings::SETTINGS_PAGE)
+            .node(ash_settings::SETTINGS_PAGE)
             .expect("Settings page")
             .parent(),
         Some(SETTINGS_DIALOG)
@@ -487,7 +487,7 @@ fn settings_tab_input_renders_a_dialog_and_selects_the_tab_container_entry() {
     assert!(
         interaction
             .focus_order()
-            .any(|id| id == zeta_settings::SETTINGS_SEARCH_INPUT)
+            .any(|id| id == ash_settings::SETTINGS_SEARCH_INPUT)
     );
     assert!(interaction.focus_order().all(|id| id != COMPOSER));
     assert_eq!(interaction.target_at(Point::new(10.0, 100.0)), None);
@@ -550,7 +550,7 @@ fn expanded_inspector_part_file_row_hover_rebuilds_with_the_hover_background() {
 
     assert!(hovered.frame().scene().rects().iter().any(|rect| {
         rect.bounds() == row_bounds
-            && rect.fill() == zeta_ui_theme::DEFAULT_UI_THEME.list_hover_background
+            && rect.fill() == ash_ui_theme::DEFAULT_UI_THEME.list_hover_background
     }));
 }
 
@@ -581,7 +581,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
     let session_search = SessionSearchState::default();
     let sidebar_part = SidebarPart::default();
     let environment_context =
-        TestEnvironmentContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
+        TestEnvironmentContext::fixture("~/Desktop/ash", Some("main"), Some(0));
     let files = FilesState::default();
     let scm = ScmState::default();
     let mut file_editor_host = FileEditorHost::default();
@@ -602,8 +602,8 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
         viewport(),
         WorkbenchPresentationModel {
             app_name: APP_DISPLAY_NAME,
-            palette: zeta_ui_theme::DEFAULT_UI_THEME,
-            typography: zeta_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
+            palette: ash_ui_theme::DEFAULT_UI_THEME,
+            typography: ash_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
             terminal: None,
             terminal_panes: &[],
             pane_group: None,
@@ -614,8 +614,8 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             terminal_selection: None,
             main_surface: MainSurfaceKind::Editor,
             file_editor_host: &file_editor_host,
-            file_editor_prompt: zeta_editor_host::FileEditorPrompt::None,
-            file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
+            file_editor_prompt: ash_editor_host::FileEditorPrompt::None,
+            file_editor_search: &ash_editor_host::FileEditorSearchState::default(),
             file_editor_diagnostics: &[],
             language_hover: None,
             language_completions: None,
@@ -644,7 +644,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             quick_access: &QuickAccess::default(),
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
-            theme_scheme: zeta_theme::ColorScheme::Light,
+            theme_scheme: ash_theme::ColorScheme::Light,
             theme_follows_system: true,
             window_control_insets: WindowControlInsets::NONE,
             pointer_position: None,
@@ -743,7 +743,7 @@ fn primary_presentation_uses_a_flat_light_surface() {
     assert_eq!(composer_panel.border().widths().top, 1.0);
     assert_eq!(
         hint_editor_separator.fill(),
-        zeta_ui_theme::DEFAULT_UI_THEME.border
+        ash_ui_theme::DEFAULT_UI_THEME.border
     );
     let intentional_pills = presentation
         .frame()
@@ -769,7 +769,7 @@ fn primary_presentation_has_an_agent_timeline_and_fixed_composer() {
 
     assert!(!visible_text.contains(&"app"));
     assert!(!visible_text.contains(&"Starting shell…"));
-    assert!(visible_text.contains(&"Ask Zeta anything…"));
+    assert!(visible_text.contains(&"Ask Ash anything…"));
     assert!(visible_text.contains(&"Local"));
     assert!(!visible_text.contains(&"Agent"));
     assert!(!visible_text.contains(&"SESSIONS"));
@@ -883,7 +883,7 @@ fn session_search_filters_tabs_by_session_name() {
     let sidebar_part = SidebarPart::default();
     session_search.apply(TextInputCommand::Insert("missing session".to_owned()));
     let environment_context =
-        TestEnvironmentContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
+        TestEnvironmentContext::fixture("~/Desktop/ash", Some("main"), Some(0));
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let files = FilesState::default();
@@ -895,8 +895,8 @@ fn session_search_filters_tabs_by_session_name() {
         viewport(),
         WorkbenchPresentationModel {
             app_name: APP_DISPLAY_NAME,
-            palette: zeta_ui_theme::DEFAULT_UI_THEME,
-            typography: zeta_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
+            palette: ash_ui_theme::DEFAULT_UI_THEME,
+            typography: ash_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
             terminal: None,
             terminal_panes: &[],
             pane_group: None,
@@ -907,8 +907,8 @@ fn session_search_filters_tabs_by_session_name() {
             terminal_selection: None,
             main_surface: MainSurfaceKind::Agent,
             file_editor_host: &file_editor_host,
-            file_editor_prompt: zeta_editor_host::FileEditorPrompt::None,
-            file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
+            file_editor_prompt: ash_editor_host::FileEditorPrompt::None,
+            file_editor_search: &ash_editor_host::FileEditorSearchState::default(),
             file_editor_diagnostics: &[],
             language_hover: None,
             language_completions: None,
@@ -937,7 +937,7 @@ fn session_search_filters_tabs_by_session_name() {
             quick_access: &QuickAccess::default(),
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
-            theme_scheme: zeta_theme::ColorScheme::Light,
+            theme_scheme: ash_theme::ColorScheme::Light,
             theme_follows_system: true,
             window_control_insets: WindowControlInsets::NONE,
             pointer_position: None,
@@ -1036,7 +1036,7 @@ fn active_files_input_mounts_directly_in_its_pane_group_with_files_actions() {
     assert_eq!(
         accessibility_nodes
             .iter()
-            .filter(|node| node.parent == Some(zeta_files::FILES_ACTION_BAR))
+            .filter(|node| node.parent == Some(ash_files::FILES_ACTION_BAR))
             .count(),
         2
     );
@@ -1058,7 +1058,7 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
     let session_search = SessionSearchState::default();
     let sidebar_part = SidebarPart::default();
     let environment_context =
-        TestEnvironmentContext::fixture("~/Desktop/zeta", Some("main"), Some(2));
+        TestEnvironmentContext::fixture("~/Desktop/ash", Some("main"), Some(2));
     let files = FilesState::default();
     let mut scm = ScmState::default();
     scm.set_branch(Some("main"));
@@ -1069,7 +1069,7 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
             .map(|diff| ScmDiff::new(diff.path(), diff.document().clone())),
     );
     let tab_key = TabInputKey::session(
-        zeta_protocol::SessionId::new("session-1").expect("test session ID is non-empty"),
+        ash_protocol::SessionId::new("session-1").expect("test session ID is non-empty"),
     );
     let mut workbench = WorkbenchHost::new();
     workbench.upsert_session_input_with(
@@ -1097,8 +1097,8 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
         viewport(),
         WorkbenchPresentationModel {
             app_name: APP_DISPLAY_NAME,
-            palette: zeta_ui_theme::DEFAULT_UI_THEME,
-            typography: zeta_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
+            palette: ash_ui_theme::DEFAULT_UI_THEME,
+            typography: ash_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
             terminal: None,
             terminal_panes: &[],
             pane_group: Some(main_pane_group),
@@ -1109,8 +1109,8 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
             terminal_selection: None,
             main_surface: MainSurfaceKind::Agent,
             file_editor_host: &file_editor_host,
-            file_editor_prompt: zeta_editor_host::FileEditorPrompt::None,
-            file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
+            file_editor_prompt: ash_editor_host::FileEditorPrompt::None,
+            file_editor_search: &ash_editor_host::FileEditorSearchState::default(),
             file_editor_diagnostics: &[],
             language_hover: None,
             language_completions: None,
@@ -1139,7 +1139,7 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
             quick_access: &QuickAccess::default(),
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
-            theme_scheme: zeta_theme::ColorScheme::Light,
+            theme_scheme: ash_theme::ColorScheme::Light,
             theme_follows_system: true,
             window_control_insets: WindowControlInsets::NONE,
             pointer_position: None,
@@ -1197,7 +1197,7 @@ fn expanded_diff_attaches_files_to_the_right_side_of_its_content() {
     let session_search = SessionSearchState::default();
     let sidebar_part = SidebarPart::default();
     let environment_context =
-        TestEnvironmentContext::fixture("~/Desktop/zeta", Some("main"), Some(1));
+        TestEnvironmentContext::fixture("~/Desktop/ash", Some("main"), Some(1));
     let files = FilesState::default();
     let mut scm = ScmState::default();
     scm.set_branch(Some("main"));
@@ -1208,7 +1208,7 @@ fn expanded_diff_attaches_files_to_the_right_side_of_its_content() {
             .map(|diff| ScmDiff::new(diff.path(), diff.document().clone())),
     );
     let tab_key = TabInputKey::session(
-        zeta_protocol::SessionId::new("session-with-files").expect("test session ID is non-empty"),
+        ash_protocol::SessionId::new("session-with-files").expect("test session ID is non-empty"),
     );
     let mut workbench = WorkbenchHost::new();
     workbench.upsert_session_input_with(
@@ -1249,8 +1249,8 @@ fn expanded_diff_attaches_files_to_the_right_side_of_its_content() {
         viewport(),
         WorkbenchPresentationModel {
             app_name: APP_DISPLAY_NAME,
-            palette: zeta_ui_theme::DEFAULT_UI_THEME,
-            typography: zeta_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
+            palette: ash_ui_theme::DEFAULT_UI_THEME,
+            typography: ash_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
             terminal: None,
             terminal_panes: &[],
             pane_group: Some(pane_group),
@@ -1261,8 +1261,8 @@ fn expanded_diff_attaches_files_to_the_right_side_of_its_content() {
             terminal_selection: None,
             main_surface: MainSurfaceKind::Agent,
             file_editor_host: &file_editor_host,
-            file_editor_prompt: zeta_editor_host::FileEditorPrompt::None,
-            file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
+            file_editor_prompt: ash_editor_host::FileEditorPrompt::None,
+            file_editor_search: &ash_editor_host::FileEditorSearchState::default(),
             file_editor_diagnostics: &[],
             language_hover: None,
             language_completions: None,
@@ -1291,7 +1291,7 @@ fn expanded_diff_attaches_files_to_the_right_side_of_its_content() {
             quick_access: &QuickAccess::default(),
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
-            theme_scheme: zeta_theme::ColorScheme::Light,
+            theme_scheme: ash_theme::ColorScheme::Light,
             theme_follows_system: true,
             window_control_insets: WindowControlInsets::NONE,
             pointer_position: None,
@@ -1334,7 +1334,7 @@ fn open_tab_context_menu_is_topmost_and_exposes_generic_actions() {
     let mut menu_state = TabContextMenuState::default();
     menu_state.open_unpinned(
         TabInputKey::session(
-            zeta_protocol::SessionId::new("context-menu-session")
+            ash_protocol::SessionId::new("context-menu-session")
                 .expect("test session ID is non-empty"),
         ),
         Point::new(80.0, 120.0),
@@ -1389,7 +1389,7 @@ fn open_tab_context_menu_is_topmost_and_exposes_generic_actions() {
             .scene()
             .icons()
             .iter()
-            .any(|icon| icon.icon() == zeta_icons::icons::CHEVRON_RIGHT)
+            .any(|icon| icon.icon() == ash_icons::icons::CHEVRON_RIGHT)
     );
 }
 
@@ -1515,7 +1515,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     let session_search = SessionSearchState::default();
     let sidebar_part = SidebarPart::default();
     let environment_context =
-        TestEnvironmentContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
+        TestEnvironmentContext::fixture("~/Desktop/ash", Some("main"), Some(0));
     let files = FilesState::default();
     let scm = ScmState::default();
     let git_branch_picker = GitBranchPickerState::default();
@@ -1531,8 +1531,8 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     let mut text_layout = TextInputLayoutEngine::new();
     let closed_model = WorkbenchPresentationModel {
         app_name: APP_DISPLAY_NAME,
-        palette: zeta_ui_theme::DEFAULT_UI_THEME,
-        typography: zeta_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
+        palette: ash_ui_theme::DEFAULT_UI_THEME,
+        typography: ash_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
         terminal: None,
         terminal_panes: &[],
         pane_group: None,
@@ -1543,8 +1543,8 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         terminal_selection: None,
         main_surface: MainSurfaceKind::Agent,
         file_editor_host: &file_editor_host,
-        file_editor_prompt: zeta_editor_host::FileEditorPrompt::None,
-        file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
+        file_editor_prompt: ash_editor_host::FileEditorPrompt::None,
+        file_editor_search: &ash_editor_host::FileEditorSearchState::default(),
         file_editor_diagnostics: &[],
         language_hover: None,
         language_completions: None,
@@ -1573,7 +1573,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         quick_access: &quick_access,
         settings: &settings,
         keybinding_diagnostics: &[],
-        theme_scheme: zeta_theme::ColorScheme::Light,
+        theme_scheme: ash_theme::ColorScheme::Light,
         theme_follows_system: true,
         window_control_insets: WindowControlInsets::NONE,
         pointer_position: None,
@@ -1586,7 +1586,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     let mut menu = TabContextMenuState::default();
     menu.open_unpinned(
         TabInputKey::session(
-            zeta_protocol::SessionId::new("context-menu-session")
+            ash_protocol::SessionId::new("context-menu-session")
                 .expect("test session ID is non-empty"),
         ),
         Point::new(200.0, 100.0),
@@ -1715,8 +1715,8 @@ fn compact_viewport_uses_bounded_fallback_scene() {
         },
         WorkbenchPresentationModel {
             app_name: APP_DISPLAY_NAME,
-            palette: zeta_ui_theme::DEFAULT_UI_THEME,
-            typography: zeta_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
+            palette: ash_ui_theme::DEFAULT_UI_THEME,
+            typography: ash_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
             terminal: None,
             terminal_panes: &[],
             pane_group: None,
@@ -1727,8 +1727,8 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             terminal_selection: None,
             main_surface: MainSurfaceKind::Agent,
             file_editor_host: &file_editor_host,
-            file_editor_prompt: zeta_editor_host::FileEditorPrompt::None,
-            file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
+            file_editor_prompt: ash_editor_host::FileEditorPrompt::None,
+            file_editor_search: &ash_editor_host::FileEditorSearchState::default(),
             file_editor_diagnostics: &[],
             language_hover: None,
             language_completions: None,
@@ -1757,7 +1757,7 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             quick_access: &QuickAccess::default(),
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
-            theme_scheme: zeta_theme::ColorScheme::Light,
+            theme_scheme: ash_theme::ColorScheme::Light,
             theme_follows_system: true,
             window_control_insets: WindowControlInsets::NONE,
             pointer_position: None,
@@ -1848,7 +1848,7 @@ fn primary_terminal_blocks_do_not_override_the_agent_timeline() {
 
     assert!(!visible_text.contains(&"❯ printf hi"));
     assert!(!visible_text.contains(&"hi"));
-    assert!(visible_text.contains(&"Ask Zeta anything…"));
+    assert!(visible_text.contains(&"Ask Ash anything…"));
 }
 
 #[test]
@@ -1870,7 +1870,7 @@ fn primary_terminal_scrollback_does_not_change_the_agent_timeline() {
     assert!(!visible_text.contains(&"❯ history"));
     assert!(!visible_text.contains(&"line-0"));
     assert!(!visible_text.contains(&"line-79"));
-    assert!(visible_text.contains(&"Ask Zeta anything…"));
+    assert!(visible_text.contains(&"Ask Ash anything…"));
 }
 
 #[test]

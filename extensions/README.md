@@ -3,10 +3,10 @@
 > This README owns the repository package-set and distribution contract. The cross-layer runtime,
 > trust, refresh, and evolution contract is maintained in
 > [`docs/editor-extensions.md`](../docs/editor-extensions.md); the Rust catalog implementation is
-> documented in [`zeta-rs/extensions/README.md`](../zeta-rs/extensions/README.md).
+> documented in [`ash-rs/extensions/README.md`](../ash-rs/extensions/README.md).
 
-This directory contains static extension packages shipped with Zeta during development. Packaging
-places the same directory under `zeta-resources/extensions/`.
+This directory contains static extension packages shipped with Ash during development. Packaging
+places the same directory under `ash-resources/extensions/`.
 
 Except for this README and `BUILD.bazel`, each direct child must be a package directory with a
 `package.json`. TextMate packages may put raw JSON or PLIST grammars below the package and reference
@@ -17,20 +17,20 @@ runtime or a workspace plugin directory.
 ## Source and distribution boundary
 
 This directory is a runtime input, not a download endpoint. Built-in packages committed here are
-copied into `zeta-resources/extensions/` during development and production packaging. Zeta reads
-that trusted package directory through `zeta-extensions`; App is only a future consumer extension
+copied into `ash-resources/extensions/` during development and production packaging. Ash reads
+that trusted package directory through `ash-extensions`; App is only a future consumer extension
 point. A running application does not authenticate to a Git repository to load built-in extensions.
 
-If the package set later moves to a shared `zeta-extension-packs` repository, that repository may
+If the package set later moves to a shared `ash-extension-packs` repository, that repository may
 be private and may own upstream pinning, license/notice preservation, validation, and CI builds.
-It must publish versioned extension artifacts for Zeta and App to consume during their build or
+It must publish versioned extension artifacts for Ash and App to consume during their build or
 release process. A running application must consume the packaged artifact or extracted extension
 directory, never Git credentials or an unversioned repository checkout.
 
 All thirteen packages are derived from `microsoft/vscode` and retain their package-level
 `NOTICE.md` provenance. The canonical upstream MIT license copy is
 [`third_party/vscode/LICENSE.txt`](../third_party/vscode/LICENSE.txt); both production and Desktop
-development packaging place it at `zeta-resources/licenses/vscode/LICENSE.txt` alongside the
+development packaging place it at `ash-resources/licenses/vscode/LICENSE.txt` alongside the
 extension packages.
 
 User-installed extensions are a separate profile-level root. They require an explicit registry or

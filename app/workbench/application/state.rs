@@ -85,7 +85,7 @@ impl WorkbenchApplication {
         let history_proxy = event_proxy.clone();
         let history = (|| {
             let runtime =
-                ::state::StateRuntime::open(zeta_utils_home_dir::find_zeta_home().map_err(|error| error.to_string())?)
+                ::state::StateRuntime::open(ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?)
                     .map_err(|error| error.to_string())?;
             let store = ::state::SqliteMessageHistory::open(
                 runtime.database_path(),
@@ -130,12 +130,12 @@ impl WorkbenchApplication {
                 let terminal_target = app_server_host
                     .remote_connection()
                     .cloned()
-                    .map(zeta_terminal_runtime::TerminalRuntimeTarget::remote)
-                    .unwrap_or(zeta_terminal_runtime::TerminalRuntimeTarget::Local);
+                    .map(ash_terminal_runtime::TerminalRuntimeTarget::remote)
+                    .unwrap_or(ash_terminal_runtime::TerminalRuntimeTarget::Local);
                 TerminalRuntime::new(
                     move |key, size| {
                         let event_proxy = terminal_event_proxy.clone();
-                        let event_sink: zeta_terminal_runtime::TerminalEventSink =
+                        let event_sink: ash_terminal_runtime::TerminalEventSink =
                             Arc::new(move |event| event_proxy.send_event(event.into()).is_ok());
                         TerminalSession::spawn_async(
                             key,

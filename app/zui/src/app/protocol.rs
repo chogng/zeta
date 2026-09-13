@@ -6,7 +6,7 @@ use std::fmt;
 pub struct ProtocolScheme(String);
 
 impl ProtocolScheme {
-    /// Creates an RFC-compatible scheme such as `zeta` or `com.example.app`.
+    /// Creates an RFC-compatible scheme such as `ash` or `com.example.app`.
     pub fn new(value: impl Into<String>) -> Result<Self, ProtocolSchemeError> {
         let value = value.into().to_ascii_lowercase();
         let mut characters = value.chars();

@@ -2,17 +2,17 @@
 
 use super::TranscriptState;
 use super::TranscriptUpdateResult;
-use zeta_protocol::ItemId;
-use zeta_protocol::SessionId;
-use zeta_protocol::StreamCursor;
-use zeta_protocol::StreamInstanceId;
-use zeta_protocol::ThreadId;
-use zeta_protocol::ThreadItem;
-use zeta_protocol::TurnId;
-use zeta_thread_transcript::ThreadTranscriptChange;
-use zeta_thread_transcript::ThreadTranscriptEntry;
-use zeta_thread_transcript::ThreadTranscriptSnapshot;
-use zeta_thread_transcript::ThreadTranscriptUpdateEnvelope;
+use ash_protocol::ItemId;
+use ash_protocol::SessionId;
+use ash_protocol::StreamCursor;
+use ash_protocol::StreamInstanceId;
+use ash_protocol::ThreadId;
+use ash_protocol::ThreadItem;
+use ash_protocol::TurnId;
+use ash_thread_transcript::ThreadTranscriptChange;
+use ash_thread_transcript::ThreadTranscriptEntry;
+use ash_thread_transcript::ThreadTranscriptSnapshot;
+use ash_thread_transcript::ThreadTranscriptUpdateEnvelope;
 
 #[test]
 fn backend_changes_replace_entries_without_changing_their_order() {

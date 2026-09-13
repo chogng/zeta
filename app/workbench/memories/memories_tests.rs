@@ -27,7 +27,7 @@ fn memory_manager_exposes_editing_permissions_and_modal_keyboard_targets() {
         created_at_unix_ms: 1,
         updated_at_unix_ms: 2,
     });
-    let theme = zeta_ui_theme::DEFAULT_UI_THEME;
+    let theme = ash_ui_theme::DEFAULT_UI_THEME;
     let mut frame = UiFrame::<InteractionFrame>::new(theme.workbench_background);
     let viewport = Rect::from_xywh(0.0, 0.0, 900.0, 720.0);
     let dispatch = UiDispatch::default();
@@ -41,7 +41,7 @@ fn memory_manager_exposes_editing_permissions_and_modal_keyboard_targets() {
             &dispatch,
             CaretVisibility::Visible,
             &mut text_layout,
-            &zeta_editor::CodeEditorStyle::light(),
+            &ash_editor::CodeEditorStyle::light(),
         )
     });
     let nodes = frame.interaction().accessibility_nodes(&dispatch);

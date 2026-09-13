@@ -17,7 +17,7 @@ from build.release.system_signing import notarize, sign_and_verify
 class SystemSigningTests(unittest.TestCase):
     def test_macos_signs_with_hardened_runtime_and_timestamp(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            artifact = Path(temporary) / "zeta"
+            artifact = Path(temporary) / "ash"
             artifact.write_bytes(b"unsigned")
             commands = []
 
@@ -28,7 +28,7 @@ class SystemSigningTests(unittest.TestCase):
 
             with patch.dict(
                 os.environ,
-                {"ZETA_MACOS_SIGNING_IDENTITY": "Developer ID Application: Zeta"},
+                {"ASH_MACOS_SIGNING_IDENTITY": "Developer ID Application: Ash"},
                 clear=False,
             ):
                 result = sign_and_verify(artifact, "darwin", runner)
@@ -40,12 +40,12 @@ class SystemSigningTests(unittest.TestCase):
 
     def test_windows_signs_by_certificate_thumbprint_with_rfc3161_timestamp(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            artifact = Path(temporary) / "zeta.exe"
+            artifact = Path(temporary) / "ash.exe"
             artifact.write_bytes(b"unsigned")
             commands = []
             with patch.dict(
                 os.environ,
-                {"ZETA_WINDOWS_SIGNING_THUMBPRINT": "ABC123"},
+                {"ASH_WINDOWS_SIGNING_THUMBPRINT": "ABC123"},
                 clear=False,
             ):
                 sign_and_verify(
@@ -72,16 +72,16 @@ class SystemSigningTests(unittest.TestCase):
 
     def test_macos_notarization_uses_a_keychain_profile_and_can_staple(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            artifact = Path(temporary) / "Zeta.pkg"
+            artifact = Path(temporary) / "Ash.pkg"
             artifact.write_bytes(b"package")
             commands = []
             with patch.dict(
-                os.environ, {"ZETA_MACOS_NOTARY_PROFILE": "zeta-release"}, clear=False
+                os.environ, {"ASH_MACOS_NOTARY_PROFILE": "ash-release"}, clear=False
             ):
                 notarize(artifact, lambda command: commands.append(list(command)), staple=True)
 
             self.assertEqual("notarytool", commands[0][1])
-            self.assertEqual("zeta-release", commands[0][-2])
+            self.assertEqual("ash-release", commands[0][-2])
             self.assertEqual("staple", commands[1][2])
             self.assertEqual("validate", commands[2][2])
 
@@ -90,12 +90,12 @@ class SystemSigningTests(unittest.TestCase):
     ) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             package = Path(temporary).resolve()
-            artifact = package / "bin/zeta.exe"
+            artifact = package / "bin/ash.exe"
             artifact.parent.mkdir()
             artifact.write_bytes(b"signed-by-service")
             unsigned_digest = "1" * 64
-            (package / "zeta-package.json").write_text(
-                '{"target":"x86_64-pc-windows-msvc","files":{"bin/zeta.exe":"'
+            (package / "ash-package.json").write_text(
+                '{"target":"x86_64-pc-windows-msvc","files":{"bin/ash.exe":"'
                 + unsigned_digest
                 + '"}}',
                 encoding="utf-8",

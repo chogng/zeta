@@ -1,8 +1,8 @@
 use super::{
     GitBranchPicker, GitBranchPickerAction, GitBranchPickerActivation, GitBranchPickerState,
 };
-use zeta_app_server_protocol::protocol::git::GitBranchDto;
-use zeta_ui_theme::DEFAULT_UI_THEME;
+use ash_app_server_protocol::protocol::git::GitBranchDto;
+use ash_ui_theme::DEFAULT_UI_THEME;
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
 use zui::ui::{CaretVisibility, Rect, TextInputCommand, TextInputLayoutEngine};
 

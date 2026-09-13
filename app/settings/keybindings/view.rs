@@ -1,19 +1,19 @@
-use zeta_icons::icons;
-use zeta_ui_components::InputBoxStateColors;
-use zeta_ui_components::InputBoxStyle;
-use zeta_ui_components::KeycapSequence;
-use zeta_ui_components::KeycapStyle;
-use zeta_ui_components::QuickInputIds;
-use zeta_ui_components::QuickInputMessageKind;
-use zeta_ui_components::QuickInputStyle;
-use zeta_ui_components::QuickPick;
-use zeta_ui_components::QuickPickItem;
-use zeta_ui_components::QuickPickItemLayout;
-use zeta_ui_components::QuickPickSelection;
-use zeta_ui_components::QuickPickStyle;
-use zeta_ui_components::ScrollViewStyle;
-use zeta_ui_components::ScrollbarStyle;
-use zeta_ui_components::SearchBoxStyle;
+use ash_icons::icons;
+use ash_ui_components::InputBoxStateColors;
+use ash_ui_components::InputBoxStyle;
+use ash_ui_components::KeycapSequence;
+use ash_ui_components::KeycapStyle;
+use ash_ui_components::QuickInputIds;
+use ash_ui_components::QuickInputMessageKind;
+use ash_ui_components::QuickInputStyle;
+use ash_ui_components::QuickPick;
+use ash_ui_components::QuickPickItem;
+use ash_ui_components::QuickPickItemLayout;
+use ash_ui_components::QuickPickSelection;
+use ash_ui_components::QuickPickStyle;
+use ash_ui_components::ScrollViewStyle;
+use ash_ui_components::ScrollbarStyle;
+use ash_ui_components::SearchBoxStyle;
 use zui::ui::CaretVisibility;
 use zui::ui::Color;
 use zui::ui::Component;
@@ -33,10 +33,10 @@ use zui::ui::UiDispatch;
 use zui::ui::UiScene;
 
 use super::state::KeyboardShortcutsState;
-use zeta_keybinding::HostPlatform;
-use zeta_keybinding::KeySequence;
-use zeta_keybinding::format_key_sequence;
-use zeta_keybinding::keycap_labels;
+use ash_keybinding::HostPlatform;
+use ash_keybinding::KeySequence;
+use ash_keybinding::format_key_sequence;
+use ash_keybinding::keycap_labels;
 
 /// One host-owned command projected into the shortcut settings surface.
 #[derive(Clone, Copy)]

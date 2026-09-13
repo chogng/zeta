@@ -1,10 +1,10 @@
 use std::time::Duration;
 use std::time::Instant;
 
-use zeta_editor::CodeEditorCommand;
-use zeta_editor::CodeEditorSelectionMode;
-use zeta_input_classifier::InputConversation;
-use zeta_input_classifier::InputHistoryEntry;
+use ash_editor::CodeEditorCommand;
+use ash_editor::CodeEditorSelectionMode;
+use ash_input_classifier::InputConversation;
+use ash_input_classifier::InputHistoryEntry;
 use zui::ui::TextInputCompositionCursor;
 use zui::ui::TextInputCompositionEvent;
 

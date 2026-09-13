@@ -1,5 +1,5 @@
 name: 💻 CLI Bug
-description: Report an issue with the Zeta CLI
+description: Report an issue with the Ash CLI
 labels:
 - cli
 body:
@@ -11,14 +11,14 @@ body:
 
         Do not report security vulnerabilities in a public issue. Follow the repository Security Policy instead.
 
-        Make sure you are running the [latest](https://npmjs.com/package/@chogng/zeta) version of Zeta CLI. The bug you are experiencing may already have been fixed.
+        Make sure you are running the [latest](https://npmjs.com/package/@chogng/ash) version of Ash CLI. The bug you are experiencing may already have been fixed.
 
-        If your version supports it, please run `zeta doctor --json` and paste the output in the "Zeta doctor report" field below. This helps us diagnose install, config, auth, terminal, MCP, network, and local state issues.
+        If your version supports it, please run `ash doctor --json` and paste the output in the "Ash doctor report" field below. This helps us diagnose install, config, auth, terminal, MCP, network, and local state issues.
   - type: input
     id: version
     attributes:
-      label: What version of the Zeta CLI are you using?
-      description: Use `zeta --version`
+      label: What version of the Ash CLI are you using?
+      description: Use `ash --version`
     validations:
       required: true
   - type: input
@@ -49,12 +49,12 @@ body:
   - type: textarea
     id: doctor
     attributes:
-      label: zeta doctor report
+      label: ash doctor report
       description: |
-        If available, run `zeta doctor --json` and paste the full output here.
+        If available, run `ash doctor --json` and paste the full output here.
 
         The report is designed to redact secrets, but please review it before submitting.
-        If your Zeta version does not support `doctor`, write `not available`.
+        If your Ash version does not support `doctor`, write `not available`.
       render: json
   - type: textarea
     id: actual

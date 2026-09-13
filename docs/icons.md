@@ -3,7 +3,7 @@
 > 状态：Current。
 > 本文拥有跨 Desktop、Rust native 与 renderer 的 product-icon ownership。Canonical SVG
 > 文件操作见 [`resources/README.md`](../resources/README.md)，Rust API 与生成路径见
-> [`zeta-icons`](../app/icons/README.md)。
+> [`ash-icons`](../app/icons/README.md)。
 
 ## 快速理解
 
@@ -14,8 +14,8 @@ Product icon 是 renderer-independent semantic identity，不是某个 component
 resources/icons/*.svg
   ├─ Desktop generator → private SVG factories → semantic registry → browser SVG renderer
   └─ Rust generator → private artwork → explicit semantic library
-                                     → zeta-icons
-                       → zui PaintIcon → zeta-ui-components IconLabel / Button
+                                     → ash-icons
+                       → zui PaintIcon → ash-ui-components IconLabel / Button
                        → native product host
 ```
 
@@ -31,16 +31,16 @@ resources/icons/*.svg
 | 能力 | 当前 owner | 状态 |
 | --- | --- | --- |
 | Canonical first-party SVG artwork | `resources/icons` | ✅ |
-| Desktop generated SVG factories | `zeta-ts/generated/product-icons.ts` | ✅ |
+| Desktop generated SVG factories | `ash-ts/generated/product-icons.ts` | ✅ |
 | Desktop semantic registration与resolution | `base/common/icon.ts` / `lxiconsLibrary.ts` | ✅ |
-| Rust semantic identity、definition 与 rendering mode | `zeta-icons` | ✅ |
+| Rust semantic identity、definition 与 rendering mode | `ash-icons` | ✅ |
 | Rust logical placement、tint 与 clip scene contract | `zui::PaintIcon` | ✅ |
-| Rust icon+text component geometry | `zeta-ui-components::IconLabel` | ✅ |
+| Rust icon+text component geometry | `ash-ui-components::IconLabel` | ✅ |
 | Product command 与 icon selection | 各 product host | ✅ |
-| Seti file-extension/theme resolution | `zeta-ts/src/zeta/platform/theme/browser` | ✅，浏览器主题能力 |
-| Native symbolic mask、fixed-color atlas 与 render path | `zeta-wgpu` | ✅ |
+| Seti file-extension/theme resolution | `ash-ts/src/ash/platform/theme/browser` | ✅，浏览器主题能力 |
+| Native symbolic mask、fixed-color atlas 与 render path | `ash-wgpu` | ✅ |
 
-`zeta-icons` 不依赖 `zui` 或 `zeta-ui-components`。`PaintIcon`、`IconLabel`、`Button` 和 `InputBox` 可以依赖 icon identity，但
+`ash-icons` 不依赖 `zui` 或 `ash-ui-components`。`PaintIcon`、`IconLabel`、`Button` 和 `InputBox` 可以依赖 icon identity，但
 资源 crate 不得包含 component、font、layout、theme color、GPU 或 input routing。
 
 ## 3. 身份与图稿
@@ -62,11 +62,11 @@ Rust generator 扫描全部 canonical SVG，生成 164 个 crate-private `IconDe
 `ALL_ICONS` 和 `icon_by_id` lookup。`history → refresh.svg`、`dropdown-indicator →
 chevron-down.svg` 等映射证明 semantic identity 不依赖 filename。`Button` 的 icon+text paint
 path 复用 `IconLabel`。
-`zeta-wgpu` 使用共享区域分配的 R8 symbolic-mask atlas 与 sRGB RGBA fixed-color atlas。Symbolic
+`ash-wgpu` 使用共享区域分配的 R8 symbolic-mask atlas 与 sRGB RGBA fixed-color atlas。Symbolic
 artwork 只写 mask；multicolor artwork 经 `resvg` 栅格化后，把纯黑 coverage 写入 mask、其余
 颜色写入 fixed-color atlas，shader 再把 caller tint 与固定色合成为一个 icon draw。
 
-Native shell 从 `zeta-icons::icons` 选择语义 icon，再交给 component；titlebar sidebar toggle
+Native shell 从 `ash-icons::icons` 选择语义 icon，再交给 component；titlebar sidebar toggle
 已同时消费 symbolic 与 multicolor artwork。
 
 ## 5. 修改路径
@@ -74,7 +74,7 @@ Native shell 从 `zeta-icons::icons` 选择语义 icon，再交给 component；t
 ```bash
 corepack pnpm icons:generate
 corepack pnpm icons:check
-cargo test --manifest-path Cargo.toml -p zeta-icons -p zeta-ui-components
+cargo test --manifest-path Cargo.toml -p ash-icons -p ash-ui-components
 ```
 
 Desktop 继续运行自己的 generate/check/optimize workflow。新增 SVG 必须同时更新两个 checked-in

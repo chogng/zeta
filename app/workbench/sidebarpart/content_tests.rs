@@ -30,9 +30,9 @@ use crate::sidebarpart::identity::{
     tab_group_list_id,
 };
 use crate::sidebarpart::test_style;
-use zeta_protocol::Session;
-use zeta_protocol::SessionId;
-use zeta_protocol::SessionStatus;
+use ash_protocol::Session;
+use ash_protocol::SessionId;
+use ash_protocol::SessionStatus;
 use zui::ui::AccessibilityExpansion;
 use zui::ui::AccessibilityRole;
 use zui::ui::AccessibilitySelection;
@@ -76,19 +76,19 @@ fn part_with_two_sessions() -> (SidebarPart, TabInputKey, TabInputKey) {
 #[test]
 fn session_status_icons_cover_the_terminal_manager_states() {
     for (status, icon) in [
-        (TabStatusKind::Idle, zeta_icons::icons::CIRCLE_SMALL),
-        (TabStatusKind::NeedsInput, zeta_icons::icons::ENTER),
-        (TabStatusKind::Working, zeta_icons::icons::SYNC),
+        (TabStatusKind::Idle, ash_icons::icons::CIRCLE_SMALL),
+        (TabStatusKind::NeedsInput, ash_icons::icons::ENTER),
+        (TabStatusKind::Working, ash_icons::icons::SYNC),
         (
             TabStatusKind::ReadyForReview,
-            zeta_icons::icons::CODE_REVIEW,
+            ash_icons::icons::CODE_REVIEW,
         ),
         (
             TabStatusKind::Completed,
-            zeta_icons::icons::CIRCLE_SMALL_FILLED,
+            ash_icons::icons::CIRCLE_SMALL_FILLED,
         ),
-        (TabStatusKind::Failed, zeta_icons::icons::ERROR),
-        (TabStatusKind::Stopped, zeta_icons::icons::PAUSE),
+        (TabStatusKind::Failed, ash_icons::icons::ERROR),
+        (TabStatusKind::Stopped, ash_icons::icons::PAUSE),
     ] {
         assert_eq!(super::session_status_icon(status), icon);
     }
@@ -148,13 +148,13 @@ fn sidebar_header_mounts_a_radio_based_mode_switcher() {
         .scene()
         .icons()
         .iter()
-        .find(|icon| icon.icon() == zeta_icons::icons::COWORK)
+        .find(|icon| icon.icon() == ash_icons::icons::COWORK)
         .expect("Cowork mode icon");
     let code_icon = frame
         .scene()
         .icons()
         .iter()
-        .find(|icon| icon.icon() == zeta_icons::icons::CODE)
+        .find(|icon| icon.icon() == ash_icons::icons::CODE)
         .expect("Code mode icon");
     let cowork_label = frame
         .scene()
@@ -320,7 +320,7 @@ fn body_mount_arranges_tabs_vertically_with_session_names_only() {
             .scene()
             .icons()
             .iter()
-            .filter(|icon| icon.icon() == zeta_icons::icons::SYNC)
+            .filter(|icon| icon.icon() == ash_icons::icons::SYNC)
             .count(),
         1
     );
@@ -329,7 +329,7 @@ fn body_mount_arranges_tabs_vertically_with_session_names_only() {
             .scene()
             .icons()
             .iter()
-            .filter(|icon| icon.icon() == zeta_icons::icons::CIRCLE_SMALL_FILLED)
+            .filter(|icon| icon.icon() == ash_icons::icons::CIRCLE_SMALL_FILLED)
             .count(),
         1
     );
@@ -544,7 +544,7 @@ fn tab_actions_button_is_hidden_at_rest_and_opens_actions_for_the_stable_tab_key
             .scene()
             .icons()
             .iter()
-            .filter(|icon| icon.icon() == zeta_icons::icons::ELLIPSIS)
+            .filter(|icon| icon.icon() == ash_icons::icons::ELLIPSIS)
             .count(),
         1
     );
@@ -583,7 +583,7 @@ fn tab_actions_button_is_hidden_at_rest_and_opens_actions_for_the_stable_tab_key
             .scene()
             .icons()
             .iter()
-            .find(|icon| icon.icon() == zeta_icons::icons::ELLIPSIS)
+            .find(|icon| icon.icon() == ash_icons::icons::ELLIPSIS)
             .expect("tab actions icon")
             .color(),
         Color::rgb(126, 126, 132)
@@ -610,7 +610,7 @@ fn pinned_status_uses_the_close_slot_until_the_action_bar_is_visible() {
         .scene()
         .icons()
         .iter()
-        .find(|icon| icon.icon() == zeta_icons::icons::PINNED)
+        .find(|icon| icon.icon() == ash_icons::icons::PINNED)
         .expect("resting pinned status");
 
     assert_eq!(pinned_icon.bounds(), expected_pin_bounds);
@@ -632,14 +632,14 @@ fn pinned_status_uses_the_close_slot_until_the_action_bar_is_visible() {
             .scene()
             .icons()
             .iter()
-            .all(|icon| icon.icon() != zeta_icons::icons::PINNED)
+            .all(|icon| icon.icon() != ash_icons::icons::PINNED)
     );
     assert_eq!(
         hovered
             .scene()
             .icons()
             .iter()
-            .filter(|icon| icon.icon() == zeta_icons::icons::CLOSE)
+            .filter(|icon| icon.icon() == ash_icons::icons::CLOSE)
             .count(),
         1
     );
@@ -762,7 +762,7 @@ fn every_hovered_tab_has_an_action_bar() {
                 .scene()
                 .icons()
                 .iter()
-                .filter(|icon| icon.icon() == zeta_icons::icons::CLOSE)
+                .filter(|icon| icon.icon() == ash_icons::icons::CLOSE)
                 .count(),
             1
         );
@@ -915,7 +915,7 @@ fn dirs_preview_lists_every_directory_with_icons_and_exposes_rename() {
             .scene()
             .icons()
             .iter()
-            .filter(|icon| icon.icon() == zeta_icons::icons::FOLDERS)
+            .filter(|icon| icon.icon() == ash_icons::icons::FOLDERS)
             .count(),
         roots.len()
     );

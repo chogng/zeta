@@ -107,7 +107,7 @@ impl ImageRenderer {
         depth_stencil: wgpu::DepthStencilState,
     ) -> Self {
         let atlas = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("zeta-ui image atlas"),
+            label: Some("ash-ui image atlas"),
             size: wgpu::Extent3d {
                 width: ATLAS_SIZE,
                 height: ATLAS_SIZE,
@@ -122,14 +122,14 @@ impl ImageRenderer {
         });
         let view = atlas.create_view(&wgpu::TextureViewDescriptor::default());
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("zeta-ui image sampler"),
+            label: Some("ash-ui image sampler"),
             min_filter: wgpu::FilterMode::Linear,
             mag_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
         });
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("zeta-ui image bind group layout"),
+            label: Some("ash-ui image bind group layout"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -150,7 +150,7 @@ impl ImageRenderer {
             ],
         });
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("zeta-ui image bind group"),
+            label: Some("ash-ui image bind group"),
             layout: &layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -164,16 +164,16 @@ impl ImageRenderer {
             ],
         });
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("zeta-ui image shader"),
+            label: Some("ash-ui image shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("image.wgsl").into()),
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("zeta-ui image pipeline layout"),
+            label: Some("ash-ui image pipeline layout"),
             bind_group_layouts: &[Some(&layout)],
             immediate_size: 0,
         });
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("zeta-ui image pipeline"),
+            label: Some("ash-ui image pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -344,7 +344,7 @@ fn validate_image(index: usize, image: &PaintImage) -> Result<(), UiRenderError>
 
 fn create_instance_buffer(device: &wgpu::Device, capacity: usize) -> wgpu::Buffer {
     device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("zeta-ui image instances"),
+        label: Some("ash-ui image instances"),
         size: (mem::size_of::<ImageInstance>() * capacity) as wgpu::BufferAddress,
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,

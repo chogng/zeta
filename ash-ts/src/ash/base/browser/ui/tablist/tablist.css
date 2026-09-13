@@ -1,0 +1,204 @@
+.ash-tab-list {
+  width: 100%;
+  height: 100%;
+}
+
+.ash-tab-list-scroll-content,
+.ash-tab-list-scroll-content > .ash-action-bar {
+  height: 100%;
+}
+
+.ash-tab-list-scroll-content > .ash-action-bar {
+  width: max-content;
+}
+
+.ash-tab-list-inset .ash-tab-list-scroll-content > .ash-action-bar {
+  padding: 0 var(--ash-tab-list-content-inset);
+}
+
+.ash-tab-list-inset {
+  height: var(--ash-tab-height);
+}
+
+.ash-tab-list-scroll-content > .ash-action-bar.vertical {
+  width: 100%;
+  height: max-content;
+}
+
+.ash-tab {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  height: var(--ash-tab-height);
+  align-items: center;
+  cursor: pointer;
+}
+
+/* A draggable tab remains a pointer target until the drag gesture starts. */
+.ash-tab.ash-dnd-draggable {
+  cursor: pointer;
+}
+
+.ash-tab.ash-dnd-draggable:active {
+  cursor: grabbing;
+}
+
+/* Keep the visual gap inside a tab's native drop hit area. */
+.ash-tab-list-scroll-content
+  > .ash-action-bar.ash-action-bar-dnd.horizontal
+  > .ash-tab:not(:last-child)::after {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  width: var(--ash-action-bar-gap);
+  height: 100%;
+  content: "";
+  pointer-events: auto;
+}
+
+.ash-tab-list-scroll-content
+  > .ash-action-bar.ash-action-bar-dnd.vertical
+  > .ash-tab:not(:last-child)::after {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  height: var(--ash-action-bar-gap);
+  content: "";
+  pointer-events: auto;
+}
+
+.ash-tab.ash-dnd-drop-before::before,
+.ash-tab.ash-dnd-drop-after::before {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  width: 2px;
+  height: 100%;
+  content: "";
+  pointer-events: none;
+  background: var(--ash-focus-border);
+}
+
+.ash-tab.ash-dnd-drop-before::before {
+  left: -2px;
+}
+
+.ash-tab.ash-dnd-drop-after::before {
+  right: -2px;
+}
+
+.ash-tab-list .ash-tab.checked {
+  background: var(--ash-tab-list-active-background);
+}
+
+.ash-tab-label {
+  display: flex;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 0 var(--ash-tab-list-item-content-inset);
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: inherit;
+  font: inherit;
+  font-weight: var(--ash-font-weight-semi-bold);
+}
+
+.ash-tab-label > .ash-icon-label {
+  min-width: 0;
+}
+
+.ash-tab-list-inset .ash-tab {
+  min-width: 64px;
+  max-width: 180px;
+  border-radius: 4px;
+  color: var(--ash-description-foreground);
+  background: var(--ash-tab-list-inactive-background, transparent);
+}
+
+.ash-tab-list-inset .ash-tab:hover,
+.ash-tab-list-inset .ash-tab.checked {
+  color: var(--ash-foreground);
+}
+
+.ash-tab-list-inset .ash-tab-label {
+  --ash-icon-label-text-overflow: clip;
+
+  position: relative;
+  overflow: hidden;
+  height: 100%;
+  flex: 1 1 auto;
+  padding-right: 4px;
+  outline: none;
+  white-space: nowrap;
+}
+
+.ash-tab-list-inset .ash-tab.checked .ash-tab-label::after,
+.ash-tab-list-inset .ash-tab:hover .ash-tab-label::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--ash-toolbar-action-size);
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, var(--ash-tab-list-inactive-background, transparent));
+}
+
+.ash-tab-list-inset .ash-tab.checked .ash-tab-label::after {
+  background: linear-gradient(to right, transparent, var(--ash-tab-list-active-background));
+}
+
+.ash-tab-list-inset .ash-tab-label:focus-visible {
+  outline: 1px solid var(--ash-focus-border);
+  outline-offset: -1px;
+}
+
+.ash-tab.preview .ash-icon-label-text {
+  font-style: italic;
+}
+
+.ash-tab-actions {
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 0;
+}
+
+.ash-tab-close-action {
+  visibility: hidden;
+}
+
+.ash-tab.checked .ash-tab-close-action,
+.ash-tab:hover .ash-tab-close-action {
+  visibility: visible;
+}
+
+.ash-tab-actions .ash-action-view-item.icon .ash-button {
+  width: var(--ash-toolbar-action-size);
+  min-width: var(--ash-toolbar-action-size);
+  height: var(--ash-toolbar-action-size);
+  min-height: var(--ash-toolbar-action-size);
+  flex: 0 0 var(--ash-toolbar-action-size);
+  padding: 3px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+}
+
+.ash-tab-actions .ash-action-view-item.icon .ash-button-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.ash-tab-actions .ash-action-view-item.icon .ash-button:hover {
+  background: var(--ash-toolbar-hover-background);
+}
+
+.ash-tab.checked .ash-tab-actions .ash-action-view-item.icon .ash-button:hover {
+  background: var(--ash-toolbar-hover-background);
+}

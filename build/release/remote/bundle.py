@@ -20,7 +20,7 @@ from typing import Dict, List, Sequence, Tuple
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from build.lib.zeta_build.targets import TARGETS
+from build.lib.ash_build.targets import TARGETS
 from build.release.archive import open_tar_gz
 
 CATALOG_FILE = "catalog.json"
@@ -34,19 +34,19 @@ REMOTE_RUNTIME_TARGETS = frozenset(
     target for target, spec in TARGETS.items() if not spec.is_windows
 )
 REQUIRED_RUNTIME_FILES = {
-    "zeta-package.json",
-    "bin/zeta-app-server-daemon",
-    "bin/zeta-app-server",
-    "bin/zeta-remote-server",
-    "zeta-path/rg",
-    "zeta-resources/node/bin/node",
+    "ash-package.json",
+    "bin/ash-app-server-daemon",
+    "bin/ash-app-server",
+    "bin/ash-remote-server",
+    "ash-path/rg",
+    "ash-resources/node/bin/node",
 }
 EXECUTABLE_RUNTIME_FILES = {
-    "bin/zeta-app-server-daemon",
-    "bin/zeta-app-server",
-    "bin/zeta-remote-server",
-    "zeta-path/rg",
-    "zeta-resources/node/bin/node",
+    "bin/ash-app-server-daemon",
+    "bin/ash-app-server",
+    "bin/ash-remote-server",
+    "ash-path/rg",
+    "ash-resources/node/bin/node",
 }
 
 
@@ -83,7 +83,7 @@ def build_remote_runtime_bundle(
             f"refusing to replace existing Remote runtime bundle: {output}"
         )
     if not package_directories:
-        raise RuntimeError("at least one canonical Zeta package directory is required")
+        raise RuntimeError("at least one canonical Ash package directory is required")
     output.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".{output.name}.", dir=output.parent))
     try:
@@ -98,7 +98,7 @@ def build_remote_runtime_bundle(
             if target in targets:
                 raise RuntimeError(f"Remote runtime bundle repeats target {target}")
             targets.add(target)
-            relative_archive = f"artifacts/zeta-{target}.tar.gz"
+            relative_archive = f"artifacts/ash-{target}.tar.gz"
             archive_path = staging / relative_archive
             unpacked_size = archive_package_directory(package_directory, archive_path)
             if archive_path.stat().st_size > MAX_RUNTIME_ARCHIVE_BYTES:
@@ -220,7 +220,7 @@ def validate_package_directory(package: Path) -> Tuple[str, str]:
     missing = REQUIRED_RUNTIME_FILES.difference(files)
     if missing:
         raise RuntimeError(f"Remote runtime package is missing {sorted(missing)}")
-    metadata = load_json(files["zeta-package.json"])
+    metadata = load_json(files["ash-package.json"])
     version, target = validate_package_metadata(metadata)
     for relative in EXECUTABLE_RUNTIME_FILES:
         if os.name != "nt" and files[relative].stat().st_mode & 0o111 == 0:
@@ -285,7 +285,7 @@ def inspect_runtime_archive(path: Path) -> RuntimeArchive:
                     raise RuntimeError(
                         f"Remote runtime archive executable has no execute bit: {name}"
                     )
-                if name == "zeta-package.json":
+                if name == "ash-package.json":
                     if not member.isfile() or member.size > MAX_PACKAGE_METADATA_BYTES:
                         raise RuntimeError(
                             "Remote runtime package metadata is not bounded"
@@ -321,9 +321,9 @@ def validate_package_metadata(metadata: Dict[str, object]) -> Tuple[str, str]:
     target = required_string(metadata, "target")
     expected = {
         "layoutVersion": 2,
-        "entrypoint": "bin/zeta-app-server",
-        "pathDir": "zeta-path",
-        "resourcesDir": "zeta-resources",
+        "entrypoint": "bin/ash-app-server",
+        "pathDir": "ash-path",
+        "resourcesDir": "ash-resources",
         "javascriptRuntime": {"kind": "packagedNode"},
     }
     for key, value in expected.items():

@@ -1,6 +1,6 @@
 use super::TerminalOutputScrollView;
-use zeta_ui_components::ScrollbarPresentation;
-use zeta_ui_theme::DEFAULT_UI_THEME;
+use ash_ui_components::ScrollbarPresentation;
+use ash_ui_theme::DEFAULT_UI_THEME;
 use zui::ui::{Point, Rect};
 
 #[test]

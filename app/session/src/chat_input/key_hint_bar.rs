@@ -1,5 +1,5 @@
-use zeta_ui_components::KeycapSequence;
-use zeta_ui_components::KeycapStyle;
+use ash_ui_components::KeycapSequence;
+use ash_ui_components::KeycapStyle;
 use zui::ui::AccessibilityRole;
 use zui::ui::Component;
 use zui::ui::ComponentContext;

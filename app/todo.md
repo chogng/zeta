@@ -2,10 +2,10 @@
 - 设计理念为 agent-first, 一切功能都是为了提升agent的能力
 
 ---------------------------------------------------
-- zeta-session：App Server Session client、worker、订阅、命令/事件队列和断线恢复策略，以及单个 Agent Pane 的 Thread、时间线、Composer、布局和内部交互
-- zeta-files：Files Pane、目录树、搜索和文件交互
-- zeta-scm：Changes Pane、多文件 Diff、折叠和滚动
-- zeta-editor-host：编辑器 Tab、搜索、诊断、LSP 展示
-- zeta-terminal-runtime：终端 runtime、Pane binding、滚动、选择、指针和视图状态
-- zeta-settings：Settings、快捷键、连接管理、Picker、Tunnel 状态和 UI
+- ash-session：App Server Session client、worker、订阅、命令/事件队列和断线恢复策略，以及单个 Agent Pane 的 Thread、时间线、Composer、布局和内部交互
+- ash-files：Files Pane、目录树、搜索和文件交互
+- ash-scm：Changes Pane、多文件 Diff、折叠和滚动
+- ash-editor-host：编辑器 Tab、搜索、诊断、LSP 展示
+- ash-terminal-runtime：终端 runtime、Pane binding、滚动、选择、指针和视图状态
+- ash-settings：Settings、快捷键、连接管理、Picker、Tunnel 状态和 UI
 - 当进行重构、退场时，要实现将职责收进现有的或者新建文件，而不是在内部重新排版

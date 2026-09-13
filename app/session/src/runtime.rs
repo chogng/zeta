@@ -17,12 +17,12 @@ use std::thread::JoinHandle;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
-use zeta_protocol::ApprovalMode;
-use zeta_protocol::CommandId;
-use zeta_protocol::ModelRef;
-use zeta_protocol::SessionId;
-use zeta_protocol::ThreadId;
-use zeta_protocol::TurnId;
+use ash_protocol::ApprovalMode;
+use ash_protocol::CommandId;
+use ash_protocol::ModelRef;
+use ash_protocol::SessionId;
+use ash_protocol::ThreadId;
+use ash_protocol::TurnId;
 
 mod contract;
 mod worker;
@@ -52,7 +52,7 @@ pub trait SessionRuntimeTarget: Send + Sync {
     fn with_cwd(&self, cwd: &Path) -> CommandResult<Box<dyn SessionRuntimeTarget>>;
 
     /// Opens and initializes one App Server protocol session.
-    fn start(&self) -> CommandResult<zeta_app_server_client::AppServerSession>;
+    fn start(&self) -> CommandResult<ash_app_server_client::AppServerSession>;
 }
 
 pub(crate) type SessionRuntimeEventSink =

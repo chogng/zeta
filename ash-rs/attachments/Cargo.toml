@@ -1,0 +1,27 @@
+[package]
+name = "ash-attachments"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "ash_attachments"
+path = "src/lib.rs"
+
+[dependencies]
+sha2 = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+url = { workspace = true }
+ash-http-client = { workspace = true }
+ash-protocol = { workspace = true }
+ash-utils-image = { workspace = true }
+ash-utils-path = { workspace = true }
+
+[dev-dependencies]
+image = { workspace = true, features = ["png"] }
+
+[lints]
+workspace = true

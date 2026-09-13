@@ -1,6 +1,6 @@
 # Security Policy
 
-Thank you for helping keep Zeta secure!
+Thank you for helping keep Ash secure!
 
 ## Reporting a vulnerability
 
@@ -8,7 +8,7 @@ Do not report security vulnerabilities in public GitHub issues, pull requests, o
 
 Use the repository's **Security** tab and private vulnerability reporting flow when available. Include enough information to reproduce and assess the issue, such as:
 
-- affected Zeta surface and version;
+- affected Ash surface and version;
 - affected operating system or environment;
 - reproduction steps;
 - security impact;

@@ -1,0 +1,50 @@
+.ash-input-box input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+}
+
+.ash-input-box-field {
+  min-height: 30px;
+  box-sizing: border-box;
+  border: 1px solid var(--ash-input-border);
+  border-radius: 4px;
+  color: var(--ash-input-foreground);
+  background: var(--ash-input-background);
+}
+
+.ash-input-box-field input {
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 0;
+  outline: none;
+  color: inherit;
+  background: transparent;
+}
+
+.ash-input-box-field input::placeholder {
+  color: var(--ash-input-placeholder-foreground);
+}
+
+.ash-input-box-field input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.ash-input-box-field input[type="number"]::-webkit-inner-spin-button,
+.ash-input-box-field input[type="number"]::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.ash-input-box-field.is-focused {
+  border-color: var(--ash-focus-border);
+}
+
+.ash-input-box.is-disabled {
+  opacity: 0.6;
+}
+
+.ash-input-box-message {
+  margin-top: 4px;
+}

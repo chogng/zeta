@@ -1,19 +1,19 @@
 # 编辑器扩展系统
 
-> 本文是 Zeta 编辑器扩展的跨层架构权威文档，明确区分两条当前边界：声明式静态 Editor
-> Extension 与 Zeta 原生可执行 Editor Extension Host v1。静态目录实现见
-> [`zeta-rs/extensions/README.md`](../zeta-rs/extensions/README.md)，声明式 Workbench 投影见
-> [`zeta-ts/src/zeta/workbench/services/extensions/README.md`](../zeta-ts/src/zeta/workbench/services/extensions/README.md)，
+> 本文是 Ash 编辑器扩展的跨层架构权威文档，明确区分两条当前边界：声明式静态 Editor
+> Extension 与 Ash 原生可执行 Editor Extension Host v1。静态目录实现见
+> [`ash-rs/extensions/README.md`](../ash-rs/extensions/README.md)，声明式 Workbench 投影见
+> [`ash-ts/src/ash/workbench/services/extensions/README.md`](../ash-ts/src/ash/workbench/services/extensions/README.md)，
 > 可执行进程与 RPC 实现见
-> [`zeta-rs/editor-extension-host/README.md`](../zeta-rs/editor-extension-host/README.md)。统一 Marketplace
-> artifact/capability 入口由 [`core-plugins.md`](../zeta-rs/docs/core-plugins.md) 维护；legacy
+> [`ash-rs/editor-extension-host/README.md`](../ash-rs/editor-extension-host/README.md)。统一 Marketplace
+> artifact/capability 入口由 [`core-plugins.md`](../ash-rs/docs/core-plugins.md) 维护；legacy
 > Plugin 本地来源 authority 由 [`plugins.md`](plugins.md) 维护。
 
 ## 快速理解
 
-Zeta 有两种不能互相冒充的 Editor Extension。声明式扩展读取主机限定目录中的
+Ash 有两种不能互相冒充的 Editor Extension。声明式扩展读取主机限定目录中的
 `package.json`、language/TextMate/snippet/theme/debugger 资源，不执行包内代码；可执行扩展则必须先
-绑定一个 immutable package/executable 与独立 enable/grant authority，再由每扩展独立进程通过 Zeta
+绑定一个 immutable package/executable 与独立 enable/grant authority，再由每扩展独立进程通过 Ash
 Host RPC v1 注册窄 provider。来源可以是 legacy Plugin authority，也可以是 Marketplace Manager；
 两类扩展可以最终服务同一个 Workbench，但 manifest、身份、信任、刷新和失败语义始终分开。
 这里的声明式 `Extension` 是领域 consumer，不是独立 Marketplace 或 package family；当前远端
@@ -28,7 +28,7 @@ manifest，同时 package 原始 bytes/digest 保持不变。通用 `asset` 不�
 | Legacy Plugin 声明 `declarativeExtensions[]` | 仅 effective exact package 的静态目录进入 catalog | 本地兼容来源不成为远端 Marketplace 旁路 |
 | 用户静态包与内置包使用同一扩展 ID | 内置包优先，用户包被报告为重复项 | 可变用户文件不能静默替换产品资源 |
 | Plugin 声明可执行 Editor Extension | 校验 exact entrypoint、process permission、Host API v1、activation event 和 capability ceiling | 安装或 manifest 校验本身不会启动进程 |
-| Marketplace package 带可选 `zeta/editor-extensions.json` | 产品 adapter 绑定同 package 的 exact executable；独立 admission 与 Manager lease 都通过后才进入 Host | sidecar 不成为通用 Marketplace 必需 manifest；安装不自动 grant |
+| Marketplace package 带可选 `ash/editor-extensions.json` | 产品 adapter 绑定同 package 的 exact executable；独立 admission 与 Manager lease 都通过后才进入 Host | sidecar 不成为通用 Marketplace 必需 manifest；安装不自动 grant |
 | 已授权可执行扩展启动 | Runtime core 为它创建独立进程，完成版本握手和整批 registration validation | 不把它加载进 App Server 进程，不继承主机环境 |
 | 可执行扩展崩溃 | 清除旧 incarnation 注册，按有界预算重新握手和激活；超限进入 crash loop | 不无限重启，不把旧请求重绑定到新进程 |
 | 调用超时或取消后没有 terminal response | 结果标为 unknown outcome，终止旧 incarnation 后恢复 | 不声称副作用没有发生 |
@@ -47,7 +47,7 @@ launcher 尚未实现，默认产品仍以 capability=false 失败关闭，不�
 
 ```mermaid
 flowchart TD
-    package["产品根 / Marketplace exact asset / legacy Plugin exact package / 用户根"] --> scan["zeta-extensions 扫描并冻结包快照"]
+    package["产品根 / Marketplace exact asset / legacy Plugin exact package / 用户根"] --> scan["ash-extensions 扫描并冻结包快照"]
     scan -->|非法包| diagnostic["目录诊断；不注册该包"]
     scan --> catalog["不可变目录代次与 package digest"]
     catalog --> protocol["App Server DTO 与有代次约束的资源读取"]
@@ -58,9 +58,9 @@ flowchart TD
     commit --> consumers["Stanza / TextMate Worker / Debug service"]
 ```
 
-产品构建把仓库根目录 `extensions/` 复制到包内 `zeta-resources/extensions/`。App Server 同时把当前
+产品构建把仓库根目录 `extensions/` 复制到包内 `ash-resources/extensions/`。App Server 同时把当前
 Plugin activation snapshot 中的 `declarativeExtensions[]` 与 Manager 的 Theme/Language capabilities
-解析为 exact immutable package directories。`zeta-extensions` 按 built-in → dynamic authority sources
+解析为 exact immutable package directories。`ash-extensions` 按 built-in → dynamic authority sources
 → profile user 顺序扫描，每个扩展 ID 的第一个有效包获胜。每次 `Refresh` 或任一动态 source
 generation 改变都产生单调递增的目录代次，并把包内 regular-file bytes 冻结为当前
 内存快照。资源读取必须携带该代次，只能读取当前快照；刷新后请求旧代次会得到 generation
@@ -78,7 +78,7 @@ Workbench 启动会保留初次 `AppServerExtensionService.start()` 的 Promise�
 
 ```mermaid
 flowchart TD
-    manifest["legacy Plugin declaration / Marketplace optional Zeta sidecar"] --> validate["source adapter: package/digest/executable/capability ceiling"]
+    manifest["legacy Plugin declaration / Marketplace optional Ash sidecar"] --> validate["source adapter: package/digest/executable/capability ceiling"]
     validate --> authority["source enable + grant + exact artifact lease + directory execution Authorization"]
     authority --> launcher{"production enforcing launcher available?"}
     launcher -->|no| unavailable["capability=false / isolationUnavailable"]
@@ -92,7 +92,7 @@ flowchart TD
 ```
 
 Legacy Plugin v1 的 `editorExtensions[]` 仍可作为本地兼容来源。Marketplace 来源则由可选
-`zeta/editor-extensions.json` consumer sidecar 把声明绑定到同 digest 内的 exact `executable`
+`ash/editor-extensions.json` consumer sidecar 把声明绑定到同 digest 内的 exact `executable`
 capability；没有独立 `MarketplaceEditorExtensionAdmission` grant 时 deployment 不会被接纳或启动。
 Admission authority 必须为 policy commit 推进 generation，并在可变时发布变更；Host 据此撤销旧
 fleet 并重新评估 grant。两条来源都只发布规范化 deployment 与 live authority，不启动进程。Host adapter 还必须绑定当前 Environment 的显式 source 与目录 Grant，随后把绝对 executable 交给能够实施 sandbox 与 hard limits 的平台 launcher。默认安全策略缺少
@@ -103,7 +103,7 @@ Initialize/Activate，最后一次发布整批 registrations。每次 provider i
 request ID、process incarnation 和 activation generation。崩溃后的新进程会重新握手和激活；旧
 registration、pending request 和 lease 不会迁移。
 
-Manifest activation events 当前是经过验证并传给 runtime 的 facts；`zeta-editor-extension-host` 不自行
+Manifest activation events 当前是经过验证并传给 runtime 的 facts；`ash-editor-extension-host` 不自行
 监听 Workbench 事件或决定何时 lazy start。activation-event matching 必须由 App Server composition
 明确实现并测试，不能因为协议携带该字段就宣称按事件激活已经可用。
 
@@ -112,16 +112,16 @@ Manifest activation events 当前是经过验证并传给 runtime 的 facts；`z
 | 能力 | 权威所有者 | 不负责 |
 | --- | --- | --- |
 | 内置静态资源源码与上游 provenance | 根目录 `extensions/` | 运行时扫描、Extension API |
-| 静态包扫描、路径/文件类型校验、快照、摘要与目录代次 | `zeta-extensions` | Editor 贡献语义、任意代码执行 |
+| 静态包扫描、路径/文件类型校验、快照、摘要与目录代次 | `ash-extensions` | Editor 贡献语义、任意代码执行 |
 | 静态可信根选择和顺序 | App Server 产品组合根 | 由 Renderer 提交任意主机路径 |
-| Plugin 静态目录选择 | `zeta-core-plugins` activation authority + App Server provider | 解析静态 `package.json`、授予代码执行 |
+| Plugin 静态目录选择 | `ash-core-plugins` activation authority + App Server provider | 解析静态 `package.json`、授予代码执行 |
 | Marketplace Theme/Language 静态目录选择 | `PluginsManager` + App Server provider | 解析 Workbench 贡献、主题选择或 LSP lifecycle |
 | 静态 DTO、connection resource 与错误映射 | App Server / `platform/extensions` adapter | Workbench 领域注册 |
 | 声明式 catalog 与生命周期 | `IExtensionService` / `AppServerExtensionService` | transport DTO、Plugin enable/grant |
-| Marketplace package artifact/install/update/uninstall 与 capability lease | `zeta-core-plugins` | Editor Extension enable/grant、启动进程 |
+| Marketplace package artifact/install/update/uninstall 与 capability lease | `ash-core-plugins` | Editor Extension enable/grant、启动进程 |
 | Marketplace Editor Extension enable/grant generation、通知与 lease | 产品注入的 `MarketplaceEditorExtensionAdmission` | package 安装、目录权限、进程隔离 |
-| Legacy Plugin 本地 package 与 enable/grant generation | `zeta-core-plugins` compatibility authority | 远端 Marketplace 安装、启动进程 |
-| 可执行进程、Host RPC、incarnation、取消和 crash recovery | `zeta-editor-extension-host` | package discovery、目录权限决定、领域 payload |
+| Legacy Plugin 本地 package 与 enable/grant generation | `ash-core-plugins` compatibility authority | 远端 Marketplace 安装、启动进程 |
+| 可执行进程、Host RPC、incarnation、取消和 crash recovery | `ash-editor-extension-host` | package discovery、目录权限决定、领域 payload |
 | source normalization + Dir Authorization adapter、Host fleet 与客户端 RPC | App Server composition | OS sandbox implementation、Workbench UI |
 | 生产 sandbox、hard resources 与 killable process tree | 注入的 platform `ExtensionHostLauncher` | package enable/grant 或 provider semantics |
 | Host snapshot normalization 与 transport | `platform/extensionHost` adapter | 领域 provider ownership |
@@ -130,7 +130,7 @@ Manifest activation events 当前是经过验证并传给 runtime 的 facts；`z
 | Commands、Language、Debug、Tasks、Testing 注册与调用 shape | 各自 Workbench domain owner | package 安装、进程监管 |
 
 Frontend common contract 使用 Workbench 自己的 snapshot/descriptor/failure 类型；generated DTO 和
-资源传输 shape 只存在于运行时 adapter。`src/zeta/base` 不认识扩展、语言、grammar 或 Host RPC。
+资源传输 shape 只存在于运行时 adapter。`src/ash/base` 不认识扩展、语言、grammar 或 Host RPC。
 
 静态 `package.json` catalog 与 executable consumer manifest 之间没有隐式转换。未来即使共享安装
 UI，也必须保留两种 package identity、authority、generation 和 failure semantics；不能把“静态资源目录可读”转换成
@@ -162,7 +162,7 @@ catalog 中，但投影为产品主题时会被忽略。
 
 ### 4.1 清单与激活上限
 
-每个 legacy Plugin `editorExtensions[]` item 或 Marketplace Zeta sidecar item 必须有唯一
+每个 legacy Plugin `editorExtensions[]` item 或 Marketplace Ash sidecar item 必须有唯一
 manifest-local ID、唯一 exact executable binding、数值 `runtimeApiVersion: 1`、非空且有界的
 activation events 和 capabilities。Legacy entrypoint 必须有对应 `process` permission；Marketplace
 entrypoint 必须引用同一 Manager package 中声明为 `runtime: direct` 的 executable capability。
@@ -282,20 +282,20 @@ Host exit、invalid protocol 或 unknown outcome 会清空旧 registration，终
 
 | 子系统 | 状态 | 实现证据或缺口 |
 | --- | --- | --- |
-| 静态 package discovery、snapshot、digest、资源读取 | 已实现 | `zeta-extensions` + App Server extension operations |
+| 静态 package discovery、snapshot、digest、资源读取 | 已实现 | `ash-extensions` + App Server extension operations |
 | Plugin 声明式 Extension 分发与 live activation | 已实现 | `declarativeExtensions[]`、dynamic source provider、Workbench Plugin generation refresh |
 | 声明式语言、grammar、snippet、theme、debugger 投影 | 已实现 | `AppServerExtensionService` 与领域 registry tests |
-| Plugin executable declaration 与 exact process permission | 已实现 | `zeta-plugin` manifest/package tests |
-| Plugin executable authority | 已实现 | `zeta-core-plugins` authority tests |
+| Plugin executable declaration 与 exact process permission | 已实现 | `ash-plugin` manifest/package tests |
+| Plugin executable authority | 已实现 | `ash-core-plugins` authority tests |
 | Marketplace executable consumer adapter 与独立 admission | 已实现 | exact sidecar/executable binding、双 lease 与 deferred uninstall tests |
-| Host RPC v1、独立进程监管、取消、配额、restart | 已实现 | `zeta-editor-extension-host` standalone tests |
+| Host RPC v1、独立进程监管、取消、配额、restart | 已实现 | `ash-editor-extension-host` standalone tests |
 | 扩展命名 Output event stream | 已实现 | process-fenced create/append/replace/clear/show/dispose、bounded retention 与 Workbench sequence projection tests |
 | App Server Host fleet、目录 Grant gate、async invoke/cancel/read | 已实现 | exact operation broker、连接配额/TTL、退役取消与 changed notification |
 | Workbench Commands/Language/Tasks/Testing bridge | 已实现（窄契约） | 原子投影、取消、stale fence 与 last-good 测试；Testing 仅 task-backed profile |
 | Workbench executable Debug bridge | 尚未完成 | registration 可见并产生诊断，但没有异步 Host-broker DAP session seam |
 | 生产第三方 platform launcher | 尚未完成 | 无 launcher 时 capability=false；可信开发 launcher 不计生产支持 |
 | Activation-event-driven lazy start | 尚未完成 | Manifest/协议携带 facts；尚无完整事件匹配调度证据 |
-| VS Code Node Extension API / Marketplace compatibility | 非目标 | Host RPC v1 是独立 Zeta 协议 |
+| VS Code Node Extension API / Marketplace compatibility | 非目标 | Host RPC v1 是独立 Ash 协议 |
 
 当前不支持 generic Node/WASM loader、命名 Output 之外的扩展主动 event stream、publisher signature/revocation feed、
 per-platform artifact selector、跨重启 invocation 恢复或多个扩展共享一个 Host process。完整 test tree、
@@ -344,14 +344,14 @@ Node/VS Code compatibility 若未来立项，仍是独立产品项目：需要 N
 跨层修改至少运行：
 
 ```text
-cargo test --manifest-path Cargo.toml -p zeta-extensions
-cargo test --manifest-path Cargo.toml -p zeta-plugin
-cargo test --manifest-path Cargo.toml -p zeta-core-plugins
-powershell -NoProfile -ExecutionPolicy Bypass -File zeta-rs/editor-extension-host/check-standalone.ps1
-corepack pnpm --dir zeta-ts test:extensions
-corepack pnpm --dir zeta-ts typecheck:extensions
-corepack pnpm --dir zeta-ts test:unit
-corepack pnpm --dir zeta-ts test:build-tools
+cargo test --manifest-path Cargo.toml -p ash-extensions
+cargo test --manifest-path Cargo.toml -p ash-plugin
+cargo test --manifest-path Cargo.toml -p ash-core-plugins
+powershell -NoProfile -ExecutionPolicy Bypass -File ash-rs/editor-extension-host/check-standalone.ps1
+corepack pnpm --dir ash-ts test:extensions
+corepack pnpm --dir ash-ts typecheck:extensions
+corepack pnpm --dir ash-ts test:unit
+corepack pnpm --dir ash-ts test:build-tools
 ```
 
-`test:extensions` 与 `typecheck:extensions` 覆盖静态链、Host transport/domain projection 与 Workbench provider seams。App Server runtime 当前由 sibling Rust tests 和 Host standalone suite 封住；根 workspace 仍需在缺失的本地 crate 恢复后补跑完整 `zeta-app-server` package test。
+`test:extensions` 与 `typecheck:extensions` 覆盖静态链、Host transport/domain projection 与 Workbench provider seams。App Server runtime 当前由 sibling Rust tests 和 Host standalone suite 封住；根 workspace 仍需在缺失的本地 crate 恢复后补跑完整 `ash-app-server` package test。

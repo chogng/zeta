@@ -1,8 +1,8 @@
-use zeta_commands::AppCommandId;
-use zeta_keybinding::HostPlatform;
-use zeta_keybinding::KeySequence;
-use zeta_keybinding::format_key_sequence;
-use zeta_settings::KeyboardShortcutRow;
+use ash_commands::AppCommandId;
+use ash_keybinding::HostPlatform;
+use ash_keybinding::KeySequence;
+use ash_keybinding::format_key_sequence;
+use ash_settings::KeyboardShortcutRow;
 
 use super::QuickAccessProvider;
 use crate::presentation::WorkbenchKeybindings;
@@ -17,7 +17,7 @@ impl ShortcutItem {
     pub(crate) fn row(&self) -> KeyboardShortcutRow<'_, AppCommandId> {
         KeyboardShortcutRow::new(
             self.command,
-            zeta_settings::keyboard_shortcut_row_element(self.command),
+            ash_settings::keyboard_shortcut_row_element(self.command),
             self.command.label(),
             self.keybinding.as_ref(),
         )
@@ -37,7 +37,7 @@ impl<'a> ShortcutProvider<'a> {
     pub(crate) fn command_for_element(element: zui::ui::ElementId) -> Option<AppCommandId> {
         AppCommandId::BINDABLE
             .into_iter()
-            .find(|command| zeta_settings::keyboard_shortcut_row_element(*command) == element)
+            .find(|command| ash_settings::keyboard_shortcut_row_element(*command) == element)
     }
 
     fn matches(

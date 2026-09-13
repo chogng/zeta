@@ -15,7 +15,7 @@ fn assert_send_sync<T: Send + Sync>() {}
 #[test]
 fn about_panel_fallback_preserves_application_metadata() {
     let mut options = AboutPanelOptions::new()
-        .with_name("Zeta")
+        .with_name("Ash")
         .with_version("1.2.3")
         .with_copyright("Copyright 2026");
     options.short_version = Some("456".to_string());
@@ -26,7 +26,7 @@ fn about_panel_fallback_preserves_application_metadata() {
 
     let request = fallback_about_request(&options);
 
-    assert_eq!(request.title(), "About Zeta");
+    assert_eq!(request.title(), "About Ash");
     assert_eq!(
         request.message(),
         "Version 1.2.3\nBuild 456\nAda, Grace\n\nA native terminal\nCopyright 2026\nHomepage: https://example.com"
@@ -51,9 +51,9 @@ fn emoji_panel_support_matches_native_implementations() {
 #[test]
 fn handoff_activity_requires_a_type_and_http_fallback_url() {
     assert_send_sync::<UserActivityInfo>();
-    assert!(validate_user_activity("com.zeta.session", None).is_ok());
+    assert!(validate_user_activity("com.ash.session", None).is_ok());
     assert_eq!(
-        validate_user_activity("com.zeta.session", Some("https://zeta.example/session"))
+        validate_user_activity("com.ash.session", Some("https://ash.example/session"))
             .unwrap()
             .unwrap()
             .scheme(),
@@ -65,7 +65,7 @@ fn handoff_activity_requires_a_type_and_http_fallback_url() {
             .is_invalid_input()
     );
     assert!(
-        validate_user_activity("com.zeta.session", Some("file:///tmp/session"))
+        validate_user_activity("com.ash.session", Some("file:///tmp/session"))
             .unwrap_err()
             .is_invalid_input()
     );

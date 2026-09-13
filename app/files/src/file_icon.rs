@@ -1,6 +1,6 @@
-use zeta_icons::Icon;
-use zeta_icons::icons;
-use zeta_ui_components::TreeItemExpansion;
+use ash_icons::Icon;
+use ash_icons::icons;
+use ash_ui_components::TreeItemExpansion;
 
 /// Selects the semantic icon for one visible file-tree item.
 ///

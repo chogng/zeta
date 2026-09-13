@@ -21,28 +21,28 @@ config_setting(
 alias(
     name = "rusty_v8_archive_for_target",
     actual = select({
-        "@rules_rs//rs/platforms/config:aarch64-apple-darwin": "@zeta_rusty_v8_aarch64_apple_darwin_archive//file",
-        "@rules_rs//rs/platforms/config:aarch64-pc-windows-msvc": "@zeta_rusty_v8_aarch64_pc_windows_msvc_archive//file",
-        "@rules_rs//rs/platforms/config:aarch64-unknown-linux-gnu": "@zeta_rusty_v8_aarch64_unknown_linux_gnu_archive//file",
-        ":platform_aarch64_unknown_linux_musl": "@zeta_rusty_v8_aarch64_unknown_linux_musl_archive//file",
-        "@rules_rs//rs/platforms/config:x86_64-apple-darwin": "@zeta_rusty_v8_x86_64_apple_darwin_archive//file",
-        "@rules_rs//rs/platforms/config:x86_64-pc-windows-msvc": "@zeta_rusty_v8_x86_64_pc_windows_msvc_archive//file",
-        "@rules_rs//rs/platforms/config:x86_64-unknown-linux-gnu": "@zeta_rusty_v8_x86_64_unknown_linux_gnu_archive//file",
-        ":platform_x86_64_unknown_linux_musl": "@zeta_rusty_v8_x86_64_unknown_linux_musl_archive//file",
+        "@rules_rs//rs/platforms/config:aarch64-apple-darwin": "@ash_rusty_v8_aarch64_apple_darwin_archive//file",
+        "@rules_rs//rs/platforms/config:aarch64-pc-windows-msvc": "@ash_rusty_v8_aarch64_pc_windows_msvc_archive//file",
+        "@rules_rs//rs/platforms/config:aarch64-unknown-linux-gnu": "@ash_rusty_v8_aarch64_unknown_linux_gnu_archive//file",
+        ":platform_aarch64_unknown_linux_musl": "@ash_rusty_v8_aarch64_unknown_linux_musl_archive//file",
+        "@rules_rs//rs/platforms/config:x86_64-apple-darwin": "@ash_rusty_v8_x86_64_apple_darwin_archive//file",
+        "@rules_rs//rs/platforms/config:x86_64-pc-windows-msvc": "@ash_rusty_v8_x86_64_pc_windows_msvc_archive//file",
+        "@rules_rs//rs/platforms/config:x86_64-unknown-linux-gnu": "@ash_rusty_v8_x86_64_unknown_linux_gnu_archive//file",
+        ":platform_x86_64_unknown_linux_musl": "@ash_rusty_v8_x86_64_unknown_linux_musl_archive//file",
     }),
 )
 
 alias(
     name = "rusty_v8_binding_for_target",
     actual = select({
-        "@rules_rs//rs/platforms/config:aarch64-apple-darwin": "@zeta_rusty_v8_aarch64_apple_darwin_binding//file",
-        "@rules_rs//rs/platforms/config:aarch64-pc-windows-msvc": "@zeta_rusty_v8_aarch64_pc_windows_msvc_binding//file",
-        "@rules_rs//rs/platforms/config:aarch64-unknown-linux-gnu": "@zeta_rusty_v8_aarch64_unknown_linux_gnu_binding//file",
-        ":platform_aarch64_unknown_linux_musl": "@zeta_rusty_v8_aarch64_unknown_linux_musl_binding//file",
-        "@rules_rs//rs/platforms/config:x86_64-apple-darwin": "@zeta_rusty_v8_x86_64_apple_darwin_binding//file",
-        "@rules_rs//rs/platforms/config:x86_64-pc-windows-msvc": "@zeta_rusty_v8_x86_64_pc_windows_msvc_binding//file",
-        "@rules_rs//rs/platforms/config:x86_64-unknown-linux-gnu": "@zeta_rusty_v8_x86_64_unknown_linux_gnu_binding//file",
-        ":platform_x86_64_unknown_linux_musl": "@zeta_rusty_v8_x86_64_unknown_linux_musl_binding//file",
+        "@rules_rs//rs/platforms/config:aarch64-apple-darwin": "@ash_rusty_v8_aarch64_apple_darwin_binding//file",
+        "@rules_rs//rs/platforms/config:aarch64-pc-windows-msvc": "@ash_rusty_v8_aarch64_pc_windows_msvc_binding//file",
+        "@rules_rs//rs/platforms/config:aarch64-unknown-linux-gnu": "@ash_rusty_v8_aarch64_unknown_linux_gnu_binding//file",
+        ":platform_aarch64_unknown_linux_musl": "@ash_rusty_v8_aarch64_unknown_linux_musl_binding//file",
+        "@rules_rs//rs/platforms/config:x86_64-apple-darwin": "@ash_rusty_v8_x86_64_apple_darwin_binding//file",
+        "@rules_rs//rs/platforms/config:x86_64-pc-windows-msvc": "@ash_rusty_v8_x86_64_pc_windows_msvc_binding//file",
+        "@rules_rs//rs/platforms/config:x86_64-unknown-linux-gnu": "@ash_rusty_v8_x86_64_unknown_linux_gnu_binding//file",
+        ":platform_x86_64_unknown_linux_musl": "@ash_rusty_v8_x86_64_unknown_linux_musl_binding//file",
     }),
 )
 

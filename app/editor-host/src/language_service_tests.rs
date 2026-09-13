@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use zeta_app_server_protocol::protocol::config::{
+use ash_app_server_protocol::protocol::config::{
     AgentGrepBackendDto, ApprovalReviewModelSelectionDto, CodebaseAutomaticContextDto,
     CodebaseConfigDto, ConfigReadResult, FrontendConfigDto, LanguageServerConfigDto,
     LanguageServerModeDto, ToolSearchConfigDto, ToolSearchEmbeddingStatusDto, ToolSearchModeDto,
 };
-use zeta_lsp_server_provider::{LanguageServerCatalogState, LanguageServerExecutionPolicy};
-use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
+use ash_lsp_server_provider::{LanguageServerCatalogState, LanguageServerExecutionPolicy};
+use ash_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
 
 use super::{catalog_from_configuration, editor_diagnostic, language_document, language_id};
 use crate::FileEditorHost;
@@ -32,7 +32,7 @@ fn desktop_adapter_maps_editor_language_revision_and_path_without_lsp_types() {
     assert_eq!(document.language_id(), "rust");
     assert_eq!(document.revision().value(), 1);
     assert_eq!(document.text(), "fn main() {}");
-    assert_eq!(language_id(zeta_editor::CodeEditorLanguage::Jsonc), "jsonc");
+    assert_eq!(language_id(ash_editor::CodeEditorLanguage::Jsonc), "jsonc");
 }
 
 #[test]
@@ -55,7 +55,7 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
         approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
         commit_message_model: None,
         commit_message_active_dir_authorized: false,
-        issues: zeta_app_server_protocol::protocol::issues::IssueConfigDto {
+        issues: ash_app_server_protocol::protocol::issues::IssueConfigDto {
             auto_refresh_minutes: 10,
         },
         tool_mode: Default::default(),
@@ -83,7 +83,7 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
     let catalog = catalog_from_configuration(&configuration);
     let resolution = catalog
         .resolve(
-            &zeta_install_context::InstallContext::current(),
+            &ash_install_context::InstallContext::current(),
             LanguageServerExecutionPolicy::Allowed,
             Path::new("/dir"),
         )
@@ -108,7 +108,7 @@ fn desktop_configuration_does_not_start_unconfigured_language_servers() {
         approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
         commit_message_model: None,
         commit_message_active_dir_authorized: false,
-        issues: zeta_app_server_protocol::protocol::issues::IssueConfigDto {
+        issues: ash_app_server_protocol::protocol::issues::IssueConfigDto {
             auto_refresh_minutes: 10,
         },
         tool_mode: Default::default(),
@@ -136,7 +136,7 @@ fn desktop_configuration_does_not_start_unconfigured_language_servers() {
     let catalog = catalog_from_configuration(&configuration);
     let resolution = catalog
         .resolve(
-            &zeta_install_context::InstallContext::current(),
+            &ash_install_context::InstallContext::current(),
             LanguageServerExecutionPolicy::Allowed,
             Path::new("/dir"),
         )
@@ -153,9 +153,9 @@ fn desktop_configuration_does_not_start_unconfigured_language_servers() {
 
 #[test]
 fn desktop_adapter_projects_language_diagnostics_without_lsp_presentation_types() {
-    let diagnostic = zeta_lsp_manager::LanguageDiagnostic {
-        range: zeta_lsp_manager::LanguageTextRange::new(4..9),
-        severity: zeta_lsp_manager::LanguageDiagnosticSeverity::Warning,
+    let diagnostic = ash_lsp_manager::LanguageDiagnostic {
+        range: ash_lsp_manager::LanguageTextRange::new(4..9),
+        severity: ash_lsp_manager::LanguageDiagnosticSeverity::Warning,
         message: "unused value".into(),
         source: Some("rustc".into()),
         code: Some("unused_variables".into()),
@@ -166,7 +166,7 @@ fn desktop_adapter_projects_language_diagnostics_without_lsp_presentation_types(
     assert_eq!(projected.range(), 4..9);
     assert_eq!(
         projected.severity(),
-        zeta_editor::CodeEditorDiagnosticSeverity::Warning
+        ash_editor::CodeEditorDiagnosticSeverity::Warning
     );
     assert_eq!(projected.message(), "unused value");
     assert_eq!(projected.source(), Some("rustc"));

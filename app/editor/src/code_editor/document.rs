@@ -3,16 +3,16 @@
 use std::fmt;
 use std::ops::Range;
 
-use zeta_editor_core::EditorCoreDocument;
-use zeta_editor_core::EditorCoreDocumentSnapshot;
-use zeta_editor_core::EditorCoreHistoryLimit;
-pub use zeta_editor_core::EditorCoreRevision as CodeEditorRevision;
-use zeta_editor_core::EditorCoreSelection;
-use zeta_editor_core::EditorCoreSelectionSet;
-use zeta_editor_core::EditorCoreTextEdit;
-use zeta_editor_core::EditorCoreTextRange;
-use zeta_editor_core::EditorCoreTransaction;
-use zeta_editor_core::EditorCoreUtf16Offset;
+use ash_editor_core::EditorCoreDocument;
+use ash_editor_core::EditorCoreDocumentSnapshot;
+use ash_editor_core::EditorCoreHistoryLimit;
+pub use ash_editor_core::EditorCoreRevision as CodeEditorRevision;
+use ash_editor_core::EditorCoreSelection;
+use ash_editor_core::EditorCoreSelectionSet;
+use ash_editor_core::EditorCoreTextEdit;
+use ash_editor_core::EditorCoreTextRange;
+use ash_editor_core::EditorCoreTransaction;
+use ash_editor_core::EditorCoreUtf16Offset;
 use zui::ui::TextInputCompositionCursor;
 
 use super::CodeEditorComposition;

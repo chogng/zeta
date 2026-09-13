@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 use std::ops::Range;
 
-use zeta_diff::DiffRowKind;
+use ash_diff::DiffRowKind;
 use zui::ui::{
     AccessibilityRole, Component, ComponentContext, ComponentElement, ComputedElement, Element,
     ElementId, PaintRect, Point, Rect, UiNode, UiScene,
@@ -499,7 +499,7 @@ impl Component for DiffEditor<'_> {
 }
 
 pub(super) fn project_row<'a>(
-    row: &'a zeta_diff::DiffRow,
+    row: &'a ash_diff::DiffRow,
     side: DiffEditorSide,
     style: &DiffEditorStyle,
     allow_placeholder: bool,

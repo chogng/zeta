@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use zeta_ui_components::{ScrollbarController, ScrollbarPresentation};
+use ash_ui_components::{ScrollbarController, ScrollbarPresentation};
 use zui::input::MouseScrollDelta;
 
 const LINES_PER_WHEEL_STEP: f32 = 3.0;

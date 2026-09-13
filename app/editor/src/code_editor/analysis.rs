@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use zeta_syntax::{
+use ash_syntax::{
     DocumentRevision, SyntaxDocument, SyntaxEdit, SyntaxLanguage, SyntaxSnapshot, SyntaxTokenKind,
 };
 

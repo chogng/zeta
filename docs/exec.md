@@ -1,15 +1,15 @@
 # 无界面 Agent 执行
 
-> 目标物理位置：`zeta-rs/exec/`  
+> 目标物理位置：`ash-rs/exec/`  
 > 当前状态：阶段 1–2 已实现；可靠自动化、远程 worker 与远程执行环境仍是 Proposed
-> 当前 crate 实现契约：[`zeta-rs/exec/README.md`](../zeta-rs/exec/README.md)
+> 当前 crate 实现契约：[`ash-rs/exec/README.md`](../ash-rs/exec/README.md)
 > App Server Client：[`app-server-client.md`](app-server-client.md)  
-> App Server contract：[`zeta-app-server-api.md`](zeta-app-server-api.md)  
+> App Server contract：[`ash-app-server-api.md`](ash-app-server-api.md)  
 > Canonical 产品模型：[`protocol.md`](protocol.md)
 
 ## 快速理解
 
-`zeta-exec` 的长期角色是无交互 Agent runner。它把一次本地 CLI 请求或远程调度 Job 转换为
+`ash-exec` 的长期角色是无交互 Agent runner。它把一次本地 CLI 请求或远程调度 Job 转换为
 canonical Session/Thread/Turn command，持续消费 App Server result/update，并输出机器可处理的
 终态、事件和退出状态。
 
@@ -19,36 +19,36 @@ canonical Session/Thread/Turn command，持续消费 App Server result/update，
 local CLI / remote scheduler
             │
             ▼
-        zeta-exec
+        ash-exec
             │ typed App Server request/update
             ▼
- zeta-app-server-client
+ ash-app-server-client
             ▼
-      zeta-app-server
+      ash-app-server
             ▼
-         zeta-core
+         ash-core
             │ tool execution port
             ▼
- zeta-tool-executor / future zeta-exec-server
+ ash-tool-executor / future ash-exec-server
 ```
 
 长期必须区分：
 
-- `zeta-exec`：运行完整的 headless Agent Job；
-- `zeta-tool-executor`：在本机执行一个经过 approval/sandbox 的 process；
-- `zeta-exec-server`：未来把 process/filesystem execution 暴露给远程环境；
+- `ash-exec`：运行完整的 headless Agent Job；
+- `ash-tool-executor`：在本机执行一个经过 approval/sandbox 的 process；
+- `ash-exec-server`：未来把 process/filesystem execution 暴露给远程环境；
 - scheduler protocol：提交、租约、取消和观察远程 Agent Job。
 
 这四者不能共享一个含义含糊的 `exec` API。
 
 | 用户或调度器想做什么 | 正确入口 | 当前状态 |
 | --- | --- | --- |
-| 无交互地运行完整 Agent 任务 | `zeta-exec` | 本地 run-once 已实现 |
-| 执行一次已经批准的本地命令 | `zeta-tool-executor` | 已实现并与 Agent runner 分离 |
+| 无交互地运行完整 Agent 任务 | `ash-exec` | 本地 run-once 已实现 |
+| 执行一次已经批准的本地命令 | `ash-tool-executor` | 已实现并与 Agent runner 分离 |
 | 在远程机器执行进程或文件操作 | 远程执行服务 | 潜在方向 |
 | 排队、租约和取消远程 Agent 任务 | 调度协议 | 潜在方向 |
 
-## 2. Codex 参考与 Zeta 取舍
+## 2. Codex 参考与 Ash 取舍
 
 本方案参考本地 `../codex` workspace 的三层边界：
 
@@ -57,7 +57,7 @@ local CLI / remote scheduler
   initialize、typed request/event channel、backpressure 和 bounded shutdown；
 - `codex-rs/exec-server/` 单独负责 process、PTY、filesystem 和远程 execution environment。
 
-Zeta 应采用：
+Ash 应采用：
 
 - exec 与 TUI 共用 App Server Client；
 - embedded hot path 使用 typed channel；
@@ -67,7 +67,7 @@ Zeta 应采用：
 - headless exec 只通过 App Server 创建/恢复 Thread、启动/中断 Turn；
 - remote Agent scheduling 与 remote process execution 分层。
 
-Zeta 不照搬：
+Ash 不照搬：
 
 - exec 直接依赖 Core、rollout 或 provider 私有类型；
 - caller 自由选择任意 `request_typed<T>` result 类型；
@@ -76,7 +76,7 @@ Zeta 不照搬：
 - 复制一套与 canonical ThreadItem 平行的内部领域状态机；
 - 按具体 notification 名字硬编码永久的 lossless/best-effort 列表。
 
-Zeta 已有 durable aggregate sequence、snapshot + gap subscribe 和 typed command replay，应利用
+Ash 已有 durable aggregate sequence、snapshot + gap subscribe 和 typed command replay，应利用
 这些契约实现 resync，而不是依赖“所有实时 event 永不丢失”。
 
 ## 3. 当前仓库偏差与迁移
@@ -84,27 +84,27 @@ Zeta 已有 durable aggregate sequence、snapshot + gap subscribe 和 typed comm
 命名迁移已经完成：
 
 ```text
-former zeta-rs/exec
-  → zeta-rs/tool-executor
-  → crate zeta-tool-executor
+former ash-rs/exec
+  → ash-rs/tool-executor
+  → crate ash-tool-executor
 
-current zeta-rs/exec
-  → crate/binary zeta-exec
+current ash-rs/exec
+  → crate/binary ash-exec
   → headless Agent runner
 ```
 
-`zeta-tool-executor` 继续拥有 `CommandRequest`、process capture、timeout、sandbox 与 approval start
-gate；`zeta-exec` 当前拥有 new/resume/fork、Turn start/interrupt、事件输出与终态映射。Sandbox 的
+`ash-tool-executor` 继续拥有 `CommandRequest`、process capture、timeout、sandbox 与 approval start
+gate；`ash-exec` 当前拥有 new/resume/fork、Turn start/interrupt、事件输出与终态映射。Sandbox 的
 共享 policy、进程生命周期与 MXC 三平台适配边界见
 [`sandboxing.md`](sandboxing.md)。
 
 若后续需要远程 process/filesystem execution：
 
 ```text
-zeta-tool-executor
-  → local backend of zeta-exec-server
+ash-tool-executor
+  → local backend of ash-exec-server
 
-zeta-exec-server-protocol
+ash-exec-server-protocol
   → process / PTY / filesystem / HTTP execution contract
 ```
 
@@ -113,11 +113,11 @@ process lifecycle 和 sandbox authority 会混在同一 crate。
 
 ## 4. 职责与非职责
 
-### 4.1 `zeta-exec` 拥有
+### 4.1 `ash-exec` 拥有
 
 - 一次 headless run 的输入、工作目录和输出选项；
 - create/resume/fork 哪种产品入口意图；
-- 使用 `zeta-app-server-client` 启动或连接 App Server；
+- 使用 `ash-app-server-client` 启动或连接 App Server；
 - 创建/选择 Session 与 Thread，启动一个 Turn；
 - 关联当前 Job、Session、Thread 与 Turn；
 - 同时等待 request completion、App Server event、cancel 和 shutdown；
@@ -127,7 +127,7 @@ process lifecycle 和 sandbox authority 会混在同一 crate。
 - terminal Turn status 到 `ExecOutcome`、退出码和 scheduler status 的映射；
 - run-once 与长期 worker 的应用级生命周期。
 
-### 4.2 `zeta-exec` 不拥有
+### 4.2 `ash-exec` 不拥有
 
 - Session/Thread/Turn reducer；
 - model loop、tool loop 或 context assembly；
@@ -210,7 +210,7 @@ pub enum AppServerTarget {
 `AppServerTarget::Remote(RemoteAppServerOptions)` 仍是 Proposed。它将表示连接相同 App Server
 contract，不表示 scheduler job protocol，也不表示 remote process executor。
 
-`zeta-cli` 负责参数和帮助；`zeta-exec` 负责这些参数解析后的运行语义。
+`ash-cli` 负责参数和帮助；`ash-exec` 负责这些参数解析后的运行语义。
 
 ## 7. 输出契约
 
@@ -294,12 +294,12 @@ pub enum HeadlessApprovalMode {
 
 ```text
 RunOnce
-  = 一个 zeta-exec process
+  = 一个 ash-exec process
   = 一个 App Server session
   = 一个前台 Agent Job
 
 Worker
-  = 一个长期 zeta-exec worker
+  = 一个长期 ash-exec worker
   = 一个或多个隔离的 App Server session
   = 多个有 lease 的 Agent Job
 ```
@@ -322,7 +322,7 @@ Worker mode 不能简单地在循环中调用 CLI `main`。它需要明确：
 
 | Identity | Owner | 用途 |
 | --- | --- | --- |
-| `ExecRunId` | zeta-exec | 当前 runner 内的一次运行 |
+| `ExecRunId` | ash-exec | 当前 runner 内的一次运行 |
 | `JobId` | scheduler | 一次逻辑远程任务 |
 | `AttemptId` | scheduler | 一次 placement/execution attempt |
 | lease/fencing token | scheduler | 阻止过期 worker 继续提交 |
@@ -349,7 +349,7 @@ Scheduler receipt 不是 App Server command receipt。两者可以在同一 Job 
 ```text
 scheduler assigns Job(attempt, lease)
   → worker validates isolation/capability
-  → zeta-exec starts/selects AppServerSession
+  → ash-exec starts/selects AppServerSession
   → stable CommandId creates/resumes Session/Thread/Turn
   → worker streams mapped ExecEvent
   → scheduler acks event cursor
@@ -371,13 +371,13 @@ scheduler assigns Job(attempt, lease)
 远程调度完整 Agent Job：
 
 ```text
-scheduler → zeta-exec worker → App Server → Core
+scheduler → ash-exec worker → App Server → Core
 ```
 
 远程执行某个 tool process/filesystem operation：
 
 ```text
-Core tool port → zeta-exec-server client → remote zeta-exec-server
+Core tool port → ash-exec-server client → remote ash-exec-server
 ```
 
 二者的 security 和 lifecycle 不同：
@@ -387,7 +387,7 @@ Core tool port → zeta-exec-server client → remote zeta-exec-server
 | Agent scheduling | scheduler + App Server | Job/Session/Thread/Turn | durable recovery/reschedule |
 | Process execution | executor connection | process/filesystem request | terminate, resume or report unknown by exec protocol |
 
-`zeta-exec-server` 不得接受 Agent `session/request`，`zeta-exec` scheduler adapter 不得提供裸
+`ash-exec-server` 不得接受 Agent `session/request`，`ash-exec` scheduler adapter 不得提供裸
 `process/start` 旁路。
 
 ## 11. 工作进程隔离与并发
@@ -460,40 +460,40 @@ shutdown。
 ## 14. 目标 crate 与依赖
 
 ```text
-zeta-cli
-├─► zeta-tui ─────┐
-└─► zeta-exec ────┤
+ash-cli
+├─► ash-tui ─────┐
+└─► ash-exec ────┤
                   ▼
-       zeta-app-server-client
+       ash-app-server-client
                   ▼
-          zeta-app-server
+          ash-app-server
                   ▼
-              zeta-core
+              ash-core
                   │
                   ▼
-        zeta-shell-command
+        ash-shell-command
                   ▼
-        zeta-tool-executor
+        ash-tool-executor
 ```
 
 未来可增加：
 
 ```text
-zeta-exec-server-protocol
-zeta-exec-server
-zeta-scheduler-protocol
+ash-exec-server-protocol
+ash-exec-server
+ash-scheduler-protocol
 ```
 
-`zeta-exec` 可依赖 app-server-client、app-server-protocol、protocol 和窄 CLI/output utility。
+`ash-exec` 可依赖 app-server-client、app-server-protocol、protocol 和窄 CLI/output utility。
 它不依赖 Core、store、rollout、model provider、sandboxing 或 tool executor。
 
 ## 15. 实施阶段
 
 ### 阶段 1：消除命名冲突（当前状态）
 
-- 已将原 process `zeta-exec` 迁移为 `zeta-tool-executor`；
+- 已将原 process `ash-exec` 迁移为 `ash-tool-executor`；
 - 已更新直接依赖与 tools、skills、plugins、MCP 文档中的 ownership；
-- `zeta-exec` crate 名称现由 headless runner 使用。
+- `ash-exec` crate 名称现由 headless runner 使用。
 
 ### 阶段 2：本地无界面纵向切片（当前状态）
 

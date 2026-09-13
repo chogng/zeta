@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-const preloadPath = resolve(import.meta.dirname, "../../.build/desktop/preload/src/zeta/base/parts/sandbox/electron-browser/preload.cjs");
+const preloadPath = resolve(import.meta.dirname, "../../.build/desktop/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs");
 const source = await readFile(preloadPath, "utf8");
 const requiredModules = [...source.matchAll(
   /\brequire\(\s*(["'])(?<module>[^"']+)\1\s*\)/g,

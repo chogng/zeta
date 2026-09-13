@@ -5,8 +5,8 @@ use super::{
     DirectoryPicker, DirectoryPickerAction, DirectoryPickerActivation, DirectoryPickerState,
     directory_item_id,
 };
-use zeta_ui_components::{ScrollAxis, ScrollCommand};
-use zeta_ui_theme::DEFAULT_UI_THEME;
+use ash_ui_components::{ScrollAxis, ScrollCommand};
+use ash_ui_theme::DEFAULT_UI_THEME;
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
 use zui::ui::{CaretVisibility, Point, Rect, TextInputCommand, TextInputLayoutEngine};
 
@@ -234,7 +234,7 @@ fn picker_offers_repository_root_and_accepts_an_explicit_path_query() {
 
 fn picker_fixture() -> PathBuf {
     let root = std::env::temp_dir().join(format!(
-        "zeta-directory-picker-{}-{}",
+        "ash-directory-picker-{}-{}",
         std::process::id(),
         NEXT_PICKER_ID.fetch_add(1, Ordering::Relaxed)
     ));

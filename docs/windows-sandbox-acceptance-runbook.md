@@ -1,20 +1,20 @@
 # Windows 沙箱验收手册
 
 本手册分别验证 MXC PSEC 路径和独立 Windows 账户候选，保留各轮实机证据。WindowsAccount 模型已在 23H2 通过当前完整执行用例；同机仍缺少完整 PSEC 能力。旧 SDK 继承重算的副作用与恢复边界见文末记录。
-实现契约见 [mxc-sandbox](../zeta-rs/mxc-sandbox/README.md) 与 [windows-sandbox](../zeta-rs/windows-sandbox/README.md)。历史账户原型的结果不能作为当前候选的通过证据。
+实现契约见 [mxc-sandbox](../ash-rs/mxc-sandbox/README.md) 与 [windows-sandbox](../ash-rs/windows-sandbox/README.md)。历史账户原型的结果不能作为当前候选的通过证据。
 
 ## 当前入口
 
-当前 MXC Windows 后端只接受完整 PSEC 能力。此前的账户原型已退出源码和产品包，不能再通过 `mxc-user` 或 `tests/local.ps1` 安装它。独立候选使用 `zeta-windows-sandbox`，仍需单独授权和验收，不能沿用旧原型的通过结论。
+当前 MXC Windows 后端只接受完整 PSEC 能力。此前的账户原型已退出源码和产品包，不能再通过 `mxc-user` 或 `tests/local.ps1` 安装它。独立候选使用 `ash-windows-sandbox`，仍需单独授权和验收，不能沿用旧原型的通过结论。
 
 ```powershell
-just test zeta-sandboxing --lib
-just test zeta-tool-executor --lib
-just test zeta-mxc-sandbox --lib --test windows
-python -B scripts/cargo.py build -p zeta-network-proxy --example probe --locked
-$env:ZETA_NETWORK_PROBE = Join-Path $PWD '.build/cargo/debug/examples/probe.exe'
+just test ash-sandboxing --lib
+just test ash-tool-executor --lib
+just test ash-mxc-sandbox --lib --test windows
+python -B scripts/cargo.py build -p ash-network-proxy --example probe --locked
+$env:ASH_NETWORK_PROBE = Join-Path $PWD '.build/cargo/debug/examples/probe.exe'
 # 需要具备完整策略能力的 PSEC 主机：
-just test zeta-mxc-sandbox --test windows -- --ignored --test-threads=1
+just test ash-mxc-sandbox --test windows -- --ignored --test-threads=1
 ```
 
 23H2 本机不能作为 PSEC 完整执行的通过证据。缺少能力时应在准备阶段拒绝，不转入旧账户原型或普通进程。
@@ -26,16 +26,16 @@ Windows、WSL 2 中的 Linux 进程和 MXC 的 WSL Container（WSLC）是不同�
 
 | 场景 | 验收要求 | 当前范围 |
 | --- | --- | --- |
-| Windows 版 Zeta 执行 Windows 命令 | 执行本手册的 ProcessContainer 验收 | 必须完成，本次实机未通过 |
+| Windows 版 Ash 执行 Windows 命令 | 执行本手册的 ProcessContainer 验收 | 必须完成，本次实机未通过 |
 | Windows 受限命令调用 `wsl.exe` | 检查能否跨入 WSL 后越权访问文件、直连网络或留下存活进程 | 纳入 Windows 绕过检查；需要可正常执行命令的 WSL 环境 |
-| WSL 2 内运行 Linux 版 Zeta | 在 WSL 2 内执行 Linux 沙箱验收，并检查跨系统边界 | 若将此用法列入支持范围，发布前必须单独通过 |
+| WSL 2 内运行 Linux 版 Ash | 在 WSL 2 内执行 Linux 沙箱验收，并检查跨系统边界 | 若将此用法列入支持范围，发布前必须单独通过 |
 | Windows 通过 MXC WSLC 启动 Linux 容器 | 验证 WSLC 的文件、网络、输入输出及完整容器生命周期 | 当前未启用，不属于已接入功能的验收 |
-| WSL 1 内运行 Linux 版 Zeta | 独立验证其系统能力，不能沿用 WSL 2 结果 | 本轮不作支持或验收通过声明 |
+| WSL 1 内运行 Linux 版 Ash | 独立验证其系统能力，不能沿用 WSL 2 结果 | 本轮不作支持或验收通过声明 |
 
-当前 Zeta 未开启 `mxc-sdk` 的 `wslc` feature，也未选择 `Containment::Wslc`。
+当前 Ash 未开启 `mxc-sdk` 的 `wslc` feature，也未选择 `Containment::Wslc`。
 固定上游版本将 WSLC 列为需要显式启用的实验能力，见 [WSLC SDK 说明](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/wsl/wsl-container-getting-started.md#rust-sdk)。
 
-WSL 2 的 Linux 验收复用 [Linux 测试入口](../zeta-rs/mxc-sandbox/README.md#验证)，另外必须覆盖：
+WSL 2 的 Linux 验收复用 [Linux 测试入口](../ash-rs/mxc-sandbox/README.md#验证)，另外必须覆盖：
 
 - Linux 文件系统工作目录与 `/mnt/c` 工作目录分别验证目录授权、只读元数据、隐藏目录和路径别名。
 - 检查通过 Windows 可执行文件及 WSL 互操作入口，能否越过文件和网络限制；取消后检查两侧进程和延迟写入。
@@ -69,8 +69,8 @@ Microsoft 对固定预览版的限制见 [上游说明](https://github.com/micro
 
 | 命令 | 退出码 | 结果 |
 | --- | --- | --- |
-| `just check zeta-mxc-sandbox --tests` | 0 | 通过，未报告编译 warning |
-| `just test zeta-mxc-sandbox --test windows -- --include-ignored --test-threads=1` | 1 | 1 项通过、2 项失败、0 项忽略；测试构建完成，未报告编译 warning |
+| `just check ash-mxc-sandbox --tests` | 0 | 通过，未报告编译 warning |
+| `just test ash-mxc-sandbox --test windows -- --include-ignored --test-threads=1` | 1 | 1 项通过、2 项失败、0 项忽略；测试构建完成，未报告编译 warning |
 | `wsl --status` | 50 | 无可用状态输出 |
 | `wsl --list --verbose` | 1 | 返回帮助文本，未取得可执行的发行版信息；WSL 测试未执行 |
 
@@ -98,10 +98,10 @@ Microsoft 对固定预览版的限制见 [上游说明](https://github.com/micro
 
 | 修复后命令 | 退出码 | 结果 |
 | --- | --- | --- |
-| `just test zeta-mxc-sandbox --lib` | 0 | 4 项通过，含 2 项新增文件策略回归 |
-| `just check zeta-mxc-sandbox --tests` | 0 | 通过 |
-| `python -B scripts/cargo.py build -p zeta-mxc-sandbox` | 0 | 正常构建通过 |
-| `just test zeta-mxc-sandbox --test windows -- --include-ignored --test-threads=1` | 1 | 1 项通过、2 项失败、0 项忽略；失败原因均为上述 `C:\` 权限限制 |
+| `just test ash-mxc-sandbox --lib` | 0 | 4 项通过，含 2 项新增文件策略回归 |
+| `just check ash-mxc-sandbox --tests` | 0 | 通过 |
+| `python -B scripts/cargo.py build -p ash-mxc-sandbox` | 0 | 正常构建通过 |
+| `just test ash-mxc-sandbox --test windows -- --include-ignored --test-threads=1` | 1 | 1 项通过、2 项失败、0 项忽略；失败原因均为上述 `C:\` 权限限制 |
 
 本轮编译未报告 warning。对应本机日志位于同一证据目录的 `fix-lib.log`、`fix-check.log`、`fix-build.log`、`fix-windows-final.log`。
 
@@ -122,7 +122,7 @@ Microsoft 对固定预览版的限制见 [上游说明](https://github.com/micro
 两次均未触发验收脚本的 150 秒超时；失败来自测试本身。
 唯一通过项是严格受管网络请求被拒绝。多根目录、元数据和退出码用例，以及超时和取消用例，均在 SDK 启动检查阶段失败，尚未执行对应的隔离断言。
 
-管理员结果说明，当前问题不能仅归结为未提升权限：Zeta 的 `mxc_engine` 补丁将宿主磁盘根目录及所有直接子项展开成文件授权，所选 DACL 实现随后逐项检查访问权。
+管理员结果说明，当前问题不能仅归结为未提升权限：Ash 的 `mxc_engine` 补丁将宿主磁盘根目录及所有直接子项展开成文件授权，所选 DACL 实现随后逐项检查访问权。
 管理员可以越过 `C:\` 检查，但系统占用文件仍会使该请求失败。当前宿主文件基线与所选实现的匹配问题尚未解决，不能通过删除系统文件、关闭分页或放宽隔离要求取得通过。
 
 ACL 证据的边界：
@@ -144,10 +144,10 @@ ACL 证据的边界：
 | SDK 独立 ACL 授权测试 | 4 项通过 |
 | SDK 请求与精确代理测试 | 2 项通过 |
 | MXC 账户实现测试 | 7 项通过；其中 2 项直接调用本机 Windows 的限制令牌、文件 ACL、独立桌面和子进程 API |
-| Zeta 适配器 lib / Windows 非忽略测试 | 4 + 1 项通过；5 项完整执行测试待配置后运行 |
-| `just check zeta-mxc-sandbox --tests --locked` | 通过 |
+| Ash 适配器 lib / Windows 非忽略测试 | 4 + 1 项通过；5 项完整执行测试待配置后运行 |
+| `just check ash-mxc-sandbox --tests --locked` | 通过 |
 | Cargo 正常构建 `mxc-user` / 网络 probe | 通过 |
-| Bazel `//zeta-rs/vendor/mxc:mxc-user` | 通过 |
+| Bazel `//ash-rs/vendor/mxc:mxc-user` | 通过 |
 | 打包与签名流程单测 | 42 项中 38 项通过，4 项既有平台条件跳过；没有进行正式代码签名 |
 | 未配置运行时与缺少授权参数的 setup | 均拒绝，运行时目录未创建 |
 | vendor 差异与固定上游复核 | 已重新生成；源文件对照通过 |
@@ -184,7 +184,7 @@ ACL 证据的边界：
 
 | 实际运行 | 结果 |
 | --- | --- |
-| `just test appcontainer_common --manifest-path zeta-rs/vendor/mxc/Cargo.toml --lib user:: --locked -- --include-ignored --test-threads=1` | 12 项通过，包括真实账户登录、运行器/凭据访问边界、限制令牌、文件写权限和独立桌面 |
+| `just test appcontainer_common --manifest-path ash-rs/vendor/mxc/Cargo.toml --lib user:: --locked -- --include-ignored --test-threads=1` | 12 项通过，包括真实账户登录、运行器/凭据访问边界、限制令牌、文件写权限和独立桌面 |
 | `tests/local.ps1 -Phase Test -Output .build/acceptance/mxc-local/round5` | 2 项通过、4 项失败、0 项忽略；测试程序退出码 101 |
 | 受管网络 | 获批 HTTP 与 SOCKS 请求成功，未获批目标返回拒绝；直接 TCP、其他端口、监听和后代绕过被阻止，UDP 没有到达宿主接收端 |
 | PowerShell 文件与退出用例 | 超时，没有进入预期断言；不能记作文件范围与退出码验收通过 |
@@ -203,28 +203,28 @@ PowerShell 未完成初始化的根因仍需定位。没有放宽文件、网络
 
 完整日志位于 `.build/acceptance/mxc-local/round1` 至 `round5`；最初一次测试另保存为 `test-1.log`。最后一轮 helper SHA-256 为 `e2637448c13ad504afc3592ceb2e60e8f5c900942ef506f77bb2f77c419f14d6`。
 
-最终 helper 的 Bazel 构建通过。一次重复 Cargo 构建在等待其他任务的 `zeta-app-server` 构建锁时被取消；没有把这次取消记为通过。此前本轮 MSVC 正常 helper 构建、12 项账户测试和完整调用链测试均已实际完成。
+最终 helper 的 Bazel 构建通过。一次重复 Cargo 构建在等待其他任务的 `ash-app-server` 构建锁时被取消；没有把这次取消记为通过。此前本轮 MSVC 正常 helper 构建、12 项账户测试和完整调用链测试均已实际完成。
 
 额外按 SID 查询可读取的进程，未发现测试 SID；有 140 个进程的所有者信息不可读取，完整输出在 `process-owner-audit.json`。该结果不能扩大为对所有受保护系统进程的证明。共享 MXC ACL 恢复目录内没有剩余恢复文件。
 
 ### 2026-09-11 统一契约与原型退出
 
-- Zeta `sandboxing` 增加执行前候选选择；仅 `UnsupportedPolicy` 允许考虑下一个候选，运行故障和启动错误均不自动换实现。
+- Ash `sandboxing` 增加执行前候选选择；仅 `UnsupportedPolicy` 允许考虑下一个候选，运行故障和启动错误均不自动换实现。
 - 被选后端与该进程绑定，Executor 使用实际进程的后端解释拒绝，覆盖并发准备后反序启动的情况。
 - App Server 的两个本地执行入口通过同一注册方式装配。目前只有 MXC 实际注册；Codex Windows 候选没有被伪装成已接入。
 - 删除原型账户运行器、构建目标、打包/签名入口及 CI 配置。15 份原型源码及摘要、原 vendor 补丁和打包补丁保存在 `.build/acceptance/mxc-local/prototype-source`。
-- Windows 的 MXC 请求要求完整 PSEC 能力；原先的账户选择和 AppContainer/DACL 转入路径不再用于 Zeta 的请求。23H2 没有被宣布支持。
+- Windows 的 MXC 请求要求完整 PSEC 能力；原先的账户选择和 AppContainer/DACL 转入路径不再用于 Ash 的请求。23H2 没有被宣布支持。
 - 保留独立 ACL 授权、对象身份检查、跨平台测试和 MXC 许可证；App 包也保留许可证，且不包含退场运行器。
 
 | 本轮验证 | 结果 |
 | --- | --- |
-| `just test zeta-sandboxing --lib` | 10 项通过，含 6 项新增选择/生命周期回归 |
-| `just test zeta-tool-executor --lib` | 4 项通过，含真实子进程结果由选中后端判定的调用链回归 |
-| `just test zeta-mxc-sandbox --lib --test windows` | 4 + 1 项通过；5 项 PSEC 端到端用例保留但本机未执行 |
+| `just test ash-sandboxing --lib` | 10 项通过，含 6 项新增选择/生命周期回归 |
+| `just test ash-tool-executor --lib` | 4 项通过，含真实子进程结果由选中后端判定的调用链回归 |
+| `just test ash-mxc-sandbox --lib --test windows` | 4 + 1 项通过；5 项 PSEC 端到端用例保留但本机未执行 |
 | SDK `host_changes::tests` / `request::tests` | 4 + 2 项通过 |
-| `just check zeta-app-server --lib` | 通过 |
-| `python -B scripts/cargo.py build -p zeta-mxc-sandbox --locked` | 通过 |
-| `bazel build //zeta-rs/sandboxing:sandboxing` | 通过；保留仓库既有 GTK 依赖注解提示 |
+| `just check ash-app-server --lib` | 通过 |
+| `python -B scripts/cargo.py build -p ash-mxc-sandbox --locked` | 通过 |
+| `bazel build //ash-rs/sandboxing:sandboxing` | 通过；保留仓库既有 GTK 依赖注解提示 |
 | Windows 打包与签名相关检查 | 9 项通过，含退场运行器排除和许可证保留 |
 | 完整相关 Python 套件 | 38 项中 1 项失败、4 项跳过：现有协议主版本断言为 2，当前工作区生成为 3；未修改并行的协议工作 |
 
@@ -233,9 +233,9 @@ PowerShell 未完成初始化的根因仍需定位。没有放宽文件、网络
 ### 2026-09-11 协议生成同步复核
 
 - 当前 Rust 协议主版本已为 4；提交的 TypeScript fixture 与前端生成产物仍为 3。此前的 Python 打包主版本断言已改为读取生成元数据，因此单独运行 Python 测试没有暴露这次漂移。
-- `just test zeta-app-server-protocol --lib --locked` 实际结果为 42 项通过、1 项失败，失败项为 `tests::schema_fixtures_match_the_generators`。
+- `just test ash-app-server-protocol --lib --locked` 实际结果为 42 项通过、1 项失败，失败项为 `tests::schema_fixtures_match_the_generators`。
 - 执行 `just generate-protocol`，同步 fixture、解码器及前端生成产物。除主版本和 schema hash 外，同步了现有源码中的消息检查点及历史类型；没有修改这些领域接口的源码。
-- 仅复跑失败项：`just test zeta-app-server-protocol --lib tests::schema_fixtures_match_the_generators --locked -- --exact` 通过。生成命令也完成了普通构建；本轮编译没有报告 warning。
+- 仅复跑失败项：`just test ash-app-server-protocol --lib tests::schema_fixtures_match_the_generators --locked -- --exact` 通过。生成命令也完成了普通构建；本轮编译没有报告 warning。
 - `python -B scripts/test-python.py release`：55 项中 50 项通过、5 项平台条件跳过。打包回归现在比较完整协议元数据，并验证显式生成元数据在装包与签名记录更新后保留。
 - Platform checks 增加上述 Rust fixture 一致性检查，避免 Python 打包测试通过却携带过期协议。
 
@@ -243,7 +243,7 @@ PowerShell 未完成初始化的根因仍需定位。没有放宽文件、网络
 
 ### 2026-09-11 独立候选接入与 CLR 边界定位
 
-后续按用户“去补”的指令实现独立 `zeta-windows-sandbox`，接入 App Server、冻结的安装上下文、产品 helper、签名摘要和许可证清单。普通执行不安装账户或修复宿主权限；每次执行使用独立租约、文件 SID、代理归属和 ACL 日志。
+后续按用户“去补”的指令实现独立 `ash-windows-sandbox`，接入 App Server、冻结的安装上下文、产品 helper、签名摘要和许可证清单。普通执行不安装账户或修复宿主权限；每次执行使用独立租约、文件 SID、代理归属和 ACL 日志。
 
 用户先授权每轮 3 个测试账户、13 条 WFP 规则、3 个设备 SID 授权和专用 ProgramData 目录；随后单独授权两个 BaseNamedObjects 目录的非继承权限。按此范围执行 3 轮安装与清理，未将实验中的 Everyone 限制 SID 带入产品。
 
@@ -256,9 +256,9 @@ PowerShell 未完成初始化的根因仍需定位。没有放宽文件、网络
 | 加入 Everyone 的诊断对照 | PowerShell 管道成功，但令牌不再满足宿主只读要求，未采用 |
 | 私有桌面、标准流与退出码单测 | `cmd.exe` 经实际受限创建路径成功退出 `125` |
 | 普通 lib 测试 | 14 项通过，3 项需要安装的用例忽略；另新增 Everyone 可写宿主文件仍须拒绝写入的回归并通过 |
-| `just check zeta-windows-sandbox --tests --locked` | 通过 |
-| `just rust-warnings zeta-windows-sandbox --locked` | 通过，未报告编译 warning |
-| `bazel build //zeta-rs/windows-sandbox:zeta-windows-sandbox` | 通过；修正别名误带入测试依赖造成的循环 |
+| `just check ash-windows-sandbox --tests --locked` | 通过 |
+| `just rust-warnings ash-windows-sandbox --locked` | 通过，未报告编译 warning |
+| `bazel build //ash-rs/windows-sandbox:ash-windows-sandbox` | 通过；修正别名误带入测试依赖造成的循环 |
 
 私有命名空间的调用者必须满足边界描述符，见 [Microsoft CreatePrivateNamespace 文档](https://learn.microsoft.com/en-us/windows/win32/api/namespaceapi/nf-namespaceapi-createprivatenamespacew)。目录 ACL 与该边界检查是两项不同要求。额外目录授权已从候选的安装清单移除；诊断用 syscall 跟踪和 AppContainer 实验代码已移出产品源码。
 

@@ -1,1 +1,1 @@
-"""Build the canonical, self-contained Zeta package directory."""
+"""Build the canonical, self-contained Ash package directory."""

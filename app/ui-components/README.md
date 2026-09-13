@@ -1,4 +1,4 @@
-# `zeta-ui-components`
+# `ash-ui-components`
 
 > 本 README 是 app 可复用 UI 组件的当前实现说明。Element、scene、inspection、font 与基础
 > layout contract 由 [`zui`](../zui/README.md) 维护；跨 crate 渲染边界见
@@ -7,9 +7,9 @@
 > [`docs/native-text-input.md`](../docs/native-text-input.md)；product icon system 见
 > [`docs/icons.md`](../../docs/icons.md)；Native UI 编写和样式边界见
 > [`docs/native-ui-authoring.md`](../docs/native-ui-authoring.md)。`Keycap` 的快捷键设置组合由
-> [`zeta-settings`](../settings/README.md) 管，工作界面的组合键提示由 [`zeta-workbench`](../workbench/README.md) 管。
+> [`ash-settings`](../settings/README.md) 管，工作界面的组合键提示由 [`ash-workbench`](../workbench/README.md) 管。
 
-`zeta-ui-components` 基于 `zui` 提供 Button、Radio/RadioGroup、Switch、Checkbox、ActionBar、ActionList、Menu、ContextMenu、Dropdown、Picker、Dialog、QuickInput、QuickPick、ListItem、Keycap、Sash、Resizable、HorizontalScrollbar、VerticalScrollbar、ScrollView 和输入框等可复用组合控件。调用方必须直接从 `zui::ui` 引用框架类型；本 crate 不转发 `zui` API。
+`ash-ui-components` 基于 `zui` 提供 Button、Radio/RadioGroup、Switch、Checkbox、ActionBar、ActionList、Menu、ContextMenu、Dropdown、Picker、Dialog、QuickInput、QuickPick、ListItem、Keycap、Sash、Resizable、HorizontalScrollbar、VerticalScrollbar、ScrollView 和输入框等可复用组合控件。调用方必须直接从 `zui::ui` 引用框架类型；本 crate 不转发 `zui` API。
 GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 
 ## 1. 边界与依赖方向
@@ -17,39 +17,39 @@ GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 | 能力 | 当前 owner | 状态 |
 | --- | --- | --- |
 | Component、Element、scene 与 inspection contract | [`zui`](../zui/README.md) | 委托；调用方直接依赖 `zui` |
-| Text、symbolic-icon 与 icon-only button 的状态、样式和内部布局 | `zeta-ui-components::Button` | ✅；纯文字默认居中，列表式组件明确选择靠左，图标仍通过 Button 的内容入口组合 |
-| 单选按钮表面与单选按钮组排列 | `zeta-ui-components::Radio` / `RadioGroup` | ✅；Radio 复用 Button，RadioGroup 保证至多一个选中项；模式切换与编辑器标签共用这套基座，产品 identity、激活和值归 host |
-| 二态控件的共享交互状态，以及 Switch/Checkbox 的独立几何和样式 | `zeta-ui-components::{ToggleState,Switch,Checkbox}` | ✅；Checkbox 支持 unchecked/checked/mixed，值、输入路由和 accessibility 归 host |
-| Button/Separator action 排列、绘制和可查询命中几何 | `zeta-ui-components::ActionBar` | ✅ |
-| 纵向动作条目排列、绘制和可查询行几何 | `zeta-ui-components::ActionList` | ✅；复用 `ActionViewItem` 的 icon、标题和提示展示，identity、无障碍、激活和命令归 host |
-| 列表或树的单行 selectable surface | `zeta-ui-components::ListItem` | ✅；只绘制 host 给定 bounds 的状态/选中背景，identity、无障碍、布局和行内容归 host |
-| NavBar 导航容器 | 计划中的 `zeta-ui-components` presentation composition | 尚未作为独立 public component 实现；若落地，只拥有方向、slot、滚动/overflow geometry，不拥有 product identity、active state 或 provider |
+| Text、symbolic-icon 与 icon-only button 的状态、样式和内部布局 | `ash-ui-components::Button` | ✅；纯文字默认居中，列表式组件明确选择靠左，图标仍通过 Button 的内容入口组合 |
+| 单选按钮表面与单选按钮组排列 | `ash-ui-components::Radio` / `RadioGroup` | ✅；Radio 复用 Button，RadioGroup 保证至多一个选中项；模式切换与编辑器标签共用这套基座，产品 identity、激活和值归 host |
+| 二态控件的共享交互状态，以及 Switch/Checkbox 的独立几何和样式 | `ash-ui-components::{ToggleState,Switch,Checkbox}` | ✅；Checkbox 支持 unchecked/checked/mixed，值、输入路由和 accessibility 归 host |
+| Button/Separator action 排列、绘制和可查询命中几何 | `ash-ui-components::ActionBar` | ✅ |
+| 纵向动作条目排列、绘制和可查询行几何 | `ash-ui-components::ActionList` | ✅；复用 `ActionViewItem` 的 icon、标题和提示展示，identity、无障碍、激活和命令归 host |
+| 列表或树的单行 selectable surface | `ash-ui-components::ListItem` | ✅；只绘制 host 给定 bounds 的状态/选中背景，identity、无障碍、布局和行内容归 host |
+| NavBar 导航容器 | 计划中的 `ash-ui-components` presentation composition | 尚未作为独立 public component 实现；若落地，只拥有方向、slot、滚动/overflow geometry，不拥有 product identity、active state 或 provider |
 | 单轴 Pane 与递归 Grid layout | `zui::{SplitViewLayout,GridLayout}` | 委托；算法和 constraints 归 `zui` |
-| Terminal/heterogeneous PaneGroup geometry projection | [`zeta-workbench`](../workbench/README.md) + `zui::GridLayout` | 委托；Workbench 消费 `PaneNode`，返回 leaf bounds 和 owning-split sash，不拥有 PaneInput 对应的具体 runtime |
-| Workbench 的 Titlebar、Sessions、Main、Inspector 结构几何 | [`zeta-workbench`](../workbench/README.md) | 委托；本 crate 不拥有 Workbench 拓扑、TabInput state 或产品布局 |
-| Workbench Titlebar、Sidebar header/content、交互标识和界面状态 | [`zeta-workbench`](../workbench/README.md) | 委托；`SidebarHeader` 挂载组合 `RadioGroup` 的 `ModeSwitcher`，Session 行组合 `ListItem` |
-| Workbench 模型与 Pane binding | [`zeta-workbench`](../workbench/README.md) | 委托；本 crate 不拥有业务状态或 runtime |
-| Workbench SidebarPart、TabGroup、TabInput 的逻辑身份、分组、展开状态和 active selection | `zeta-workbench` + product host | 委托；模型不含 `ElementId`，Sidebar header/content 的具体组件和语义由 Workbench scene 负责 |
-| PaneInput 类型、逻辑 identity 与 Pane binding | `zeta-workbench` | 委托；具体 Terminal/Agent/Files/Diff/Settings runtime 仍由产品模块负责 |
-| Settings、Files、SCM 和 Editor pane content | `zeta-settings` / `zeta-files` / `zeta-scm` / `zeta-editor` | 委托；各 feature/crate 负责自己的 view/presentation contract，domain state 与 adapter 由对应 host 保留，不能下沉到 `zeta-ui-components` |
-| Sash 命中几何、hover/active presentation 与通用 resize gesture | `zeta-ui-components::{Sash,SashController,Resizable}` | ✅；基础 hover 复用 `zui::ui::Hover`，pointer capture、identity、preferred size 与产品 resize transition 归 host |
-| 单轴滚动条几何、绘制和交互映射 | `zeta-ui-components::{HorizontalScrollbar,VerticalScrollbar}` | ✅；两个方向由类型确定，共享标量 metrics、hover/active/fade、thumb drag 和 track paging；pointer capture 与调度归 host |
-| 通用像素滚动状态、viewport 裁剪与内容坐标 | `zeta-ui-components::ScrollState` / `ScrollView` | ✅；`ScrollView` 组合启用方向对应的滚动条；平台事件路由、pointer capture 与产品内容归 host |
-| 固定/可变高度列表测量、可见/overscan range、item bounds、hit-test 与虚拟化绘制 | `zeta-ui-components::VirtualListLayout` / `ListView` | ✅；固定高度直接计算，可变高度使用写时复制的平衡分块树，单项更新、按偏移定位和区间 splice 不重建无关分支，并支持稀疏展示覆盖和 item-relative scroll anchor；identity、selection、键盘语义与产品数据归 host |
-| 虚拟 Tree 行、层级缩进、disclosure/content geometry 与命中 | `zeta-ui-components::TreeView` | ✅；普通文件树复用固定高度 ListView，展开式编辑器可接入保留的可变高度布局；hierarchy、稳定节点 identity、展开状态和 child loading 归 host |
-| 锚点浮层布局、viewport 翻转/约束、通用外壳与浮层合成 | `zeta-ui-components::ContextView` / `zui::ui::UiScene::with_overlay` | ✅；显示生命周期、关闭和输入路由归 host |
-| 居中模态弹窗的遮罩、面板几何、浮层合成与模态交互边界 | `zeta-ui-components::Dialog` | ✅；背景输入和焦点遍历被限制到弹窗子树，显示生命周期、关闭、焦点恢复和内容状态归 host |
-| 菜单外壳、纵向菜单项、选择、滚动、命中、键盘导航和无障碍结构 | `zeta-ui-components::Menu` | ✅；可滚动菜单复用 ListView 的可见范围投影，产品 identity 由 host 提供，打开状态、关闭与 command 归 host |
-| 右键菜单的 viewport 翻转、约束与浮层组合 | `zeta-ui-components::ContextMenu` | ✅；组合 ContextView/Menu，保留右键菜单语义；打开、关闭和焦点恢复归调用界面 |
-| 按钮或选择器触发的锚定菜单 | `zeta-ui-components::Dropdown` | ✅；组合 ContextView/Menu，不重复菜单内容和交互结构；触发与关闭策略归调用界面 |
-| 带搜索框的锚定候选列表、滚动、选择展示与 accessibility | `zeta-ui-components::Picker` | ✅；组合 Dropdown/Menu 与 SearchBox，调用界面保留打开状态、查询、过滤、输入路由和选择结果执行 |
-| Icon+text label 的内部布局 | `zeta-ui-components::IconLabel` | ✅ |
-| 单个按键与多段快捷键的 keycap 几何和绘制 | `zeta-ui-components::Keycap` / `KeycapSequence` | ✅；按键语义与平台 label 归 caller |
+| Terminal/heterogeneous PaneGroup geometry projection | [`ash-workbench`](../workbench/README.md) + `zui::GridLayout` | 委托；Workbench 消费 `PaneNode`，返回 leaf bounds 和 owning-split sash，不拥有 PaneInput 对应的具体 runtime |
+| Workbench 的 Titlebar、Sessions、Main、Inspector 结构几何 | [`ash-workbench`](../workbench/README.md) | 委托；本 crate 不拥有 Workbench 拓扑、TabInput state 或产品布局 |
+| Workbench Titlebar、Sidebar header/content、交互标识和界面状态 | [`ash-workbench`](../workbench/README.md) | 委托；`SidebarHeader` 挂载组合 `RadioGroup` 的 `ModeSwitcher`，Session 行组合 `ListItem` |
+| Workbench 模型与 Pane binding | [`ash-workbench`](../workbench/README.md) | 委托；本 crate 不拥有业务状态或 runtime |
+| Workbench SidebarPart、TabGroup、TabInput 的逻辑身份、分组、展开状态和 active selection | `ash-workbench` + product host | 委托；模型不含 `ElementId`，Sidebar header/content 的具体组件和语义由 Workbench scene 负责 |
+| PaneInput 类型、逻辑 identity 与 Pane binding | `ash-workbench` | 委托；具体 Terminal/Agent/Files/Diff/Settings runtime 仍由产品模块负责 |
+| Settings、Files、SCM 和 Editor pane content | `ash-settings` / `ash-files` / `ash-scm` / `ash-editor` | 委托；各 feature/crate 负责自己的 view/presentation contract，domain state 与 adapter 由对应 host 保留，不能下沉到 `ash-ui-components` |
+| Sash 命中几何、hover/active presentation 与通用 resize gesture | `ash-ui-components::{Sash,SashController,Resizable}` | ✅；基础 hover 复用 `zui::ui::Hover`，pointer capture、identity、preferred size 与产品 resize transition 归 host |
+| 单轴滚动条几何、绘制和交互映射 | `ash-ui-components::{HorizontalScrollbar,VerticalScrollbar}` | ✅；两个方向由类型确定，共享标量 metrics、hover/active/fade、thumb drag 和 track paging；pointer capture 与调度归 host |
+| 通用像素滚动状态、viewport 裁剪与内容坐标 | `ash-ui-components::ScrollState` / `ScrollView` | ✅；`ScrollView` 组合启用方向对应的滚动条；平台事件路由、pointer capture 与产品内容归 host |
+| 固定/可变高度列表测量、可见/overscan range、item bounds、hit-test 与虚拟化绘制 | `ash-ui-components::VirtualListLayout` / `ListView` | ✅；固定高度直接计算，可变高度使用写时复制的平衡分块树，单项更新、按偏移定位和区间 splice 不重建无关分支，并支持稀疏展示覆盖和 item-relative scroll anchor；identity、selection、键盘语义与产品数据归 host |
+| 虚拟 Tree 行、层级缩进、disclosure/content geometry 与命中 | `ash-ui-components::TreeView` | ✅；普通文件树复用固定高度 ListView，展开式编辑器可接入保留的可变高度布局；hierarchy、稳定节点 identity、展开状态和 child loading 归 host |
+| 锚点浮层布局、viewport 翻转/约束、通用外壳与浮层合成 | `ash-ui-components::ContextView` / `zui::ui::UiScene::with_overlay` | ✅；显示生命周期、关闭和输入路由归 host |
+| 居中模态弹窗的遮罩、面板几何、浮层合成与模态交互边界 | `ash-ui-components::Dialog` | ✅；背景输入和焦点遍历被限制到弹窗子树，显示生命周期、关闭、焦点恢复和内容状态归 host |
+| 菜单外壳、纵向菜单项、选择、滚动、命中、键盘导航和无障碍结构 | `ash-ui-components::Menu` | ✅；可滚动菜单复用 ListView 的可见范围投影，产品 identity 由 host 提供，打开状态、关闭与 command 归 host |
+| 右键菜单的 viewport 翻转、约束与浮层组合 | `ash-ui-components::ContextMenu` | ✅；组合 ContextView/Menu，保留右键菜单语义；打开、关闭和焦点恢复归调用界面 |
+| 按钮或选择器触发的锚定菜单 | `ash-ui-components::Dropdown` | ✅；组合 ContextView/Menu，不重复菜单内容和交互结构；触发与关闭策略归调用界面 |
+| 带搜索框的锚定候选列表、滚动、选择展示与 accessibility | `ash-ui-components::Picker` | ✅；组合 Dropdown/Menu 与 SearchBox，调用界面保留打开状态、查询、过滤、输入路由和选择结果执行 |
+| Icon+text label 的内部布局 | `ash-ui-components::IconLabel` | ✅ |
+| 单个按键与多段快捷键的 keycap 几何和绘制 | `ash-ui-components::Keycap` / `KeycapSequence` | ✅；按键语义与平台 label 归 caller |
 | Renderer-independent icon identity、SVG definition 与 rendering mode | `zui::{Icon,IconDefinition}` | 委托 |
 | 非 component 单行编辑基座与 shaping | `zui::{TextInput,TextInputLayoutEngine}` | 委托 |
 | Input-box chrome、状态与 scene composition | `InputBox` | ✅ |
 | 带左侧语义图标的单行搜索框 composition | `SearchBox` | ✅；过滤策略与输入状态仍归 host |
-| Scene primitive、ordered batch、text layout 与 font catalog | `zui` | 委托；Markdown 语义归 `zeta-markdown` |
+| Scene primitive、ordered batch、text layout 与 font catalog | `zui` | 委托；Markdown 语义归 `ash-markdown` |
 | shaping 与 renderer-compatible text measurement | `zui` → `cosmic-text` | 委托 |
 | 后端无关 frame execution contract | `zui::render::Renderer` | ❌；由 framework 拥有 |
 | GPU pipeline、atlas、shader、surface 与 present | private `zui::render/wgpu` | ❌ |
@@ -58,23 +58,23 @@ GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 依赖方向：
 
 ```text
-product host → zeta-workbench → zui
-product host → zeta-ui-components → zui
+product host → ash-workbench → zui
+product host → ash-ui-components → zui
 product → zui public facade → private framework modules
 
-zeta-ui-components → zui::Icon
+ash-ui-components → zui::Icon
 product catalog → zui::Icon
 zui(macOS font catalog) → coretext-rs → CoreText
 
-zeta-ui-components -X→ wgpu / Metal / Vulkan / winit
-zeta-ui-components -X→ App Server / workspace / product state
+ash-ui-components -X→ wgpu / Metal / Vulkan / winit
+ash-ui-components -X→ App Server / workspace / product state
 ```
 
-`zeta-icons` 是可选的产品语义目录；组件只接收 caller 提供的 `zui::Icon`，因此本 crate
+`ash-icons` 是可选的产品语义目录；组件只接收 caller 提供的 `zui::Icon`，因此本 crate
 不需要依赖 app 的产品 artwork。若本 crate 开始拥有 scene primitive、font adapter、GPU API、窗口、workspace 或产品 reducer，
 说明 ownership 已经漂移。基础 framework 的内部符号、验证与扩展点以 `zui/README.md` 为准。
 
-导航和 Pane 组合的跨 crate contract 由 [`LAYOUT.md`](../LAYOUT.md) 维护。当前 `zeta-ui-components` 提供可供模式切换和编辑器标签复用的 `Radio`/`RadioGroup`、用于列表行表面的 `ListItem` 和其他展示组件；Workbench 模型、结构布局、外壳 UI 和绑定都位于 [`zeta-workbench`](../workbench/README.md)。`TabInput`、`PaneInput`、`PaneGroup`、选中状态、provider/controller 和具体内容不得下沉到本 crate。
+导航和 Pane 组合的跨 crate contract 由 [`LAYOUT.md`](../LAYOUT.md) 维护。当前 `ash-ui-components` 提供可供模式切换和编辑器标签复用的 `Radio`/`RadioGroup`、用于列表行表面的 `ListItem` 和其他展示组件；Workbench 模型、结构布局、外壳 UI 和绑定都位于 [`ash-workbench`](../workbench/README.md)。`TabInput`、`PaneInput`、`PaneGroup`、选中状态、provider/controller 和具体内容不得下沉到本 crate。
 
 ## 2. 文件与接口地图
 
@@ -123,11 +123,11 @@ zeta-ui-components -X→ App Server / workspace / product state
 | `components::keycap::{Keycap, KeycapSequence, KeycapStyle}` | public | 绘制 caller 提供 label 的按键块，并区分同一 Chord 内按键间距与多段 Chord 间距；不解析快捷键或选择平台 label |
 | `components::input_box::InputBox` | public | 组合 base layout 与 input-box chrome/style，并实现 `Component` |
 | `components::search_box::{SearchBox, SearchBoxStyle}` | public | 复用 `InputBox` 的 chrome/text layout，在组件内拥有左侧 search icon 占位与几何 |
-| `zeta-workbench::{TabContainerLayoutSpec,TabContainerLayout}` | external crate | 解析 Sidebar 与 main Part 的 split geometry；不进入本组件库 |
-| `zeta-workbench::{WorkbenchLayoutSpec,WorkbenchLayout,WorkbenchPart}` | external crate | 组装 Titlebar、Sessions、Main、Inspector 的结构 geometry；不进入本组件库 |
-| `zeta-workbench::PaneGroupLayout` | external crate | 将 `PaneNode` 投影为 leaf bounds 和 split sash；不进入本组件库 |
-| `zeta-workbench::{SidebarPart,TabGroup,TabInput}` | external crate | 保存 Workbench 逻辑状态；不进入本组件库 |
-| `zeta-workbench::{PanePart,PaneGroup,PaneInput}` | external crate | 保存 Pane 内容描述与递归 split topology；不进入本组件库 |
+| `ash-workbench::{TabContainerLayoutSpec,TabContainerLayout}` | external crate | 解析 Sidebar 与 main Part 的 split geometry；不进入本组件库 |
+| `ash-workbench::{WorkbenchLayoutSpec,WorkbenchLayout,WorkbenchPart}` | external crate | 组装 Titlebar、Sessions、Main、Inspector 的结构 geometry；不进入本组件库 |
+| `ash-workbench::PaneGroupLayout` | external crate | 将 `PaneNode` 投影为 leaf bounds 和 split sash；不进入本组件库 |
+| `ash-workbench::{SidebarPart,TabGroup,TabInput}` | external crate | 保存 Workbench 逻辑状态；不进入本组件库 |
+| `ash-workbench::{PanePart,PaneGroup,PaneInput}` | external crate | 保存 Pane 内容描述与递归 split topology；不进入本组件库 |
 
 `Color` 的 RGB channel 是 sRGB、alpha 为 straight alpha。`Point`、`Size`、font size 与 line
 height 都使用 logical UI pixels；只有 renderer backend 可以执行 logical-to-physical 转换。
@@ -253,7 +253,7 @@ accessibility 与 pointer capture，再把 `Resizable` 返回的 pane size 写�
 `GridLayout` 在这层单轴能力上递归解析 caller-owned `GridNode`。每个 Split 的 identity、
 orientation、children 与 preferred sizes 都来自 Host；布局只输出当前帧的 Leaf/Split bounds
 和带 owning split identity 的 `GridSashLayout`。产品层必须把 resize 结果写回对应 Split，
-并自行处理 add/remove/move、active Pane、Session binding 与序列化。若 `zeta-ui-components` 开始创建
+并自行处理 add/remove/move、active Pane、Session binding 与序列化。若 `ash-ui-components` 开始创建
 Terminal Session、决定 split command 或跨帧修改树，说明 Grid ownership 已漂移。
 
 `ScrollState` 是 logical-pixel offset primitive，不读取 `winit::MouseScrollDelta`。Host 把平台 wheel 和键盘归一化为 `ScrollCommand`；pointer event 则把逻辑坐标、当前 `ScrollView` 和 `ScrollState` 交给 `ScrollbarController`。`ScrollbarController` 使用 `zui::ui::Hover` 维护基础 hover，并用同一几何维护显隐、track page 和 thumb capture。`ScrollView::draw` 把调用方内容裁剪到 viewport，并通过 `ScrollViewport` 返回 translated content origin 和 content-coordinate visible bounds；启用横向或纵向滚动时分别组合 `HorizontalScrollbar` 或 `VerticalScrollbar`，滚动条用自己的 `ScrollbarMetrics` 计算同源 track/thumb paint 与交互几何。
@@ -283,11 +283,11 @@ IME 候选框定位读取同一个 `InputBox::caret_bounds`，即使 blink phase
 ## 6. 测试与修改路径
 
 ```bash
-just test zeta-ui-components
+just test ash-ui-components
 bazel test //app/ui-components:ui-unit-tests
 ```
 
-`zui` 单元测试覆盖检查节点、Element、scene、font/text input 与 Split/Grid；`zeta-ui-components` 单元测试覆盖
+`zui` 单元测试覆盖检查节点、Element、scene、font/text input 与 Split/Grid；`ash-ui-components` 单元测试覆盖
 组件裁剪与浮层合成、Sash 命中/反馈几何、SashController deadline 与 Resizable drag 结果，
 ScrollState 的 axis clamp、绝对 offset、首尾和
 ensure-visible transition，水平/垂直 Scrollbar 的独立类型、比例 thumb geometry、track paging、thumb drag 映射、hover/active 颜色与 fade deadline，ScrollView 的内容坐标、裁剪和 visibility policy，ListView 的固定/可变高度 visible/overscan range、平衡分块高度索引、O(log n) 单项更新、O(log n + k) 区间 splice、稀疏高度覆盖、scroll anchor、gap/padding、translated bounds、hit-test、ensure-visible 与 visible/overscan-only paint，TreeView 的固定/可变 item、depth/disclosure geometry、命中与 visible/overscan-only paint，
@@ -298,7 +298,7 @@ Button surface 状态、按钮、图标标签和输入框的状态/样式/布局
 validation 测试属于具体 backend crate。
 
 - 扩展 text style/span、path、rect/clip、font 或 scene：修改 `zui`、backend 与其 canonical README，
-  再检查本 crate 的组件和 `zeta-markdown` projection；
+  再检查本 crate 的组件和 `ash-markdown` projection；
 - 更换 shaping backend：保持 `zui::ui::UiScene` 平台无关，并更新字体语义与 backend bridge；
 - 修改 DPI 转换、shader、atlas 或 glyph raster：只修改具体 backend，不向组件暴露实现类型；
 - 新增拥有 box geometry 的组件：实现必需的 `Component::element` 与需要时的 `paint_element`，让
@@ -321,7 +321,7 @@ validation 测试属于具体 backend crate。
 - `ActionList` 当前支持固定高度的纵向 `ActionViewItem` 行和同源 hit-test；无障碍、键盘导航、滚动与命令执行由调用界面组合；
 - `BoxShadow` 当前支持单个圆角矩形阴影的 color、offset、blur radius 与 spread；尚无 inset 或多重 shadow。`Menu` 已通过 `ActionViewItem` 支持 label、icon、icon+label、styled label、separator 和可滚动列表，暂不内建 submenu 或 typeahead；
 - `RadioGroup` 当前拥有固定 item size、gap、单选约束和基于 Button 的表面绘制；额外内容、动态宽度、overflow、关闭动作、identity、interaction 与对应内容均由组合控件或宿主拥有；
-- `NavBar` 当前尚未作为独立 component 存在；在出现稳定的横向标题栏 `RadioGroup` 消费者后，才评估是否把方向、slot 和 overflow/scroll geometry 收敛为 `zeta-ui-components` 展示契约；
+- `NavBar` 当前尚未作为独立 component 存在；在出现稳定的横向标题栏 `RadioGroup` 消费者后，才评估是否把方向、slot 和 overflow/scroll geometry 收敛为 `ash-ui-components` 展示契约；
 - `ContextView` 不拥有 shadow、arrow/callout，也不拥有 outside click、Escape、focus
   restoration 或 accessibility scope；overflow shadow 由托管内容的 `PaintRect` 拥有，
   lifecycle/interaction 由 host 与 `zui` 组合；

@@ -1,8 +1,0 @@
-{
-  "extends": "./tsconfig.renderer.json",
-  "exclude": [
-    "src/zeta/**/test/**/*.ts",
-    "src/zeta/**/electron-main/**/*.ts",
-    "src/zeta/**/node/**/*.ts"
-  ]
-}

@@ -54,10 +54,10 @@ def run_command(command: Sequence[str], runner: Optional[CommandRunner] = None) 
 def sign_command(artifact: Path, platform: str) -> list[str]:
     if platform == "darwin":
         return [
-            os.environ.get("ZETA_MACOS_CODESIGN") or "codesign",
+            os.environ.get("ASH_MACOS_CODESIGN") or "codesign",
             "--force",
             "--sign",
-            require_environment("ZETA_MACOS_SIGNING_IDENTITY"),
+            require_environment("ASH_MACOS_SIGNING_IDENTITY"),
             "--timestamp",
             "--options",
             "runtime",
@@ -65,14 +65,14 @@ def sign_command(artifact: Path, platform: str) -> list[str]:
         ]
     if platform == "windows":
         return [
-            os.environ.get("ZETA_WINDOWS_SIGNTOOL") or "signtool",
+            os.environ.get("ASH_WINDOWS_SIGNTOOL") or "signtool",
             "sign",
             "/fd",
             "SHA256",
             "/sha1",
-            require_environment("ZETA_WINDOWS_SIGNING_THUMBPRINT"),
+            require_environment("ASH_WINDOWS_SIGNING_THUMBPRINT"),
             "/tr",
-            os.environ.get("ZETA_WINDOWS_TIMESTAMP_URL") or WINDOWS_TIMESTAMP_URL,
+            os.environ.get("ASH_WINDOWS_TIMESTAMP_URL") or WINDOWS_TIMESTAMP_URL,
             "/td",
             "SHA256",
             str(artifact),
@@ -83,7 +83,7 @@ def sign_command(artifact: Path, platform: str) -> list[str]:
 def verify_command(artifact: Path, platform: str) -> list[str]:
     if platform == "darwin":
         return [
-            os.environ.get("ZETA_MACOS_CODESIGN") or "codesign",
+            os.environ.get("ASH_MACOS_CODESIGN") or "codesign",
             "--verify",
             "--strict",
             "--verbose=2",
@@ -91,7 +91,7 @@ def verify_command(artifact: Path, platform: str) -> list[str]:
         ]
     if platform == "windows":
         return [
-            os.environ.get("ZETA_WINDOWS_SIGNTOOL") or "signtool",
+            os.environ.get("ASH_WINDOWS_SIGNTOOL") or "signtool",
             "verify",
             "/pa",
             "/all",
@@ -124,8 +124,8 @@ def notarize(
     artifact = artifact.expanduser().resolve()
     if artifact.is_symlink() or not artifact.exists():
         raise RuntimeError(f"notarization artifact does not exist: {artifact}")
-    profile = require_environment("ZETA_MACOS_NOTARY_PROFILE")
-    xcrun = os.environ.get("ZETA_MACOS_XCRUN") or "xcrun"
+    profile = require_environment("ASH_MACOS_NOTARY_PROFILE")
+    xcrun = os.environ.get("ASH_MACOS_XCRUN") or "xcrun"
     run_command(
         [
             xcrun,

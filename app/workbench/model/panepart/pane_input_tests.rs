@@ -4,8 +4,8 @@ use std::path::PathBuf;
 
 use super::PaneInput;
 use super::PaneInputKind;
-use zeta_protocol::SessionId;
-use zeta_protocol::ThreadId;
+use ash_protocol::SessionId;
+use ash_protocol::ThreadId;
 
 fn session(value: &str) -> SessionId {
     SessionId::new(value).expect("test session ID is non-empty")

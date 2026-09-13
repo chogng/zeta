@@ -1,8 +1,8 @@
-use zeta_ui_components::InteractionRegion;
-use zeta_ui_components::Sash;
-use zeta_ui_components::SashOrientation;
-use zeta_ui_components::SashState;
-use zeta_ui_components::SashStyle;
+use ash_ui_components::InteractionRegion;
+use ash_ui_components::Sash;
+use ash_ui_components::SashOrientation;
+use ash_ui_components::SashState;
+use ash_ui_components::SashStyle;
 use zui::ui::AccessibilityRole;
 use zui::ui::Color;
 use zui::ui::Component;

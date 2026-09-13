@@ -1,6 +1,6 @@
 //! Editor popovers for product-neutral language hover and completion results.
 
-use zeta_lsp_manager::{LanguageCompletions, LanguageHover};
+use ash_lsp_manager::{LanguageCompletions, LanguageHover};
 use zui::ui::{
     Border, Component, ComponentElement, Edges, Element, PaintRect, Point, Rect, Size, TextBlock,
     TextBlockWrap, TextStyle, UiScene,

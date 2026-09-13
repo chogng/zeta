@@ -15,8 +15,8 @@ pub fn run() -> ExitCode {
         .first()
         .is_some_and(|command| command == "app-server-daemon")
     {
-        return match zeta_app_server_daemon::backend_executable_path().and_then(|executable| {
-            zeta_app_server_daemon::run_command(arguments.into_iter().skip(1), &executable)
+        return match ash_app_server_daemon::backend_executable_path().and_then(|executable| {
+            ash_app_server_daemon::run_command(arguments.into_iter().skip(1), &executable)
         }) {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => {

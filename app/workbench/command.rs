@@ -1,5 +1,5 @@
-use zeta_commands::AppCommandId;
-use zeta_session::interaction::ContextAction;
+use ash_commands::AppCommandId;
+use ash_session::interaction::ContextAction;
 use zui::ui::ElementId;
 
 use super::WorkbenchApplication;
@@ -11,12 +11,12 @@ use crate::TAB_CONTAINER_TOGGLE;
 /// Resolves a command-like Workbench element into its stable command identity.
 pub(crate) fn command_for_element(element: ElementId) -> Option<AppCommandId> {
     match element {
-        zeta_settings::OPEN_MEMORIES => Some(AppCommandId::ManageMemories),
+        ash_settings::OPEN_MEMORIES => Some(AppCommandId::ManageMemories),
         TAB_CONTAINER_TOGGLE => Some(AppCommandId::ToggleTabContainer),
         CHANGES_PANE_BUTTON => Some(AppCommandId::ShowAgentChanges),
         ADD_SESSION => Some(AppCommandId::AddSession),
-        zeta_files::FILES_REFRESH => Some(AppCommandId::RefreshAgentFiles),
-        zeta_files::FILES_SEARCH => Some(AppCommandId::ToggleAgentFileSearch),
+        ash_files::FILES_REFRESH => Some(AppCommandId::RefreshAgentFiles),
+        ash_files::FILES_SEARCH => Some(AppCommandId::ToggleAgentFileSearch),
         _ => match ContextAction::from_element_id(element)? {
             ContextAction::Location => Some(AppCommandId::PickExecutionLocation),
             ContextAction::WorkingDirectory => Some(AppCommandId::PickWorkingDirectory),
@@ -93,11 +93,11 @@ fn execute_toggle_terminal_surface(app: &mut WorkbenchApplication) {
         app.restore_main_pane_after_terminal();
     }
     app.pending_focus = if app.main_surface.is_editor() {
-        Some(zeta_editor_host::FILE_EDITOR_DOCUMENT)
+        Some(ash_editor_host::FILE_EDITOR_DOCUMENT)
     } else if app.main_surface.is_terminal() {
         None
     } else {
-        Some(zeta_session::interaction::COMPOSER)
+        Some(ash_session::interaction::COMPOSER)
     };
     app.terminal_view_mut().selection.clear();
     app.terminal_view_mut().scroll.reset();
@@ -110,7 +110,7 @@ fn execute_open_keyboard_shortcuts(app: &mut WorkbenchApplication) {
     app.dismiss_remote_tunnel_manager();
     app.quick_access.open_shortcuts();
     app.settings.reset_keyboard_shortcut_recording();
-    app.pending_focus = Some(zeta_settings::KEYBOARD_SHORTCUTS_SEARCH);
+    app.pending_focus = Some(ash_settings::KEYBOARD_SHORTCUTS_SEARCH);
     app.keybindings.cancel_chord();
 }
 
@@ -132,7 +132,7 @@ fn execute_toggle_files_pane(app: &mut WorkbenchApplication) {
     if app.main_surface.is_editor() {
         app.show_agent_pane();
         app.workbench.collapse_inspector();
-        app.pending_focus = Some(zeta_session::interaction::COMPOSER);
+        app.pending_focus = Some(ash_session::interaction::COMPOSER);
         return;
     }
     match app.active_main_pane_kind() {
@@ -175,7 +175,7 @@ fn execute_toggle_agent_file_search(app: &mut WorkbenchApplication) {
         if let Some(presentation) = app.presentation.as_ref() {
             let _ = app.ui_dispatch.focus_element(
                 presentation.interaction_frame(),
-                zeta_files::FILE_SEARCH_INPUT,
+                ash_files::FILE_SEARCH_INPUT,
             );
         }
     }

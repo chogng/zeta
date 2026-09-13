@@ -1,6 +1,6 @@
-use zeta_terminal::{GridSize, ScreenBuffer, TerminalColor, TerminalCore, TerminalMousePosition};
-use zeta_ui_components::ScrollbarPresentation;
-use zeta_ui_theme::UiTheme;
+use ash_terminal::{GridSize, ScreenBuffer, TerminalColor, TerminalCore, TerminalMousePosition};
+use ash_ui_components::ScrollbarPresentation;
+use ash_ui_theme::UiTheme;
 use zui::ui::{
     Color, FontFamily, FontWeight, PaintRect, Point, Rect, TextBlock, TextStyle, UiScene,
 };
@@ -209,7 +209,7 @@ fn draw_block_list(
     });
 }
 
-fn terminal_cell_colors(style: zeta_terminal::CellStyle, palette: UiTheme) -> (Color, Color) {
+fn terminal_cell_colors(style: ash_terminal::CellStyle, palette: UiTheme) -> (Color, Color) {
     let mut foreground = terminal_color(style.foreground, palette.foreground, palette);
     let mut background = terminal_color(style.background, Color::TRANSPARENT, palette);
     if style.inverse {

@@ -14,11 +14,11 @@ use super::SettingsPageStyle;
 use super::navigation::button_state;
 use super::navigation::navigation_buttons;
 
-use zeta_icons::icons;
-use zeta_ui_components::Button;
-use zeta_ui_components::InputBoxState;
-use zeta_ui_components::InteractionRegion;
-use zeta_ui_components::SearchBox;
+use ash_icons::icons;
+use ash_ui_components::Button;
+use ash_ui_components::InputBoxState;
+use ash_ui_components::InteractionRegion;
+use ash_ui_components::SearchBox;
 use zui::ui::AccessibilityRole;
 use zui::ui::AccessibilitySelection;
 use zui::ui::CaretVisibility;

@@ -1,0 +1,20 @@
+[package]
+name = "ash-thread-transcript"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "ash_thread_transcript"
+path = "src/lib.rs"
+
+[dependencies]
+schemars = { workspace = true }
+serde = { workspace = true }
+ts-rs = { workspace = true }
+ash-protocol = { workspace = true }
+
+[lints]
+workspace = true

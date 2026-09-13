@@ -46,7 +46,7 @@ class AppPackageTests(unittest.TestCase):
             for name in ("LICENSE-APACHE", "NOTICE"):
                 self.assertEqual(
                     (
-                        Path(__file__).resolve().parents[3] / "zeta-rs" / "uds" / name
+                        Path(__file__).resolve().parents[3] / "ash-rs" / "uds" / name
                     ).read_bytes(),
                     (package / "licenses" / "uds" / name).read_bytes(),
                 )
@@ -55,7 +55,7 @@ class AppPackageTests(unittest.TestCase):
             self.assertEqual(
                 (
                     Path(__file__).resolve().parents[3]
-                    / "zeta-rs/vendor/mxc/LICENSE.md"
+                    / "ash-rs/vendor/mxc/LICENSE.md"
                 ).read_bytes(),
                 (package / "licenses/mxc/LICENSE.md").read_bytes(),
             )
@@ -140,7 +140,7 @@ class AppPackageTests(unittest.TestCase):
             binary = root / "app"
             binary.write_bytes(b"app-test-binary")
 
-            with self.assertRaisesRegex(RuntimeError, "Unsupported Zeta target"):
+            with self.assertRaisesRegex(RuntimeError, "Unsupported Ash target"):
                 build_package(
                     root / "package",
                     binary,
@@ -208,7 +208,7 @@ class AppPackageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             release = remote_runtime_network_release(
-                "https://releases.example/zeta/catalog.json", "a" * 64
+                "https://releases.example/ash/catalog.json", "a" * 64
             )
             binary = root / "app"
             binary.write_bytes(
@@ -237,12 +237,12 @@ class AppPackageTests(unittest.TestCase):
                 },
                 metadata["remoteRuntimeCatalog"],
             )
-            self.assertFalse((output / "zeta-remote-runtimes").exists())
+            self.assertFalse((output / "ash-remote-runtimes").exists())
 
     def test_rejects_an_invalid_network_catalog_release(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "credential-free HTTPS"):
             remote_runtime_network_release(
-                "https://user@releases.example/zeta/catalog.json", "a" * 64
+                "https://user@releases.example/ash/catalog.json", "a" * 64
             )
 
 

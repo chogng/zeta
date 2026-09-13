@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use std::sync::OnceLock;
 
-use zeta_ui_theme::DEFAULT_UI_THEME;
+use ash_ui_theme::DEFAULT_UI_THEME;
 use zui::ui::{Border, Color, Edges, PaintRect, Rect, TextInputLayoutEngine, TextStyle};
 
 use super::{

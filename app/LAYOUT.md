@@ -1,6 +1,6 @@
 # `app` 布局
 
-> 状态：Workbench 层级和生命周期边界已实现；内容挂载仍按“当前差距”继续收口。本文是 `app` 窗口结构、Sidebar/Pane 层级和响应式布局的唯一说明。Workbench 状态、布局、外壳 UI 和生命周期边界见 [`zeta-workbench`](workbench/README.md)，Zeta Agent 行为见 [`Agent 工作区`](docs/native-agent-console.md)，外部 AI CLI 与终端边界见 [`TERMINAL.md`](TERMINAL.md)。
+> 状态：Workbench 层级和生命周期边界已实现；内容挂载仍按“当前差距”继续收口。本文是 `app` 窗口结构、Sidebar/Pane 层级和响应式布局的唯一说明。Workbench 状态、布局、外壳 UI 和生命周期边界见 [`ash-workbench`](workbench/README.md)，Ash Agent 行为见 [`Agent 工作区`](docs/native-agent-console.md)，外部 AI CLI 与终端边界见 [`TERMINAL.md`](TERMINAL.md)。
 
 ## 快速理解
 
@@ -48,7 +48,7 @@ Sidebar 内容项当前只有两种。增加 Pane 内容类型不增加 Sidebar 
 
 | `TabInput` | 身份 | 默认内容 |
 | --- | --- | --- |
-| Session | `SessionId` | 该 Session 的 Zeta Agent、Terminal、Files 或 Changes Pane |
+| Session | `SessionId` | 该 Session 的 Ash Agent、Terminal、Files 或 Changes Pane |
 | Settings | 全局单例 | Settings Pane |
 
 切换 Sidebar 内容项必须整体保存和恢复 PanePart 拆分、活动 PaneGroup、各组活动输入和可丢弃的视图状态。Settings 不创建 Session、Thread 或 Terminal。
@@ -59,7 +59,7 @@ Sidebar 内容项当前只有两种。增加 Pane 内容类型不增加 Sidebar 
 
 | `PaneInput` | 视图身份 | 负责 |
 | --- | --- | --- |
-| `Agent` | Session + Thread | 只表示 Zeta Agent 的对话、时间线和 Composer |
+| `Agent` | Session + Thread | 只表示 Ash Agent 的对话、时间线和 Composer |
 | `Terminal` | Terminal session | 外部 AI CLI、shell 或其他交互式进程 |
 | `Files` | 工作区根目录 | 文件浏览、搜索、选择和文件内容 |
 | `Changes` | 工作区根目录 | 变更集合、状态、选择和 Diff 内容 |
@@ -67,7 +67,7 @@ Sidebar 内容项当前只有两种。增加 Pane 内容类型不增加 Sidebar 
 
 `PaneInput` 的边界止于完整视图。`Files` 拥有文件身份、编辑器和文件内容的组合；`Changes` 拥有变更身份、单文件 Diff 和多文件 Diff 的组合。
 
-Codex、Claude Code、Gemini CLI 等外部 AI 不增加新的 Agent 类型，也不进入 Zeta Thread。它们由独立 CLI adapter 启动，并统一通过 `Terminal` Pane 显示；Terminal 不解析屏幕文字来推断外部 AI 的结构化状态。
+Codex、Claude Code、Gemini CLI 等外部 AI 不增加新的 Agent 类型，也不进入 Ash Thread。它们由独立 CLI adapter 启动，并统一通过 `Terminal` Pane 显示；Terminal 不解析屏幕文字来推断外部 AI 的结构化状态。
 
 ## 布局规则
 
@@ -102,4 +102,4 @@ Codex、Claude Code、Gemini CLI 等外部 AI 不增加新的 Agent 类型，也
 - PanePart 只拥有布局拓扑和选择，不拥有文件、Git、Thread、Terminal 或 Settings 的权威状态。
 - 功能 crate 拥有视图内部内容、状态和行为；产品宿主只把 `PaneInput` 连接到对应视图。
 - 布局状态可以丢弃和重建，Session、文件修改、Diff、Terminal 生命周期和执行结果不能由布局拥有。
-- Zeta Agent 与外部 AI CLI 不共享 Thread、Tool、Approval 或持久状态；Terminal 只承载外部进程。
+- Ash Agent 与外部 AI CLI 不共享 Thread、Tool、Approval 或持久状态；Terminal 只承载外部进程。

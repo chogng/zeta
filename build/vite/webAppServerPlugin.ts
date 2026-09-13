@@ -5,14 +5,14 @@ import type { IncomingMessage } from "node:http";
 import { dirname, join, resolve } from "node:path";
 import type { Writable } from "node:stream";
 import type { Plugin, WebSocket, WebSocketClient } from "vite";
-import { desktopBuildPath, developmentZetaPackagePath } from "../lib/paths.ts";
+import { desktopBuildPath, developmentAshPackagePath } from "../lib/paths.ts";
 
 export const WEB_APP_SERVER_PROTOCOL_VERSION = 1;
-export const WEB_APP_SERVER_CONNECT_EVENT = "zeta:app-server:connect";
-export const WEB_APP_SERVER_CONNECTED_EVENT = "zeta:app-server:connected";
-export const WEB_APP_SERVER_DISCONNECT_EVENT = "zeta:app-server:disconnect";
-export const WEB_APP_SERVER_FRAME_EVENT = "zeta:app-server:frame";
-export const WEB_APP_SERVER_CLOSED_EVENT = "zeta:app-server:closed";
+export const WEB_APP_SERVER_CONNECT_EVENT = "ash:app-server:connect";
+export const WEB_APP_SERVER_CONNECTED_EVENT = "ash:app-server:connected";
+export const WEB_APP_SERVER_DISCONNECT_EVENT = "ash:app-server:disconnect";
+export const WEB_APP_SERVER_FRAME_EVENT = "ash:app-server:frame";
+export const WEB_APP_SERVER_CLOSED_EVENT = "ash:app-server:closed";
 
 const MAX_FRAME_BYTES = 320 * 1024 * 1024;
 const MAX_STDERR_BYTES = 65_536;
@@ -40,32 +40,32 @@ interface AppServerEnvironmentOptions {
  * HMR WebSocket and one connection carrier per browser, sharing the profile daemon.
  */
 export function webAppServerVitePlugin(options: WebAppServerPluginOptions = {}): Plugin {
-  const desktopRoot = resolve(options.desktopRoot ?? resolve(import.meta.dirname, "../../zeta-ts"));
+  const desktopRoot = resolve(options.desktopRoot ?? resolve(import.meta.dirname, "../../ash-ts"));
   const repositoryRoot = resolve(options.repositoryRoot ?? resolve(desktopRoot, ".."));
-  const workspaceRoot = resolve(options.workspaceRoot ?? process.env.ZETA_WORKSPACE_ROOT ?? repositoryRoot);
-  const profileRoot = resolve(options.profileRoot ?? process.env.ZETA_WEB_APP_SERVER_PROFILE ?? desktopBuildPath(repositoryRoot, "dev", "web-profile"));
+  const workspaceRoot = resolve(options.workspaceRoot ?? process.env.ASH_WORKSPACE_ROOT ?? repositoryRoot);
+  const profileRoot = resolve(options.profileRoot ?? process.env.ASH_WEB_APP_SERVER_PROFILE ?? desktopBuildPath(repositoryRoot, "dev", "web-profile"));
   let packageRoot: string | undefined;
-  const developmentPackage = () => packageRoot ??= developmentZetaPackagePath(repositoryRoot, "packaged-node");
+  const developmentPackage = () => packageRoot ??= developmentAshPackagePath(repositoryRoot, "packaged-node");
   const executable = resolve(options.executable ?? join(
     developmentPackage(),
     "bin",
-    process.platform === "win32" ? "zeta-app-server-daemon.exe" : "zeta-app-server-daemon",
+    process.platform === "win32" ? "ash-app-server-daemon.exe" : "ash-app-server-daemon",
   ));
-  const ripgrep = resolve(options.ripgrep ?? process.env.ZETA_RG_PATH ?? join(
+  const ripgrep = resolve(options.ripgrep ?? process.env.ASH_RG_PATH ?? join(
     developmentPackage(),
-    "zeta-path",
+    "ash-path",
     process.platform === "win32" ? "rg.exe" : "rg",
   ));
   const sessions = new Map<WebSocketClient, Promise<WebAppServerSession>>();
 
   return {
-    name: "zeta-web-app-server",
+    name: "ash-web-app-server",
     apply: "serve",
     configureServer(server) {
       assertLoopbackServer(server.config.server.host);
       const onConnection = (socket: WebSocket, request: IncomingMessage): void => {
         if (!isAllowedDevOrigin(request?.headers?.origin, request?.headers?.host)) {
-          socket.close(1008, "Zeta Web development bridge requires a same-origin loopback client");
+          socket.close(1008, "Ash Web development bridge requires a same-origin loopback client");
         }
       };
       const onConnect = (_payload: unknown, client: WebSocketClient): void => {
@@ -111,7 +111,7 @@ export function webAppServerVitePlugin(options: WebAppServerPluginOptions = {}):
 
       async function createSession(client: WebSocketClient): Promise<WebAppServerSession> {
         if (!existsSync(executable)) {
-          throw new Error(`Packaged Zeta binary is missing: ${executable}`);
+          throw new Error(`Packaged Ash binary is missing: ${executable}`);
         }
         if (!existsSync(ripgrep)) {
           throw new Error(`Packaged ripgrep binary is missing: ${ripgrep}`);
@@ -119,7 +119,7 @@ export function webAppServerVitePlugin(options: WebAppServerPluginOptions = {}):
         await mkdir(profileRoot, { recursive: true });
         const child = spawn(executable, ["connect"], {
           cwd: workspaceRoot,
-          env: { ...appServerEnvironment({ profileRoot, ripgrep, workspaceRoot }), ZETA_APP_SERVER_PATH: join(dirname(executable), process.platform === 'win32' ? 'zeta-app-server.exe' : 'zeta-app-server') },
+          env: { ...appServerEnvironment({ profileRoot, ripgrep, workspaceRoot }), ASH_APP_SERVER_PATH: join(dirname(executable), process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server') },
           shell: false,
           stdio: "pipe",
           windowsHide: true,
@@ -305,11 +305,11 @@ class WebAppServerSession {
 function assertLoopbackServer(host: string | boolean | undefined): void {
   const value = host === true || host === undefined ? "127.0.0.1" : String(host);
   if (!isLoopbackHostname(value)) {
-    throw new Error(`Zeta Web development bridge must bind to loopback, received: ${value}`);
+    throw new Error(`Ash Web development bridge must bind to loopback, received: ${value}`);
   }
 }
 
-const COMMON_HOST_ENVIRONMENT_KEYS = ["HOME", "LANG", "LOGNAME", "PATH", "SHELL", "TEMP", "TMP", "TMPDIR", "USER", "ZETA_PRODUCT_SERVICES_PATH"];
+const COMMON_HOST_ENVIRONMENT_KEYS = ["HOME", "LANG", "LOGNAME", "PATH", "SHELL", "TEMP", "TMP", "TMPDIR", "USER", "ASH_PRODUCT_SERVICES_PATH"];
 const POSIX_HOST_ENVIRONMENT_KEYS = ["XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_RUNTIME_DIR", "XDG_STATE_HOME"];
 const WINDOWS_HOST_ENVIRONMENT_KEYS = ["ALLUSERSPROFILE", "APPDATA", "COMMONPROGRAMFILES", "COMMONPROGRAMFILES(X86)", "COMSPEC", "HOMEDRIVE", "HOMEPATH", "LOCALAPPDATA", "NUMBER_OF_PROCESSORS", "OS", "PATHEXT", "PROCESSOR_ARCHITECTURE", "PROCESSOR_IDENTIFIER", "PROCESSOR_LEVEL", "PROCESSOR_REVISION", "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "PSMODULEPATH", "PUBLIC", "SYSTEMDRIVE", "SYSTEMROOT", "USERDOMAIN", "USERNAME", "USERPROFILE", "WINDIR"];
 
@@ -326,9 +326,9 @@ export function appServerEnvironment({ profileRoot, ripgrep, workspaceRoot, sour
   }
   return {
     ...environment,
-    ZETA_HOME: profileRoot,
-    ZETA_RG_PATH: ripgrep,
-    ZETA_WORKSPACE_ROOT: workspaceRoot,
+    ASH_HOME: profileRoot,
+    ASH_RG_PATH: ripgrep,
+    ASH_WORKSPACE_ROOT: workspaceRoot,
   };
 }
 

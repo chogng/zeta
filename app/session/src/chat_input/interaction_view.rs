@@ -1,5 +1,5 @@
-use zeta_ui_components::ListView;
-use zeta_ui_components::ScrollState;
+use ash_ui_components::ListView;
+use ash_ui_components::ScrollState;
 use zui::ui::AccessibilityRole;
 use zui::ui::AccessibilitySelection;
 use zui::ui::Border;
@@ -36,7 +36,7 @@ pub(crate) fn draw_chat_input_interaction(
     dispatch: &UiDispatch,
     style: SessionPaneStyle,
 ) {
-    let interaction = zeta_ui_components::InteractionRegion::new(
+    let interaction = ash_ui_components::InteractionRegion::new(
         "ComposerInteraction",
         COMPOSER_INTERACTION,
         bounds,
@@ -102,7 +102,7 @@ pub(crate) fn draw_chat_input_interaction(
                 .intersection(list_bounds);
             let id = composer_interaction_item_id(index);
             context.draw_component(
-                &zeta_ui_components::InteractionRegion::new(
+                &ash_ui_components::InteractionRegion::new(
                     "ComposerInteractionItem",
                     id,
                     item_bounds,

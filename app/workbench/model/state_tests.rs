@@ -7,7 +7,7 @@ use crate::TabInputChange;
 use crate::TabInputMetadata;
 use crate::TabStatus;
 use crate::TabStatusKind;
-use zeta_protocol::{Session, SessionId, SessionStatus, ThreadId};
+use ash_protocol::{Session, SessionId, SessionStatus, ThreadId};
 
 fn session(id: &str, title: &str) -> Session {
     Session {

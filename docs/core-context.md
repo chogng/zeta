@@ -3,7 +3,7 @@
 > 状态：核心纵向切片已实现。`ContextInput`、纯规划器、`ContextPlan`、每个已加载 Thread 的
 > `ContextManager`、持久化 checkpoint、预算压缩、供应商溢出恢复和 `ContextAssembler` 已接入
 > `TurnExecutor`。Skill 正文通过通用 `TurnInputContributor` 在 invocation safe point 注入；
-> 通用预算、精准/估算计量结果和边界判定已拆入 `zeta-context-engine`；OpenAI exact，以及
+> 通用预算、精准/估算计量结果和边界判定已拆入 `ash-context-engine`；OpenAI exact，以及
 > Anthropic、Google、Kimi、Z.AI estimated remote preflight 已接入，DeepSeek/Hugging Face local
 > tokenizer adapter 已接入；provider usage 会按冻结模型和估算 revision 校准未来 Core-managed
 > capacity，未知窗口仍为 provider-managed。Hugging Face 公共模型支持按需发现、下载和缓存，其他 provider 的固定
@@ -11,10 +11,10 @@
 >
 > Core 总体边界：[`core.md`](core.md)
 > Canonical Thread/Turn/Item contract：[`protocol.md`](protocol.md)
-> 通用 extension contract：[`zeta-rs/ext/extension-api/README.md`](../zeta-rs/ext/extension-api/README.md)
+> 通用 extension contract：[`ash-rs/ext/extension-api/README.md`](../ash-rs/ext/extension-api/README.md)
 > 多 Agent context inheritance：[`core-multi-agent.md`](core-multi-agent.md)
-> 共享提示词资产契约：[`zeta-prompts`](../zeta-rs/prompts/README.md)
-> 预算与 token 计量实现：[`zeta-context-engine`](../zeta-rs/context-engine/README.md)
+> 共享提示词资产契约：[`ash-prompts`](../ash-rs/prompts/README.md)
+> 预算与 token 计量实现：[`ash-context-engine`](../ash-rs/context-engine/README.md)
 
 ## 快速理解
 
@@ -31,7 +31,7 @@
 
 ## 1. 结论
 
-Zeta 长期必须区分四个概念：
+Ash 长期必须区分四个概念：
 
 ```text
 Thread history
@@ -57,7 +57,7 @@ checkpoint、context seed 与 policy snapshot 重建。
 
 ## 2. 为什么不放进 Session
 
-Zeta 的 `Session` 是多个 Thread 的产品容器，只拥有 membership、lineage、shared defaults 和
+Ash 的 `Session` 是多个 Thread 的产品容器，只拥有 membership、lineage、shared defaults 和
 lifecycle。若 Session 持有 context，会产生无法接受的问题：
 
 - 多个 Thread 竞争同一 history/window；
@@ -67,7 +67,7 @@ lifecycle。若 Session 持有 context，会产生无法接受的问题：
 - Session lock 被 model/context I/O 放大；
 - Thread 无法独立恢复、并行和回收。
 
-其他代码库中名为 `Session` 的对象可能实际代表一条 conversation/thread 的加载实例。Zeta 必须
+其他代码库中名为 `Session` 的对象可能实际代表一条 conversation/thread 的加载实例。Ash 必须
 按领域语义映射，不能按目录或类型名照搬。
 
 ## 3. 权威与派生关系
@@ -106,7 +106,7 @@ Thread event stream
 
 ## 4. 数据模型
 
-以下类型表达当前规划语义；`ContextBudget` 由通用 `zeta-context-engine` 提供，其余选择模型仍由
+以下类型表达当前规划语义；`ContextBudget` 由通用 `ash-context-engine` 提供，其余选择模型仍由
 Core 内部拥有。live Config、provider client 和 mutable manager 都不会进入不可变规划输入。
 
 ### 4.1 ContextInput
@@ -229,7 +229,7 @@ ContextManager/Planner 完成。
 
 ### 5.4 通用预算引擎
 
-[`zeta-context-engine`](../zeta-rs/context-engine/README.md) 只拥有模型无关的预算数学和 token 计量
+[`ash-context-engine`](../ash-rs/context-engine/README.md) 只拥有模型无关的预算数学和 token 计量
 结果：它区分普通请求的压缩压力线与模型硬窗口，接受精准 preflight/本地 tokenizer 结果或带保守
 记账余量的估算，并返回 `Fits`、`NeedsCompaction` 或 `ExceedsContextWindow`。
 
@@ -239,9 +239,9 @@ ContextManager/Planner 完成。
 
 ### 5.5 提示词所有权与组装
 
-提示词按功能归属：`zeta-models-manager` 拥有所选模型的基础 instructions，Goal 提示归 `ext/goal`，动态上下文由对应贡献者提供，`zeta-guardian-reviewer` 拥有与动作授权 response schema 绑定的审查提示词，Skill、扩展和工具描述由各能力 crate 拥有。[`zeta-prompts`](../zeta-rs/prompts/README.md) 提供统一资产和冻结契约，并拥有 context compaction、通用代码 review 这类共享产品提示词。
+提示词按功能归属：`ash-models-manager` 拥有所选模型的基础 instructions，Goal 提示归 `ext/goal`，动态上下文由对应贡献者提供，`ash-guardian-reviewer` 拥有与动作授权 response schema 绑定的审查提示词，Skill、扩展和工具描述由各能力 crate 拥有。[`ash-prompts`](../ash-rs/prompts/README.md) 提供统一资产和冻结契约，并拥有 context compaction、通用代码 review 这类共享产品提示词。
 
-App Server 在接受普通 Turn 前把 `zeta-models-manager` 的基础 instructions 冻结为 durable `TurnInstructions`，review Turn 则冻结共享 review rubric 并标记 `TurnKind::Review`。Core 不在 invocation 时重新读取模型配置；它把 Turn 快照连同 Directory、Goal、Skill 与扩展 fragment 按 instruction layer、precedence、budget 和 provenance 组装成最终 request。Review Turn 跳过 active Goal 注入与 Goal continuation。历史旧 Turn 可以读取为缺少快照，但不能以临时查询或默认文本继续执行。
+App Server 在接受普通 Turn 前把 `ash-models-manager` 的基础 instructions 冻结为 durable `TurnInstructions`，review Turn 则冻结共享 review rubric 并标记 `TurnKind::Review`。Core 不在 invocation 时重新读取模型配置；它把 Turn 快照连同 Directory、Goal、Skill 与扩展 fragment 按 instruction layer、precedence、budget 和 provenance 组装成最终 request。Review Turn 跳过 active Goal 注入与 Goal continuation。历史旧 Turn 可以读取为缺少快照，但不能以临时查询或默认文本继续执行。
 
 当前 assembler 会把同一 Turn 中相邻的 `UserMessage` / `UserImage` 按 durable 顺序合并成一个
 provider-neutral user `Message`，分别映射为 `ContentPart::Text` 与
@@ -375,7 +375,7 @@ Core-managed plan 会把同一份 `reserved_output` 写入该次不可变 `Model
 
 已知窗口可以来自内置 `ModelInfo`，也可以由 `ModelProviderConfig.model_context` 按模型 ID 配置；
 窗口未知时使用 `ContextBudget::ProviderManaged`，Core 不假装拥有可靠上限。预算解析、精准/估算
-计量结果和统一边界判定已由 `zeta-context-engine` 提供；生产 planner 首轮仍使用带 revision 的
+计量结果和统一边界判定已由 `ash-context-engine` 提供；生产 planner 首轮仍使用带 revision 的
 确定性 byte estimate。最终 canonical request 会按“官方 preflight → 匹配模型的本地整请求计数 →
 Core 保守估算”降级：OpenAI Responses 为 exact；Anthropic、Google native `countTokens`、Kimi
 estimate 与 Z.AI tokenizer 为 estimated remote；本地 `hf-chat-template + tokenizers` 结果为
@@ -497,7 +497,7 @@ wait for safe point
 
 Core 为普通 Turn 请求写入 Session 级 prompt cache key，并在 `ContextPlan` 组装时标出当前 Turn 之前的可复用输入前缀。同一 Session 内的 fork 保留原消息与 key；委托说明追加在前缀之后。模型、工具集、权限指令或模型可见环境变化仍可能改变请求，不能由 AgentId 相同推断缓存命中。
 
-OpenAI 公开 Responses API 对支持模型将 Core 前缀终点映射为显式缓存断点；旧模型保持自动缓存。model-provider 按登录通道选择 `ApiEndpoint::ChatGptResponses`，由 zeta-api 省略订阅接口不支持的断点，并将同一缓存 key 写入 `session-id` 请求头。续写、fork、消息恢复和认证重试共用这个协议入口，调用者请求和认证 target 不被改写。结构化工具结果和图片能力与断点支持分别处理。供应商行为见 [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)，跨 provider 的请求头规则与验证见[模型 API 协议](zeta-api.md#14-供应商配置档案验证矩阵)。
+OpenAI 公开 Responses API 对支持模型将 Core 前缀终点映射为显式缓存断点；旧模型保持自动缓存。model-provider 按登录通道选择 `ApiEndpoint::ChatGptResponses`，由 ash-api 省略订阅接口不支持的断点，并将同一缓存 key 写入 `session-id` 请求头。续写、fork、消息恢复和认证重试共用这个协议入口，调用者请求和认证 target 不被改写。结构化工具结果和图片能力与断点支持分别处理。供应商行为见 [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)，跨 provider 的请求头规则与验证见[模型 API 协议](ash-api.md#14-供应商配置档案验证矩阵)。
 
 Provider response ID、缓存命中和连接状态都不是恢复正确性的前提。
 
@@ -529,7 +529,7 @@ ContextManager 决定是否选入下一次 ContextPlan。
 ## 11. 目录与可见性
 
 ```text
-zeta-rs/
+ash-rs/
 ├─ context-engine/
 │  └─ src/
 │     ├─ budget.rs
@@ -562,7 +562,7 @@ Memory 由 `ext/memories` 通过 `ContextContributor` 注册；`ContextEvidence`
 替换或移除 Codebase 不影响 Memory，各条材料保留独立来源、引用和 revision。
 来源失败会结束本次 Turn，取消继续传播，不能使用已经收集的
 部分内容继续调用模型。压缩或 token 计量导致准备重试时重新读取，避免保留已删除或撤销授权的材料。
-Codebase 自动召回由产品设置显式开启；Memory 自动读取由 [Memory API](zeta-app-server-api.md#memory)
+Codebase 自动召回由产品设置显式开启；Memory 自动读取由 [Memory API](ash-app-server-api.md#memory)
 按作用域独立授权，默认关闭。
 只有确有外部消费者时才从 `lib.rs` 导出窄 value/port，不能公开 cache、baseline、window mutable
 state 或 ContextManager 自身。
@@ -588,7 +588,7 @@ TurnExecutor
 | durable checkpoint、摘要生成、commit 后重规划 | ✅ 已实现 | 原始 event log 永不删除；压缩请求本身也受预算限制 |
 | 供应商上下文溢出恢复 | ✅ 已实现 | 只压缩 terminal 旧历史；checkpoint 与 Turn 恢复标记原子提交；最多重试一次 |
 | 已知模型窗口的生产启用 | ✅ 已实现 | 可通过 `model_context` 配置；未知模型退回 provider-managed |
-| 通用预算与精准/估算计量契约 | ✅ 已实现 | `zeta-context-engine` 统一压力线、硬窗口和保守记账判定 |
+| 通用预算与精准/估算计量契约 | ✅ 已实现 | `ash-context-engine` 统一压力线、硬窗口和保守记账判定 |
 | provider input-token preflight | 部分具备 | OpenAI exact；Anthropic、Google、Kimi、Z.AI estimated；官方接口失败时降级到本地或 Core 估算 |
 | 请求级本地 token 计数 | 部分具备 | HF 公共模型按需发现/下载/缓存；其他 provider 需固定资产清单；多模态 processor 尚未接入 |
 | provider usage 校准 | ✅ 已实现 | estimate 与 usage 仍是独立 durable 字段；按 Thread、冻结模型和 estimator revision 重建只影响未来 Core-managed capacity 的非对称 EMA |
@@ -621,19 +621,19 @@ TurnExecutor
 手动运行真实缓存验证：
 
 ```bash
-just test zeta-app-server --lib luna_cache_survives_fork_and_message_restore_after_restart -- --ignored --nocapture
+just test ash-app-server --lib luna_cache_survives_fork_and_message_restore_after_restart -- --ignored --nocapture
 ```
 
 该测试仅使用 Luna／low 和合成文本，读取已有 Codex 登录状态，不刷新或改写凭据。它经过 SQLite 历史、Core 执行循环和真实模型通道，比较原分支、fork、重新打开数据库后的消息前后恢复，并输出各次调用的输入、缓存读取、缓存写入、输出 token 和耗时。默认测试不发送这些真实模型请求；缓存未命中时保留测量结果并明确失败，不能把本地前缀相等当作服务端命中。
 
-2026-09-10 的 Luna／low 订阅通道实测定位了此前全为 0 的原因：Zeta 只发送了 body 中的 `prompt_cache_key`，缺少 Codex 同时发送的 `session-id` 请求头。固定输入的对照显示，仅补 `session-id` 即可命中；单独补 `thread-id`、`x-client-request-id` 或 `client_metadata` 不能替代它。Responses Lite、verbosity 和 turn-state 不属于这次修复的必要条件。原始 SSE 与 Zeta 解析后的缓存计数一致。
+2026-09-10 的 Luna／low 订阅通道实测定位了此前全为 0 的原因：Ash 只发送了 body 中的 `prompt_cache_key`，缺少 Codex 同时发送的 `session-id` 请求头。固定输入的对照显示，仅补 `session-id` 即可命中；单独补 `thread-id`、`x-client-request-id` 或 `client_metadata` 不能替代它。Responses Lite、verbosity 和 turn-state 不属于这次修复的必要条件。原始 SSE 与 Ash 解析后的缓存计数一致。
 
 正式通道补齐请求头后，约 14.3k 输入的原分支续写、fork、重新打开数据库后的消息前后恢复，以及完全相同请求对照都报告 14,080 个缓存读取 token；首轮为 0。历史、身份和请求前缀断言通过，登录凭据未改写。该通道本次仍报告 `cache_write_tokens = 0`，不能据此推断没有写缓存。模型服务的路由和缓存状态仍可能使后续运行出现未命中。
 
 针对路由头的独立对照与原始 SSE 用量核对：
 
 ```bash
-just test zeta-model-provider --lib live_luna_cache_requires_session_routing_header -- --ignored --nocapture
+just test ash-model-provider --lib live_luna_cache_requires_session_routing_header -- --ignored --nocapture
 ```
 
 ## 14. 固定决策
@@ -644,7 +644,7 @@ just test zeta-model-provider --lib live_luna_cache_requires_session_routing_hea
 - Thread event stream 是唯一 history authority；
 - ContextManager 可丢失、可重建；
 - ContextAssembler 保持纯组装；
-- 模型无关预算公式和 token 计量结果属于 `zeta-context-engine`；
+- 模型无关预算公式和 token 计量结果属于 `ash-context-engine`；
 - 选择、预算和 compaction 决策不进入 provider adapter；
 - checkpoint durable，但不删除原始 history；
 - 多 Agent 只通过 immutable seed 和 durable message/result 传递 context；

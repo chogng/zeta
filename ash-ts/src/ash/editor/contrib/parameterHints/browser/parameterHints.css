@@ -1,0 +1,23 @@
+.stanza-editor-parameter-hints {
+  position: absolute;
+  z-index: 8;
+  max-width: min(480px, calc(100% - 16px));
+  padding: 6px 8px;
+  color: var(--ash-editor-foreground);
+  background: var(--ash-editor-hover-background, var(--ash-editor-background));
+  border: 1px solid var(--ash-editor-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 14px var(--ash-editor-widget-shadow);
+}
+
+.stanza-editor-parameter-hints-signature.active {
+  font-weight: 600;
+}
+
+.stanza-editor-parameter-hints-parameter.active {
+  color: var(--ash-list-active-selection-foreground);
+  background: var(--ash-list-active-selection-background);
+  border-radius: 2px;
+  padding: 0 1px;
+  font-weight: 700;
+}

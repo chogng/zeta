@@ -1,7 +1,7 @@
 # 工具系统
 
-> 计划物理位置：`zeta-rs/tools/`  
-> Rust crate：`zeta_tools`  
+> 计划物理位置：`ash-rs/tools/`  
+> Rust crate：`ash_tools`  
 > 当前状态：T1 主链完成，T2 MCP/dynamic 主链完成；MCP host runtime 已提取到 `ext/mcp`。T3 的
 > Tool Search、capability-bearing extension、Connector discovery projection、Plugin catalog projection 与
 > typed discovery request 已接入共享契约；`ext/web-search` 已提供默认关闭、宿主注入 backend 后才注册的
@@ -15,7 +15,7 @@
 > MCP client runtime：[`mcp.md`](mcp.md)  
 > Plugin authority：[`plugins.md`](plugins.md)  
 > Config 与 runtime snapshot：[`config.md`](config.md)  
-> Provider wire adapter：[`zeta-api.md`](zeta-api.md)
+> Provider wire adapter：[`ash-api.md`](ash-api.md)
 
 ## 快速理解
 
@@ -32,7 +32,7 @@
 
 ## 1. 结论
 
-`zeta-tools` 是 Zeta 工具子系统的共享类型与纯适配层。它定义一个工具如何被描述、暴露、搜索、
+`ash-tools` 是 Ash 工具子系统的共享类型与纯适配层。它定义一个工具如何被描述、暴露、搜索、
 绑定、调用和返回结果，并提供 MCP、dynamic tool、code mode 与图片精度等跨模块转换能力。
 
 它解决的是：
@@ -59,7 +59,7 @@ Core durable Tool Call / Tool Result lifecycle
 - model-emitted `ToolCall` 到 host-materialized `ToolInvocation` 之间的共享值；
 - executable tool 的 `ToolExecutor` / `ToolOutput` 接口；
 - immutable `ToolRegistrySnapshot`、binding、definition digest 与来源信息；
-- MCP descriptor/result 到 Zeta 工具值的纯转换；
+- MCP descriptor/result 到 Ash 工具值的纯转换；
 - dynamic tool definition/result 的校验与转换；
 - deferred tool loading、tool search 索引和值类型；
 - Plugin/Connector 发现结果和 install/enable/connect 请求的纯展示值；
@@ -67,7 +67,7 @@ Core durable Tool Call / Tool Result lifecycle
 - tool output image 的 detail capability 检查、标准化和降级；
 - schema、输出、日志预览和 provider capability 的共享校验规则。
 
-`zeta-tools` 不拥有：
+`ash-tools` 不拥有：
 
 - model → tool → model loop、approval、并行计划、retry 或 `UnknownOutcome` 决策；
 - Thread/Turn reducer、durable append、Tool Call/Result commit 或 recovery；
@@ -80,33 +80,33 @@ Core durable Tool Call / Tool Result lifecycle
 
 一句话边界：
 
-> `zeta-tools` 统一“工具在 host 中是什么以及如何跨表示转换”；Core 决定“何时、按什么策略调用”；
+> `ash-tools` 统一“工具在 host 中是什么以及如何跨表示转换”；Core 决定“何时、按什么策略调用”；
 > source runtime 决定“如何完成具体 I/O”。
 
 ## 2. 当前仓库审计
 
 当前已有可复用地基：
 
-- `zeta-protocol` 已定义 `ToolName`、`ToolCallId`、`ToolDefinition`、`ToolCall`、`ToolResult`、
+- `ash-protocol` 已定义 `ToolName`、`ToolCallId`、`ToolDefinition`、`ToolCall`、`ToolResult`、
   `ContentPart`、`ImageDetail` 和 durable `ThreadItem::ToolCall/ToolResult`；
-- `zeta-protocol` 已定义 `DynamicToolSpec`、`DynamicToolCall`、`DynamicToolResponse` 和对应
+- `ash-protocol` 已定义 `DynamicToolSpec`、`DynamicToolCall`、`DynamicToolResponse` 和对应
   Agent interaction；
-- `zeta-core` 已定义 `ToolService::prepare/execute` port，并完成 policy-gated、可恢复的顺序
+- `ash-core` 已定义 `ToolService::prepare/execute` port，并完成 policy-gated、可恢复的顺序
   model → tool → model vertical slice；
-- `zeta-core::ContextAssembler` 已能重建 Tool Call/Result pairing；
-- `zeta-api` 已分别把 canonical function tool 和图片 detail 转成 OpenAI Responses、
+- `ash-core::ContextAssembler` 已能重建 Tool Call/Result pairing；
+- `ash-api` 已分别把 canonical function tool 和图片 detail 转成 OpenAI Responses、
   Chat Completions 与 Anthropic Messages wire payload；
-- `zeta-shell-command` 与 `zeta-apply-patch` 各自提供独立 executor；App Server 的 direct
+- `ash-shell-command` 与 `ash-apply-patch` 各自提供独立 executor；App Server 的 direct
   `LocalToolSuite` 唯一提供 Agent 可见的 `read_file`、`write_file`、`edit`、`grep` 与 `glob`，三者
   共同接入 durable facts、policy authority、streaming output 与统一 registry；legacy
   operation-enum `file-system` 只留给明确的非 Agent consumer；
-- `zeta-mcp` 的 tools-only catalog/binding runtime 与 `zeta-mcp-extension` 的 host/Core adapter 已进入共享
+- `ash-mcp` 的 tools-only catalog/binding runtime 与 `ash-mcp-extension` 的 host/Core adapter 已进入共享
   registry/search projection；client-hosted dynamic tool 已进入同一 approval、durable interaction、
   exact owner 与 unknown-outcome 链；
-- `zeta-extension-api::ReadOnlyToolContributor` 和显式声明 network/credential scope 的
+- `ash-extension-api::ReadOnlyToolContributor` 和显式声明 network/credential scope 的
   `CapabilityToolContributor` 已进入同一 registry/policy/runtime；当前 `skills-read` 走前者，
-  `web_search` 走后者并要求 exact one-time approval。`zeta-core-plugins` 已把验证后的本地 catalog 投影为不可执行的 discovery
-  snapshot，`zeta-tools` 已定义 generation-bound install/enable/connect request；`zeta-core-plugins` 已能把
+  `web_search` 走后者并要求 exact one-time approval。`ash-core-plugins` 已把验证后的本地 catalog 投影为不可执行的 discovery
+  snapshot，`ash-tools` 已定义 generation-bound install/enable/connect request；`ash-core-plugins` 已能把
   local package stage、复验并原子 promote 到 content-addressed store，安装 authority 位于同一 crate；
 - App Server 以 frozen `ToolBinding` 的 runtime key 执行，不再在执行阶段按 live tool name 猜 source
   service；model invocation 会同时冻结 definitions 与 generation-bound binder，hot reload 只影响后续
@@ -121,24 +121,24 @@ Core durable Tool Call / Tool Result lifecycle
 
 - dynamic owner 断连已经 fail closed，但还缺“持久化后重启恢复”的完整 App Server fixture；
 - Plugin/Connector 已有 typed discovery，Plugin manifest 可声明一个 Connector 到其 MCP contribution
-  的绑定；`zeta-connectors-extension` 统一拥有连接状态、Plugin 目录转换、SQLite authority 与认证编排，
+  的绑定；`ash-connectors-extension` 统一拥有连接状态、Plugin 目录转换、SQLite authority 与认证编排，
   ready binding 已接入 MCP/App Server hot composition。local package store、OAuth/refresh/远端 revoke
   和产品连接入口也已落地；完整状态见 [外部服务连接系统](connectors.md)。Plugin activation
   由 package authority 提供，不能用 executable registry 反向代替；
-- `zeta-web-search-extension` 已有 bounded request、executor、JSON HTTP backend 与 App Server opt-in 安装口；
+- `ash-web-search-extension` 已有 bounded request、executor、JSON HTTP backend 与 App Server opt-in 安装口；
   当前没有默认生产 Search provider 或 credential UI，宿主未注入 backend 时工具完全不可用；
 - provider adapter 可能分别决定 namespace flattening、strict schema 和 image detail fallback；
 - tool search、Plugin discovery 和 install request 容易被混成一个有隐式副作用的“发现服务”；
 - Code Mode 已有确定性投影、exec/wait、V8 cell lifecycle、异步 broker 和可选 stdio Host。嵌套调用
   使用冻结 binding 并重新进入普通 ToolScheduler；Host/运行时异常不会重放可能已有副作用的调用。
 
-后续扩展必须继续经过现有 `zeta-tools` 窄共享契约和 App Server composition root，不能在 Plugin、
+后续扩展必须继续经过现有 `ash-tools` 窄共享契约和 App Server composition root，不能在 Plugin、
 Connector、code mode 或 provider adapter 内另建可执行 registry。
 
 本方案参考本地 `../codex/codex-rs/tools/` 已验证的提取方向：共享 definition/spec、MCP/dynamic
 adapter、tool search/discovery、code-mode bridge、image-detail normalization 与 executor
-contract 可以离开 Core。Zeta 不直接照搬其中的 Responses API DTO 或 Core runtime context：
-provider wire 继续属于 `zeta-api`，durable scheduling/recovery 继续属于 `zeta-core`。
+contract 可以离开 Core。Ash 不直接照搬其中的 Responses API DTO 或 Core runtime context：
+provider wire 继续属于 `ash-api`，durable scheduling/recovery 继续属于 `ash-core`。
 
 ## 3. 三层工具契约
 
@@ -146,11 +146,11 @@ provider wire 继续属于 `zeta-api`，durable scheduling/recovery 继续属于
 
 | 层 | Owner | 典型类型 | 生命周期 |
 | --- | --- | --- | --- |
-| Canonical product contract | `zeta-protocol` | `ToolName`、`ToolCallId`、durable Tool Item、dynamic interaction | 可序列化、可持久化 |
-| Host tool contract | `zeta-tools` | `ToolDefinition`、`ToolSpec`、binding、invocation、output、executor | process-local 或 snapshot-scoped |
-| Execution orchestration | `zeta-core` | `ToolScheduler`、`ToolService` port、approval、retry、recovery | Turn/operation-scoped |
+| Canonical product contract | `ash-protocol` | `ToolName`、`ToolCallId`、durable Tool Item、dynamic interaction | 可序列化、可持久化 |
+| Host tool contract | `ash-tools` | `ToolDefinition`、`ToolSpec`、binding、invocation、output、executor | process-local 或 snapshot-scoped |
+| Execution orchestration | `ash-core` | `ToolScheduler`、`ToolService` port、approval、retry、recovery | Turn/operation-scoped |
 
-### 3.1 `zeta-protocol` 继续拥有
+### 3.1 `ash-protocol` 继续拥有
 
 - 所有跨进程和 durable identity；
 - model output 中 canonical `ToolCall` 的语义；
@@ -159,9 +159,9 @@ provider wire 继续属于 `zeta-api`，durable scheduling/recovery 继续属于
 - provider-independent message content 和图片 detail 枚举；
 - App Server 客户端确实需要读取的稳定工具值。
 
-`zeta-tools` 不重新定义 `ToolName`、`ToolCallId` 或另一套 durable Tool Item。
+`ash-tools` 不重新定义 `ToolName`、`ToolCallId` 或另一套 durable Tool Item。
 
-### 3.2 `zeta-tools` 拥有
+### 3.2 `ash-tools` 拥有
 
 - 比 model request DTO 更完整的 host-side definition/spec；
 - schema normalization、definition digest 和 name/binding 规则；
@@ -169,8 +169,8 @@ provider wire 继续属于 `zeta-api`，durable scheduling/recovery 继续属于
 - source-neutral registry、search、code mode 和 output adapter；
 - 从 source-specific projection 到 host tool contract 的纯函数。
 
-当前 `zeta-protocol::ToolDefinition` 在迁移期保留为 model invocation 的最小 canonical value。
-`zeta-tools::ToolDefinition` 通过显式、可失败的 adapter 转成它。两者不能依赖同名 re-export
+当前 `ash-protocol::ToolDefinition` 在迁移期保留为 model invocation 的最小 canonical value。
+`ash-tools::ToolDefinition` 通过显式、可失败的 adapter 转成它。两者不能依赖同名 re-export
 长期共存；迁移完成后应根据真实消费者选择以下一个方向：
 
 1. protocol 类型明确命名为 `ModelToolDefinition`，host 类型保留 `ToolDefinition`；或
@@ -178,7 +178,7 @@ provider wire 继续属于 `zeta-api`，durable scheduling/recovery 继续属于
 
 不能用 `pub use` 假装两个不同生命周期的类型语义相同。
 
-### 3.3 `zeta-core` 继续拥有
+### 3.3 `ash-core` 继续拥有
 
 - 当前 invocation 使用哪个 registry snapshot；
 - model call 后的 schema/availability 校验时机；
@@ -197,45 +197,45 @@ Core 的 `ToolService` 是 consumer-owned port；它可以由外层 `ToolRegistr
 目标依赖：
 
 ```text
-                         zeta-protocol
+                         ash-protocol
                                ▲
                                │ canonical IDs/content
-                         zeta-tools
+                         ash-tools
                    shared types / pure adapters
                     ▲       ▲        ▲
                     │       │        │
-          local tool owners  zeta-mcp  code-mode adapter
+          local tool owners  ash-mcp  code-mode adapter
       shell-command / App Server direct files / apply_patch
                     \       |        /
                      \      |       /
                       App Server composition
                      /       |        \
                     ▼        ▼         ▼
-             Core ToolService  Plugin catalog  zeta-api
+             Core ToolService  Plugin catalog  ash-api
                 adapter        projection      provider wire
                     │
                     ▼
-                 zeta-core
+                 ash-core
 ```
 
 允许：
 
-- `zeta-tools → zeta-protocol`；
-- `zeta-core → zeta-tools + zeta-protocol`；
-- `zeta-mcp → zeta-tools`；
-- `zeta-shell-command → zeta-tools + zeta-tool-executor + zeta-sandboxing`；
-- local App Server composition → `zeta-install-context + zeta-shell-command`；
-- `zeta-file-system → zeta-tools + zeta-sandboxing`；
-- `zeta-tui → zeta-file-search`；后者提供只读路径索引，不依赖 `zeta-tools`，也不注册为模型
+- `ash-tools → ash-protocol`；
+- `ash-core → ash-tools + ash-protocol`；
+- `ash-mcp → ash-tools`；
+- `ash-shell-command → ash-tools + ash-tool-executor + ash-sandboxing`；
+- local App Server composition → `ash-install-context + ash-shell-command`；
+- `ash-file-system → ash-tools + ash-sandboxing`；
+- `ash-tui → ash-file-search`；后者提供只读路径索引，不依赖 `ash-tools`，也不注册为模型
   Tool；
-- catalog/runtime manager 可依赖 `zeta-file-watcher` 获取 coarse invalidation hint；后者不依赖
-  `zeta-tools`，不读取文件内容，也不注册为模型 Tool；
-- `zeta-apply-patch → zeta-tools + zeta-sandboxing`；
-- `zeta-action-policy → zeta-execpolicy + zeta-sandboxing`；
-- `zeta-execpolicy` 不依赖 sandbox、Core、Tool 或配置 I/O；
-- `zeta-guardian-reviewer → zeta-action-policy + zeta-sandboxing`；
-- 本地进程执行器只依赖 `zeta-sandboxing` 契约；产品组合注入 `mxc-sandbox`，平台细节留在适配器；
-- `zeta-api → zeta-tools + zeta-protocol`；
+- catalog/runtime manager 可依赖 `ash-file-watcher` 获取 coarse invalidation hint；后者不依赖
+  `ash-tools`，不读取文件内容，也不注册为模型 Tool；
+- `ash-apply-patch → ash-tools + ash-sandboxing`；
+- `ash-action-policy → ash-execpolicy + ash-sandboxing`；
+- `ash-execpolicy` 不依赖 sandbox、Core、Tool 或配置 I/O；
+- `ash-guardian-reviewer → ash-action-policy + ash-sandboxing`；
+- 本地进程执行器只依赖 `ash-sandboxing` 契约；产品组合注入 `mxc-sandbox`，平台细节留在适配器；
+- `ash-api → ash-tools + ash-protocol`；
 - App Server 组合 Tool registry、source runtime、policy 和 Core port。
 
 Sandbox backend 的内部调度、平台 crate 边界和 fail-closed 规则见
@@ -246,18 +246,18 @@ Action classifier、exact grant 与最终 execution decision 见
 禁止：
 
 ```text
-zeta-tools → zeta-core
-zeta-tools → zeta-mcp live runtime
-zeta-tools → zeta-core-plugins authority
-zeta-tools → zeta-app-server
-zeta-tools → provider HTTP client
-zeta-tools → credential or secret store
-zeta-tools → ThreadStore / SessionStore
+ash-tools → ash-core
+ash-tools → ash-mcp live runtime
+ash-tools → ash-core-plugins authority
+ash-tools → ash-app-server
+ash-tools → provider HTTP client
+ash-tools → credential or secret store
+ash-tools → ThreadStore / SessionStore
 ```
 
-MCP adapter 的公开输入使用 `zeta-tools` 自己的纯 `McpToolProjection`，不在 public API 暴露
-某个 MCP SDK 的 wire DTO。`zeta-mcp` 负责从当前 protocol revision 的 wire model 产生 projection；
-`zeta-tools` 负责从 projection 产生 host definition。这样 MCP SDK 升级不会迫使所有工具消费者
+MCP adapter 的公开输入使用 `ash-tools` 自己的纯 `McpToolProjection`，不在 public API 暴露
+某个 MCP SDK 的 wire DTO。`ash-mcp` 负责从当前 protocol revision 的 wire model 产生 projection；
+`ash-tools` 负责从 projection 产生 host definition。这样 MCP SDK 升级不会迫使所有工具消费者
 一起升级。
 
 ### 4.1 当前本地工具来源运行时
@@ -267,54 +267,54 @@ direct 工具名，不看到基础库或 legacy operation enum：
 
 | Crate / tool name | 可做的事 | 明确不做的事 |
 | --- | --- | --- |
-| `zeta-shell-command` / `shell-command` | 在批准的相对 Directory 工作目录执行显式 program/arguments；复用 `zeta-tool-executor` 的 approval、timeout 和输出上限 | 不隐式启动 shell，不绕过 process policy |
+| `ash-shell-command` / `shell-command` | 在批准的相对 Directory 工作目录执行显式 program/arguments；复用 `ash-tool-executor` 的 approval、timeout 和输出上限 | 不隐式启动 shell，不绕过 process policy |
 | App Server `LocalToolSuite` / `read_file`、`write_file`、`edit`、`grep`、`glob` | Thread-scoped 读后写入、conditional atomic 单文件写入和受控搜索 | 不暴露 operation enum；断线恢复后必须重读才能恢复内存中的文件 fingerprint |
-| `zeta-file-system` / 非 Agent 基础库 | 提供 directory-scoped 条件写入与 host-only filesystem 能力 | 默认 coding profile 不暴露 `file-system` 工具 |
-| `zeta-apply-patch` / `apply_patch` | 预检后更新、添加或删除普通文件；replacement 按文件原子写入 | 不接受绝对/`..` 路径，不直接提供任意写入 API；多文件提交不承诺事务性 |
+| `ash-file-system` / 非 Agent 基础库 | 提供 directory-scoped 条件写入与 host-only filesystem 能力 | 默认 coding profile 不暴露 `file-system` 工具 |
+| `ash-apply-patch` / `apply_patch` | 预检后更新、添加或删除普通文件；replacement 按文件原子写入 | 不接受绝对/`..` 路径，不直接提供任意写入 API；多文件提交不承诺事务性 |
 
 这些 owner 均在构造时固定 `ToolEnvironmentId + DirectoryRoot`，要求它与
 `ToolExecutionContext.environment_id` 一致，且只接受与自身 `ToolDefinition` digest 相符的冻结
 binding。`apply_patch` 在所有 hunk 校验完成前不写入；
 若多文件 commit 中途失败，返回 `OutcomeUncertain`，由 Core 决定后续恢复语义。
 
-`zeta-file-system` 还提供 host-only 的 `find_nearest_ancestor_with_markers`，用于从一个本地路径
+`ash-file-system` 还提供 host-only 的 `find_nearest_ancestor_with_markers`，用于从一个本地路径
 向上发现最近的项目 marker。它不是模型 Tool，不读取 marker 配置，也不施加 `DirectoryRoot`
 containment；调用方仍拥有项目根语义和搜索边界。实现与错误策略由
-[`zeta-rs/file-system/README.md`](../zeta-rs/file-system/README.md) 维护。
+[`ash-rs/file-system/README.md`](../ash-rs/file-system/README.md) 维护。
 
 搜索分成 Agent 内容搜索、编辑器内容搜索和交互式路径搜索：
 
 | Surface | 所有权 | 模型可见 |
 | --- | --- | --- |
-| App Server `LocalToolSuite::grep` | Agent 内容搜索；由 `agent.grepBackend` 在冻结 `rg` 与 `zeta-fast-regex-search` 间选择 | `grep` Tool |
-| `zeta-content-search` + `rg` | 编辑器工作区内容搜索、分页和取消；不读取 Agent grep 配置 | 否 |
-| `zeta-file-search` | ignore-aware 路径索引、fuzzy matching、`PathSearchHandle` 和 CLI | 否 |
-| `zeta-file-watcher` | 多订阅者路径失效提示、missing-path fallback、throttle/debounce 与 overflow rescan hint | 否 |
+| App Server `LocalToolSuite::grep` | Agent 内容搜索；由 `agent.grepBackend` 在冻结 `rg` 与 `ash-fast-regex-search` 间选择 | `grep` Tool |
+| `ash-content-search` + `rg` | 编辑器工作区内容搜索、分页和取消；不读取 Agent grep 配置 | 否 |
+| `ash-file-search` | ignore-aware 路径索引、fuzzy matching、`PathSearchHandle` 和 CLI | 否 |
+| `ash-file-watcher` | 多订阅者路径失效提示、missing-path fallback、throttle/debounce 与 overflow rescan hint | 否 |
 
-模型侧注册独立 `grep` 和 `glob` Tool。`grep` 默认执行冻结的 `rg`；选择 `fastRegex` 后只把 `grep` 切换到本地稀疏 n-gram 索引，`glob` 与编辑器 Search 继续执行 `rg`。交互式路径搜索契约由 [`zeta-rs/file-search/README.md`](../zeta-rs/file-search/README.md) 维护；TUI 直接持有 `PathSearchHandle`，不启动 CLI，Core 也不把路径搜索注册成 Tool。
+模型侧注册独立 `grep` 和 `glob` Tool。`grep` 默认执行冻结的 `rg`；选择 `fastRegex` 后只把 `grep` 切换到本地稀疏 n-gram 索引，`glob` 与编辑器 Search 继续执行 `rg`。交互式路径搜索契约由 [`ash-rs/file-search/README.md`](../ash-rs/file-search/README.md) 维护；TUI 直接持有 `PathSearchHandle`，不启动 CLI，Core 也不把路径搜索注册成 Tool。
 
-`fastRegex` 必须先用覆盖 n-gram 和 posting 交集缩小候选，再读取当前文件做精确验证。产品 App Server 通过私有 UDS 调用按 Directory 常驻的 Fast Regex 子进程，lookup 的 mmap、posting 读取和完整查询都留在子进程，主进程只接收有上限的最终结果。短查询、纯字符类和其他没有必需文字的正则仍会扫描全部已索引文件，但它们也进入与 `rg --line-number` 等价输出的性能底线；稀有、无命中和全量扫描用例任一不快于 `rg`，基准就失败。执行方式在 Tool generation 冻结后不会按单次查询暗中切换。基准入口和当前存储契约由 [`zeta-fast-regex-search`](../zeta-rs/fast-regex-search/README.md) 维护。
+`fastRegex` 必须先用覆盖 n-gram 和 posting 交集缩小候选，再读取当前文件做精确验证。产品 App Server 通过私有 UDS 调用按 Directory 常驻的 Fast Regex 子进程，lookup 的 mmap、posting 读取和完整查询都留在子进程，主进程只接收有上限的最终结果。短查询、纯字符类和其他没有必需文字的正则仍会扫描全部已索引文件，但它们也进入与 `rg --line-number` 等价输出的性能底线；稀有、无命中和全量扫描用例任一不快于 `rg`，基准就失败。执行方式在 Tool generation 冻结后不会按单次查询暗中切换。基准入口和当前存储契约由 [`ash-fast-regex-search`](../ash-rs/fast-regex-search/README.md) 维护。
 
 普通文件变化直接写 delta；`.gitignore`、`.ignore`、`.git/info/exclude` 变化或 watcher overflow 会重新核对
 当前可索引文件集合，只发布实际增删改。只有 delta 需要压缩、格式不兼容、索引损坏或无法可靠计算差异时
 才重建 base。手动重建期间旧 generation 继续服务；普通“关闭”切回 `rg` 并保留磁盘数据，“关闭并删除”
 在配置提交后释放 worker，再通过跨进程独占锁删除。
 
-`zeta-file-watcher` 同样不是搜索或读取接口。它只把 OS mutation/error 转成
+`ash-file-watcher` 同样不是搜索或读取接口。它只把 OS mutation/error 转成
 `PathsChanged`/`RescanRequired`；consumer 必须重新扫描并校验 own state。其 ref-count、路径匹配、
 RAII 与 failure contract 由
-[`zeta-rs/file-watcher/README.md`](../zeta-rs/file-watcher/README.md) 维护。
+[`ash-rs/file-watcher/README.md`](../ash-rs/file-watcher/README.md) 维护。
 
-当前 local App Server 启动时通过 `zeta-install-context` 按 `ZETA_RG_PATH`、package
-`zeta-path/`、Zeta executable 同目录、host `PATH` 的顺序生成 `rg` candidates，再由
-`zeta-shell-command` 验证并冻结 canonical executable identity；未找到时启用本地工具的
+当前 local App Server 启动时通过 `ash-install-context` 按 `ASH_RG_PATH`、package
+`ash-path/`、Ash executable 同目录、host `PATH` 的顺序生成 `rg` candidates，再由
+`ash-shell-command` 验证并冻结 canonical executable identity；未找到时启用本地工具的
 composition 直接失败。canonical release package 由
 [`build/release/package/build.py`](../build/release/package/build.py) 按
 [`third_party/ripgrep/runtime-lock.json`](../third_party/ripgrep/runtime-lock.json) 下载并校验
-target-specific ripgrep archive，把 executable 放到 `zeta-path/rg[.exe]`；源码开发启动仍可使用
-`ZETA_RG_PATH` 或 host `PATH`。
+target-specific ripgrep archive，把 executable 放到 `ash-path/rg[.exe]`；源码开发启动仍可使用
+`ASH_RG_PATH` 或 host `PATH`。
 filesystem 与 shell Tool 复用同一个启动时 canonicalized `DirectoryRoot`，CLI 优先采用
-`ZETA_WORKSPACE_ROOT`，否则采用当前目录。模型只看到 `program = "rg"`，host 强制加入
+`ASH_WORKSPACE_ROOT`，否则采用当前目录。模型只看到 `program = "rg"`，host 强制加入
 `--no-config`，拒绝 preprocessor、hostname command、archive search、symlink follow 和外部
 pattern/ignore file 参数，包括 `-f/path`、`-LH` 等紧凑短参数形式，并用只读、断网 sandbox
 执行。进程输出采用总 byte budget 截断并返回显式 truncation marker，Turn cancellation 会终止
@@ -324,7 +324,7 @@ pattern/ignore file 参数，包括 `-f/path`、`-LH` 等紧凑短参数形式�
 App Server 尚未执行 `rg --version` capability probe；本地 override/PATH candidate 也不保证与
 package 锁定版本相同。该 runtime prerequisite 属于命令执行与安装诊断，不应通过重新增加一套
 内容搜索 Tool 解决。crate 内实现契约见
-[`zeta-rs/shell-command/README.md`](../zeta-rs/shell-command/README.md)。
+[`ash-rs/shell-command/README.md`](../ash-rs/shell-command/README.md)。
 
 ## 5. 身份、来源与绑定
 
@@ -431,7 +431,7 @@ pub enum ToolOutputSchema {
 ```
 
 不使用 `strict: bool` 或 `defer_loading: bool` 作为 host API。Provider wire 需要的 bool 只在
-`zeta-api` adapter 最后一层产生。
+`ash-api` adapter 最后一层产生。
 
 Description 是 untrusted model context：
 
@@ -453,7 +453,7 @@ pub struct ToolSchema {
 pub struct ToolInputSchema(ToolSchema);
 ```
 
-`ToolInputSchema` 额外要求根节点满足 Zeta function-argument contract。公开构造只能经过
+`ToolInputSchema` 额外要求根节点满足 Ash function-argument contract。公开构造只能经过
 parser/validator。至少限制：
 
 - 总 bytes、nesting depth、node/property/enum 数；
@@ -465,7 +465,7 @@ parser/validator。至少限制：
 - provider 严格模式所需的完整 required set；
 - schema canonicalization 与稳定 digest。
 
-Canonical dialect 以 Zeta 支持的 JSON Schema 子集表达。MCP 2020-12 schema、dynamic schema 和
+Canonical dialect 以 Ash 支持的 JSON Schema 子集表达。MCP 2020-12 schema、dynamic schema 和
 provider function schema 都先进入同一 parser。不能为通过某个 provider 校验而静默删除有语义的
 constraint；只能：
 
@@ -496,7 +496,7 @@ pub enum ToolSpec {
 - `Search` 只搜索冻结 registry 中的 deferred definitions；
 - `ProviderHosted` 由 provider 执行，必须有独立 outcome/capability contract，不能伪装成
   `ToolExecutor`；
-- provider 不支持 namespace 时，由 `zeta-api` 根据 frozen alias table flatten，不能自由拼接
+- provider 不支持 namespace 时，由 `ash-api` 根据 frozen alias table flatten，不能自由拼接
   字符串；
 - provider 不支持 freeform 或 hosted kind 时，在 model invocation 前返回 capability error。
 
@@ -537,7 +537,7 @@ constrained by policy/grants/model capability
 = ToolRegistrySnapshot
 ```
 
-`zeta-tools` 提供 builder 和 immutable snapshot value，但不读取任何 live manager。
+`ash-tools` 提供 builder 和 immutable snapshot value，但不读取任何 live manager。
 
 ### 7.2 快照
 
@@ -646,7 +646,7 @@ Core/App Server 接入时会将它扩展为具名、受限的 capability handle�
 
 ### 8.4 执行器接口
 
-`zeta-tools` 定义工具作者接口：
+`ash-tools` 定义工具作者接口：
 
 ```rust
 /// Executes one fully materialized tool invocation.
@@ -748,7 +748,7 @@ error。
 - 日志预览与 model-facing full output 分离；
 - external context provenance。
 
-统一截断算法由 `zeta-utils-output-truncation` 持有；`zeta-tools::ToolOutput::truncate_text` 只负责
+统一截断算法由 `ash-utils-output-truncation` 持有；`ash-tools::ToolOutput::truncate_text` 只负责
 把 `ToolContent` 的多个 text part 交给这个 utility，并保留非文本 part。算法只在文本超过明确预算
 时从中间截断，保留 UTF-8 边界和头尾，并写入原始 token 数与行数；当前的 image 不会被切坏。
 `Bytes` 是硬字节预算，`ApproximateTokens` 只用于确定性近似，不能替代 Context/Model Provider
@@ -771,7 +771,7 @@ pub enum ToolExecutionOutcome {
 - `NotStarted`：能够证明外部动作尚未开始，例如 binding stale、local validation failed；
 - `OutcomeUncertain`：请求可能已到达外部系统，但断线/崩溃使终态未知。
 
-`zeta-tools` 定义准确值，Core 决定：
+`ash-tools` 定义准确值，Core 决定：
 
 - 是否将 `NotStarted` retry；
 - 是否把 `OutcomeUncertain` durable 映射为 `UnknownOutcome`；
@@ -792,13 +792,13 @@ approval binding。批准后在非 sandbox 重试前提交 escalation marker；�
 
 ```text
 ToolOutput
-  ├─► canonical zeta-protocol::ToolResult content
+  ├─► canonical ash-protocol::ToolResult content
   ├─► code-mode nested result
   ├─► bounded telemetry preview
   └─► provider-neutral next ModelRequest input
 ```
 
-Provider wire encoding 仍由 `zeta-api` 完成。不能让每个 executor 自己生成 OpenAI/Anthropic
+Provider wire encoding 仍由 `ash-api` 完成。不能让每个 executor 自己生成 OpenAI/Anthropic
 JSON。
 
 ## 10. MCP 工具转换
@@ -809,9 +809,9 @@ MCP 转换固定为：
 
 ```text
 MCP wire Tool
-  → zeta-mcp: revision-specific parse + exact remote identity
+  → ash-mcp: revision-specific parse + exact remote identity
   → McpToolProjection
-  → zeta-tools: schema normalization + host definition + output adapter
+  → ash-tools: schema normalization + host definition + output adapter
   → RegisteredTool + MCP executor binding
 ```
 
@@ -1020,7 +1020,7 @@ snapshot-local 目录、输入准备、召回融合、generation 校验、过滤
 已授权 semantic 和可选 cloud candidates，再返回 bounded、current-source-verified excerpts。Policy 只
 只接受绑定当前目录、授权版本和读取 Permission 的 Authorization；伪造或复用其他 Authorization 会被拒绝。
 
-`zeta-rs/tools/src/registry_search_eval_tests.rs` 保存一份跨 coding、GitHub、Slack、Calendar、
+`ash-rs/tools/src/registry_search_eval_tests.rs` 保存一份跨 coding、GitHub、Slack、Calendar、
 Browser 和 Database 的离线查询集，比较当前 BM25 排序与 uniform token-overlap baseline，并以
 Top-1、Top-3 和 MRR 设置回归门槛。该 synthetic fixture 只防止明显退化，不替代基于匿名真实调用
 构建的长期评测集；纯语义同义词和跨语言查询单独计分，不冒充词法方案已经解决的能力。
@@ -1036,7 +1036,7 @@ model calls tool_search
 → next model invocation includes selected definitions
 ```
 
-如果 provider 原生支持 deferred tool loading，`zeta-api` 可以把同一 `LoadableToolSpec` 编码成
+如果 provider 原生支持 deferred tool loading，`ash-api` 可以把同一 `LoadableToolSpec` 编码成
 provider feature，但 provider 返回的 loaded tool 仍必须关联 frozen binding。Provider 不能加载
 host registry 中不存在的 tool。
 
@@ -1058,7 +1058,7 @@ Plugin discovery result 永远不是 `ToolDefinition`，不能直接进入 model
 
 ### 13.2 共享发现值
 
-`zeta-tools` 只定义跨 Plugin manager、App Server 和 Agent-facing helper 共享的纯值：
+`ash-tools` 只定义跨 Plugin manager、App Server 和 Agent-facing helper 共享的纯值：
 
 ```rust
 pub enum DiscoverableCapability {
@@ -1116,7 +1116,7 @@ request_plugin_install
 Code mode 是普通工具集合的另一种模型调用表示：模型通过一个 code execution surface，在代码中
 调用多个 nested tools。它不是第二套 tool runtime，也不是 approval/sandbox 旁路。
 
-`zeta-tools` 拥有：
+`ash-tools` 拥有：
 
 - `ToolSpec → CodeModeToolDefinition` 的纯投影；
 - namespace/name normalization 和 collision table；
@@ -1202,7 +1202,7 @@ call、cell ID 和 runtime call ID，再由同一个 `ToolScheduler` 处理审�
 
 图片可以来自 built-in tool、MCP、dynamic owner、code mode 或 future connector。它们最终进入同一
 provider-neutral model context。若每个 source/provider 分别降级 `Original`，同一图片会得到不一致
-行为，因此 capability normalization 放在 `zeta-tools`。
+行为，因此 capability normalization 放在 `ash-tools`。
 
 ### 15.2 请求与决策
 
@@ -1262,13 +1262,13 @@ bytes 的权限。
 ### 15.4 图像安全
 
 共享图片字节的解码、资源限制、缩放、重编码、metadata policy 与 bounded cache 由
-[`zeta-utils-image`](../zeta-rs/utils/image/README.md) 实现；本节拥有跨 Core、Tool、模型与
+[`ash-utils-image`](../ash-rs/utils/image/README.md) 实现；本节拥有跨 Core、Tool、模型与
 provider 的安全和策略边界，crate README 拥有具体实现契约。
 
 - data URL、remote URL 和 durable attachment reference 使用不同 typed source；
 - 限制 decoded bytes、pixel count、dimensions、frame count 和 MIME；
 - SVG、animated image 和 metadata 使用明确 policy；
-- remote URL fetch 属于 host-owned `zeta-attachments` admission，不在 `zeta-tools`；它使用 direct
+- remote URL fetch 属于 host-owned `ash-attachments` admission，不在 `ash-tools`；它使用 direct
   transport、DNS-time public-address enforcement、逐跳 redirect 复核和 bounded body；
 - 接受后的图片以 content digest + 验证后的媒体元数据进入 Thread；只有 model invocation adapter
   才把 verified bytes 临时 materialize 为 provider data URL；
@@ -1278,7 +1278,7 @@ provider 的安全和策略边界，crate README 拥有具体实现契约。
 
 ## 16. 供应商适配器
 
-`zeta-tools` 保持 provider-neutral；`zeta-api` 负责：
+`ash-tools` 保持 provider-neutral；`ash-api` 负责：
 
 ```text
 ToolSpec + ModelCapabilitySnapshot
@@ -1290,7 +1290,7 @@ provider tool call/result
 
 共享层负责提供确定性输入，provider 层负责 wire 差异：
 
-| 能力 | `zeta-tools` | `zeta-api` |
+| 能力 | `ash-tools` | `ash-api` |
 | --- | --- | --- |
 | name/schema validation | canonical 规则 | provider-specific final gate |
 | namespace | binding 与 flatten plan | wire encoding |
@@ -1380,7 +1380,7 @@ InternalToolInvariant
 
 职责：
 
-- `zeta-tools` 产生 definition/schema/adapter/binding 错误；
+- `ash-tools` 产生 definition/schema/adapter/binding 错误；
 - source runtime 产生 transport/executor detail；
 - Core 映射 approval/retry/recovery/Turn outcome；
 - App Server 映射 stable RPC error；
@@ -1394,7 +1394,7 @@ InternalToolInvariant
 第一版保持一个 crate，模块默认 private，`lib.rs` 只做精确导出：
 
 ```text
-zeta-rs/tools/src/
+ash-rs/tools/src/
 ├── lib.rs
 ├── error.rs
 ├── identity.rs
@@ -1470,14 +1470,14 @@ mod tests;
 - unchecked schema constructor。
 
 若 code-mode runtime、MCP adapter 或 search engine 后续形成独立重量级依赖，应提取独立 crate，
-但 `zeta-tools` 仍只保留窄 bridge contract。第一版不创建 `tools-common`、`tools-types`、
+但 `ash-tools` 仍只保留窄 bridge contract。第一版不创建 `tools-common`、`tools-types`、
 `tool-runtime` 等无独立消费者的小 crate。
 
 ## 20. 迁移顺序
 
 ### 阶段 T0：固定共享边界（完成）
 
-- ✅ 创建 `zeta-tools`；
+- ✅ 创建 `ash-tools`；
 - ✅ 复用 protocol `ToolName` / `ToolCallId`，不复制 identity；
 - ✅ 建立受限 schema parser、`ToolDefinition`、function/freeform invocation 与基础 output content；
 - ✅ 为当前 protocol `ToolDefinition/ToolResult` 提供 adapter；
@@ -1499,10 +1499,10 @@ mod tests;
 
 ### 阶段 T2：MCP 与动态适配器（MCP/动态与 durable 来源主链完成）
 
-- ✅ `zeta-mcp` 输出 `McpToolProjection` 并建立 immutable catalog/binding；
+- ✅ `ash-mcp` 输出 `McpToolProjection` 并建立 immutable catalog/binding；
 - ✅ 接通 MCP schema/name/result conversion 与调用取消；
 - ✅ MCP App Server/Core adapter 接入逐次 approval、durable commit 和 unknown outcome；
-- ✅ MCP host integration 从 App Server 私有模块提取到 `zeta-rs/ext/mcp`；App Server 仅组合和 safe-point replacement；
+- ✅ MCP host integration 从 App Server 私有模块提取到 `ash-rs/ext/mcp`；App Server 仅组合和 safe-point replacement；
 - ✅ dynamic definition 进入共享 registry，execution 经过 approval、durable interaction 与 Tool Result commit；
 - ✅ dynamic request 固定 definition digest、call id、name 与 arguments；同名新定义不能认领旧 response；
 - ✅ 多连接 delivery 还按 initialize capability 的 exact dynamic tool name 选 owner；
@@ -1598,14 +1598,14 @@ ranking 只证明 gate、document embedding、cosine ranking 和 hybrid merge �
 
 ## 22. 固定决策
 
-- `zeta-tools` 是共享类型与纯适配层，不是第二个 Core；
+- `ash-tools` 是共享类型与纯适配层，不是第二个 Core；
 - `ToolName` 是 model-facing alias，不是 source/executor identity；
 - `ToolCall` 与 materialized `ToolInvocation` 是不同生命周期；
 - Core 的 `ToolService` port 与工具作者的 `ToolExecutor` interface 分开；
 - definition、binding、registry snapshot 在 model safe point 冻结；
 - in-flight call 永远按原 binding 执行，不按 name 重查 live registry；
-- MCP wire/lifecycle 属于 `zeta-mcp`，MCP-to-tool pure conversion 属于 `zeta-tools`；
-- Plugin authority/install/grant 属于 `zeta-core-plugins`，discovery DTO 不拥有 mutation；
+- MCP wire/lifecycle 属于 `ash-mcp`，MCP-to-tool pure conversion 属于 `ash-tools`；
+- Plugin authority/install/grant 属于 `ash-core-plugins`，discovery DTO 不拥有 mutation；
 - tool search 只搜索已安装、已授权、当前可用的 deferred tools；
 - Plugin discovery 不能直接产生 executable ToolDefinition；
 - dynamic tool 不绕过 schema、registry、approval 或 durable interaction；
@@ -1615,9 +1615,9 @@ ranking 只证明 gate、document embedding、cosine ranking 和 hybrid merge �
 - `Original` 图片精度只在 model capability 支持时保留；
 - provider adapter 只编码 effective tool/image value，不重新做 host policy；
 - 所有 schema、description、arguments、outputs 和 discovery metadata 默认不可信；
-- `zeta-tools` 不读取 Config、Plugin/MCP live manager、credential、ThreadStore 或 provider client；
+- `ash-tools` 不读取 Config、Plugin/MCP live manager、credential、ThreadStore 或 provider client；
 - 新 public trait 必须带角色和实现约束 doc comment；
 - 新 API 不使用让调用方写出 `foo(false)` / `bar(None)` 的含糊参数；
 - 模块默认 private，`lib.rs` 精确导出，implementation tests 放 sibling 文件。
 
-新增的 Goal、Agent、历史笔记、图片和等待工具，以及对应扩展职责见 [Agent 扩展](../zeta-rs/docs/extensions.md)。
+新增的 Goal、Agent、历史笔记、图片和等待工具，以及对应扩展职责见 [Agent 扩展](../ash-rs/docs/extensions.md)。

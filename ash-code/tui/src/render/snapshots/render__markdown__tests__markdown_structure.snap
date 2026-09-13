@@ -1,0 +1,15 @@
+---
+source: ash-code/tui/src/render/markdown_tests.rs
+assertion_line: 18
+expression: text
+---
+Heading
+
+bold and italic and gone site
+
+│ quote
+
+• [x] done
+• next
+
+fn main() {}

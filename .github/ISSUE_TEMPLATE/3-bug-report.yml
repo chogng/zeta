@@ -11,7 +11,7 @@ body:
 
         Do not report security vulnerabilities in a public issue. Follow the repository Security Policy instead.
 
-        If you need help or support using Zeta and are not reporting a bug, please post on [zeta/discussions](https://github.com/chogng/zeta/discussions), where you can ask questions or engage with others on ideas for how to improve zeta.
+        If you need help or support using Ash and are not reporting a bug, please post on [ash/discussions](https://github.com/chogng/ash/discussions), where you can ask questions or engage with others on ideas for how to improve ash.
 
   - type: textarea
     id: actual

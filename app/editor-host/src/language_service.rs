@@ -13,22 +13,22 @@ use self::remote::protocol_position;
 use self::remote_session::RemoteLanguageSession;
 use crate::FileEditorHost;
 use crate::FileEditorTab;
-use zeta_app_server_protocol::protocol::config::{ConfigReadResult, LanguageServerModeDto};
-use zeta_app_server_protocol::protocol::language::LanguageCompletionTriggerKindDto;
-use zeta_app_server_protocol::protocol::language::LanguageCompletionsParams;
-use zeta_app_server_protocol::protocol::language::LanguageHoverParams;
-use zeta_app_server_protocol::protocol::language::LanguageLocationsParams;
-use zeta_editor::{
+use ash_app_server_protocol::protocol::config::{ConfigReadResult, LanguageServerModeDto};
+use ash_app_server_protocol::protocol::language::LanguageCompletionTriggerKindDto;
+use ash_app_server_protocol::protocol::language::LanguageCompletionsParams;
+use ash_app_server_protocol::protocol::language::LanguageHoverParams;
+use ash_app_server_protocol::protocol::language::LanguageLocationsParams;
+use ash_editor::{
     CodeEditorDiagnostic, CodeEditorDiagnosticSeverity, CodeEditorLanguage, CodeEditorRowSource,
 };
-use zeta_install_context::InstallContext;
-use zeta_lsp_manager::{
+use ash_install_context::InstallContext;
+use ash_lsp_manager::{
     LanguageCompletionTrigger, LanguageCompletions, LanguageDocumentPosition,
     LanguageDocumentRevision, LanguageHover, LanguageLocations, LanguageRequestId,
     LanguageRequestKind, LanguageServerState, LanguageService, LanguageServiceConfiguration,
     LanguageServiceDocument, LanguageServiceEvent, LanguageServiceEventSink,
 };
-use zeta_lsp_server_provider::{
+use ash_lsp_server_provider::{
     BASH_LANGUAGE_SERVER_ID, JSON_LANGUAGE_SERVER_ID, LanguageServerCatalog,
     LanguageServerExecutionPolicy, LanguageServerPreference, RUST_ANALYZER_SERVER_ID,
     TYPESCRIPT_LANGUAGE_SERVER_ID,
@@ -58,7 +58,7 @@ pub trait FileEditorLanguageEventSink: Send + Sync {
 /// Opens the dedicated App Server connection used by remote editor language requests.
 pub trait RemoteLanguageSessionTarget: Send + Sync {
     fn is_remote(&self) -> bool;
-    fn start(&self) -> anyhow::Result<zeta_app_server_client::AppServerSession>;
+    fn start(&self) -> anyhow::Result<ash_app_server_client::AppServerSession>;
 }
 
 /// Desktop composition adapter between retained file tabs and the product language service.
@@ -296,7 +296,7 @@ impl FileEditorLanguageService {
         &mut self,
         host: &FileEditorHost,
         kind: LanguageRequestKind,
-        position: zeta_editor::CodeEditorPosition,
+        position: ash_editor::CodeEditorPosition,
     ) {
         let Some(tab) = host.active() else {
             return;
@@ -524,19 +524,19 @@ impl FileEditorLanguageService {
             }
             LanguageServiceEvent::Locations(definitions) => {
                 let request_kind = match definitions.kind {
-                    zeta_lsp_manager::LanguageLocationKind::Declaration => {
+                    ash_lsp_manager::LanguageLocationKind::Declaration => {
                         LanguageRequestKind::Declaration
                     }
-                    zeta_lsp_manager::LanguageLocationKind::Definition => {
+                    ash_lsp_manager::LanguageLocationKind::Definition => {
                         LanguageRequestKind::Definition
                     }
-                    zeta_lsp_manager::LanguageLocationKind::Implementation => {
+                    ash_lsp_manager::LanguageLocationKind::Implementation => {
                         LanguageRequestKind::Implementation
                     }
-                    zeta_lsp_manager::LanguageLocationKind::TypeDefinition => {
+                    ash_lsp_manager::LanguageLocationKind::TypeDefinition => {
                         LanguageRequestKind::TypeDefinition
                     }
-                    zeta_lsp_manager::LanguageLocationKind::Reference => {
+                    ash_lsp_manager::LanguageLocationKind::Reference => {
                         LanguageRequestKind::References
                     }
                 };
@@ -660,16 +660,16 @@ struct FileEditorDocumentDiagnostics {
     items: Vec<CodeEditorDiagnostic>,
 }
 
-fn editor_diagnostic(diagnostic: &zeta_lsp_manager::LanguageDiagnostic) -> CodeEditorDiagnostic {
+fn editor_diagnostic(diagnostic: &ash_lsp_manager::LanguageDiagnostic) -> CodeEditorDiagnostic {
     let severity = match diagnostic.severity {
-        zeta_lsp_manager::LanguageDiagnosticSeverity::Error => CodeEditorDiagnosticSeverity::Error,
-        zeta_lsp_manager::LanguageDiagnosticSeverity::Warning => {
+        ash_lsp_manager::LanguageDiagnosticSeverity::Error => CodeEditorDiagnosticSeverity::Error,
+        ash_lsp_manager::LanguageDiagnosticSeverity::Warning => {
             CodeEditorDiagnosticSeverity::Warning
         }
-        zeta_lsp_manager::LanguageDiagnosticSeverity::Information => {
+        ash_lsp_manager::LanguageDiagnosticSeverity::Information => {
             CodeEditorDiagnosticSeverity::Information
         }
-        zeta_lsp_manager::LanguageDiagnosticSeverity::Hint => CodeEditorDiagnosticSeverity::Hint,
+        ash_lsp_manager::LanguageDiagnosticSeverity::Hint => CodeEditorDiagnosticSeverity::Hint,
     };
     let mut projected =
         CodeEditorDiagnostic::new(diagnostic.range.byte_range(), severity, &diagnostic.message);
@@ -739,7 +739,7 @@ fn resolve_configuration(
 fn language_document(
     dir_root: &Path,
     tab: &FileEditorTab,
-) -> Result<LanguageServiceDocument, zeta_lsp_manager::LanguageServiceError> {
+) -> Result<LanguageServiceDocument, ash_lsp_manager::LanguageServiceError> {
     let path = if tab.path().is_absolute() {
         tab.path().to_path_buf()
     } else {

@@ -12,10 +12,10 @@ use zui::ui::UiFrame;
 use super::KeyboardShortcutRow;
 use super::KeyboardShortcuts;
 use crate::KeyboardShortcutsState;
-use zeta_commands::AppCommandId;
-use zeta_keybinding::HostPlatform;
-use zeta_keybinding::parse_key_sequence;
-use zeta_ui_components::QuickInputIds;
+use ash_commands::AppCommandId;
+use ash_keybinding::HostPlatform;
+use ash_keybinding::parse_key_sequence;
+use ash_ui_components::QuickInputIds;
 
 const PARENT: ElementId = ElementId::scoped(90, 1);
 const ROOT: ElementId = ElementId::scoped(90, 2);

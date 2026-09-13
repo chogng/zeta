@@ -1,5 +1,5 @@
 ---
-description: Zeta Rust package testing, warning, conditional-compilation, protocol-generation, and product validation rules.
+description: Ash Rust package testing, warning, conditional-compilation, protocol-generation, and product validation rules.
 applyTo: "**/*.rs,**/Cargo.toml,Cargo.toml,Cargo.lock,justfile,scripts/cargo.py"
 ---
 

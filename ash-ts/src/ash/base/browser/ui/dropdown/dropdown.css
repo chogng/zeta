@@ -1,0 +1,102 @@
+.ash-dropdown {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.ash-dropdown-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  min-height: 26px;
+  padding: 2px 8px;
+  color: var(--ash-foreground);
+  background: transparent;
+  border: 1px solid var(--ash-border);
+  border-radius: 3px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ash-dropdown-button:hover,
+.ash-dropdown-open > .ash-dropdown-button {
+  background: var(--ash-button-hover-background);
+}
+
+.ash-dropdown-button:focus-visible {
+  outline: 1px solid var(--ash-focus-border);
+  outline-offset: -1px;
+}
+
+.ash-dropdown-button:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+.ash-dropdown-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ash-dropdown-indicator {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.ash-dropdown-indicator > .ash-icon {
+  display: block;
+}
+
+.ash-dropdown-content {
+  box-sizing: border-box;
+}
+
+.ash-dropdown-with-primary-action-view-item {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border-radius: 4px;
+}
+
+.ash-dropdown-with-primary-primary,
+.ash-dropdown-with-primary-dropdown {
+  display: flex;
+  align-items: stretch;
+}
+
+.ash-toolbar .ash-dropdown-with-primary-action-view-item .ash-button {
+  height: var(--ash-toolbar-action-size);
+  min-height: var(--ash-toolbar-action-size);
+  border: 0;
+}
+
+.ash-toolbar .ash-dropdown-with-primary-primary.icon > .ash-button {
+  width: var(--ash-toolbar-action-size);
+  min-width: var(--ash-toolbar-action-size);
+  padding: 3px;
+  border-radius: 4px 0 0 4px;
+}
+
+.ash-toolbar .ash-dropdown-with-primary-dropdown > .ash-button {
+  width: 18px;
+  min-width: 18px;
+  padding: 3px 2px;
+  border-radius: 0 4px 4px 0;
+}
+
+.ash-dropdown-with-primary-dropdown .ash-button-content {
+  display: none;
+}
+
+.ash-dropdown-with-primary-dropdown .ash-dropdown-menu-indicator .ash-icon {
+  width: 14px;
+  height: 14px;
+}

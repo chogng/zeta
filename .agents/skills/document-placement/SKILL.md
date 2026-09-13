@@ -1,6 +1,6 @@
 ---
 name: document-placement
-description: Choose the owning project's docs directory when creating or relocating development and design documents in Zeta. Use for architecture documents, technical designs, implementation plans, and engineering proposals; do not use it to relocate existing documents or README files unless the user explicitly asks.
+description: Choose the owning project's docs directory when creating or relocating development and design documents in Ash. Use for architecture documents, technical designs, implementation plans, and engineering proposals; do not use it to relocate existing documents or README files unless the user explicitly asks.
 ---
 
 # Document Placement
@@ -9,10 +9,10 @@ Before creating a development or design document, identify the project that owns
 
 | Document owner | Destination |
 | --- | --- |
-| TypeScript frontend under `zeta-ts/`, including the Zeta editor and Workbench | `zeta-ts/docs/` |
-| Shared Rust backend under `zeta-rs/` | `zeta-rs/docs/` |
+| TypeScript frontend under `ash-ts/`, including the Ash editor and Workbench | `ash-ts/docs/` |
+| Shared Rust backend under `ash-rs/` | `ash-rs/docs/` |
 | Desktop product and Rust UI under `app/` | `app/docs/` |
-| CLI and TUI product under `zeta-code/` | `zeta-code/docs/` |
+| CLI and TUI product under `ash-code/` | `ash-code/docs/` |
 | Repository-wide behavior that genuinely has no single project owner | `docs/` |
 
 Apply the same rule to another stable top-level project: use `<project>/docs/`. Do not treat an individual crate, package, feature folder, or the currently active file as a project boundary.

@@ -3,7 +3,7 @@ use super::ChatInputInteractionState;
 use super::ComposerInteractionActivation;
 use super::ComposerModelOption;
 use super::SelectionDirection;
-use zeta_protocol::{ModelId, ModelRef, ProviderId};
+use ash_protocol::{ModelId, ModelRef, ProviderId};
 
 fn model_option(provider: &str, model: &str, display_name: &str) -> ComposerModelOption {
     let model = ModelRef::new(

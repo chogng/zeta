@@ -1,4 +1,4 @@
-use zeta_diff::{DiffDocument, DiffLine, LineEnding};
+use ash_diff::{DiffDocument, DiffLine, LineEnding};
 
 use crate::{CodeEditorDocument, CodeEditorLanguage, CodeEditorSyntaxToken};
 

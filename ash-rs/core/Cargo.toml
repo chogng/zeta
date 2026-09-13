@@ -1,0 +1,43 @@
+[package]
+name = "ash-core"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[features]
+code-mode = ["dep:ash-code-mode", "dep:ash-code-mode-protocol"]
+
+[lib]
+doctest = false
+name = "ash_core"
+path = "src/lib.rs"
+
+[dependencies]
+agent-graph-store = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+ash-async-utils = { workspace = true }
+ash-attachments = { workspace = true }
+ash-context-engine = { workspace = true }
+ash-code-mode = { workspace = true, optional = true }
+ash-code-mode-protocol = { workspace = true, optional = true }
+ash-extension-api = { workspace = true }
+ash-history = { workspace = true }
+ash-model-accounting = { workspace = true }
+ash-action-policy = { workspace = true }
+ash-agent-environment = { workspace = true }
+ash-prompts = { workspace = true }
+ash-protocol = { workspace = true }
+ash-sandboxing = { workspace = true }
+ash-thread-store = { workspace = true }
+ash-utils-image = { workspace = true }
+ash-utils-stream-parser = { workspace = true }
+
+[dev-dependencies]
+image = { workspace = true, features = ["png"] }
+ash-execpolicy = { workspace = true }
+
+[lints]
+workspace = true

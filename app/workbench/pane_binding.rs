@@ -42,7 +42,7 @@ impl PaneBinding {
     pub fn bind_terminal(
         &mut self,
         input: &PaneInput,
-        session_id: &zeta_protocol::SessionId,
+        session_id: &ash_protocol::SessionId,
         key: TerminalSessionKey,
     ) -> bool {
         if input.kind() != PaneInputKind::Terminal

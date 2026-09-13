@@ -9,7 +9,7 @@ use super::tab_group_menu_element_id;
 use crate::SidebarPart;
 use crate::TabInputKey;
 use crate::sidebarpart::identity::WINDOW;
-use zeta_protocol::SessionId;
+use ash_protocol::SessionId;
 use zui::ui::AccessibilityRole;
 use zui::ui::Border;
 use zui::ui::CaretVisibility;
@@ -98,7 +98,7 @@ fn menu_owns_current_generic_tab_actions() {
     assert_eq!(frame.scene().icons().len(), 1);
     assert_eq!(
         frame.scene().icons()[0].icon(),
-        zeta_icons::icons::CHEVRON_RIGHT
+        ash_icons::icons::CHEVRON_RIGHT
     );
     let surface = frame
         .scene()

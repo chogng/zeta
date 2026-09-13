@@ -9,14 +9,14 @@
 > 上限继续收窄。Desktop 只消费 canonical tree 并可精确
 > 中断单个节点。S6 的 child failure、parent cancel、join timeout、any/quorum、恢复、预算耗尽与
 > mailbox isolation 矩阵已覆盖；late-result/UnknownOutcome 等更广故障注入仍按后续需求演进。原落地顺序分为契约冻结
-> （[阶段 D](zeta-agent-runtime-architecture.md#阶段-d多-agent-契约冻结已完成)）与运行时
-> （[阶段 E](zeta-agent-runtime-architecture.md#阶段-emultiagentcoordinator核心纵向切片已完成)）；理由见
-> [`zeta-agent-runtime-architecture.md` R4](zeta-agent-runtime-architecture.md#44-r4多-agent-契约冻结先行)。
+> （[阶段 D](ash-agent-runtime-architecture.md#阶段-d多-agent-契约冻结已完成)）与运行时
+> （[阶段 E](ash-agent-runtime-architecture.md#阶段-emultiagentcoordinator核心纵向切片已完成)）；理由见
+> [`ash-agent-runtime-architecture.md` R4](ash-agent-runtime-architecture.md#44-r4多-agent-契约冻结先行)。
 >
 > Core 总体边界：[`core.md`](core.md)
 > Context 与 ContextManager：[`core-context.md`](core-context.md)
 > Canonical Session/Thread/Turn contract：[`protocol.md`](protocol.md)
-> 外部客户端与 Remote Zeta 接入：[`zeta-app-server-api.md`](zeta-app-server-api.md)
+> 外部客户端与 Remote Ash 接入：[`ash-app-server-api.md`](ash-app-server-api.md)
 > 内置与自定义 Agent 的统一定义、专化职责、启动范围、模型和工具边界：[`agents.md`](agents.md)
 
 ## 快速理解
@@ -34,13 +34,13 @@
 | 被委托 Agent 如何回传结果？ | 结果通过可持久化消息和委托终态回到调用方，不靠进程内引用 | [结果与汇合](#8-结果与汇合) |
 | 取消父 Agent 会发生什么？ | App Server 的 Turn interrupt/Session stop 会向所有 live descendants 传播；child 取消不反向影响 parent/sibling | [取消与终态语义](#9-取消与终态语义) |
 | 多个 Agent 的代码结果如何避免互相破坏？ | 根 Agent 通过明确任务范围和依赖安排子 Agent；每个 Thread 使用自己的受管目录与 Turn ChangeSet，最终验证和提交仍走 Git/Turn Changes | [`chat-session-inspector.md`](chat-session-inspector.md) |
-| 专化职责的提示词、模型、工具和启动范围在哪里定义？ | 内置定义由产品资源维护，自定义定义来自 `.zeta/agents`；会话、委托和工作流共用一种契约 | [`agents.md`](agents.md) |
+| 专化职责的提示词、模型、工具和启动范围在哪里定义？ | 内置定义由产品资源维护，自定义定义来自 `.ash/agents`；会话、委托和工作流共用一种契约 | [`agents.md`](agents.md) |
 | Team 模式属于哪一种？ | Team 是同一 Session Agent 树的产品形态，根 Thread 协调多个子 Thread | [Agent 树协调器](#3-agent-树协调器) |
 | 多个独立 Session 如何协作？ | 不建立隐式协作；需要共同目标时回到一个 Session 的 Agent tree | [系统边界](#2-系统边界) |
 
 ## 1. 结论
 
-Zeta 当前实现的 Agent 树使用同一 Session 下的独立 Thread：
+Ash 当前实现的 Agent 树使用同一 Session 下的独立 Thread：
 
 ```text
 Session
@@ -64,7 +64,7 @@ Session
 projection、provider conversation ID 或 Tool state。
 
 同进程 Agent 委托运行由本架构定义的 `MultiAgentCoordinator` 创建，不通过外部 App Server
-连接自调用。跨 runtime Zeta 使用 App Server transport；调用方仍必须在本地拥有 delegation、
+连接自调用。跨 runtime Ash 使用 App Server transport；调用方仍必须在本地拥有 delegation、
 budget、cancellation 和 result delivery，远端连接只承担执行通信。
 
 长期必须把定义和三种运行关系分开：
@@ -92,7 +92,7 @@ lifecycle，不串行 child Thread 执行。
 - replacement 要求源 Thread 已归档，新分支从空历史开始；旧历史、委托和结果留在原 Thread。
 - Agent 与 Thread 绑定、Thread 来源均不可重新分配；替换通过创建新绑定表达。
 - Agent 记录与首次 Thread 创建同事务提交，删除所有任务后仍保留身份。
-- `agent-graph-store` 定义读取契约，`zeta-state` 实现索引；云端认证不进入该模型。
+- `agent-graph-store` 定义读取契约，`ash-state` 实现索引；云端认证不进入该模型。
 
 身份跨 Session 复用不建立跨 Session 委托、消息、共同预算或取消关系。
 
@@ -588,7 +588,7 @@ projection，不公开 coordinator 内部状态机。
 ## 16. 落地顺序
 
 落地分两段执行；跨层阶段定义与完成条件由
-[`zeta-agent-runtime-architecture.md` §7](zeta-agent-runtime-architecture.md#7-分阶段实施计划)
+[`ash-agent-runtime-architecture.md` §7](ash-agent-runtime-architecture.md#7-分阶段实施计划)
 权威维护。
 
 **阶段 D｜契约冻结（已完成当前切片）：**
@@ -615,7 +615,7 @@ projection，不公开 coordinator 内部状态机。
 
 第一阶段不需要：
 
-- 独立 `zeta-agent` crate；
+- 独立 `ash-agent` crate；
 - 与 Thread 一一对应的 Agent aggregate；
 - 任意 Agent graph workflow engine；
 - 跨机器 Agent transport；

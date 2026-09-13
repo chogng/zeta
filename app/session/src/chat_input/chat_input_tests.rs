@@ -5,12 +5,12 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
-use zeta_editor::CodeEditorCommand;
-use zeta_editor::CodeEditorLanguage;
-use zeta_editor::CodeEditorSelectionMode;
-use zeta_input_classifier::InputConversation;
-use zeta_ui_components::ScrollCommand;
-use zeta_ui_components::ScrollDelta;
+use ash_editor::CodeEditorCommand;
+use ash_editor::CodeEditorLanguage;
+use ash_editor::CodeEditorSelectionMode;
+use ash_input_classifier::InputConversation;
+use ash_ui_components::ScrollCommand;
+use ash_ui_components::ScrollDelta;
 use zui::ui::Point;
 use zui::ui::Rect;
 use zui::ui::Size;
@@ -54,7 +54,7 @@ fn classifier_routes_a_direct_command_to_shell_submission() {
 #[test]
 fn classifier_routes_a_just_task_to_shell_submission() {
     let root = std::env::temp_dir().join(format!(
-        "zeta-agent-chat_input-{}-{}",
+        "ash-agent-chat_input-{}-{}",
         std::process::id(),
         NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed)
     ));
@@ -141,7 +141,7 @@ fn shell_ghost_text_is_not_offered_when_the_caret_is_inside_a_token() {
 #[test]
 fn shell_ghost_text_accepts_only_the_common_prefix_of_multiple_paths() {
     let root = std::env::temp_dir().join(format!(
-        "zeta-agent-chat_input-completion-{}-{}",
+        "ash-agent-chat_input-completion-{}-{}",
         std::process::id(),
         NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed)
     ));
@@ -378,7 +378,7 @@ fn persisted_agent_input_keeps_its_route_and_restores_the_desktop_draft() {
         input.poll_history();
     }
     assert_eq!(input.route(), ComposerRoute::Agent);
-    input.synchronize_conversation(zeta_input_classifier::InputConversation::Standalone);
+    input.synchronize_conversation(ash_input_classifier::InputConversation::Standalone);
     assert_eq!(input.route(), ComposerRoute::Agent);
     input.cancel_history();
     assert_eq!(input.input().text(), "original draft");

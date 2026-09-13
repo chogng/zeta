@@ -1,0 +1,20 @@
+[package]
+name = "ash-memory-diagnostics"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+sysinfo = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+schemars = { workspace = true }
+ts-rs = { workspace = true, features = ["no-serde-warnings"] }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

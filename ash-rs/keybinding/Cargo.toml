@@ -1,0 +1,18 @@
+[package]
+name = "ash-keybinding"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tinyjson = "2.5.1"
+
+[lints]
+workspace = true

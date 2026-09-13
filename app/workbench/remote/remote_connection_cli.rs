@@ -2,15 +2,15 @@ use std::fmt;
 use std::io;
 use std::io::Write;
 
-use zeta_remote::RemoteAddressError;
-use zeta_remote::RemoteDirPath;
-use zeta_remote::SshHost;
-use zeta_remote::SshTarget;
-use zeta_remote_connections::RemoteConnectionCatalog;
-use zeta_remote_connections::RemoteConnectionEntry;
-use zeta_remote_connections::RemoteConnectionName;
-use zeta_remote_connections::RemoteConnectionNameError;
-use zeta_remote_connections::RemoteConnectionSaveMode;
+use ash_remote::RemoteAddressError;
+use ash_remote::RemoteDirPath;
+use ash_remote::SshHost;
+use ash_remote::SshTarget;
+use ash_remote_connections::RemoteConnectionCatalog;
+use ash_remote_connections::RemoteConnectionEntry;
+use ash_remote_connections::RemoteConnectionName;
+use ash_remote_connections::RemoteConnectionNameError;
+use ash_remote_connections::RemoteConnectionSaveMode;
 
 use crate::launch::AppLaunch;
 use crate::launch::LaunchParseError;
@@ -44,7 +44,7 @@ impl AppInvocation {
     /// Executes a management command or returns the launch selected for the desktop application.
     pub(crate) fn resolve(self) -> Result<Option<AppLaunch>, String> {
         let catalog = RemoteConnectionCatalog::from_profile_root(
-            zeta_utils_home_dir::find_zeta_home().map_err(|error| error.to_string())?,
+            ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?,
         );
         let stdout = io::stdout();
         let mut output = stdout.lock();

@@ -1,7 +1,7 @@
 //! App Server model catalog projection for ChatInput.
 
 use crate::ComposerModelOption;
-use zeta_app_server_protocol::protocol::model::ModelCatalogEntry;
+use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
 
 /// Normalizes transport-owned model catalog entries into the Session Pane contract.
 pub fn composer_model_options(entries: Vec<ModelCatalogEntry>) -> Vec<ComposerModelOption> {

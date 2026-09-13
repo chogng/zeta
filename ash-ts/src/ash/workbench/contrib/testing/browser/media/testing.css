@@ -1,0 +1,88 @@
+.ash-testing {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 8px;
+}
+
+.ash-testing-controls {
+  display: flex;
+  gap: 5px;
+}
+
+.ash-testing-controls button,
+.ash-testing-run,
+.ash-testing-run-result {
+  border: 0;
+  border-radius: 3px;
+  padding: 4px 7px;
+  color: inherit;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.ash-testing-status {
+  min-height: 18px;
+  padding: 6px 2px;
+  color: var(--ash-description-foreground);
+  font-size: 12px;
+}
+
+.ash-testing-list {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.ash-testing-profile {
+  display: grid;
+  grid-template-columns: auto minmax(70px, 1fr);
+  gap: 2px 7px;
+  align-items: center;
+  padding: 4px 2px;
+}
+
+.ash-testing-run {
+  grid-row: 1 / 3;
+}
+
+.ash-testing-label,
+.ash-testing-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ash-testing-detail {
+  color: var(--ash-muted-foreground);
+  font-size: 11px;
+}
+
+.ash-testing-result {
+  margin-top: 4px;
+}
+
+.ash-testing-run-result {
+  width: 100%;
+  text-align: left;
+}
+
+.ash-testing-result.passed .ash-testing-run-result {
+  color: var(--ash-success-foreground);
+}
+
+.ash-testing-result.failed .ash-testing-run-result {
+  color: var(--ash-error-foreground);
+}
+
+.ash-testing button:hover {
+  background: var(--ash-toolbar-hover-background);
+}
+
+.ash-testing button:focus-visible {
+  outline: 1px solid var(--ash-focus-border);
+  outline-offset: -1px;
+}

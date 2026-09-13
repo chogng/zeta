@@ -1,5 +1,5 @@
 {
-  "$schema": "https://zeta.dev/schemas/color-theme.schema.json",
+  "$schema": "https://ash.dev/schemas/color-theme.schema.json",
   "version": 1,
   "id": "my-custom-theme",
   "label": "My Custom Theme",

@@ -9,10 +9,10 @@ use memories::Memory;
 use memories::MemoryPolicy;
 use memories::MemoryScope;
 use memories::MemorySummary;
-use zeta_app_server_protocol::protocol::memory::*;
-use zeta_editor::CodeEditorDocument;
-use zeta_editor::CodeEditorViewport;
-use zeta_protocol::ThreadId;
+use ash_app_server_protocol::protocol::memory::*;
+use ash_editor::CodeEditorDocument;
+use ash_editor::CodeEditorViewport;
+use ash_protocol::ThreadId;
 use zui::app::ApplicationHandle;
 use zui::runtime::BackgroundExecutor;
 use zui::runtime::Task;
@@ -49,7 +49,7 @@ pub(crate) struct State {
     pub scopes: Vec<MemoryScopeDescriptor>,
     pub scope_index: usize,
     pub entries: Vec<MemorySummary>,
-    pub list_scroll: zeta_ui_components::ScrollState,
+    pub list_scroll: ash_ui_components::ScrollState,
     pub selected: Option<Memory>,
     pub cursor: Option<String>,
     pub query: TextInput,
@@ -62,7 +62,7 @@ pub(crate) struct State {
     pub read_only: bool,
     pub confirm_delete: bool,
     pub confirm_close: bool,
-    pub mutation_id: zeta_protocol::CommandId,
+    pub mutation_id: ash_protocol::CommandId,
 }
 
 impl Default for State {
@@ -136,14 +136,14 @@ pub(crate) enum Request {
     },
     Read(MemorySummary),
     Save {
-        command_id: zeta_protocol::CommandId,
+        command_id: ash_protocol::CommandId,
         scope: MemoryScope,
         selected: Option<Memory>,
         title: String,
         body: String,
     },
     Delete {
-        command_id: zeta_protocol::CommandId,
+        command_id: ash_protocol::CommandId,
         memory: Memory,
     },
     Policy(MemoryPolicy),
@@ -294,14 +294,14 @@ impl MemoriesUi {
     }
 }
 
-fn command_id() -> zeta_protocol::CommandId {
+fn command_id() -> ash_protocol::CommandId {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let counter = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let millis = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("clock after epoch")
         .as_nanos();
-    zeta_protocol::CommandId::new(format!("memory-{}-{millis}-{counter}", std::process::id()))
+    ash_protocol::CommandId::new(format!("memory-{}-{millis}-{counter}", std::process::id()))
         .expect("generated command identity")
 }
 

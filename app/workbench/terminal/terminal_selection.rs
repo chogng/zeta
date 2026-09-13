@@ -1,4 +1,4 @@
-use zeta_terminal::TerminalMousePosition;
+use ash_terminal::TerminalMousePosition;
 use zui::input::ElementState;
 use zui::services::{ClipboardError, ClipboardHandle};
 

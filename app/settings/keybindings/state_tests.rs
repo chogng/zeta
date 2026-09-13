@@ -1,9 +1,9 @@
 use std::time::Duration;
 use std::time::Instant;
 
-use zeta_keybinding::Chord;
-use zeta_keybinding::ShortcutModifiers;
-use zeta_keybinding::serialize_key_sequence;
+use ash_keybinding::Chord;
+use ash_keybinding::ShortcutModifiers;
+use ash_keybinding::serialize_key_sequence;
 
 use super::KeyboardShortcutsState;
 

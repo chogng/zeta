@@ -2,13 +2,13 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "Run Zeta Code",
+			"name": "Run Ash Code",
 			"type": "node-terminal",
 			"request": "launch",
-			"command": "just zeta",
+			"command": "just ash",
 			"cwd": "${workspaceFolder}",
 			"presentation": {
-				"group": "zeta-code",
+				"group": "ash-code",
 				"order": 1
 			}
 		},

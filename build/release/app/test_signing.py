@@ -72,7 +72,7 @@ class AppSigningTests(unittest.TestCase):
 
             with patch.dict(
                 os.environ,
-                {"ZETA_WINDOWS_SIGNING_THUMBPRINT": "test-certificate"},
+                {"ASH_WINDOWS_SIGNING_THUMBPRINT": "test-certificate"},
                 clear=False,
             ):
                 signed = sign_package(
@@ -173,7 +173,7 @@ class AppSigningTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             release = remote_runtime_network_release(
-                "https://releases.example/zeta/catalog.json", "b" * 64
+                "https://releases.example/ash/catalog.json", "b" * 64
             )
             binary = root / "app"
             binary.write_bytes(

@@ -1,6 +1,6 @@
 ---
-description: Zeta source code organization — layers, target environments, dependency injection, and folder structure conventions. Reference when adding new modules, services, or contributions.
-applyTo: src/zeta/**
+description: Ash source code organization — layers, target environments, dependency injection, and folder structure conventions. Reference when adding new modules, services, or contributions.
+applyTo: src/ash/**
 ---
 
 # Source Code Organization
@@ -9,12 +9,12 @@ Canonical reference: https://github.com/microsoft/vscode/wiki/Source-Code-Organi
 
 ## Layers
 
-The `src/zeta/` core is partitioned into ordered layers — each may only import from layers below it:
+The `src/ash/` core is partitioned into ordered layers — each may only import from layers below it:
 
 1. **`base`** — General utilities and UI building blocks (no service dependencies)
 2. **`platform`** — Service injection support and base services shared across layers
 3. **`editor`** — Stanza Editor core (no `node` or `electron-*` dependencies)
-4. **`workbench`** — Full Zeta workbench, panels, views, and framework
+4. **`workbench`** — Full Ash workbench, panels, views, and framework
 5. **`code`** — Desktop app entry point (Electron main, shared process, CLI)
 6. **`server`** — Server app entry point for remote development
 7. **`sessions`** — Agent Sessions window (may import from `workbench` and below; `workbench` must never import from `sessions`)
@@ -34,10 +34,10 @@ Within each layer, code is organized by runtime environment:
 
 ## Workbench Organization
 
-- `zeta/workbench/{common|browser|electron-browser}` — minimal workbench core
-- `zeta/workbench/api` — `zeta.d.ts` API provider
-- `zeta/workbench/services` — core services (not contrib-specific)
-- `zeta/workbench/contrib` — feature contributions
+- `ash/workbench/{common|browser|electron-browser}` — minimal workbench core
+- `ash/workbench/api` — `ash.d.ts` API provider
+- `ash/workbench/services` — core services (not contrib-specific)
+- `ash/workbench/contrib` — feature contributions
 
 ### Contribution Rules
 

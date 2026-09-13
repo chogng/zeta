@@ -1,7 +1,7 @@
 //! Terminal history viewport tests.
 
 use super::{block_view_range, scroll_limit, visible_text_lines};
-use zeta_terminal::{GridSize, TerminalCore};
+use ash_terminal::{GridSize, TerminalCore};
 
 #[test]
 fn block_history_uses_the_same_range_for_scroll_limit_and_visible_text() {

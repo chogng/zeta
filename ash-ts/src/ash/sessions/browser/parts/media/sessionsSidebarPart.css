@@ -1,0 +1,8 @@
+.ash-workbench-sidebar {
+  background: var(--sessions-muted-surface);
+}
+
+.ash-workbench-sidebar > .ash-workbench-part-content > .ash-sessions-list {
+  min-height: 0;
+  flex: 1 1 auto;
+}

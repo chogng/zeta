@@ -72,7 +72,7 @@ Opening a directory for the current Session and remembering permissions for late
 - `add-dir` adds a directory and an explicit capability set to the current Session only. It must not write `[tui]`, `[gui]`, TypeScript settings, or durable directory permissions.
 - A separate explicit "remember these permissions" action may persist a complete capability set in the user profile's permission domain, keyed by the directory's stable identity. It must not use a display path as identity.
 - A directory-provided config file cannot grant permissions to itself. Durable permission remains user-owned profile data.
-- Do not model Zeta permissions as a `trusted` boolean. Preserve the complete capability set so each permission can be reviewed and revoked independently.
+- Do not model Ash permissions as a `trusted` boolean. Preserve the complete capability set so each permission can be reviewed and revoked independently.
 
 ## Complete the resource contract
 

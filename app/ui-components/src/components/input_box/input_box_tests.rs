@@ -33,7 +33,7 @@ fn empty_focused_input_paints_placeholder_and_caret() {
     let text_input = TextInput::new();
     let input = InputBox::new(
         bounds,
-        "Ask Zeta",
+        "Ask Ash",
         InputBoxState::Focused(CaretVisibility::Visible),
         style,
         &text_input,
@@ -44,7 +44,7 @@ fn empty_focused_input_paints_placeholder_and_caret() {
     input.paint(&mut scene);
 
     assert_eq!(scene.rects().len(), 2);
-    assert_eq!(scene.text_blocks()[0].text(), "Ask Zeta");
+    assert_eq!(scene.text_blocks()[0].text(), "Ask Ash");
     assert_eq!(input.caret_bounds().unwrap().origin.x, 18.0);
 }
 

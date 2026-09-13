@@ -1,0 +1,59 @@
+.ash-workbench-titlebar {
+  border-bottom: 1px solid var(--ash-border);
+  background: color-mix(in srgb, var(--ash-title-bar-background, var(--ash-workbench-background)) 88%, var(--ash-editor-background));
+}
+
+.ash-workbench-titlebar > .ash-workbench-part-content {
+  position: relative;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+}
+
+.ash-workbench-titlebar > .ash-workbench-part-content::before {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--sessions-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sessions-accent) 16%, transparent);
+  content: "";
+}
+
+.ash-sessions-titlebar-title {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--ash-title-bar-foreground, var(--ash-foreground));
+  font-size: 13px;
+  font-weight: var(--ash-font-weight-semi-bold, 600);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ash-sessions-titlebar-button { padding: 4px 9px; }
+
+.ash-sessions-navigation-button {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--ash-title-bar-foreground, var(--ash-foreground));
+  background: transparent;
+  cursor: pointer;
+}
+
+.ash-sessions-navigation-button:hover:not(:disabled) {
+  background: var(--ash-list-hover-background);
+}
+
+.ash-sessions-navigation-button:focus-visible {
+  outline: 2px solid var(--ash-focus-border);
+  outline-offset: -1px;
+}
+
+.ash-sessions-navigation-button:disabled {
+  opacity: .35;
+  cursor: default;
+}

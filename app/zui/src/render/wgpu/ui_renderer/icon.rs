@@ -113,7 +113,7 @@ impl IconRenderer {
         depth_stencil: wgpu::DepthStencilState,
     ) -> Self {
         let mask_atlas = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("zeta-ui icon symbolic-mask atlas"),
+            label: Some("ash-ui icon symbolic-mask atlas"),
             size: wgpu::Extent3d {
                 width: ATLAS_SIZE,
                 height: ATLAS_SIZE,
@@ -127,7 +127,7 @@ impl IconRenderer {
             view_formats: &[],
         });
         let color_atlas = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("zeta-ui icon fixed-color atlas"),
+            label: Some("ash-ui icon fixed-color atlas"),
             size: wgpu::Extent3d {
                 width: ATLAS_SIZE,
                 height: ATLAS_SIZE,
@@ -143,14 +143,14 @@ impl IconRenderer {
         let mask_atlas_view = mask_atlas.create_view(&wgpu::TextureViewDescriptor::default());
         let color_atlas_view = color_atlas.create_view(&wgpu::TextureViewDescriptor::default());
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("zeta-ui icon sampler"),
+            label: Some("ash-ui icon sampler"),
             min_filter: wgpu::FilterMode::Linear,
             mag_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
         });
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("zeta-ui icon bind group layout"),
+            label: Some("ash-ui icon bind group layout"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -181,7 +181,7 @@ impl IconRenderer {
             ],
         });
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("zeta-ui icon bind group"),
+            label: Some("ash-ui icon bind group"),
             layout: &bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -199,16 +199,16 @@ impl IconRenderer {
             ],
         });
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("zeta-ui icon shader"),
+            label: Some("ash-ui icon shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("icon.wgsl").into()),
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("zeta-ui icon pipeline layout"),
+            label: Some("ash-ui icon pipeline layout"),
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
         });
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("zeta-ui icon pipeline"),
+            label: Some("ash-ui icon pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -477,7 +477,7 @@ impl AtlasRegion {
 
 fn create_instance_buffer(device: &wgpu::Device, capacity: usize) -> wgpu::Buffer {
     device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("zeta-ui symbolic icon instances"),
+        label: Some("ash-ui symbolic icon instances"),
         size: (capacity * mem::size_of::<IconInstance>()) as wgpu::BufferAddress,
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,

@@ -36,14 +36,14 @@ pub use sections::{
 };
 pub use state::{SettingsActivation, SettingsState};
 
-use zeta_icons::icons;
-use zeta_ui_components::ButtonBackgrounds;
-use zeta_ui_components::ButtonStyle;
-use zeta_ui_components::InputBoxStateColors;
-use zeta_ui_components::InputBoxStyle;
-use zeta_ui_components::SearchBoxStyle;
-use zeta_ui_theme::UiTheme;
-use zeta_ui_theme::UiTypography;
+use ash_icons::icons;
+use ash_ui_components::ButtonBackgrounds;
+use ash_ui_components::ButtonStyle;
+use ash_ui_components::InputBoxStateColors;
+use ash_ui_components::InputBoxStyle;
+use ash_ui_components::SearchBoxStyle;
+use ash_ui_theme::UiTheme;
+use ash_ui_theme::UiTypography;
 use zui::ui::Border;
 use zui::ui::Color;
 use zui::ui::CornerRadii;

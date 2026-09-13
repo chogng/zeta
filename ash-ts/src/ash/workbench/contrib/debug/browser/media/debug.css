@@ -1,0 +1,172 @@
+.ash-debug {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 8px;
+}
+
+.ash-debug-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ash-debug-controls select,
+.ash-debug-thread-select,
+.ash-debug-input-form input {
+  flex: 1 1 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  color: inherit;
+  background: var(--ash-input-background);
+  border: 1px solid var(--ash-input-border);
+}
+
+.ash-debug button {
+  padding: 3px 6px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  border: 0;
+  border-radius: 3px;
+}
+
+.ash-debug button:hover {
+  background: var(--ash-toolbar-hover-background);
+}
+
+.ash-debug button:focus-visible,
+.ash-debug select:focus-visible,
+.ash-debug input:focus-visible {
+  outline: 1px solid var(--ash-focus-border);
+  outline-offset: -1px;
+}
+
+.ash-debug-status {
+  min-height: 18px;
+  padding: 6px 2px;
+  color: var(--ash-description-foreground);
+  font-size: 12px;
+}
+
+.ash-debug-section {
+  flex: 0 1 auto;
+  min-height: 0;
+  margin: 0 0 6px;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.ash-debug-section-heading {
+  padding: 5px 3px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--ash-border);
+}
+
+.ash-debug-section li:not(.ash-debug-section-heading) {
+  display: flex;
+  min-width: 0;
+}
+
+.ash-debug-frame,
+.ash-debug-variable,
+.ash-debug-breakpoint,
+.ash-debug-watch-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ash-debug-frame.selected {
+  background: var(--ash-list-active-selection-background);
+}
+
+.ash-debug-thread-select {
+  width: 100%;
+  margin-bottom: 6px;
+}
+
+.ash-debug-input-form {
+  display: flex;
+  gap: 4px;
+  margin: -2px 0 6px;
+}
+
+.ash-debug-input-form input {
+  flex: 1;
+  min-width: 0;
+}
+
+.ash-debug-watch-value {
+  flex: 1;
+  padding: 4px 6px;
+}
+
+.ash-debug-exceptions label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 3px;
+}
+
+.ash-debug-console {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ash-debug-console-session {
+  flex: 0 0 auto;
+  margin: 4px 8px;
+  padding: 3px 6px;
+  color: inherit;
+  background: var(--ash-input-background);
+  border: 1px solid var(--ash-input-border);
+}
+
+.ash-debug-console-output {
+  flex: 1;
+  min-height: 60px;
+  margin: 0;
+  padding: 8px 12px;
+  overflow: auto;
+  color: var(--ash-editor-foreground);
+  font-family: var(--ash-font-family-monospace);
+  white-space: pre-wrap;
+  background: var(--ash-editor-background);
+}
+
+.ash-debug-console-form {
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  border-top: 1px solid var(--ash-border);
+}
+
+.ash-debug-console-form input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 5px 7px;
+  color: inherit;
+  font: inherit;
+  background: var(--ash-input-background);
+  border: 1px solid var(--ash-input-border);
+}
+
+.ash-debug-console-session:focus-visible,
+.ash-debug-console-output:focus-visible,
+.ash-debug-console-form input:focus-visible {
+  outline: 1px solid var(--ash-focus-border);
+  outline-offset: -1px;
+}
+
+.ash-debug-console-status {
+  min-height: 0;
+  padding: 0 8px 4px;
+  color: var(--ash-error-foreground);
+  font-size: 12px;
+}

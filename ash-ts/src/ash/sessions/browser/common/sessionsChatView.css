@@ -1,0 +1,107 @@
+.ash-sessions-chat-view {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.ash-sessions-chat-grid {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  --ash-sash-hover-background: var(--sessions-accent);
+}
+
+.ash-sessions-chat-slot {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  flex-direction: column;
+  border: 1px solid var(--ash-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ash-editor-background) 96%, var(--ash-workbench-background));
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--ash-widget-shadow) 40%, transparent);
+}
+
+.ash-sessions-chat-slot.active {
+  border-color: color-mix(in srgb, var(--sessions-accent) 55%, var(--ash-border));
+}
+
+.ash-sessions-chat-slot-header {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--ash-border);
+  background: color-mix(in srgb, var(--ash-editor-background) 88%, var(--ash-workbench-background));
+}
+
+.ash-sessions-chat-slot-title,
+.ash-sessions-chat-slot-close {
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+}
+
+.ash-sessions-chat-slot-title {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
+  padding: 7px 0;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ash-sessions-chat-slot-close {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  color: var(--ash-description-foreground);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.ash-sessions-chat-slot-title:hover,
+.ash-sessions-chat-slot-close:hover {
+  background: var(--ash-list-hover-background);
+}
+
+.ash-sessions-chat-slot-title:focus-visible,
+.ash-sessions-chat-slot-close:focus-visible {
+  outline: 1px solid var(--sessions-accent);
+  outline-offset: -1px;
+}
+
+.ash-sessions-chat-slot > .ash-chat {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.ash-sessions-chat-view-empty {
+  display: grid;
+  max-width: 480px;
+  align-content: center;
+  gap: 8px;
+  margin: auto;
+  padding: 40px;
+}
+
+.ash-sessions-chat-view-empty h2 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: -.025em;
+}
+
+.ash-sessions-chat-view-empty p {
+  margin: 0;
+  color: var(--ash-description-foreground);
+  font-size: 13px;
+  line-height: 1.55;
+}

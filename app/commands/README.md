@@ -1,12 +1,12 @@
-# zeta-commands
+# ash-commands
 
-`zeta-commands` owns the stable command vocabulary shared by Workbench command entry points.
+`ash-commands` owns the stable command vocabulary shared by Workbench command entry points.
 
 ## Responsibilities
 
 - `AppCommandId` is the type-safe identity used by Rust callers; `AppCommandId::ALL` is the complete catalog and `AppCommandId::BINDABLE` is the subset exposed to user keybindings.
 - `AppCommandId::id`, `from_id`, and `bindable_from_id` own the persisted string boundary, including compatibility names under `workbench.action.*`; internal callers do not pass string IDs.
-- Command execution, UI element mapping, focus, state changes, and invalidation belong to `zeta-workbench`; this crate has no dependency on Workbench state, `zui`, keybinding execution, or domain APIs.
+- Command execution, UI element mapping, focus, state changes, and invalidation belong to `ash-workbench`; this crate has no dependency on Workbench state, `zui`, keybinding execution, or domain APIs.
 
 ## Execution path
 
@@ -23,5 +23,5 @@ The dispatcher in `app/workbench/command.rs` uses an exhaustive `match`, so addi
 ## Verification
 
 ```bash
-just test zeta-commands
+just test ash-commands
 ```

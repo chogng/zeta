@@ -11,7 +11,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use zeta_remote_connections::RemoteConnectionName;
+use ash_remote_connections::RemoteConnectionName;
 use zui::app::AppProxy;
 
 use crate::launch_progress::REMOTE_LAUNCH_PROGRESS_ENV;

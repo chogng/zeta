@@ -1,4 +1,4 @@
-use zeta_terminal::{BlockStatus, TerminalCore};
+use ash_terminal::{BlockStatus, TerminalCore};
 
 #[derive(Clone, Copy)]
 pub enum TerminalBlockLineKind {

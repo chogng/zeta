@@ -92,10 +92,10 @@ jobs:
         shell: bash
         run: ${{ matrix.python }} -B scripts/cargo.py test -p zui --lib distribution::tests --target "${{ matrix.target }}"
 
-      - name: Test Zeta Code tooling
+      - name: Test Ash Code tooling
         if: matrix.checks != false
         shell: bash
-        run: ${{ matrix.python }} -B scripts/test-python.py zeta-code
+        run: ${{ matrix.python }} -B scripts/test-python.py ash-code
 
       - name: Test build tooling
         if: matrix.checks != false
@@ -110,93 +110,93 @@ jobs:
       - name: Verify App Server protocol artifacts
         if: matrix.checks != false
         shell: bash
-        run: ${{ matrix.python }} -B scripts/cargo.py test -p zeta-app-server-protocol --lib tests::schema_fixtures_match_the_generators --locked --target "${{ matrix.target }}" -- --exact
+        run: ${{ matrix.python }} -B scripts/cargo.py test -p ash-app-server-protocol --lib tests::schema_fixtures_match_the_generators --locked --target "${{ matrix.target }}" -- --exact
 
       - name: Test Linux managed network boundary
         if: matrix.checks != false && runner.os == 'Linux'
         shell: bash
         run: |
-          ${{ matrix.python }} -B scripts/cargo.py build -p zeta-network-proxy --example probe --target "${{ matrix.target }}"
-          export ZETA_NETWORK_PROBE="$GITHUB_WORKSPACE/.build/cargo/${{ matrix.target }}/debug/examples/probe"
-          ${{ matrix.python }} -B scripts/cargo.py test -p zeta-mxc-sandbox --lib --target "${{ matrix.target }}"
-          ${{ matrix.python }} -B scripts/cargo.py test -p zeta-mxc-sandbox --test linux --target "${{ matrix.target }}" -- --ignored
+          ${{ matrix.python }} -B scripts/cargo.py build -p ash-network-proxy --example probe --target "${{ matrix.target }}"
+          export ASH_NETWORK_PROBE="$GITHUB_WORKSPACE/.build/cargo/${{ matrix.target }}/debug/examples/probe"
+          ${{ matrix.python }} -B scripts/cargo.py test -p ash-mxc-sandbox --lib --target "${{ matrix.target }}"
+          ${{ matrix.python }} -B scripts/cargo.py test -p ash-mxc-sandbox --test linux --target "${{ matrix.target }}" -- --ignored
 
       - name: Test Windows account execution and cleanup
         if: matrix.checks != false && runner.os == 'Windows'
         shell: pwsh
         run: |
-          ${{ matrix.python }} -B scripts/cargo.py test -p zeta-mxc-sandbox --lib --target "${{ matrix.target }}"
+          ${{ matrix.python }} -B scripts/cargo.py test -p ash-mxc-sandbox --lib --target "${{ matrix.target }}"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ./scripts/test-windows-sandbox.ps1 -Target "${{ matrix.target }}"
 
-      - name: Build Zeta Code release package
+      - name: Build Ash Code release package
         if: github.event_name == 'release' && matrix.release_package != false
         shell: bash
         env:
-          ZETA_UPDATE_PUBLIC_KEY: ${{ vars.ZETA_UPDATE_PUBLIC_KEY }}
+          ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
         run: |
           version="$(${{ matrix.python }} -c 'from build.release.package.version import read_workspace_version; from pathlib import Path; print(read_workspace_version(Path("Cargo.toml")))')"
           test "${GITHUB_REF_NAME}" = "v${version}"
-          test "${#ZETA_UPDATE_PUBLIC_KEY}" = 64
-          ${{ matrix.python }} -B scripts/cargo.py build --package zeta-cli --bin zeta --profile release --target "${{ matrix.target }}"
-          cli=".build/cargo/${{ matrix.target }}/release/zeta${{ runner.os == 'Windows' && '.exe' || '' }}"
-          package=".build/releases/zeta-code-${{ matrix.target }}"
+          test "${#ASH_UPDATE_PUBLIC_KEY}" = 64
+          ${{ matrix.python }} -B scripts/cargo.py build --package ash-cli --bin ash --profile release --target "${{ matrix.target }}"
+          cli=".build/cargo/${{ matrix.target }}/release/ash${{ runner.os == 'Windows' && '.exe' || '' }}"
+          package=".build/releases/ash-code-${{ matrix.target }}"
           ${{ matrix.python }} -B build/release/package/build.py \
             --target "${{ matrix.target }}" \
             --cli-bin "$cli" \
-            --update-public-key "$ZETA_UPDATE_PUBLIC_KEY" \
+            --update-public-key "$ASH_UPDATE_PUBLIC_KEY" \
             --package-dir "$package"
-          ${{ matrix.python }} -B scripts/cargo.py build --package zeta-update-sign --bin zeta-update-sign
+          ${{ matrix.python }} -B scripts/cargo.py build --package ash-update-sign --bin ash-update-sign
 
       - name: Import macOS release credentials
         if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'macOS'
         shell: bash
         env:
-          ZETA_MACOS_CERTIFICATE_P12: ${{ secrets.ZETA_MACOS_CERTIFICATE_P12 }}
-          ZETA_MACOS_CERTIFICATE_PASSWORD: ${{ secrets.ZETA_MACOS_CERTIFICATE_PASSWORD }}
-          ZETA_MACOS_NOTARY_KEY_P8: ${{ secrets.ZETA_MACOS_NOTARY_KEY_P8 }}
-          ZETA_MACOS_NOTARY_KEY_ID: ${{ secrets.ZETA_MACOS_NOTARY_KEY_ID }}
-          ZETA_MACOS_NOTARY_ISSUER: ${{ secrets.ZETA_MACOS_NOTARY_ISSUER }}
+          ASH_MACOS_CERTIFICATE_P12: ${{ secrets.ASH_MACOS_CERTIFICATE_P12 }}
+          ASH_MACOS_CERTIFICATE_PASSWORD: ${{ secrets.ASH_MACOS_CERTIFICATE_PASSWORD }}
+          ASH_MACOS_NOTARY_KEY_P8: ${{ secrets.ASH_MACOS_NOTARY_KEY_P8 }}
+          ASH_MACOS_NOTARY_KEY_ID: ${{ secrets.ASH_MACOS_NOTARY_KEY_ID }}
+          ASH_MACOS_NOTARY_ISSUER: ${{ secrets.ASH_MACOS_NOTARY_ISSUER }}
         run: |
-          test -n "$ZETA_MACOS_CERTIFICATE_P12"
-          test -n "$ZETA_MACOS_CERTIFICATE_PASSWORD"
-          test -n "$ZETA_MACOS_NOTARY_KEY_P8"
-          test -n "$ZETA_MACOS_NOTARY_KEY_ID"
-          test -n "$ZETA_MACOS_NOTARY_ISSUER"
-          signing_dir="$RUNNER_TEMP/zeta-signing"
+          test -n "$ASH_MACOS_CERTIFICATE_P12"
+          test -n "$ASH_MACOS_CERTIFICATE_PASSWORD"
+          test -n "$ASH_MACOS_NOTARY_KEY_P8"
+          test -n "$ASH_MACOS_NOTARY_KEY_ID"
+          test -n "$ASH_MACOS_NOTARY_ISSUER"
+          signing_dir="$RUNNER_TEMP/ash-signing"
           mkdir -p "$signing_dir"
-          python3 -c 'import base64, os, pathlib; pathlib.Path(os.environ["RUNNER_TEMP"], "zeta-signing", "certificate.p12").write_bytes(base64.b64decode(os.environ["ZETA_MACOS_CERTIFICATE_P12"], validate=True)); pathlib.Path(os.environ["RUNNER_TEMP"], "zeta-signing", "AuthKey.p8").write_bytes(base64.b64decode(os.environ["ZETA_MACOS_NOTARY_KEY_P8"], validate=True))'
+          python3 -c 'import base64, os, pathlib; pathlib.Path(os.environ["RUNNER_TEMP"], "ash-signing", "certificate.p12").write_bytes(base64.b64decode(os.environ["ASH_MACOS_CERTIFICATE_P12"], validate=True)); pathlib.Path(os.environ["RUNNER_TEMP"], "ash-signing", "AuthKey.p8").write_bytes(base64.b64decode(os.environ["ASH_MACOS_NOTARY_KEY_P8"], validate=True))'
           keychain="$signing_dir/release.keychain-db"
           keychain_password="$(uuidgen)"
           security create-keychain -p "$keychain_password" "$keychain"
           security set-keychain-settings -lut 21600 "$keychain"
           security unlock-keychain -p "$keychain_password" "$keychain"
-          security import "$signing_dir/certificate.p12" -k "$keychain" -P "$ZETA_MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12
+          security import "$signing_dir/certificate.p12" -k "$keychain" -P "$ASH_MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain"
           login_keychain="$(security default-keychain -d user | tr -d '"')"
           security list-keychains -d user -s "$keychain" "$login_keychain"
-          xcrun notarytool store-credentials zeta-release \
+          xcrun notarytool store-credentials ash-release \
             --key "$signing_dir/AuthKey.p8" \
-            --key-id "$ZETA_MACOS_NOTARY_KEY_ID" \
-            --issuer "$ZETA_MACOS_NOTARY_ISSUER"
-          echo "ZETA_MACOS_NOTARY_PROFILE=zeta-release" >> "$GITHUB_ENV"
+            --key-id "$ASH_MACOS_NOTARY_KEY_ID" \
+            --issuer "$ASH_MACOS_NOTARY_ISSUER"
+          echo "ASH_MACOS_NOTARY_PROFILE=ash-release" >> "$GITHUB_ENV"
 
       - name: Sign in to Azure for Windows release signing
         if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
         uses: Azure/login@93381592711f247e165c389ebb30b596c84cdc48 # v3.0.0
         with:
-          client-id: ${{ vars.ZETA_AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.ZETA_AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.ZETA_AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ vars.ASH_AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.ASH_AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.ASH_AZURE_SUBSCRIPTION_ID }}
 
       - name: Sign Windows executables with Artifact Signing
         if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
         uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba # v2.0.0
         with:
-          endpoint: ${{ vars.ZETA_WINDOWS_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.ZETA_WINDOWS_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.ZETA_WINDOWS_CERTIFICATE_PROFILE }}
-          files-folder: ${{ github.workspace }}\.build\releases\zeta-code-${{ matrix.target }}
+          endpoint: ${{ vars.ASH_WINDOWS_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ASH_WINDOWS_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.ASH_WINDOWS_CERTIFICATE_PROFILE }}
+          files-folder: ${{ github.workspace }}\.build\releases\ash-code-${{ matrix.target }}
           files-folder-filter: exe
           files-folder-recurse: true
           file-digest: SHA256
@@ -207,10 +207,10 @@ jobs:
         if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'macOS'
         shell: bash
         env:
-          ZETA_MACOS_SIGNING_IDENTITY: ${{ vars.ZETA_MACOS_SIGNING_IDENTITY }}
+          ASH_MACOS_SIGNING_IDENTITY: ${{ vars.ASH_MACOS_SIGNING_IDENTITY }}
         run: |
           ${{ matrix.python }} -B build/release/package/sign.py \
-            --package-dir ".build/releases/zeta-code-${{ matrix.target }}" \
+            --package-dir ".build/releases/ash-code-${{ matrix.target }}" \
             --target "${{ matrix.target }}"
 
       - name: Verify and record Windows signatures
@@ -219,54 +219,54 @@ jobs:
         run: |
           $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
           if (-not $signTool) { throw "signtool.exe is not installed" }
-          $env:ZETA_WINDOWS_SIGNTOOL = $signTool.FullName
+          $env:ASH_WINDOWS_SIGNTOOL = $signTool.FullName
           ${{ matrix.python }} -B build/release/package/sign.py `
-            --package-dir ".build/releases/zeta-code-${{ matrix.target }}" `
+            --package-dir ".build/releases/ash-code-${{ matrix.target }}" `
             --target "${{ matrix.target }}" `
             --verify-only
 
-      - name: Build Zeta Code release archive
+      - name: Build Ash Code release archive
         if: github.event_name == 'release' && matrix.release_package != false
         shell: bash
         run: |
           ${{ matrix.python }} -B build/release/code/archive.py \
-            --package-dir ".build/releases/zeta-code-${{ matrix.target }}" \
-            --output ".build/releases/zeta-code-${{ matrix.target }}.${{ matrix.archive }}"
+            --package-dir ".build/releases/ash-code-${{ matrix.target }}" \
+            --output ".build/releases/ash-code-${{ matrix.target }}.${{ matrix.archive }}"
 
       - name: Notarize macOS release archive
         if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'macOS'
         shell: bash
         run: |
           ${{ matrix.python }} -B build/release/notarize.py \
-            ".build/releases/zeta-code-${{ matrix.target }}.${{ matrix.archive }}"
+            ".build/releases/ash-code-${{ matrix.target }}.${{ matrix.archive }}"
 
-      - name: Sign Zeta Code update
+      - name: Sign Ash Code update
         if: github.event_name == 'release' && matrix.release_package != false
         shell: bash
         env:
-          ZETA_UPDATE_PUBLIC_KEY: ${{ vars.ZETA_UPDATE_PUBLIC_KEY }}
-          ZETA_UPDATE_SIGNING_KEY: ${{ secrets.ZETA_UPDATE_SIGNING_KEY }}
+          ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
+          ASH_UPDATE_SIGNING_KEY: ${{ secrets.ASH_UPDATE_SIGNING_KEY }}
         run: |
-          signer=".build/cargo/debug/zeta-update-sign${{ runner.os == 'Windows' && '.exe' || '' }}"
+          signer=".build/cargo/debug/ash-update-sign${{ runner.os == 'Windows' && '.exe' || '' }}"
           "$signer" \
-            --repository chogng/zeta \
-            --product zeta-code \
+            --repository chogng/ash \
+            --product ash-code \
             --channel latest \
             --version "${GITHUB_REF_NAME#v}" \
             --release-tag "$GITHUB_REF_NAME" \
             --target "${{ matrix.target }}" \
             --format "${{ matrix.update_format }}" \
-            --archive ".build/releases/zeta-code-${{ matrix.target }}.${{ matrix.archive }}" \
-            --output ".build/releases/zeta-code-${{ matrix.target }}.update.json" \
-            --public-key "$ZETA_UPDATE_PUBLIC_KEY"
+            --archive ".build/releases/ash-code-${{ matrix.target }}.${{ matrix.archive }}" \
+            --output ".build/releases/ash-code-${{ matrix.target }}.update.json" \
+            --public-key "$ASH_UPDATE_PUBLIC_KEY"
 
-      - name: Publish Zeta Code release package
+      - name: Publish Ash Code release package
         if: github.event_name == 'release' && matrix.release_package != false
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release upload "$GITHUB_REF_NAME" \
-            ".build/releases/zeta-code-${{ matrix.target }}.${{ matrix.archive }}" \
-            ".build/releases/zeta-code-${{ matrix.target }}.${{ matrix.archive }}.sha256" \
-            ".build/releases/zeta-code-${{ matrix.target }}.update.json"
+            ".build/releases/ash-code-${{ matrix.target }}.${{ matrix.archive }}" \
+            ".build/releases/ash-code-${{ matrix.target }}.${{ matrix.archive }}.sha256" \
+            ".build/releases/ash-code-${{ matrix.target }}.update.json"

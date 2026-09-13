@@ -1,6 +1,6 @@
 {
-	"name": "Zeta",
-	"short_name": "Zeta",
+	"name": "Ash",
+	"short_name": "Ash",
 	"start_url": "./",
 	"lang": "en-US",
 	"display": "standalone",
@@ -9,12 +9,12 @@
 	],
 	"icons": [
 		{
-			"src": "zeta-192.png",
+			"src": "ash-192.png",
 			"type": "image/png",
 			"sizes": "192x192"
 		},
 		{
-			"src": "zeta-512.png",
+			"src": "ash-512.png",
 			"type": "image/png",
 			"sizes": "512x512"
 		}

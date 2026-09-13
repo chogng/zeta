@@ -1,0 +1,26 @@
+[package]
+name = "ash-history-notes"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+rusqlite = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+state = { package = "ash-state", path = "../../state" }
+ash-core = { workspace = true }
+protocol = { package = "ash-protocol", path = "../../protocol" }
+tools = { package = "ash-tools", path = "../../tools" }
+async-utils = { package = "ash-async-utils", path = "../../async-utils" }
+extension-api = { package = "ash-extension-api", path = "../extension-api" }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

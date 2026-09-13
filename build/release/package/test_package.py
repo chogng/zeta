@@ -15,7 +15,7 @@ from unittest.mock import patch
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from build.lib.zeta_build.targets import TARGETS
+from build.lib.ash_build.targets import TARGETS
 from build.release.package.build import generate_protocol_metadata
 from build.release.package.build import main as build_main
 from build.release.package.bubblewrap import load_vendored_source, resolve_bubblewrap
@@ -42,7 +42,7 @@ from build.release.package.version import read_workspace_version
 
 PRODUCTION_LOCK = REPOSITORY_ROOT / "third_party" / "ripgrep" / "runtime-lock.json"
 PRODUCTION_NODE_LOCK = REPOSITORY_ROOT / "third_party" / "node" / "runtime-lock.json"
-PRODUCTION_BUBBLEWRAP_SOURCE = REPOSITORY_ROOT / "zeta-rs" / "vendor" / "bubblewrap"
+PRODUCTION_BUBBLEWRAP_SOURCE = REPOSITORY_ROOT / "ash-rs" / "vendor" / "bubblewrap"
 
 
 class PackageTests(unittest.TestCase):
@@ -50,11 +50,11 @@ class PackageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             names = (
-                "zeta-app-server",
-                "zeta-app-server-daemon",
-                "zeta-code-mode-host",
-                "zeta-remote",
-                "zeta-remote-server",
+                "ash-app-server",
+                "ash-app-server-daemon",
+                "ash-code-mode-host",
+                "ash-remote",
+                "ash-remote-server",
             )
             artifacts = [
                 json.dumps(
@@ -108,7 +108,7 @@ class PackageTests(unittest.TestCase):
     def test_product_services_requires_every_sources_regular_trust_root(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            official = {"name": "zeta", "trustedRoot": "marketplace-root.json"}
+            official = {"name": "ash", "trustedRoot": "marketplace-root.json"}
             vendor = {"name": "vendor", "trustedRoot": "vendor/root.json"}
             (root / "marketplace-root.json").write_text("official root")
             (root / "vendor").mkdir()
@@ -153,7 +153,7 @@ class PackageTests(unittest.TestCase):
                     {
                         "schemaVersion": 2,
                         "marketplaces": [
-                            {"name": "zeta", "trustedRoot": "marketplace-root.json"},
+                            {"name": "ash", "trustedRoot": "marketplace-root.json"},
                             {"name": "vendor", "trustedRoot": "linked/root.json"},
                         ],
                     }
@@ -212,7 +212,7 @@ class PackageTests(unittest.TestCase):
         command, cwd, check = commands[0]
         self.assertEqual(REPOSITORY_ROOT, cwd)
         self.assertTrue(check)
-        self.assertEqual("zeta-app-server-protocol", command[command.index("-p") + 1])
+        self.assertEqual("ash-app-server-protocol", command[command.index("-p") + 1])
         self.assertEqual("typescript", command[command.index("--") + 1])
         self.assertNotEqual(metadata, load_protocol_metadata(REPOSITORY_ROOT))
 
@@ -253,14 +253,14 @@ class PackageTests(unittest.TestCase):
     def test_local_overrides_build_canonical_package(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            server_binary = executable_file(root / "zeta-source", b"zeta-app-server")
+            server_binary = executable_file(root / "ash-source", b"ash-app-server")
             daemon_binary = executable_file(
-                root / "daemon-source", b"zeta-app-server-daemon"
+                root / "daemon-source", b"ash-app-server-daemon"
             )
             code_mode_host_binary = executable_file(
-                root / "code-mode-host-source", b"zeta-code-mode-host"
+                root / "code-mode-host-source", b"ash-code-mode-host"
             )
-            cli_binary = executable_file(root / "cli-source", b"zeta-cli")
+            cli_binary = executable_file(root / "cli-source", b"ash-cli")
             rg_binary = executable_file(root / "rg-source", b"ripgrep")
             output = root / "package"
             spec = TARGETS["aarch64-apple-darwin"]
@@ -289,34 +289,34 @@ class PackageTests(unittest.TestCase):
             )
 
             self.assertEqual(
-                b"zeta-app-server", (output / "bin" / "zeta-app-server").read_bytes()
+                b"ash-app-server", (output / "bin" / "ash-app-server").read_bytes()
             )
             self.assertEqual(
-                b"zeta-app-server-daemon",
-                (output / "bin" / "zeta-app-server-daemon").read_bytes(),
+                b"ash-app-server-daemon",
+                (output / "bin" / "ash-app-server-daemon").read_bytes(),
             )
             self.assertEqual(
-                b"zeta-code-mode-host",
-                (output / "bin" / "zeta-code-mode-host").read_bytes(),
+                b"ash-code-mode-host",
+                (output / "bin" / "ash-code-mode-host").read_bytes(),
             )
-            self.assertEqual(b"zeta-cli", (output / "bin" / "zeta").read_bytes())
-            self.assertEqual(b"ripgrep", (output / "zeta-path" / "rg").read_bytes())
+            self.assertEqual(b"ash-cli", (output / "bin" / "ash").read_bytes())
+            self.assertEqual(b"ripgrep", (output / "ash-path" / "rg").read_bytes())
             for name in ("LICENSE-APACHE", "NOTICE"):
                 self.assertEqual(
-                    (REPOSITORY_ROOT / "zeta-rs" / "uds" / name).read_bytes(),
+                    (REPOSITORY_ROOT / "ash-rs" / "uds" / name).read_bytes(),
                     (
-                        output / "zeta-resources" / "licenses" / "uds" / name
+                        output / "ash-resources" / "licenses" / "uds" / name
                     ).read_bytes(),
                 )
             self.assertEqual(
                 b"node",
-                (output / "zeta-resources" / "node" / "bin" / "node").read_bytes(),
+                (output / "ash-resources" / "node" / "bin" / "node").read_bytes(),
             )
-            self.assertTrue(os.access(str(output / "bin" / "zeta-app-server"), os.X_OK))
-            self.assertTrue(os.access(str(output / "zeta-path" / "rg"), os.X_OK))
+            self.assertTrue(os.access(str(output / "bin" / "ash-app-server"), os.X_OK))
+            self.assertTrue(os.access(str(output / "ash-path" / "rg"), os.X_OK))
             self.assertTrue(
                 (
-                    output / "zeta-resources" / "licenses" / "ripgrep" / "LICENSE-MIT"
+                    output / "ash-resources" / "licenses" / "ripgrep" / "LICENSE-MIT"
                 ).is_file()
             )
             self.assertEqual(
@@ -324,27 +324,27 @@ class PackageTests(unittest.TestCase):
                     encoding="utf-8"
                 ),
                 (
-                    output / "zeta-resources" / "licenses" / "vscode" / "LICENSE.txt"
+                    output / "ash-resources" / "licenses" / "vscode" / "LICENSE.txt"
                 ).read_text(encoding="utf-8"),
             )
             self.assertEqual(
                 (
                     REPOSITORY_ROOT
-                    / "zeta-rs"
+                    / "ash-rs"
                     / "skills"
                     / "assets"
                     / "skill-creator"
                     / "SKILL.md"
                 ).read_text(encoding="utf-8"),
                 (
-                    output / "zeta-resources" / "skills" / "skill-creator" / "SKILL.md"
+                    output / "ash-resources" / "skills" / "skill-creator" / "SKILL.md"
                 ).read_text(encoding="utf-8"),
             )
-            self.assertTrue((output / "zeta-resources" / "extensions").is_dir())
+            self.assertTrue((output / "ash-resources" / "extensions").is_dir())
             product_services = json.loads(
                 (
                     output
-                    / "zeta-resources"
+                    / "ash-resources"
                     / "product-services"
                     / "product-services.json"
                 ).read_text(encoding="utf-8")
@@ -354,7 +354,7 @@ class PackageTests(unittest.TestCase):
                 next(
                     source
                     for source in product_services["marketplaces"]
-                    if source["name"] == "zeta"
+                    if source["name"] == "ash"
                 )["trustedRoot"],
             )
             self.assertEqual(
@@ -366,7 +366,7 @@ class PackageTests(unittest.TestCase):
                 ).read_bytes(),
                 (
                     output
-                    / "zeta-resources"
+                    / "ash-resources"
                     / "product-services"
                     / "marketplace-root.json"
                 ).read_bytes(),
@@ -375,7 +375,7 @@ class PackageTests(unittest.TestCase):
                 [
                     path.name
                     for path in sorted(
-                        (output / "zeta-resources" / "extensions").iterdir(),
+                        (output / "ash-resources" / "extensions").iterdir(),
                         key=lambda path: path.name,
                     )
                 ],
@@ -384,19 +384,19 @@ class PackageTests(unittest.TestCase):
             self.assertIn(
                 '"name": "json"',
                 (
-                    output / "zeta-resources" / "extensions" / "json" / "package.json"
+                    output / "ash-resources" / "extensions" / "json" / "package.json"
                 ).read_text(encoding="utf-8"),
             )
 
-            self.assert_extension_resources(output / "zeta-resources" / "extensions")
+            self.assert_extension_resources(output / "ash-resources" / "extensions")
             metadata = json.loads(
-                (output / "zeta-package.json").read_text(encoding="utf-8")
+                (output / "ash-package.json").read_text(encoding="utf-8")
             )
             self.assertEqual(2, metadata["layoutVersion"])
             self.assertEqual("release", metadata["buildProfile"])
             self.assertEqual(
-                hashlib.sha256(b"zeta-app-server").hexdigest(),
-                metadata["files"]["bin/zeta-app-server"],
+                hashlib.sha256(b"ash-app-server").hexdigest(),
+                metadata["files"]["bin/ash-app-server"],
             )
             self.assertEqual({"kind": "packagedNode"}, metadata["javascriptRuntime"])
             self.assertEqual("aarch64-apple-darwin", metadata["target"])
@@ -410,15 +410,15 @@ class PackageTests(unittest.TestCase):
                 metadata["protocol"],
             )
             self.assertEqual(
-                hashlib.sha256(b"zeta-app-server").hexdigest(),
+                hashlib.sha256(b"ash-app-server").hexdigest(),
                 metadata["components"]["appServer"]["binarySha256"],
             )
             self.assertEqual(
-                hashlib.sha256(b"zeta-app-server-daemon").hexdigest(),
+                hashlib.sha256(b"ash-app-server-daemon").hexdigest(),
                 metadata["components"]["appServerDaemon"]["binarySha256"],
             )
             self.assertEqual(
-                hashlib.sha256(b"zeta-cli").hexdigest(),
+                hashlib.sha256(b"ash-cli").hexdigest(),
                 metadata["components"]["cli"]["binarySha256"],
             )
             self.assertEqual(
@@ -480,11 +480,11 @@ class PackageTests(unittest.TestCase):
                 REPOSITORY_ROOT,
                 read_workspace_version(REPOSITORY_ROOT / "Cargo.toml"),
                 spec,
-                executable_file(root / "zeta-source", b"zeta-app-server"),
+                executable_file(root / "ash-source", b"ash-app-server"),
                 executable_file(root / "remote-source", b"remote"),
                 executable_file(root / "remote-server-source", b"remote-server"),
-                executable_file(root / "daemon-source", b"zeta-app-server-daemon"),
-                executable_file(root / "code-mode-host-source", b"zeta-code-mode-host"),
+                executable_file(root / "daemon-source", b"ash-app-server-daemon"),
+                executable_file(root / "code-mode-host-source", b"ash-code-mode-host"),
                 resolve_ripgrep(
                     spec,
                     PRODUCTION_LOCK,
@@ -496,15 +496,15 @@ class PackageTests(unittest.TestCase):
             )
 
             metadata = json.loads(
-                (output / "zeta-package.json").read_text(encoding="utf-8")
+                (output / "ash-package.json").read_text(encoding="utf-8")
             )
             self.assertEqual(
                 {"kind": "hostProvidedNode"}, metadata["javascriptRuntime"]
             )
             self.assertEqual(generated_protocol, metadata["protocol"])
             self.assertNotIn("node", metadata["components"])
-            self.assertFalse((output / "zeta-resources" / "node").exists())
-            self.assertFalse((output / "zeta-resources" / "licenses" / "node").exists())
+            self.assertFalse((output / "ash-resources" / "node").exists())
+            self.assertFalse((output / "ash-resources" / "licenses" / "node").exists())
 
             signed = {}
             for name, path in system_signing_artifacts(output, spec).items():
@@ -517,7 +517,7 @@ class PackageTests(unittest.TestCase):
             record_system_signing(output, spec, signed)
             require_verified_system_signing(output, spec)
             signed_metadata = json.loads(
-                (output / "zeta-package.json").read_text(encoding="utf-8")
+                (output / "ash-package.json").read_text(encoding="utf-8")
             )
             self.assertEqual("verified", signed_metadata["systemSigning"]["status"])
             self.assertEqual(generated_protocol, signed_metadata["protocol"])
@@ -592,12 +592,12 @@ class PackageTests(unittest.TestCase):
     def test_linux_package_contains_built_sandbox_resource_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            server_binary = executable_file(root / "zeta-source", b"zeta-app-server")
+            server_binary = executable_file(root / "ash-source", b"ash-app-server")
             daemon_binary = executable_file(
-                root / "daemon-source", b"zeta-app-server-daemon"
+                root / "daemon-source", b"ash-app-server-daemon"
             )
             code_mode_host_binary = executable_file(
-                root / "code-mode-host-source", b"zeta-code-mode-host"
+                root / "code-mode-host-source", b"ash-code-mode-host"
             )
             rg_binary = executable_file(root / "rg-source", b"ripgrep")
             bwrap_binary = executable_file(root / "bwrap-source", b"bubblewrap")
@@ -636,15 +636,15 @@ class PackageTests(unittest.TestCase):
 
             self.assertEqual(
                 b"bubblewrap",
-                (output / "zeta-resources" / "bwrap").read_bytes(),
+                (output / "ash-resources" / "bwrap").read_bytes(),
             )
             self.assertTrue(
                 (
-                    output / "zeta-resources" / "licenses" / "bubblewrap" / "COPYING"
+                    output / "ash-resources" / "licenses" / "bubblewrap" / "COPYING"
                 ).is_file()
             )
             metadata = json.loads(
-                (output / "zeta-package.json").read_text(encoding="utf-8")
+                (output / "ash-package.json").read_text(encoding="utf-8")
             )
             self.assertEqual(
                 "0.11.2",
@@ -658,12 +658,12 @@ class PackageTests(unittest.TestCase):
     def test_windows_package_excludes_retired_account_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            server_binary = root / "zeta-app-server.exe"
-            server_binary.write_bytes(b"zeta-app-server")
-            daemon_binary = root / "zeta-app-server-daemon.exe"
-            daemon_binary.write_bytes(b"zeta-app-server-daemon")
-            code_mode_host_binary = root / "zeta-code-mode-host.exe"
-            code_mode_host_binary.write_bytes(b"zeta-code-mode-host")
+            server_binary = root / "ash-app-server.exe"
+            server_binary.write_bytes(b"ash-app-server")
+            daemon_binary = root / "ash-app-server-daemon.exe"
+            daemon_binary.write_bytes(b"ash-app-server-daemon")
+            code_mode_host_binary = root / "ash-code-mode-host.exe"
+            code_mode_host_binary.write_bytes(b"ash-code-mode-host")
             rg_binary = root / "rg.exe"
             rg_binary.write_bytes(b"ripgrep")
             spec = TARGETS["x86_64-pc-windows-msvc"]
@@ -691,11 +691,11 @@ class PackageTests(unittest.TestCase):
                 windows_sandbox_binary=executable_file(root / "sandbox-source.exe", b"sandbox"),
             )
 
-            resources = output / "zeta-resources"
+            resources = output / "ash-resources"
             for name in [
-                "zeta-command-runner.exe",
-                "zeta-windows-sandbox-service.exe",
-                "zeta-windows-sandbox-worker.exe",
+                "ash-command-runner.exe",
+                "ash-windows-sandbox-service.exe",
+                "ash-windows-sandbox-worker.exe",
             ]:
                 self.assertFalse((resources / name).exists())
             artifacts = system_signing_artifacts(output, spec)
@@ -777,7 +777,7 @@ class PackageTests(unittest.TestCase):
             extension = root / "demo-target"
             extension.mkdir()
             (extension / "package.json").write_text(
-                '{"name":"demo","publisher":"zeta","version":"1.0.0"}',
+                '{"name":"demo","publisher":"ash","version":"1.0.0"}',
                 encoding="utf-8",
             )
             (source / "demo").symlink_to(extension, target_is_directory=True)
@@ -791,7 +791,7 @@ class PackageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source = write_vendored_bubblewrap(root)
-            metadata_path = source / "zeta-source.json"
+            metadata_path = source / "ash-source.json"
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
             metadata["archive"]["sha256"] = "invalid"
             metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
@@ -959,7 +959,7 @@ def write_node_tar_archive(
 
 
 def write_vendored_bubblewrap(root: Path) -> Path:
-    source = root / "zeta-rs" / "vendor" / "bubblewrap"
+    source = root / "ash-rs" / "vendor" / "bubblewrap"
     source.mkdir(parents=True)
     for name in (
         "COPYING",
@@ -983,7 +983,7 @@ def write_vendored_bubblewrap(root: Path) -> Path:
             "sha256": "0" * 64,
         },
     }
-    (source / "zeta-source.json").write_text(json.dumps(metadata), encoding="utf-8")
+    (source / "ash-source.json").write_text(json.dumps(metadata), encoding="utf-8")
     return source
 
 

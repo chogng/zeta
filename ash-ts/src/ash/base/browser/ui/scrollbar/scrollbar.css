@@ -1,0 +1,155 @@
+.ash-scrollbar {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  outline: none;
+}
+
+.ash-scrollbar-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: scroll;
+  overscroll-behavior: auto;
+  scrollbar-width: none;
+}
+
+.ash-scrollable-element[data-scroll-direction="horizontal"] >
+  .ash-scrollbar-viewport {
+  overflow-x: scroll;
+  overflow-y: hidden;
+}
+
+.ash-scrollable-element[data-scroll-direction="vertical"] >
+  .ash-scrollbar-viewport {
+  overflow-x: hidden;
+  overflow-y: scroll;
+}
+
+.ash-scrollbar-viewport::-webkit-scrollbar {
+  display: none;
+}
+
+.ash-scrollbar-content {
+  min-width: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
+  width: max-content;
+}
+
+.ash-scrollable-element[data-scroll-direction="horizontal"] >
+  .ash-scrollbar-viewport >
+  .ash-scrollbar-content {
+  height: 100%;
+}
+
+.ash-scrollable-element[data-scroll-direction="vertical"] >
+  .ash-scrollbar-viewport >
+  .ash-scrollbar-content {
+  width: 100%;
+}
+
+.ash-scrollbar-track {
+  position: absolute;
+  z-index: 3;
+  border-radius: calc(var(--ash-scrollbar-size) / 2);
+  opacity: 1;
+  outline: none;
+  touch-action: none;
+  transition: opacity 100ms linear;
+}
+
+.ash-scrollbar-track-horizontal {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: var(--ash-scrollbar-size);
+}
+
+.ash-scrollbar-track-vertical {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--ash-scrollbar-size);
+}
+
+.ash-scrollbar-track[data-visibility="auto"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ash-scrollbar:hover >
+  .ash-scrollbar-track[data-visibility="auto"],
+.ash-scrollbar:focus-within >
+  .ash-scrollbar-track[data-visibility="auto"],
+.ash-scrollbar-scrolling >
+  .ash-scrollbar-track[data-visibility="auto"],
+.ash-scrollbar-track.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ash-scrollbar-track.disabled {
+  pointer-events: none;
+}
+
+.ash-scrollbar-thumb {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid transparent;
+  border-radius: calc(var(--ash-scrollbar-size) / 2);
+  background:
+    var(--ash-scrollbar-slider-background)
+    padding-box;
+  cursor: default;
+  forced-color-adjust: none;
+  will-change: transform;
+}
+
+.ash-scrollbar-track-horizontal > .ash-scrollbar-thumb {
+  top: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.ash-scrollbar-track-vertical > .ash-scrollbar-thumb {
+  top: 0;
+  right: 0;
+  bottom: auto;
+  left: 0;
+}
+
+.ash-scrollbar-track:hover > .ash-scrollbar-thumb {
+  background:
+    var(--ash-scrollbar-slider-hover-background)
+    padding-box;
+}
+
+.ash-scrollbar-track.active > .ash-scrollbar-thumb {
+  background:
+    var(--ash-scrollbar-slider-active-background)
+    padding-box;
+}
+
+.ash-scrollbar-track:focus-visible {
+  outline: 1px solid
+    var(--ash-focus-border);
+  outline-offset: -1px;
+}
+
+.ash-scrollbar-corner {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: 0;
+  width: var(--ash-scrollbar-size);
+  height: var(--ash-scrollbar-size);
+  background: transparent;
+}
+
+@media (forced-colors: active) {
+  .ash-scrollbar-thumb {
+    border-color: ButtonText;
+    background: ButtonFace padding-box;
+  }
+}

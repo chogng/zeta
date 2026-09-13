@@ -62,7 +62,7 @@ fn badge_values_keep_hidden_count_and_indeterminate_semantics_distinct() {
 #[test]
 fn configured_desktop_identity_and_badge_reach_the_injected_backend() {
     let (handle, requests) = recording_handle(false);
-    let desktop_file_name = DesktopFileName::new("dev.zeta.BadgeTest").unwrap();
+    let desktop_file_name = DesktopFileName::new("dev.ash.BadgeTest").unwrap();
     handle.set_desktop_file_name(Some(desktop_file_name.clone()));
     handle.set_count(12).unwrap();
     assert_eq!(handle.badge(), ApplicationBadge::Count(12));

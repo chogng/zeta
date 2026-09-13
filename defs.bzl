@@ -1,4 +1,4 @@
-"""Shared Bazel definitions for Rust crates in the Zeta workspace."""
+"""Shared Bazel definitions for Rust crates in the Ash workspace."""
 
 load("@crates//:data.bzl", "DEP_DATA")
 load("@crates//:defs.bzl", "all_crate_deps")
@@ -22,7 +22,7 @@ def _crate_aliases(include_dev = False):
     result["//conditions:default"] = {label: alias for label, alias in aliases.items() if label in common}
     return select(result)
 
-def zeta_rust_crate(name, crate_name, data = [], crate_features = [], test_env_inherit = [], test_env = {}):
+def ash_rust_crate(name, crate_name, data = [], crate_features = [], test_env_inherit = [], test_env = {}):
     """Defines a Cargo library crate and its unit-test target.
 
     The crate's dependencies come from the workspace Cargo.lock through the
@@ -59,7 +59,7 @@ def zeta_rust_crate(name, crate_name, data = [], crate_features = [], test_env_i
         ),
     )
 
-def zeta_rust_binary(name, crate_name, crate_root, deps, data = []):
+def ash_rust_binary(name, crate_name, crate_root, deps, data = []):
     """Defines a Cargo binary using the lockfile-derived dependency graph.
 
     Callers provide the package library in `deps` when the binary imports it.

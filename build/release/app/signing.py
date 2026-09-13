@@ -14,8 +14,8 @@ from urllib.parse import urlsplit
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from build.lib.zeta_build.targets import TargetSpec
-from build.lib.zeta_build.targets import target_spec
+from build.lib.ash_build.targets import TargetSpec
+from build.lib.ash_build.targets import target_spec
 from build.release.remote.bundle import RemoteRuntimeBundle
 from build.release.remote.bundle import validate_remote_runtime_bundle
 from build.release.system_signing import run_command
@@ -316,7 +316,7 @@ def _sandbox(context):
         if entry is not None:
             raise RuntimeError("non-Windows package contains Windows sandbox metadata")
         return None
-    if not isinstance(entry, dict) or entry.get("path") != "bin/zeta-windows-sandbox.exe":
+    if not isinstance(entry, dict) or entry.get("path") != "bin/ash-windows-sandbox.exe":
         raise RuntimeError("Windows package is missing its sandbox executable metadata")
     artifact = context["package_dir"] / entry["path"]
     if artifact.is_symlink() or not artifact.is_file() or artifact.resolve().parent != context["artifact"].parent:

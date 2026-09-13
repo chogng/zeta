@@ -1,8 +1,8 @@
-use zeta_keybinding::HostPlatform;
-use zeta_keybinding::KeySequence;
-use zeta_keybinding::keycap_labels;
-use zeta_ui_components::KeycapSequence;
-use zeta_ui_components::KeycapStyle;
+use ash_keybinding::HostPlatform;
+use ash_keybinding::KeySequence;
+use ash_keybinding::keycap_labels;
+use ash_ui_components::KeycapSequence;
+use ash_ui_components::KeycapStyle;
 use zui::ui::BoxShadow;
 use zui::ui::Color;
 use zui::ui::CornerRadii;

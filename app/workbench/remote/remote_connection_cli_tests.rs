@@ -1,5 +1,5 @@
 use tempfile::TempDir;
-use zeta_remote_connections::RemoteConnectionCatalog;
+use ash_remote_connections::RemoteConnectionCatalog;
 
 use crate::launch::AppLaunch;
 use crate::launch::RemoteRuntimeSource;
@@ -93,7 +93,7 @@ fn save_list_replace_remove_and_connect_form_one_credential_free_workflow() {
         "connect".into(),
         "build".into(),
         "--runtime".into(),
-        "/opt/zeta/bin/zeta-remote-server".into(),
+        "/opt/ash/bin/ash-remote-server".into(),
         "--ssh".into(),
         "/usr/bin/ssh".into(),
     ])
@@ -114,7 +114,7 @@ fn save_list_replace_remove_and_connect_form_one_credential_free_workflow() {
     assert_eq!(profile.target().dir().as_str(), "/srv/other");
     assert_eq!(
         profile.runtime().executable(),
-        "/opt/zeta/bin/zeta-remote-server"
+        "/opt/ash/bin/ash-remote-server"
     );
     assert_eq!(ssh_executable.unwrap().to_string_lossy(), "/usr/bin/ssh");
     assert_eq!(runtime_source, RemoteRuntimeSource::ExplicitRuntime);

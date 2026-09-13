@@ -6,10 +6,10 @@ use crate::ChangesActivation;
 use crate::MULTI_DIFF_EDITOR;
 use crate::MULTI_DIFF_SCROLLBAR;
 use crate::TEST_SCM_PANE_STYLE;
-use zeta_diff::DiffDocument;
-use zeta_editor::CodeEditorStyle;
-use zeta_editor::MultiDiffEditorStyle;
-use zeta_ui_theme::DEFAULT_UI_THEME;
+use ash_diff::DiffDocument;
+use ash_editor::CodeEditorStyle;
+use ash_editor::MultiDiffEditorStyle;
+use ash_ui_theme::DEFAULT_UI_THEME;
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
 use zui::ui::{Color, Component, FontFamily, Rect, TextInputLayoutEngine, TextStyle, UiScene};
 

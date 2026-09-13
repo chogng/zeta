@@ -4,7 +4,7 @@ use super::{
     ActivationDecision, EnsureReservation, PendingTerminalReservation, TerminalReadyPlacement,
     TerminalRuntimeState,
 };
-use zeta_protocol::SessionId;
+use ash_protocol::SessionId;
 
 fn session_id(value: &str) -> SessionId {
     SessionId::new(value).expect("test session ID is non-empty")

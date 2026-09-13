@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use crate::FileEditorAutoScrollState;
 use crate::FileEditorPrompt;
-use zeta_editor::CodeEditorPosition;
+use ash_editor::CodeEditorPosition;
 
 const ROWS_PER_WHEEL_STEP: f64 = 3.0;
 

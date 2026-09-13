@@ -1,8 +1,8 @@
-use zeta_commands::AppCommandId;
-use zeta_ui_components::ScrollAxis;
-use zeta_ui_components::ScrollCommand;
-use zeta_ui_components::ScrollViewStyle;
-use zeta_ui_components::ScrollbarStyle;
+use ash_commands::AppCommandId;
+use ash_ui_components::ScrollAxis;
+use ash_ui_components::ScrollCommand;
+use ash_ui_components::ScrollViewStyle;
+use ash_ui_components::ScrollbarStyle;
 
 use super::SettingsActivation;
 use super::SettingsState;
@@ -176,8 +176,8 @@ fn focused_keybinding_is_scrolled_into_the_list_viewport() {
 
 #[test]
 fn shortcut_recording_routes_platform_keys_to_portable_bindings() {
-    use zeta_keybinding::HostPlatform;
-    use zeta_keybinding::serialize_key_sequence;
+    use ash_keybinding::HostPlatform;
+    use ash_keybinding::serialize_key_sequence;
     use zui::input::ElementState;
     use zui::input::Key;
     use zui::input::KeyEvent;

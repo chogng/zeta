@@ -1,13 +1,13 @@
 ---
-description: Zeta CLI and Ratatui product ownership, architecture, interaction, and validation boundaries.
-applyTo: "zeta-code/**"
+description: Ash CLI and Ratatui product ownership, architecture, interaction, and validation boundaries.
+applyTo: "ash-code/**"
 ---
 
-# Zeta Code CLI/TUI Guidelines
+# Ash Code CLI/TUI Guidelines
 
-Do not add feature overviews, UI behavior specifications, design notes, change records, plans, or verification reports under `zeta-code/docs`; keep implementation guidance and targeted test commands with the owning crate, and keep cross-client methods, parameters, results, notifications, errors, and machine-output contracts in their owning API documents. See [`zeta-code/README.md`](../../zeta-code/README.md) for the product entry point. A specification or existing test file is not evidence that behavior passed acceptance.
+Do not add feature overviews, UI behavior specifications, design notes, change records, plans, or verification reports under `ash-code/docs`; keep implementation guidance and targeted test commands with the owning crate, and keep cross-client methods, parameters, results, notifications, errors, and machine-output contracts in their owning API documents. See [`ash-code/README.md`](../../ash-code/README.md) for the product entry point. A specification or existing test file is not evidence that behavior passed acceptance.
 
-`zeta-code` owns `zeta-cli`, `zeta-tui`, raw-mode lifecycle, Ratatui interaction, and CLI product composition. Do not move this product presentation or lifecycle into `zeta-rs`; shared backend semantics must first form a backend-neutral contract with a real non-TUI consumer.
+`ash-code` owns `ash-cli`, `ash-tui`, raw-mode lifecycle, Ratatui interaction, and CLI product composition. Do not move this product presentation or lifecycle into `ash-rs`; shared backend semantics must first form a backend-neutral contract with a real non-TUI consumer.
 
 Keep one writer for each product state, render from explicit state, isolate side effects, reject stale asynchronous results by request/revision identity, and keep host adapters narrow. Feature behavior belongs in vertical feature owners rather than a global application switch.
 

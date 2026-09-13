@@ -1,0 +1,4 @@
+Windows endpoint ACL and peer-token helpers are adapted from OpenAI Codex
+(codex-rs/uds, revision dafb6781ee), Copyright 2025 OpenAI, licensed under Apache-2.0.
+Local changes provide synchronous SocketDirectory lifecycle and peer identity facts;
+endpoint owners decide connection policy. See LICENSE-APACHE.

@@ -1,4 +1,4 @@
-"""Read the Zeta workspace package version without third-party TOML dependencies."""
+"""Read the Ash workspace package version without third-party TOML dependencies."""
 
 import re
 from pathlib import Path

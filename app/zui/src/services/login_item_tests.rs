@@ -64,8 +64,8 @@ fn absolute_executable() -> PathBuf {
 #[test]
 fn login_item_names_reject_empty_and_nul_identities() {
     assert_eq!(
-        LoginItemName::new("Zeta Agent").unwrap().as_str(),
-        "Zeta Agent"
+        LoginItemName::new("Ash Agent").unwrap().as_str(),
+        "Ash Agent"
     );
     assert!(LoginItemName::new(" ").is_err());
     assert!(LoginItemName::new("bad\0name").is_err());
@@ -76,9 +76,9 @@ fn explicit_login_item_settings_reach_the_injected_backend_exactly() {
     let state = LoginItemState::new(LoginItemStatus::RequiresApproval);
     let (handle, operations) = recording_handle(state);
     let executable = absolute_executable();
-    let name = LoginItemName::new("Zeta Login").unwrap();
+    let name = LoginItemName::new("Ash Login").unwrap();
     let service =
-        LoginItemServiceKind::MacOsAgent(LoginItemName::new("dev.zeta.agent.plist").unwrap());
+        LoginItemServiceKind::MacOsAgent(LoginItemName::new("dev.ash.agent.plist").unwrap());
     let arguments = [OsString::from("--profile"), OsString::from("A B")];
     let options = LoginItemOptions::new()
         .with_service_kind(service.clone())

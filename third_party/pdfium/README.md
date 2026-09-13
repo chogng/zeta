@@ -1,12 +1,12 @@
 # PDFium runtime
 
-Zeta uses PDFium only for backend document ingestion: text extraction, page
+Ash uses PDFium only for backend document ingestion: text extraction, page
 rendering, and OCR pre-processing. Electron's normal PDF preview continues to
 use Chromium's built-in viewer.
 
 `runtime-lock.json` is the release lockfile. The selected PDFium build must
 remain compatible with the `pdfium-render` crate feature enabled by
-`zeta-pdf`. The current lock is intentionally pinned to build 7763 and
+`ash-pdf`. The current lock is intentionally pinned to build 7763 and
 the workspace enables the matching `pdfium_7763` feature.
 
 Fetch and verify the host artifact into a release staging directory:

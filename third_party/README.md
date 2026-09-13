@@ -6,19 +6,19 @@ must fetch each locked artifact, verify its SHA-256 digest, and copy it into the
 application bundle.
 
 This directory is an engineering boundary, not the repository-wide license
-inventory. Third-party material is recorded according to how Zeta consumes it:
+inventory. Third-party material is recorded according to how Ash consumes it:
 
 | Kind | Canonical repository location | Release obligation |
 | --- | --- | --- |
 | Downloaded native runtime | `third_party/<name>/` | Preserve its provenance, checksum, license, and required notices |
 | Ordinary Rust or JavaScript dependency | Owning manifest and lockfile | Validate its license policy and include required notices in the product that distributes it |
-| Component-specific bundled assets | The owning component, for example `zeta-rs/utils/typst/licenses/` | Copy the applicable license and notice texts into the release |
-| Desktop release notices | `zeta-ts/THIRD_PARTY_NOTICES.md` and `zeta-ts/licenses/` | Ship them with the desktop application |
+| Component-specific bundled assets | The owning component, for example `ash-rs/utils/typst/licenses/` | Copy the applicable license and notice texts into the release |
+| Desktop release notices | `ash-ts/THIRD_PARTY_NOTICES.md` and `ash-ts/licenses/` | Ship them with the desktop application |
 
 Do not add a package-manager dependency to this directory merely because it is
-third-party. Add it here only when Zeta owns the download, verification,
+third-party. Add it here only when Ash owns the download, verification,
 vendoring, patching, or runtime-bundling path. A first-party wrapper remains
-licensed under Zeta's root license; any license files stored beside that wrapper
+licensed under Ash's root license; any license files stored beside that wrapper
 must be clearly identified as applying to its upstream dependencies or bundled
 assets.
 
@@ -32,10 +32,10 @@ assets.
 
 | Runtime | Purpose | Distribution policy |
 | --- | --- | --- |
-| `node` | Shared runtime for package-provided JavaScript language servers | Required in every canonical Zeta package; language packages must not bundle it |
+| `node` | Shared runtime for package-provided JavaScript language servers | Required in every canonical Ash package; language packages must not bundle it |
 | `pdfium` | Agent PDF extraction and page rendering | Required by PDF ingestion releases |
 | `powershell` | Optional Windows PowerShell 7 runtime | Bundle only for releases that require a consistent `pwsh` runtime |
-| `ripgrep` | Model-visible content and path search executable | Required in every canonical Zeta package |
+| `ripgrep` | Model-visible content and path search executable | Required in every canonical Ash package |
 | `wezterm` | Provenance for reused PTY implementation code | Do not bundle the WezTerm GUI application |
 
 Downloaded artifacts are intentionally ignored under `third_party/.cache/`.

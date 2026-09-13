@@ -4,18 +4,18 @@ use std::time::Instant;
 
 use anyhow::Result;
 use anyhow::anyhow;
-use zeta_app_server_protocol::protocol::git::GitCommitParams;
-use zeta_app_server_protocol::protocol::git::GitPathsParams;
-use zeta_app_server_protocol::protocol::turn_changes::TurnChangesCommitParams;
-use zeta_app_server_protocol::protocol::turn_changes::TurnChangesListParams;
-use zeta_app_server_protocol::protocol::turn_changes::TurnChangesMutationParams;
-use zeta_app_server_protocol::protocol::turn_changes::TurnChangesReadParams;
-use zeta_protocol::CommandId;
-use zeta_protocol::SessionId;
-use zeta_protocol::ThreadId;
-use zeta_protocol::TurnId;
-use zeta_scm::ChangesActivation;
-use zeta_scm::PullRequestMode;
+use ash_app_server_protocol::protocol::git::GitCommitParams;
+use ash_app_server_protocol::protocol::git::GitPathsParams;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesCommitParams;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesListParams;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesMutationParams;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesReadParams;
+use ash_protocol::CommandId;
+use ash_protocol::SessionId;
+use ash_protocol::ThreadId;
+use ash_protocol::TurnId;
+use ash_scm::ChangesActivation;
+use ash_scm::PullRequestMode;
 use zui::input::Key;
 use zui::input::KeyEvent;
 use zui::input::NamedKey;
@@ -27,14 +27,14 @@ use crate::app_server::AppServerRequestHandle;
 
 impl WorkbenchApplication {
     pub(super) fn route_scm_keyboard(&mut self, event: &KeyEvent) -> bool {
-        if !self.ui_dispatch.is_focused(zeta_scm::COMMIT_MESSAGE_EDITOR) {
+        if !self.ui_dispatch.is_focused(ash_scm::COMMIT_MESSAGE_EDITOR) {
             return false;
         }
         if event.logical_key == Key::Named(NamedKey::Escape) {
             self.scm.toolbar_mut().dismiss_menus();
         } else {
             let command = if event.logical_key == Key::Named(NamedKey::Enter) {
-                Some(zeta_editor::CodeEditorCommand::Newline)
+                Some(ash_editor::CodeEditorCommand::Newline)
             } else {
                 crate::terminal_input::code_editor_command(event, self.modifiers)
             };
@@ -179,7 +179,7 @@ impl WorkbenchApplication {
         let mut client = client.clone();
         let proxy = self.event_proxy.clone();
         std::thread::Builder::new()
-            .name("zeta-scm-auto-commit".into())
+            .name("ash-scm-auto-commit".into())
             .spawn(move || {
                 let result = generate_and_commit(&mut client, session_id, thread_id, current_turn);
                 let _ = proxy.send_event(WorkbenchEvent::ScmOperationFinished(result));

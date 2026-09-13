@@ -1,4 +1,4 @@
-use zeta_editor::CodeEditorSearchQuery;
+use ash_editor::CodeEditorSearchQuery;
 use zui::ui::{TextInput, TextInputCommand, TextInputCompositionEvent};
 
 /// Which find widget fields are visible above the shared CodeEditor.

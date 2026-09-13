@@ -33,10 +33,10 @@ class RemoteRuntimeBundleTests(unittest.TestCase):
             self.assertGreater(artifact["unpackedSize"], 0)
             with tarfile.open(first.root / artifact["archive"], "r:gz") as archive:
                 self.assertEqual(
-                    archive.extractfile("bin/zeta-app-server").read(), b"zeta"
+                    archive.extractfile("bin/ash-app-server").read(), b"ash"
                 )
-                self.assertEqual(archive.getmember("bin/zeta-app-server").mode, 0o755)
-                self.assertEqual(archive.getmember("zeta-package.json").mode, 0o644)
+                self.assertEqual(archive.getmember("bin/ash-app-server").mode, 0o755)
+                self.assertEqual(archive.getmember("ash-package.json").mode, 0o644)
                 for member in archive.getmembers():
                     self.assertEqual((member.uid, member.gid, member.mtime), (0, 0, 0))
                     self.assertEqual((member.uname, member.gname), ("", ""))
@@ -71,24 +71,24 @@ class RemoteRuntimeBundleTests(unittest.TestCase):
 
 def create_package(path: Path) -> Path:
     files = {
-        "bin/zeta-app-server-daemon": b"daemon",
-        "bin/zeta-app-server": b"zeta",
-        "bin/zeta-remote-server": b"remote",
-        "zeta-path/rg": b"ripgrep",
-        "zeta-resources/node/bin/node": b"node",
+        "bin/ash-app-server-daemon": b"daemon",
+        "bin/ash-app-server": b"ash",
+        "bin/ash-remote-server": b"remote",
+        "ash-path/rg": b"ripgrep",
+        "ash-resources/node/bin/node": b"node",
     }
     metadata = {
         "layoutVersion": 2,
         "version": "0.1.0",
         "target": "x86_64-unknown-linux-gnu",
-        "entrypoint": "bin/zeta-app-server",
-        "pathDir": "zeta-path",
-        "resourcesDir": "zeta-resources",
+        "entrypoint": "bin/ash-app-server",
+        "pathDir": "ash-path",
+        "resourcesDir": "ash-resources",
         "javascriptRuntime": {"kind": "packagedNode"},
         "components": {},
     }
     path.mkdir()
-    (path / "zeta-package.json").write_text(json.dumps(metadata) + "\n")
+    (path / "ash-package.json").write_text(json.dumps(metadata) + "\n")
     for relative, content in files.items():
         destination = path / relative
         destination.parent.mkdir(parents=True, exist_ok=True)

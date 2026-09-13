@@ -1,0 +1,32 @@
+---
+source: ash-code/tui/src/app/fullscreen/modal_tests.rs
+expression: frame_text(&app)
+---
+  .                                                                            [— / —] [Dashboard]  
+                                                                                                    
+                                                                                                    
+            ┌── Memories ─────────────────────────────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │  ╭────────────────────────────────────────────────────────────────────╮ │             
+            │  │ Filter memories and actions                                        │ │             
+            │  ╰────────────────────────────────────────────────────────────────────╯ │             
+            │> Add memory  ·  Save a preference or reusable decision                  │             
+            │  Search all memories in this scope                                      │             
+            │  Enable memory reading  ·  Controls automatic recall and model searches │             
+            │  Enable model saving  ·  Save durable facts in this scope               │             
+            │  Back to scopes                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+  ╭─────────│  / to search  ·  Esc to close                                           │──────────╮  
+  │ > backgr└─────────────────────────────────────────────────────────────────────────┘          │  
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

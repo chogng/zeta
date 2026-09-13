@@ -1,11 +1,11 @@
-use zeta_ui_components::ScrollAxis;
-use zeta_ui_components::ScrollCommand;
-use zeta_ui_components::ScrollDelta;
-use zeta_ui_components::ScrollMetrics;
-use zeta_ui_components::ScrollState;
-use zeta_ui_components::ScrollViewStyle;
-use zeta_ui_components::ScrollbarPresentation;
-use zeta_ui_components::ScrollbarStyle;
+use ash_ui_components::ScrollAxis;
+use ash_ui_components::ScrollCommand;
+use ash_ui_components::ScrollDelta;
+use ash_ui_components::ScrollMetrics;
+use ash_ui_components::ScrollState;
+use ash_ui_components::ScrollViewStyle;
+use ash_ui_components::ScrollbarPresentation;
+use ash_ui_components::ScrollbarStyle;
 use zui::ui::Color;
 use zui::ui::InteractionFrame;
 use zui::ui::Rect;
@@ -63,7 +63,7 @@ fn keybindings_section_composes_scroll_view_with_translated_visible_rows() {
         bounds,
         SettingsPageSection::Keybindings,
         style(),
-        "zeta",
+        "ash",
         "Local",
         "Agent",
         &rows,

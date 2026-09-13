@@ -7,31 +7,31 @@ use std::sync::atomic::Ordering;
 
 use anyhow::Result;
 use anyhow::anyhow;
-use zeta_app_server_client::AppServerRequestHandle;
-use zeta_app_server_client::ClientError;
-use zeta_app_server_protocol::protocol::common::CommandId;
-use zeta_app_server_protocol::protocol::config::ConfigUpdateParams;
-use zeta_app_server_protocol::protocol::config::ModelRefDto;
-use zeta_app_server_protocol::protocol::session::SessionCreateParams;
-use zeta_app_server_protocol::protocol::session::SessionReadParams;
-use zeta_app_server_protocol::protocol::session::SessionRequest;
-use zeta_app_server_protocol::protocol::session::SessionRequestParams;
-use zeta_app_server_protocol::protocol::session::SessionRequestResult;
-use zeta_app_server_protocol::protocol::session::SessionSubscribeParams;
-use zeta_app_server_protocol::protocol::session::SessionSubscribeResult;
-use zeta_app_server_protocol::protocol::session::SessionThreadProjection;
-use zeta_app_server_protocol::protocol::session::SessionUnsubscribeParams;
-use zeta_app_server_protocol::protocol::turn::InputItem;
-use zeta_protocol::ApprovalMode;
-use zeta_protocol::ModelRef;
-use zeta_protocol::Patch;
-use zeta_protocol::Session;
-use zeta_protocol::SessionId;
-use zeta_protocol::SessionStatus;
-use zeta_protocol::SessionThread;
-use zeta_protocol::ThreadId;
-use zeta_protocol::ThreadStatus;
-use zeta_protocol::TurnId;
+use ash_app_server_client::AppServerRequestHandle;
+use ash_app_server_client::ClientError;
+use ash_app_server_protocol::protocol::common::CommandId;
+use ash_app_server_protocol::protocol::config::ConfigUpdateParams;
+use ash_app_server_protocol::protocol::config::ModelRefDto;
+use ash_app_server_protocol::protocol::session::SessionCreateParams;
+use ash_app_server_protocol::protocol::session::SessionReadParams;
+use ash_app_server_protocol::protocol::session::SessionRequest;
+use ash_app_server_protocol::protocol::session::SessionRequestParams;
+use ash_app_server_protocol::protocol::session::SessionRequestResult;
+use ash_app_server_protocol::protocol::session::SessionSubscribeParams;
+use ash_app_server_protocol::protocol::session::SessionSubscribeResult;
+use ash_app_server_protocol::protocol::session::SessionThreadProjection;
+use ash_app_server_protocol::protocol::session::SessionUnsubscribeParams;
+use ash_app_server_protocol::protocol::turn::InputItem;
+use ash_protocol::ApprovalMode;
+use ash_protocol::ModelRef;
+use ash_protocol::Patch;
+use ash_protocol::Session;
+use ash_protocol::SessionId;
+use ash_protocol::SessionStatus;
+use ash_protocol::SessionThread;
+use ash_protocol::ThreadId;
+use ash_protocol::ThreadStatus;
+use ash_protocol::TurnId;
 
 use super::ConnectionLost;
 use crate::EnvCwdSetResult;
@@ -158,7 +158,7 @@ fn create_session(client: &mut AppServerRequestHandle, cwd: &Path) -> Result<Ses
     client
         .create_session(SessionCreateParams {
             agent_id: None,
-            agent: zeta_protocol::AgentRoleSelection::Default,
+            agent: ash_protocol::AgentRoleSelection::Default,
             command_id: next_command_id("session"),
             title: cwd_title(cwd),
         })
@@ -474,6 +474,7 @@ pub(super) fn set_preferred_model(
                 provider: model.provider.to_string(),
                 model: model.model.to_string(),
             }),
+            preferred_reasoning_effort: Patch::Missing,
             approval_review_model: Patch::Missing,
             commit_message_model: Patch::Missing,
             tool_mode: Patch::Missing,

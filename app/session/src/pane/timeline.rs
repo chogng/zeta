@@ -4,11 +4,11 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use serde_json::Value;
-use zeta_protocol::PlanStepStatus;
-use zeta_protocol::ThreadItem;
-use zeta_protocol::ToolCallId;
-use zeta_protocol::ToolOutputStream;
-use zeta_thread_transcript::ThreadTranscriptEntry;
+use ash_protocol::PlanStepStatus;
+use ash_protocol::ThreadItem;
+use ash_protocol::ToolCallId;
+use ash_protocol::ToolOutputStream;
+use ash_thread_transcript::ThreadTranscriptEntry;
 use zui::ui::{
     Component, ComponentElement, Edges, Element, FontFamily, FontWeight, PaintRect, Point, Rect,
     Size, TextBlock, TextStyle, UiScene,

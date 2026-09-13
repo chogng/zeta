@@ -20,11 +20,11 @@ use std::time::Instant;
 use zui::ui::Point;
 use zui::ui::TextInputCommand;
 
-fn session_id(value: &str) -> zeta_protocol::SessionId {
-    zeta_protocol::SessionId::new(value).expect("valid session id")
+fn session_id(value: &str) -> ash_protocol::SessionId {
+    ash_protocol::SessionId::new(value).expect("valid session id")
 }
 
-fn session_input(id: zeta_protocol::SessionId) -> TabInput {
+fn session_input(id: ash_protocol::SessionId) -> TabInput {
     TabInput::session(
         id,
         TabInputMetadata::new("Session").with_status(TabStatus::new(TabStatusKind::Idle)),

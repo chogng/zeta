@@ -3,7 +3,7 @@ import { relative, resolve, sep } from "node:path";
 import { normalizePath, type HtmlTagDescriptor, type Plugin } from "vite";
 import { analyzeHotReloadModule, type HotReloadModuleAnalysis, unsafeHotReloadChangeReason } from "./hotReloadAnalysis.ts";
 
-const hotExportsName = "__zetaViteHotReloadExports";
+const hotExportsName = "__ashViteHotReloadExports";
 
 export interface HotReloadPluginOptions {
   readonly desktopRoot?: string;
@@ -19,19 +19,19 @@ interface HotReloadContext {
   };
 }
 
-export interface ZetaHotReloadPlugin extends Plugin {
+export interface AshHotReloadPlugin extends Plugin {
   readonly transformIndexHtml: { readonly order: "pre"; readonly handler: () => HtmlTagDescriptor[] };
   readonly transform: { readonly order: "pre"; readonly handler: (code: string, id: string) => string | undefined };
   readonly handleHotUpdate: (context: HotReloadContext) => Promise<[] | undefined>;
 }
 
 /** Owns Vite's development-only bridge to the generic Renderer hot-reload runtime. */
-export function hotReloadPlugin(options: HotReloadPluginOptions = {}): ZetaHotReloadPlugin {
-  const desktopRoot = resolve(options.desktopRoot ?? resolve(import.meta.dirname, "../../zeta-ts"));
+export function hotReloadPlugin(options: HotReloadPluginOptions = {}): AshHotReloadPlugin {
+  const desktopRoot = resolve(options.desktopRoot ?? resolve(import.meta.dirname, "../../ash-ts"));
   const setupPath = resolve(options.setupPath ?? resolve(import.meta.dirname, "setup-dev.ts"));
   const analyses = new Map<string, HotReloadModuleAnalysis>();
   return {
-    name: "zeta-hot-reload",
+    name: "ash-hot-reload",
     apply: "serve",
     transformIndexHtml: {
       order: "pre",

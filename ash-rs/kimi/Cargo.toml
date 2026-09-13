@@ -1,0 +1,26 @@
+[package]
+name = "ash-kimi"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "ash_kimi"
+path = "src/lib.rs"
+
+[dependencies]
+getrandom = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+urlencoding = { workspace = true }
+zeroize = { workspace = true }
+ash-async-utils = { workspace = true }
+ash-client = { workspace = true }
+ash-http-client = { workspace = true }
+ash-login = { workspace = true }
+ash-secrets = { workspace = true }
+
+[lints]
+workspace = true

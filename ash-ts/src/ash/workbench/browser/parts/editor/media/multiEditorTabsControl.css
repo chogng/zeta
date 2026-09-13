@@ -1,0 +1,32 @@
+.ash-multi-editor-tabs-control {
+  --ash-tab-list-inactive-background: var(--ash-editor-tab-background);
+
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  overflow: hidden;
+}
+
+.ash-multi-editor-tabs-control .ash-tab[data-state] .ash-tab-close-action {
+  visibility: visible;
+}
+
+.ash-multi-editor-tabs-control .ash-tab[data-state]:not(:hover) .ash-tab-close-action svg {
+  visibility: hidden;
+}
+
+.ash-multi-editor-tabs-control .ash-tab[data-state]:not(:hover) .ash-tab-close-action button::after {
+  width: 8px;
+  height: 8px;
+  margin: auto;
+  border-radius: 50%;
+  background: currentcolor;
+  content: "";
+}
+
+.ash-multi-editor-tabs-control .ash-tab[data-state="conflict"] .ash-tab-close-action button::after {
+  border-radius: 1px;
+  color: var(--ash-warning-foreground);
+  transform: rotate(45deg);
+}

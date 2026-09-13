@@ -1,7 +1,7 @@
 //! Remote connection and Tunnel state plus product presentation.
 //!
 //! Target validation, profile storage, runtime installation, SSH, and Tunnel lifecycle remain in
-//! the `zeta-rs/remote*` crates. The public API here is limited to resolved style, typed UI state,
+//! the `ash-rs/remote*` crates. The public API here is limited to resolved style, typed UI state,
 //! and requests that the product host forwards to those capabilities.
 
 mod interaction;
@@ -22,7 +22,7 @@ pub use style::RemoteUiStyle;
 
 #[cfg(test)]
 fn test_style() -> RemoteUiStyle {
-    use zeta_ui_components::{ScrollViewStyle, ScrollbarStyle};
+    use ash_ui_components::{ScrollViewStyle, ScrollbarStyle};
     use zui::ui::Color;
 
     let scroll = ScrollViewStyle::new(ScrollbarStyle::new(

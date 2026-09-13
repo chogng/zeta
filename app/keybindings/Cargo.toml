@@ -1,5 +1,5 @@
 [package]
-name = "zeta-keybindings-host"
+name = "ash-keybindings-host"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,12 +7,12 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "zeta_keybindings_host"
+name = "ash_keybindings_host"
 path = "src/lib.rs"
 
 [dependencies]
 serde_json = { workspace = true }
-zeta-keybinding = { workspace = true }
+ash-keybinding = { workspace = true }
 zui = { workspace = true, features = ["native"] }
 
 [lints]

@@ -23,7 +23,7 @@ function outputs(root: string): IconOutputs {
 }
 
 test("product icon generation tracks added, changed, and removed SVG files", async () => {
-  const root = await mkdtemp(join(tmpdir(), "zeta-product-icons-"));
+  const root = await mkdtemp(join(tmpdir(), "ash-product-icons-"));
   const sourceDirectory = join(root, "icons");
   const generatedOutputs = outputs(root);
   const outputFile = generatedOutputs.typescriptFile!;
@@ -61,7 +61,7 @@ test("product icon generation tracks added, changed, and removed SVG files", asy
 });
 
 test("product icon generation exposes prefix-free names including reserved words", async () => {
-  const root = await mkdtemp(join(tmpdir(), "zeta-product-icons-"));
+  const root = await mkdtemp(join(tmpdir(), "ash-product-icons-"));
   const sourceDirectory = join(root, "icons");
   const generatedOutputs = outputs(root);
   const outputFile = generatedOutputs.typescriptFile!;
@@ -78,7 +78,7 @@ test("product icon generation exposes prefix-free names including reserved words
 });
 
 test("product icon generation can update generated output without rewriting source SVGs", async () => {
-  const root = await mkdtemp(join(tmpdir(), "zeta-product-icons-"));
+  const root = await mkdtemp(join(tmpdir(), "ash-product-icons-"));
   const sourceDirectory = join(root, "icons");
   const generatedOutputs = outputs(root);
   const outputFile = generatedOutputs.typescriptFile!;
@@ -96,7 +96,7 @@ test("product icon generation can update generated output without rewriting sour
 });
 
 test("product icon generation canonicalizes sources and supports a read-only check", async () => {
-  const root = await mkdtemp(join(tmpdir(), "zeta-product-icons-"));
+  const root = await mkdtemp(join(tmpdir(), "ash-product-icons-"));
   const sourceDirectory = join(root, "icons");
   const generatedOutputs = outputs(root);
   try {
@@ -119,7 +119,7 @@ test("product icon generation canonicalizes sources and supports a read-only che
 });
 
 test("product icon generation rejects linked or active SVG content", async () => {
-  const root = await mkdtemp(join(tmpdir(), "zeta-product-icons-"));
+  const root = await mkdtemp(join(tmpdir(), "ash-product-icons-"));
   const sourceDirectory = join(root, "icons");
   const generatedOutputs = outputs(root);
   try {
@@ -132,7 +132,7 @@ test("product icon generation rejects linked or active SVG content", async () =>
 });
 
 test("Vite product icon integration regenerates and reloads after an SVG replacement", async () => {
-  const root = await mkdtemp(join(tmpdir(), "zeta-product-icons-vite-"));
+  const root = await mkdtemp(join(tmpdir(), "ash-product-icons-vite-"));
   const sourceDirectory = join(root, "icons");
   const outputFile = join(root, "generated", "product-icons.ts");
   try {

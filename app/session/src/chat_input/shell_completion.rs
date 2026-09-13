@@ -1,5 +1,5 @@
-use zeta_editor::CodeEditorTextEdit;
-use zeta_input_classifier::ShellCompletion;
+use ash_editor::CodeEditorTextEdit;
+use ash_input_classifier::ShellCompletion;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct ShellGhostSuggestion {

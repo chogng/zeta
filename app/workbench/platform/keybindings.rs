@@ -1,24 +1,24 @@
 use std::sync::OnceLock;
 
 use serde_json::Value;
-use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
-use zeta_keybinding::BindingPriority;
-use zeta_keybinding::BindingSet;
-use zeta_keybinding::BindingSource;
-use zeta_keybinding::Chord;
-use zeta_keybinding::ContextExpression;
-use zeta_keybinding::ContextValue;
-use zeta_keybinding::HostPlatform;
-use zeta_keybinding::KeySequence;
-use zeta_keybinding::ShortcutModifiers;
-use zeta_keybindings_host::KeybindingCatalog;
-use zeta_keybindings_host::KeybindingResolution;
-use zeta_keybindings_host::Keybindings;
-use zeta_keybindings_host::UserBinding;
+use ash_app_server_protocol::protocol::config::FrontendConfigDto;
+use ash_keybinding::BindingPriority;
+use ash_keybinding::BindingSet;
+use ash_keybinding::BindingSource;
+use ash_keybinding::Chord;
+use ash_keybinding::ContextExpression;
+use ash_keybinding::ContextValue;
+use ash_keybinding::HostPlatform;
+use ash_keybinding::KeySequence;
+use ash_keybinding::ShortcutModifiers;
+use ash_keybindings_host::KeybindingCatalog;
+use ash_keybindings_host::KeybindingResolution;
+use ash_keybindings_host::Keybindings;
+use ash_keybindings_host::UserBinding;
 #[cfg(test)]
-use zeta_keybindings_host::UserBindingTarget;
+use ash_keybindings_host::UserBindingTarget;
 
-use zeta_commands::AppCommandId;
+use ash_commands::AppCommandId;
 
 pub(crate) type WorkbenchKeybindings = Keybindings<WorkbenchKeybindingCatalog>;
 pub(crate) type WorkbenchKeybindingResolution = KeybindingResolution<AppCommandId>;
@@ -369,15 +369,15 @@ fn register(
 pub(crate) fn compile_user_bindings(
     value: Option<&Value>,
     platform: HostPlatform,
-) -> Result<Vec<WorkbenchUserBinding>, zeta_keybindings_host::KeybindingsConfigError> {
-    zeta_keybindings_host::compile_user_bindings::<WorkbenchKeybindingCatalog>(value, platform)
+) -> Result<Vec<WorkbenchUserBinding>, ash_keybindings_host::KeybindingsConfigError> {
+    ash_keybindings_host::compile_user_bindings::<WorkbenchKeybindingCatalog>(value, platform)
 }
 
 pub(crate) fn binding_diagnostics(
     rules: &[WorkbenchUserBinding],
     platform: HostPlatform,
 ) -> Vec<String> {
-    zeta_keybindings_host::binding_diagnostics::<WorkbenchKeybindingCatalog>(rules, platform)
+    ash_keybindings_host::binding_diagnostics::<WorkbenchKeybindingCatalog>(rules, platform)
 }
 
 pub(crate) fn edited_gui_config(
@@ -386,7 +386,7 @@ pub(crate) fn edited_gui_config(
     keybinding: &KeySequence,
     platform: HostPlatform,
 ) -> Result<FrontendConfigDto, String> {
-    let bindings = zeta_keybindings_host::edited_user_bindings::<WorkbenchKeybindingCatalog>(
+    let bindings = ash_keybindings_host::edited_user_bindings::<WorkbenchKeybindingCatalog>(
         section.0.get("keybindings"),
         command,
         keybinding,

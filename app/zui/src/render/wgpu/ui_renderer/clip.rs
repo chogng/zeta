@@ -86,21 +86,21 @@ pub(super) struct ClipRenderer {
 impl ClipRenderer {
     pub(super) fn new(device: &wgpu::Device, surface_format: wgpu::TextureFormat) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("zeta-ui rounded clip shader"),
+            label: Some("ash-ui rounded clip shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("clip.wgsl").into()),
         });
         let start_pipeline = create_pipeline(
             device,
             surface_format,
             &shader,
-            "zeta-ui rounded clip start pipeline",
+            "ash-ui rounded clip start pipeline",
             wgpu::StencilOperation::IncrementClamp,
         );
         let end_pipeline = create_pipeline(
             device,
             surface_format,
             &shader,
-            "zeta-ui rounded clip end pipeline",
+            "ash-ui rounded clip end pipeline",
             wgpu::StencilOperation::DecrementClamp,
         );
         Self {
@@ -263,7 +263,7 @@ fn create_pipeline(
 
 fn create_instance_buffer(device: &wgpu::Device, capacity: usize) -> wgpu::Buffer {
     device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("zeta-ui rounded clip instances"),
+        label: Some("ash-ui rounded clip instances"),
         size: (capacity * mem::size_of::<ClipInstance>()) as wgpu::BufferAddress,
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,

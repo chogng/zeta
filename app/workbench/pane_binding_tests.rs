@@ -1,7 +1,7 @@
 use super::PaneBinding;
 use crate::PaneInput;
 use crate::terminal_session::TerminalSessionKey;
-use zeta_protocol::SessionId;
+use ash_protocol::SessionId;
 
 fn session(value: &str) -> SessionId {
     SessionId::new(value).expect("test session ID is non-empty")

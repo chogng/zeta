@@ -1,6 +1,6 @@
 # 工程文档
 
-[系统架构](architecture.md) · [Zeta Code](../zeta-code/README.md) · [app](../app/docs/README.md) · [用户文档](https://github.com/chogng/zeta-docs)
+[系统架构](architecture.md) · [Ash Code](../ash-code/README.md) · [app](../app/docs/README.md) · [用户文档](https://github.com/chogng/ash-docs)
 
 普通开发直接完成实现和测试，按需更新现有文档；显式使用 `/develop` 时才采用[阶段产物与验收规则](development-workflow.md)。编写文档见[写作规范](../.github/instructions/documentation.instructions.md)。各模块的代码和测试入口在相邻 README。
 
@@ -17,28 +17,28 @@
 | --- | --- | --- |
 | [`agent-tools-spec.md`](agent-tools-spec.md) | 规格 | 逐工具 schema / 描述正文 / 错误文案 + 系统提示词扩写 |
 | [`agent-harness-design.md`](agent-harness-design.md) | 设计 | harness 行为策略：提示词、循环、失败、裁剪、压缩、缓存 |
-| [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) | 设计 | 执行内核总体设计、组件状态总账、阶段 A–E |
-| [`core.md`](core.md) | 设计 | zeta-core 的 ownership、组件、端口、提交顺序 |
+| [`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md) | 设计 | 执行内核总体设计、组件状态总账、阶段 A–E |
+| [`core.md`](core.md) | 设计 | ash-core 的 ownership、组件、端口、提交顺序 |
 | [`core-context.md`](core-context.md) | 设计 | ContextPlan / Manager / checkpoint / compaction 机制 |
 | [`core-multi-agent.md`](core-multi-agent.md) | 设计 | 同 Session Agent 的委托、Fresh spawn、消息交付和隔离（部分实现，缺口见状态头） |
-| [`agent-customizations.md`](agent-customizations.md) | 设计 | Instructions / Skills / Agents、`.zeta` 与外部导入边界 |
+| [`agent-customizations.md`](agent-customizations.md) | 设计 | Instructions / Skills / Agents、`.ash` 与外部导入边界 |
 | [`agents.md`](agents.md) | 设计 | 内置与自定义 Agent 的统一定义、专化职责、启动来源和执行约束 |
 | [`tools.md`](tools.md) | 设计 | 工具三层契约、registry snapshot |
 | [`exec.md`](exec.md) | 设计 | 进程执行 |
-| [`core-plugins.md`](../zeta-rs/docs/core-plugins.md) | 设计 | Plugin 来源、PluginsManager、包存储、activation 与 capability 接线 |
+| [`core-plugins.md`](../ash-rs/docs/core-plugins.md) | 设计 | Plugin 来源、PluginsManager、包存储、activation 与 capability 接线 |
 | [`localization.md`](localization.md) | 设计 | 内置 locale catalog、Marketplace localization 包与 UI fallback |
 | [`plugins.md`](plugins.md) / [`connectors.md`](connectors.md) / [`skills.md`](skills.md) | 设计 | Plugin 扩展分发、Connector 外部账号连接与 Skill 指令运行时边界 |
-| [`editor-extensions.md`](editor-extensions.md) | 设计 | 声明式扩展与 Zeta 原生可执行 Host v1 的双轨边界、信任、生命周期和产品接入状态 |
+| [`editor-extensions.md`](editor-extensions.md) | 设计 | 声明式扩展与 Ash 原生可执行 Host v1 的双轨边界、信任、生命周期和产品接入状态 |
 | [`mcp.md`](mcp.md) | 设计 | MCP 客户端协议会话、能力调用与 Connector ready binding |
 | [`slash-commands.md`](slash-commands.md) | 设计 | Slash Command 与统一斜杠启动面板边界 |
 
 ## 协议与 API
 
 [`domain-model.md`](domain-model.md)（领域身份与命名）、[`protocol.md`](protocol.md)（canonical 产品契约）、
-[`zeta-app-server-api.md`](zeta-app-server-api.md)、[`app-server-client.md`](app-server-client.md)、
-[`zeta-api.md`](zeta-api.md)、[`zeta-api-interface-requirements.md`](zeta-api-interface-requirements.md)、
-[`zeta-api-interface-template.md`](zeta-api-interface-template.md)（模板）、
-[`zeta-client.md`](zeta-client.md)、[`chatgpt-subscription.md`](chatgpt-subscription.md)（参考）
+[`ash-app-server-api.md`](ash-app-server-api.md)、[`app-server-client.md`](app-server-client.md)、
+[`ash-api.md`](ash-api.md)、[`ash-api-interface-requirements.md`](ash-api-interface-requirements.md)、
+[`ash-api-interface-template.md`](ash-api-interface-template.md)（模板）、
+[`ash-client.md`](ash-client.md)、[`chatgpt-subscription.md`](chatgpt-subscription.md)（参考）
 
 ## 模型与配置
 
@@ -55,7 +55,7 @@
 
 ## 界面与体验
 
-[`zeta-desktop-architecture.md`](zeta-desktop-architecture.md)、
+[`ash-desktop-architecture.md`](ash-desktop-architecture.md)、
 [`ui-styling-ownership.md`](ui-styling-ownership.md)、
 [`editor-architecture.md`](editor-architecture.md)、[`editor-core.md`](editor-core.md)、
 [`workbench-pane-composite-design.md`](workbench-pane-composite-design.md)、
@@ -74,8 +74,8 @@
 
 ## 平台与产品
 
-[`architecture.md`](architecture.md)（总入口）、[`zeta-rs-architecture.md`](zeta-rs-architecture.md)、
-[`zeta-code/README.md`](../zeta-code/README.md)、[`workbench-modes.md`](workbench-modes.md)、
+[`architecture.md`](architecture.md)（总入口）、[`ash-rs-architecture.md`](ash-rs-architecture.md)、
+[`ash-code/README.md`](../ash-code/README.md)、[`workbench-modes.md`](workbench-modes.md)、
 [`product-lines.md`](product-lines.md)、[`remote-development.md`](remote-development.md)、[`git.md`](git.md)、
 [`documentation-guidelines.md`](documentation-guidelines.md)
 

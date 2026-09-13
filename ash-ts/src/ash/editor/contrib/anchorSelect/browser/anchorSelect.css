@@ -1,0 +1,11 @@
+.stanza-editor .selection-anchor {
+	z-index: 3;
+	width: 2px !important;
+	background: var(--ash-focus-border);
+}
+
+@media (forced-colors: active) {
+	.stanza-editor .selection-anchor {
+		background: CanvasText;
+	}
+}

@@ -8,7 +8,7 @@ use super::{
     CodeEditorSelectionMode, CodeEditorStyle, CodeEditorSyntaxToken, CodeEditorTextEdit,
     CodeEditorTokenRole, CodeEditorViewport,
 };
-use zeta_ui_theme::DEFAULT_UI_THEME;
+use ash_ui_theme::DEFAULT_UI_THEME;
 use zui::ui::{
     CaretVisibility, Color, Component, FontFamily, Point, Rect, TextBlockWrap,
     TextInputLayoutEngine, TextStyle, UiScene,

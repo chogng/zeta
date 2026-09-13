@@ -1,5 +1,5 @@
 [package]
-name = "zeta-ui-components"
+name = "ash-ui-components"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,7 +7,7 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "zeta_ui_components"
+name = "ash_ui_components"
 path = "src/lib.rs"
 
 [dependencies]
@@ -17,4 +17,4 @@ zui = { workspace = true, default-features = false }
 workspace = true
 
 [dev-dependencies]
-zeta-icons = { workspace = true }
+ash-icons = { workspace = true }

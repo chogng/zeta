@@ -13,12 +13,12 @@ use std::time::Instant;
 
 use anyhow::Result;
 use anyhow::anyhow;
-use zeta_app_server_client::AppServerEvent;
-use zeta_app_server_client::AppServerEvents;
-use zeta_app_server_client::AppServerRequestHandle;
-use zeta_app_server_client::ServerNotification;
-use zeta_protocol::SessionId;
-use zeta_protocol::ThreadUpdate;
+use ash_app_server_client::AppServerEvent;
+use ash_app_server_client::AppServerEvents;
+use ash_app_server_client::AppServerRequestHandle;
+use ash_app_server_client::ServerNotification;
+use ash_protocol::SessionId;
+use ash_protocol::ThreadUpdate;
 
 use crate::RECONNECT_WINDOW;
 use crate::SESSION_UNAVAILABLE_COMMAND_ERROR;
@@ -427,7 +427,7 @@ fn drive(
                     let resets_transient_state = update.changes.iter().any(|change| {
                         matches!(
                             change,
-                            zeta_app_server_protocol::protocol::transcript::ThreadTranscriptChange::ClearTransient
+                            ash_app_server_protocol::protocol::transcript::ThreadTranscriptChange::ClearTransient
                         )
                     });
                     if !is_next && !resets_transient_state {

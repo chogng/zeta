@@ -6,7 +6,7 @@ import test from 'node:test';
 import { readDeclaration } from './compare-editor-api-members.mjs';
 
 test('includes inherited public Editor members without importing external base classes', () => {
-	const directory = mkdtempSync(join(tmpdir(), 'zeta-editor-api-members-'));
+	const directory = mkdtempSync(join(tmpdir(), 'ash-editor-api-members-'));
 	try {
 		const base = join(directory, 'base.ts');
 		const child = join(directory, 'child.ts');

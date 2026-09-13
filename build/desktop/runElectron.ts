@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 
-const desktopRoot = resolve(import.meta.dirname, "../../zeta-ts");
+const desktopRoot = resolve(import.meta.dirname, "../../ash-ts");
 const require = createRequire(resolve(desktopRoot, "package.json"));
 const electronExecutable = require("electron");
 const environment = { ...process.env };

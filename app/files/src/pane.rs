@@ -1,4 +1,4 @@
-use zeta_ui_components::{IconLabel, IconLabelStyle, ListView};
+use ash_ui_components::{IconLabel, IconLabelStyle, ListView};
 use zui::ui::{AccessibilityRole, ComputedElement, UiDispatch, UiNode};
 use zui::ui::{
     Component, ComponentContext, ComponentElement, Element, PaintRect, Rect, TextBlock, TextStyle,
@@ -13,8 +13,8 @@ use super::tree_view::FilesTreeView;
 use super::tree_view::draw_row_background;
 use super::tree_view::file_row_state;
 
-use zeta_ui_components::ScrollViewStyle;
-use zeta_ui_theme::UiTheme;
+use ash_ui_components::ScrollViewStyle;
+use ash_ui_theme::UiTheme;
 use zui::ui::Color;
 use zui::ui::ElementId;
 

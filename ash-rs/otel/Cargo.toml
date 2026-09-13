@@ -1,0 +1,29 @@
+[package]
+name = "ash-otel"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "ash_otel"
+path = "src/lib.rs"
+
+[features]
+default = []
+mock = ["opentelemetry_sdk/testing"]
+
+[dependencies]
+opentelemetry = { workspace = true, features = ["metrics", "trace"] }
+opentelemetry_sdk = { workspace = true, features = ["metrics", "trace"] }
+serde = { workspace = true }
+ash-client = { workspace = true }
+ash-http-client = { workspace = true }
+diagnostics = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

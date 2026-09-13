@@ -29,7 +29,7 @@ use crate::TextInputLayoutEngine;
 use crate::UiDispatch;
 use crate::UiNode;
 use crate::UiScene;
-use zeta_icons::icons;
+use ash_icons::icons;
 use zui::ui::Icon;
 
 use super::WorkbenchUiStyle;

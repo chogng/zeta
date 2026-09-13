@@ -1,8 +1,8 @@
-use zeta_editor::{
+use ash_editor::{
     CodeEditorCommand, CodeEditorLanguage, CodeEditorPosition, CodeEditorSearchQuery,
     CodeEditorSelectionMode,
 };
-use zeta_text_file::{
+use ash_text_file::{
     TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot, TextFileStatus,
 };
 

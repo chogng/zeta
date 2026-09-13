@@ -1,0 +1,21 @@
+[package]
+name = "ash-theme"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "ash_theme"
+path = "src/lib.rs"
+
+[dependencies]
+ash-utils-home-dir = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+ash-utils-path = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,4 +1,4 @@
-use zeta_editor::{CodeEditorDiagnostic, CodeEditorDiagnosticSeverity};
+use ash_editor::{CodeEditorDiagnostic, CodeEditorDiagnosticSeverity};
 use zui::ui::{Color, Component, Point, Rect, UiScene};
 
 use super::*;

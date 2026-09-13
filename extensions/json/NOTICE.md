@@ -9,6 +9,6 @@ VS Code source tree at `extensions/json/syntaxes`.
 - License: MIT, following the upstream VS Code repository
 
 The files are intentionally shipped as resources of the declarative
-`zeta.json` extension package. They are not base contracts and
+`ash.json` extension package. They are not base contracts and
 must not be imported by `workbench/services/textMate/common`.
 

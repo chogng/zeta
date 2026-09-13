@@ -1,5 +1,5 @@
-use zeta_keybinding::HostPlatform;
-use zeta_keybinding::parse_key_sequence;
+use ash_keybinding::HostPlatform;
+use ash_keybinding::parse_key_sequence;
 use zui::ui::Color;
 use zui::ui::Rect;
 use zui::ui::UiScene;

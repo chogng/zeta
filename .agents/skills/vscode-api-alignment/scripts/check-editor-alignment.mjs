@@ -113,24 +113,24 @@ function runDiffCheck() {
 }
 
 function runTypecheck() {
-	const packagePath = resolve(repositoryRoot, 'zeta-ts/package.json');
-	const rendererConfigPath = resolve(repositoryRoot, 'zeta-ts/tsconfig.renderer.json');
+	const packagePath = resolve(repositoryRoot, 'ash-ts/package.json');
+	const rendererConfigPath = resolve(repositoryRoot, 'ash-ts/tsconfig.renderer.json');
 	const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
 	const rendererConfig = JSON.parse(readFileSync(rendererConfigPath, 'utf8'));
 	const command = packageJson.scripts?.['typecheck:stanza'];
 	process.stdout.write(`\n[typecheck:stanza]\n`);
 	if (rendererConfig.compilerOptions?.noEmit !== true) {
-		process.stderr.write(`Refusing to run: zeta-ts/tsconfig.renderer.json must set compilerOptions.noEmit to true.\n`);
+		process.stderr.write(`Refusing to run: ash-ts/tsconfig.renderer.json must set compilerOptions.noEmit to true.\n`);
 		return false;
 	}
 	if (typeof command !== 'string') {
-		process.stderr.write(`Refusing to run: zeta-ts/package.json must define typecheck:stanza.\n`);
+		process.stderr.write(`Refusing to run: ash-ts/package.json must define typecheck:stanza.\n`);
 		return false;
 	}
 	process.stdout.write(`repository script: ${command}\n`);
 	const result = process.platform === 'win32'
-		? run(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', 'corepack pnpm --dir zeta-ts run typecheck:stanza'])
-		: run('corepack', ['pnpm', '--dir', 'zeta-ts', 'run', 'typecheck:stanza']);
+		? run(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', 'corepack pnpm --dir ash-ts run typecheck:stanza'])
+		: run('corepack', ['pnpm', '--dir', 'ash-ts', 'run', 'typecheck:stanza']);
 	if (result.stdout) process.stdout.write(result.stdout);
 	if (result.stderr) process.stderr.write(result.stderr);
 	if (result.status !== 0) process.stderr.write(`[typecheck:stanza] FAILED with exit code ${result.status}\n`);
@@ -145,8 +145,8 @@ function runBehaviorTests() {
 	}[testMode];
 	process.stdout.write(`\n[behavior tests: ${testMode}]\n`);
 	const result = process.platform === 'win32'
-		? run(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `corepack pnpm --dir zeta-ts run ${script}`])
-		: run('corepack', ['pnpm', '--dir', 'zeta-ts', 'run', script]);
+		? run(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `corepack pnpm --dir ash-ts run ${script}`])
+		: run('corepack', ['pnpm', '--dir', 'ash-ts', 'run', script]);
 	if (result.stdout) process.stdout.write(result.stdout);
 	if (result.stderr) process.stderr.write(result.stderr);
 	if (result.status !== 0) process.stderr.write(`[behavior tests: ${testMode}] FAILED with exit code ${result.status}\n`);

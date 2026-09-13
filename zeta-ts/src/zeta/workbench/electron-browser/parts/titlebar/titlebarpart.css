@@ -1,9 +1,0 @@
-.zeta-electron-titlebar {
-  padding-left: calc(12px + env(titlebar-area-x, 0px));
-  padding-right: calc(12px + 100% - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100%));
-  -webkit-app-region: drag;
-}
-
-.zeta-electron-titlebar .zeta-titlebar-interactive-region {
-  -webkit-app-region: no-drag;
-}

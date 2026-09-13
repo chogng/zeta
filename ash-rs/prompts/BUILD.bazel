@@ -1,0 +1,7 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "prompts",
+    crate_name = "ash_prompts",
+    data = glob(["templates/**"]),
+)

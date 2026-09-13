@@ -19,7 +19,7 @@ interface ProductIconsServer {
   readonly ws: { send(message: { readonly type: "full-reload" }): void };
 }
 
-export type ZetaProductIconsPlugin = Omit<Plugin, "configureServer"> & {
+export type AshProductIconsPlugin = Omit<Plugin, "configureServer"> & {
   readonly configureServer: (server: ProductIconsServer) => void;
 };
 
@@ -27,15 +27,15 @@ export type ZetaProductIconsPlugin = Omit<Plugin, "configureServer"> & {
  * Keeps generated product-icon modules synchronized with their source SVGs
  * while Vite is running and reloads the Renderer after a successful update.
  */
-export function productIconsPlugin(options: ProductIconsPluginOptions = {}): ZetaProductIconsPlugin {
+export function productIconsPlugin(options: ProductIconsPluginOptions = {}): AshProductIconsPlugin {
   const sourceDirectory = resolve(options.sourceDirectory ?? resolve(import.meta.dirname, "../../resources/icons"));
-  const outputFile = resolve(options.outputFile ?? resolve(import.meta.dirname, "../../zeta-ts/generated/product-icons.ts"));
+  const outputFile = resolve(options.outputFile ?? resolve(import.meta.dirname, "../../ash-ts/generated/product-icons.ts"));
   const debounceMilliseconds = options.debounceMilliseconds ?? 50;
   let timer: NodeJS.Timeout | undefined;
   let pending: Promise<unknown> = Promise.resolve();
 
   return {
-    name: "zeta-product-icons",
+    name: "ash-product-icons",
     configureServer(server) {
       server.watcher.add(sourceDirectory);
       server.watcher.on("all", (event, path) => {

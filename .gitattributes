@@ -2,13 +2,13 @@
 /justfile text eol=lf
 
 # Embed identical shared prompt assets on every platform.
-/zeta-rs/prompts/templates/** text eol=lf
-/zeta-rs/models-manager/templates/instructions/** text eol=lf
+/ash-rs/prompts/templates/** text eol=lf
+/ash-rs/models-manager/templates/instructions/** text eol=lf
 
 # Keep embedded classifier assets identical to their pinned release hashes.
-/zeta-rs/input-classifier/models/*.json text eol=lf
-/zeta-rs/input-classifier/models/*.onnx -text
-/zeta-rs/input-classifier/dictionaries/*.txt text eol=lf
+/ash-rs/input-classifier/models/*.json text eol=lf
+/ash-rs/input-classifier/models/*.onnx -text
+/ash-rs/input-classifier/dictionaries/*.txt text eol=lf
 
 # Keep generated design-token artifacts byte-stable across platforms.
 /resources/design-tokens/* text eol=lf
@@ -17,4 +17,4 @@
 /resources/icons/*.svg text eol=lf
 /resources/icons/manifest.json text eol=lf
 /app/icons/src/generated.rs text eol=lf
-/zeta-ts/generated/product-icons.ts text eol=lf
+/ash-ts/generated/product-icons.ts text eol=lf

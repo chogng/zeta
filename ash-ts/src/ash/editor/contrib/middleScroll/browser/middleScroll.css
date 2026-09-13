@@ -1,0 +1,17 @@
+.stanza-editor .scroll-editor-on-middle-click-dot {
+	position: absolute;
+	z-index: 8;
+	width: 6px;
+	height: 6px;
+	background: var(--ash-editor-foreground);
+	border: 1px solid var(--ash-editor-background);
+	border-radius: 50%;
+	opacity: 0.65;
+	transform: translate(-50%, -50%);
+}
+
+.stanza-editor.scroll-editor-on-middle-click-editor,
+.stanza-editor.scroll-editor-on-middle-click-editor * {
+	cursor: all-scroll;
+	user-select: none;
+}

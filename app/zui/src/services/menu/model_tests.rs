@@ -63,7 +63,7 @@ fn native_roles_need_no_application_action_identity() {
 
     assert_eq!(model.validate(), Ok(()));
     assert!(matches!(
-        MenuRole::about(MenuAboutMetadata::new().with_name("Zeta")),
-        MenuRole::About(metadata) if metadata.name.as_deref() == Some("Zeta")
+        MenuRole::about(MenuAboutMetadata::new().with_name("Ash")),
+        MenuRole::About(metadata) if metadata.name.as_deref() == Some("Ash")
     ));
 }

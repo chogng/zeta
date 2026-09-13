@@ -1,0 +1,12 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+filegroup(
+    name = "built-in-skills",
+    srcs = glob(["assets/*/SKILL.md"]),
+)
+
+ash_rust_crate(
+    name = "skills",
+    crate_name = "ash_skills",
+    data = [":built-in-skills"],
+)

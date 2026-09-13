@@ -1,12 +1,12 @@
-use zeta_remote::RemoteDirPath;
-use zeta_remote::SshHost;
-use zeta_remote::SshTarget;
-use zeta_remote_connections::RemoteConnectionEntry;
-use zeta_remote_connections::RemoteConnectionName;
-use zeta_ui_components::ScrollAxis;
-use zeta_ui_components::ScrollCommand;
-use zeta_ui_components::ScrollMetrics;
-use zeta_ui_components::ScrollState;
+use ash_remote::RemoteDirPath;
+use ash_remote::SshHost;
+use ash_remote::SshTarget;
+use ash_remote_connections::RemoteConnectionEntry;
+use ash_remote_connections::RemoteConnectionName;
+use ash_ui_components::ScrollAxis;
+use ash_ui_components::ScrollCommand;
+use ash_ui_components::ScrollMetrics;
+use ash_ui_components::ScrollState;
 use zui::ui::ElementId;
 use zui::ui::Rect;
 use zui::ui::TextInput;
@@ -562,11 +562,11 @@ impl RemoteConnectionManagerState {
 
 #[cfg(test)]
 mod tests {
-    use zeta_remote::RemoteDirPath;
-    use zeta_remote::SshHost;
-    use zeta_remote::SshTarget;
-    use zeta_remote_connections::RemoteConnectionEntry;
-    use zeta_remote_connections::RemoteConnectionName;
+    use ash_remote::RemoteDirPath;
+    use ash_remote::SshHost;
+    use ash_remote::SshTarget;
+    use ash_remote_connections::RemoteConnectionEntry;
+    use ash_remote_connections::RemoteConnectionName;
     use zui::ui::TextInputCommand;
 
     use super::RemoteConnectionManagerField;

@@ -50,7 +50,7 @@ pub(crate) fn test_style() -> WorkbenchUiStyle {
         Color, Edges, InputBoxStateColors, InputBoxStyle, ScrollViewStyle, ScrollbarStyle,
         SearchBoxStyle, TextStyle,
     };
-    use zeta_icons::icons;
+    use ash_icons::icons;
 
     let input = InputBoxStyle::new(
         InputBoxStateColors::new(Color::TRANSPARENT, Color::TRANSPARENT, Color::TRANSPARENT),

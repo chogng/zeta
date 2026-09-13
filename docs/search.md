@@ -1,8 +1,8 @@
 # 内容搜索
 
 > 本文拥有跨文件内容搜索的产品边界。实现分别见
-> [`zeta-content-search`](../zeta-rs/content-search/README.md) 与
-> [`zeta-app-server`](../zeta-rs/app-server/README.md)。
+> [`ash-content-search`](../ash-rs/content-search/README.md) 与
+> [`ash-app-server`](../ash-rs/app-server/README.md)。
 
 ## 结论
 
@@ -12,10 +12,10 @@
 ```text
 Search UI
   → IContentSearchService
-  → zeta:content-search:*
+  → ash:content-search:*
   → content/search/*
   → DirId + Authorization<SearchFiles>
-  → zeta-content-search
+  → ash-content-search
 ```
 
 桌面端可以把多个窗口文件夹聚合成一次用户操作，但它必须逐个目录发起搜索并保留目录身份。
@@ -28,8 +28,8 @@ Search UI
 | 查询表单、结果分组、高亮和取消时机 | Renderer |
 | IPC 参数形状和输入上限 | Electron Main |
 | 目录选择、`SearchFiles` 检查和连接级任务路由 | App Server |
-| `rg` 执行、解析、分页和取消 | `zeta-content-search` |
-| 文件名模糊查找 | `zeta-file-search` |
+| `rg` 执行、解析、分页和取消 | `ash-content-search` |
+| 文件名模糊查找 | `ash-file-search` |
 | Agent 的 `grep` 工具 | Agent Tool 与 Policy；不复用产品搜索任务 |
 
 ## 协议
@@ -40,7 +40,7 @@ Search UI
 - `content/search/read` 使用游标读取下一批匹配项。
 - `content/search/cancel` 终止并释放任务。
 
-IPC 通道使用 `zeta:content-search:*`。公开接口使用完整的 `ContentSearch*`，因为它跨越
+IPC 通道使用 `ash:content-search:*`。公开接口使用完整的 `ContentSearch*`，因为它跨越
 Renderer、Electron Main 和 App Server；搜索模块内部的私有函数只使用 `start`、`read`、`cancel`
 等无歧义短词。
 

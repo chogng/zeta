@@ -300,7 +300,7 @@ fn create_clip_target(
     height: u32,
 ) -> (wgpu::Texture, wgpu::TextureView) {
     let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("zeta-ui rounded clip target"),
+        label: Some("ash-ui rounded clip target"),
         size: wgpu::Extent3d {
             width,
             height,

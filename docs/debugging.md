@@ -1,6 +1,6 @@
 # 调试系统
 
-> 状态：Code 产品已具备通用 DAP 调试平台；SSH Remote Workbench 的 stdio adapter、debuggee Terminal、断点路径和调用栈源码都绑定同一个远端 Environment，编辑器 Workspace 只负责路径与配置呈现；Academic 不组装 Tasks、Testing 或 Debug。后端实现细节由 [`zeta-debug-adapter` README](../zeta-rs/debug-adapter/README.md) 拥有，Renderer 实现细节由 [Workbench Debug README](../zeta-ts/src/zeta/workbench/services/debug/README.md) 拥有。
+> 状态：Code 产品已具备通用 DAP 调试平台；SSH Remote Workbench 的 stdio adapter、debuggee Terminal、断点路径和调用栈源码都绑定同一个远端 Environment，编辑器 Workspace 只负责路径与配置呈现；Academic 不组装 Tasks、Testing 或 Debug。后端实现细节由 [`ash-debug-adapter` README](../ash-rs/debug-adapter/README.md) 拥有，Renderer 实现细节由 [Workbench Debug README](../ash-ts/src/ash/workbench/services/debug/README.md) 拥有。
 
 ## 快速理解
 
@@ -16,7 +16,7 @@ Code 可以从 `.vscode/launch.json` 启动或附加到一个调试目标，并�
 | SSH Remote 调试 | ✅ adapter 由远端 App Server 启动；`${workspaceFolder}`、断点、调用栈源码和 `runInTerminal` 使用远端路径/Terminal | stdio 不需要额外 Tunnel；socket/server adapter 尚未实现 |
 | 调试任务 | ✅ `preLaunchTask`、`postDebugTask` | Tasks 负责执行和退出状态 |
 | 适配器发现 | ✅ 声明式 `contributes.debuggers`，仍可显式写 `debugAdapter` | 不执行扩展 JavaScript |
-| 完整 VS Code Debug 扩展 API | 非目标 | Zeta Host RPC v1 不是 VS Code/Node Extension API；兼容层需独立立项 |
+| 完整 VS Code Debug 扩展 API | 非目标 | Ash Host RPC v1 不是 VS Code/Node Extension API；兼容层需独立立项 |
 
 ## 一次调试如何执行
 
@@ -27,7 +27,7 @@ flowchart LR
     DebugService --> Sessions["one or more DAP sessions"]
     Sessions --> Platform["Renderer debug process boundary"]
     Platform --> AppServer["App Server connection owner"]
-    AppServer --> Runtime["zeta-debug-adapter"]
+    AppServer --> Runtime["ash-debug-adapter"]
     Runtime --> Adapter["Debug adapter process"]
     Sessions --> View["Run and Debug view"]
     Sessions --> Console["Debug Console panel"]
@@ -44,7 +44,7 @@ flowchart LR
 
 ## 所有权边界
 
-| 能力 | Editor | Workbench Debug | Platform / App Server | `zeta-debug-adapter` |
+| 能力 | Editor | Workbench Debug | Platform / App Server | `ash-debug-adapter` |
 | --- | --- | --- | --- | --- |
 | 通用 gutter 槽位 | ✅ 拥有 | 投影断点 | ❌ | ❌ |
 | 断点、Watch、会话和 DAP 客户端语义 | ❌ | ✅ 拥有 | 传输 | ❌ |
@@ -53,7 +53,7 @@ flowchart LR
 | Environment 与目录 Grant | ❌ | 请求 | ✅ 拥有 | 消费能力 |
 | 进程、framing、缓冲与回收 | ❌ | 消费 | 连接包装 | ✅ 拥有 |
 
-Editor 不得 import Debug service；它只提供无领域语义的 gutter decoration contract。后端 runtime 不得解析 launch 配置、持久化断点、决定当前线程或拥有 Workbench 会话选择。声明式扩展服务只贡献经过验证的适配器命令元数据；Zeta executable Host v1 是另一条逐扩展进程、Plugin + Environment/Grant 与 brokered provider 边界，当前产品接入状态见 [`editor-extensions.md`](editor-extensions.md)。
+Editor 不得 import Debug service；它只提供无领域语义的 gutter decoration contract。后端 runtime 不得解析 launch 配置、持久化断点、决定当前线程或拥有 Workbench 会话选择。声明式扩展服务只贡献经过验证的适配器命令元数据；Ash executable Host v1 是另一条逐扩展进程、Plugin + Environment/Grant 与 brokered provider 边界，当前产品接入状态见 [`editor-extensions.md`](editor-extensions.md)。
 
 ## 持久性与失败语义
 
@@ -65,4 +65,4 @@ compound 启动中任一配置失败时，已经启动的会话会回滚。自�
 
 当前已实现：已授权 stdio adapter、连接级归属、有界 framing/分页、显式和声明式适配器解析、初始化与请求配对、持久行断点、异常断点、线程/栈/递归变量、Watch/`evaluate`、调试控制台、虚拟源码、多会话、compound、restart、Tasks 生命周期、`runInTerminal`、Code-only 组装和断点 gutter。Remote Workbench 复用相同协议让 App Server 在远端启动 adapter，并保持 Workspace 变量、断点、调用栈源码和集成终端都映射到同一个远端 Environment。
 
-仍属于后续扩展：条件/日志/函数/数据/指令断点，socket/server adapter，跨进程会话恢复，以及 VS Code Debug Extension API 兼容层。Zeta Host v1 的 runtime core 已存在，但 production enforcing launcher 和跨层 Debug factory bridge 未完成验证前，不能把声明式适配器发现描述成可执行第三方扩展运行时。
+仍属于后续扩展：条件/日志/函数/数据/指令断点，socket/server adapter，跨进程会话恢复，以及 VS Code Debug Extension API 兼容层。Ash Host v1 的 runtime core 已存在，但 production enforcing launcher 和跨层 Debug factory bridge 未完成验证前，不能把声明式适配器发现描述成可执行第三方扩展运行时。

@@ -5,7 +5,7 @@ use crate::interaction::{
     FILE_EDITOR_SEARCH_BAR, FILE_EDITOR_TABS, file_editor_close_id, file_editor_fold_id,
     file_editor_tab_id,
 };
-use zeta_ui_components::InteractionRegion;
+use ash_ui_components::InteractionRegion;
 use zui::ui::Rect;
 use zui::ui::{
     AccessibilityExpansion, AccessibilityRole, AccessibilitySelection, CursorFeedback, ElementId,
@@ -167,8 +167,8 @@ pub(super) fn child_interaction_regions(pane: &FileEditorPane<'_>) -> Vec<Intera
                 format!(
                     "{} lines {} through {}",
                     match control.state() {
-                        zeta_editor::CodeEditorFoldState::Expanded => "Collapse",
-                        zeta_editor::CodeEditorFoldState::Collapsed => "Expand",
+                        ash_editor::CodeEditorFoldState::Expanded => "Collapse",
+                        ash_editor::CodeEditorFoldState::Collapsed => "Expand",
                     },
                     control.range().start_row() + 1,
                     control.range().end_row() + 1
@@ -178,8 +178,8 @@ pub(super) fn child_interaction_regions(pane: &FileEditorPane<'_>) -> Vec<Intera
             .with_focus(FocusBehavior::TabStop)
             .with_action(NodeAction::Activate)
             .with_expansion(match control.state() {
-                zeta_editor::CodeEditorFoldState::Expanded => AccessibilityExpansion::Expanded,
-                zeta_editor::CodeEditorFoldState::Collapsed => AccessibilityExpansion::Collapsed,
+                ash_editor::CodeEditorFoldState::Expanded => AccessibilityExpansion::Expanded,
+                ash_editor::CodeEditorFoldState::Collapsed => AccessibilityExpansion::Collapsed,
             })
         })
         .collect::<Vec<_>>();

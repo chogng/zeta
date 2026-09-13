@@ -1,13 +1,13 @@
 use std::time::Instant;
 
-use zeta_settings::REMOTE_TUNNEL_ITEM_HEIGHT;
-use zeta_settings::REMOTE_TUNNEL_MANAGER;
-use zeta_settings::REMOTE_TUNNEL_MANAGER_CLOSE;
-use zeta_settings::REMOTE_TUNNEL_OPEN;
-use zeta_settings::REMOTE_TUNNEL_REMOTE_PORT;
-use zeta_settings::is_remote_tunnel_manager_element;
-use zeta_ui_components::ScrollCommand;
-use zeta_ui_components::ScrollDelta;
+use ash_settings::REMOTE_TUNNEL_ITEM_HEIGHT;
+use ash_settings::REMOTE_TUNNEL_MANAGER;
+use ash_settings::REMOTE_TUNNEL_MANAGER_CLOSE;
+use ash_settings::REMOTE_TUNNEL_OPEN;
+use ash_settings::REMOTE_TUNNEL_REMOTE_PORT;
+use ash_settings::is_remote_tunnel_manager_element;
+use ash_ui_components::ScrollCommand;
+use ash_ui_components::ScrollDelta;
 use zui::input::ElementState;
 use zui::input::Key;
 use zui::input::KeyEvent;

@@ -1,0 +1,22 @@
+[package]
+name = "ash-action-policy"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+readme = "README.md"
+
+[lib]
+doctest = false
+name = "ash_action_policy"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+sha2 = { workspace = true }
+ash-async-utils = { workspace = true }
+ash-execpolicy = { workspace = true }
+ash-sandboxing = { workspace = true }
+
+[lints]
+workspace = true

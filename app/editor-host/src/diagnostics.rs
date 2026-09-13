@@ -1,6 +1,6 @@
 //! Editor presentation for editor-owned diagnostic hover details.
 
-use zeta_editor::CodeEditorDiagnostic;
+use ash_editor::CodeEditorDiagnostic;
 use zui::ui::{
     Border, Component, ComponentElement, Edges, Element, PaintRect, Point, Rect, Size, TextBlock,
     TextBlockWrap, TextStyle, UiScene,

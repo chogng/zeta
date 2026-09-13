@@ -1,0 +1,9 @@
+.ash-workbench.modern-ui :is(
+  .ash-workbench-sidebar,
+  .ash-workbench-agentSidebar,
+  .ash-workbench-panel,
+  .ash-workbench-auxiliarybar
+) {
+  border: 1px solid var(--ash-border);
+  border-radius: 8px;
+}

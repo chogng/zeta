@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "file-identity",
+    crate_name = "ash_file_identity",
+)

@@ -2,8 +2,8 @@ use super::{
     InputMethodContext, InputMethodTarget, encode_terminal_ime_event, text_input_composition_event,
 };
 use crate::MainSurfaceKind;
-use zeta_settings::RemoteConnectionManagerField;
-use zeta_terminal::{GridSize, TerminalCore};
+use ash_settings::RemoteConnectionManagerField;
+use ash_terminal::{GridSize, TerminalCore};
 use zui::input::Ime;
 use zui::ui::{TextInputCompositionCursor, TextInputCompositionEvent};
 

@@ -1,15 +1,15 @@
-# Zeta
+# Ash
 
-Zeta is a Rust-first agent workspace with three product lines sharing one App Server contract:
+Ash is a Rust-first agent workspace with three product lines sharing one App Server contract:
 
 | Product | Description | Source | Start |
 | --- | --- | --- | --- |
-| `zeta code` | CLI and TUI | [`zeta-code`](zeta-code) | `just zeta` |
-| `zeta` | Electron Desktop | [`zeta-ts`](zeta-ts) | `just zeta-desktop` |
+| `ash code` | CLI and TUI | [`ash-code`](ash-code) | `just ash` |
+| `ash` | Electron Desktop | [`ash-ts`](ash-ts) | `just ash-desktop` |
 | `app` | Native Rust Desktop terminal | [`app`](app) | `just app` |
 
-`zeta-rs` contains the shared Rust backend. The product-neutral backend executable is
-`zeta-app-server`, owned by [`zeta-app-server`](zeta-rs/app-server/README.md). Electron's `code` and
+`ash-rs` contains the shared Rust backend. The product-neutral backend executable is
+`ash-app-server`, owned by [`ash-app-server`](ash-rs/app-server/README.md). Electron's `code` and
 `academic` builds are internal variants, not additional product lines; see
 [`docs/product-lines.md`](docs/product-lines.md) and [`docs/workbench-modes.md`](docs/workbench-modes.md).
 
@@ -18,7 +18,7 @@ Zeta is a Rust-first agent workspace with three product lines sharing one App Se
 On Windows, initialize the Rust development environment with the repository setup script. It installs the toolchain declared by `rust-toolchain.toml` together with MSVC, the Windows SDK, Git, ripgrep, just, CMake, LLVM, Python 3.12, and cargo-insta:
 
 ~~~powershell
-powershell -ExecutionPolicy Bypass -File scripts/zeta-rs/setup-windows.ps1
+powershell -ExecutionPolicy Bypass -File scripts/ash-rs/setup-windows.ps1
 ~~~
 
 On macOS or Linux, install Rust. Cargo supplies the input classifier's
@@ -41,30 +41,30 @@ just build
 
 `corepack pnpm build` builds only the Electron and Browser workspace.
 
-### `zeta code`
+### `ash code`
 
 ```bash
-just zeta
-just zeta ask "explain this repository"
-just zeta exec "summarize the current changes"
+just ash
+just ash ask "explain this repository"
+just ash exec "summarize the current changes"
 ```
 
 Without `just`:
 
 ```bash
-cargo run -p zeta-cli --bin zeta
+cargo run -p ash-cli --bin ash
 ```
 
-### `zeta` Electron Desktop
+### `ash` Electron Desktop
 
 ```bash
-just zeta-desktop
+just ash-desktop
 # or:
 corepack pnpm dev:desktop
 ```
 
 The Desktop command is shared by both Workbench build modes. The default mode is `code`; build
-matrix checks can set `ZETA_WORKBENCH_MODE=academic` without changing the command name.
+matrix checks can set `ASH_WORKBENCH_MODE=academic` without changing the command name.
 
 ### Browser Workbench
 
@@ -98,21 +98,21 @@ python3 -B scripts/cargo.py run -p app
 
 ## Repository map
 
-- [`zeta-rs`](zeta-rs): shared protocol, App Server, domain, storage, execution, and runtime crates.
-- [`zeta-code`](zeta-code): CLI command host and TUI presentation.
-- [`zeta-ts`](zeta-ts): Electron Main, Preload, Renderer, and Browser Workbench.
+- [`ash-rs`](ash-rs): shared protocol, App Server, domain, storage, execution, and runtime crates.
+- [`ash-code`](ash-code): CLI command host and TUI presentation.
+- [`ash-ts`](ash-ts): Electron Main, Preload, Renderer, and Browser Workbench.
 - [`build`](build): checked-in build orchestration; generated artifacts go to `.build/`.
 - [`app`](app): native window, terminal, renderer, and product UI.
 - [`docs`](docs): architecture and system documentation; start with [`docs/README.md`](docs/README.md).
 
 ## Where to read next
 
-- [Zeta user documentation](https://github.com/chogng/zeta-docs)
+- [Ash user documentation](https://github.com/chogng/ash-docs)
 - [Product lines and host boundaries](docs/product-lines.md)
 - [System architecture](docs/architecture.md)
-- [Zeta Code documentation](zeta-code/docs/README.md)
-- [Electron Desktop architecture](docs/zeta-desktop-architecture.md)
-- [Shared Rust architecture](docs/zeta-rs-architecture.md)
+- [Ash Code documentation](ash-code/docs/README.md)
+- [Electron Desktop architecture](docs/ash-desktop-architecture.md)
+- [Shared Rust architecture](docs/ash-rs-architecture.md)
 - [Remote development](docs/remote-development.md)
 - [Packaging](build/release/package/README.md)
 - [`app` release graph](app/docs/app-release-graph.md)
@@ -121,6 +121,6 @@ Crate-level implementation details live in the `README.md` next to each crate.
 
 ## License
 
-Zeta's original code and materials are proprietary and all rights reserved. See [`LICENSE`](LICENSE).
+Ash's original code and materials are proprietary and all rights reserved. See [`LICENSE`](LICENSE).
 Third-party components remain governed by their own licenses and notices, including
-[`zeta-ts/THIRD_PARTY_NOTICES.md`](zeta-ts/THIRD_PARTY_NOTICES.md).
+[`ash-ts/THIRD_PARTY_NOTICES.md`](ash-ts/THIRD_PARTY_NOTICES.md).

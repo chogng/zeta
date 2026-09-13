@@ -1,4 +1,4 @@
-use zeta_ui_components::InteractionRegion;
+use ash_ui_components::InteractionRegion;
 use zui::ui::{AccessibilityRole, CursorFeedback, FocusBehavior, UiDispatch};
 use zui::ui::{
     Border, CaretVisibility, Component, ComponentContext, ComponentElement, Edges, Element,
@@ -100,7 +100,7 @@ pub(crate) fn draw_chat_input(
                     ChatInputFocus::Blurred
                 };
                 let placeholder = match view.input.route() {
-                    ComposerRoute::Agent => "Ask Zeta anything…",
+                    ComposerRoute::Agent => "Ask Ash anything…",
                     ComposerRoute::Shell => "Enter a shell command…",
                 };
                 let editor = view.input.input().view(

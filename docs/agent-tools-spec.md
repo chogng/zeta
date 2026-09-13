@@ -41,8 +41,8 @@
 
 | | |
 | --- | --- |
-| 状态 | 已接入（`zeta-shell-command` + `local_tools.rs`），schema 需按本节收敛 |
-| 执行 | 沙箱 + 审批走 `zeta-action-policy`；执行上限 256 KiB / 默认 30s（已有） |
+| 状态 | 已接入（`ash-shell-command` + `local_tools.rs`），schema 需按本节收敛 |
+| 执行 | 沙箱 + 审批走 `ash-action-policy`；执行上限 256 KiB / 默认 30s（已有） |
 | 模型侧限幅 | 30 KiB，头尾各半，中间标注 `[... N bytes truncated ...]` |
 
 **description（模型可见）：**
@@ -285,7 +285,7 @@ Usage notes:
 
 | | |
 | --- | --- |
-| 状态 | 已实现；`zeta-apply-patch` 是 `coding-v1` 中唯一的 `apply_patch` executor |
+| 状态 | 已实现；`ash-apply-patch` 是 `coding-v1` 中唯一的 `apply_patch` executor |
 | 格式 | V4A envelope（canonical 格式，不按模型或 Provider 发明方言） |
 
 **description（模型可见）：**
@@ -612,6 +612,6 @@ delegation result。Desktop Agent Sidebar 只消费该 projection；`session/thr
 修改本文任何工具的 schema、描述或错误文案时同步：
 
 1. 对应实现 crate 的 schema/文案常量与测试；
-2. 若模型基础 instructions 确实引用了该契约，同步 `zeta-models-manager` 中对应资产与 revision；
+2. 若模型基础 instructions 确实引用了该契约，同步 `ash-models-manager` 中对应资产与 revision；
 3. [`agent-harness-design.md` §14](agent-harness-design.md#14-评测) 的组装快照和行为测试；
 4. 运行对应的现有单元/集成测试；只有启用版本化模型 benchmark 时，才补充 T1/T2 对比。

@@ -1,5 +1,5 @@
 use super::{PointerInput, TerminalPointer};
-use zeta_terminal::{GridSize, TerminalCore, TerminalMousePosition};
+use ash_terminal::{GridSize, TerminalCore, TerminalMousePosition};
 use zui::input::{ElementState, ModifiersState, MouseButton, MouseScrollDelta};
 
 const FIRST: TerminalMousePosition = TerminalMousePosition::new(2, 4);

@@ -1,0 +1,31 @@
+.stanza-editor .word-highlight,
+.stanza-editor .word-highlight-text,
+.stanza-editor .word-highlight-strong,
+.stanza-editor .selection-highlight {
+	box-sizing: border-box;
+}
+
+.stanza-editor .word-highlight {
+	background: color-mix(in srgb, var(--ash-foreground) 18%, transparent);
+}
+
+.stanza-editor .word-highlight-text {
+	background: var(--ash-search-match-background);
+}
+
+.stanza-editor .word-highlight-strong {
+	background: color-mix(in srgb, var(--ash-focus-border) 28%, transparent);
+}
+
+.stanza-editor.input-focused .selection-highlight {
+	background: color-mix(in srgb, var(--ash-selection-background) 50%, transparent);
+}
+
+@media (forced-colors: active) {
+	.stanza-editor .word-highlight,
+	.stanza-editor .word-highlight-text,
+	.stanza-editor .word-highlight-strong,
+	.stanza-editor .selection-highlight {
+		border: 1px dotted CanvasText;
+	}
+}

@@ -16,7 +16,7 @@ fmt:
 fmt-check:
     {{ python }} -B scripts/format.py --check
 
-# Run repository-owned Python tests, optionally selecting zeta-code, build, or release.
+# Run repository-owned Python tests, optionally selecting ash-code, build, or release.
 test-python *args:
     {{ python }} -B scripts/test-python.py {args}
 
@@ -25,7 +25,7 @@ build: build-desktop build-rust
 
 # Build the Electron Desktop product.
 build-desktop:
-    corepack pnpm --dir zeta-ts build
+    corepack pnpm --dir ash-ts build
 
 # Build the root Rust workspace with the locked V8 inputs when required.
 build-rust *args:
@@ -37,8 +37,8 @@ test *args:
 
 # Build the matching daemon and run real CLI/TUI scenarios through a PTY.
 test-tui *args:
-    {{ python }} -B scripts/cargo.py build -p zeta-app-server --bin zeta-app-server -p zeta-app-server-daemon --bin zeta-app-server-daemon -p zeta-remote-server --bin zeta-remote-server
-    {{ python }} -B scripts/cargo.py test -p zeta-cli --test tui_real_scenarios {args}
+    {{ python }} -B scripts/cargo.py build -p ash-app-server --bin ash-app-server -p ash-app-server-daemon --bin ash-app-server-daemon -p ash-remote-server --bin ash-remote-server
+    {{ python }} -B scripts/cargo.py test -p ash-cli --test tui_real_scenarios {args}
 
 # Check one Rust package. V8 inputs are configured only when its dependency graph needs them.
 check *args:
@@ -50,40 +50,40 @@ rust-warnings *args:
 
 # Fail once the configuration support window makes a compatibility migration removable.
 check-config-migrations:
-    {{ python }} -B scripts/cargo.py test -p zeta-config tests::config_migration_support_window_has_no_expired_compatibility -- --exact
+    {{ python }} -B scripts/cargo.py test -p ash-config tests::config_migration_support_window_has_no_expired_compatibility -- --exact
 
 # Refresh the canonical user configuration schema.
 generate-config-schema:
-    cargo run --quiet -p zeta-config-schema -- zeta-rs/config/schema.json
+    cargo run --quiet -p ash-config-schema -- ash-rs/config/schema.json
 
 # Refresh the checked-in App Server protocol fixtures and generated TypeScript client.
 generate-protocol:
-    cargo run --quiet -p zeta-app-server-protocol --bin generate_protocol -- fixtures
-    corepack pnpm --dir zeta-ts run protocol:generate
+    cargo run --quiet -p ash-app-server-protocol --bin generate_protocol -- fixtures
+    corepack pnpm --dir ash-ts run protocol:generate
 
-# Launch the zeta code TUI product from the current source tree.
-zeta *args:
-    {{ python }} -B scripts/zeta-code/run.py {args}
+# Launch the ash code TUI product from the current source tree.
+ash *args:
+    {{ python }} -B scripts/ash-code/run.py {args}
 
 # Preview the Welcome pet's idle frame, all frames, or one named action.
 pet *args:
-    @{{ python }} -B scripts/cargo.py run --quiet -p zeta-sprite -- zeta-code/tui/assets/welcome/pet.sprite {{ args }}
+    @{{ python }} -B scripts/cargo.py run --quiet -p ash-sprite -- ash-code/tui/assets/welcome/pet.sprite {{ args }}
 
-# Assemble the complete immutable development package shared by Zeta products.
-zeta-package *args:
-    node build/zeta-package/prepareDevPackage.ts {args}
+# Assemble the complete immutable development package shared by Ash products.
+ash-package *args:
+    node build/ash-package/prepareDevPackage.ts {args}
 
-# Assemble the complete development package and launch Zeta Code against it.
-zeta-package-run *args:
-    {{ python }} -B scripts/zeta-code/run_package.py {args}
+# Assemble the complete development package and launch Ash Code against it.
+ash-package-run *args:
+    {{ python }} -B scripts/ash-code/run_package.py {args}
 
-# Launch the zeta Electron Desktop product.
-zeta-desktop:
-    corepack pnpm --dir zeta-ts dev
+# Launch the ash Electron Desktop product.
+ash-desktop:
+    corepack pnpm --dir ash-ts dev
 
 # Launch the pure-Rust app Desktop product.
 app:
-    {{ python }} -B scripts/cargo.py build -p zeta-app-server --bin zeta-app-server
+    {{ python }} -B scripts/cargo.py build -p ash-app-server --bin ash-app-server
     {{ python }} -B scripts/cargo.py run -p app
 
 # Check every pure-Rust app target with the locked sandbox-enabled V8 inputs.
@@ -98,7 +98,7 @@ app-test:
 app-package *args:
     {{ python }} -B build/release/app/build.py {args}
 
-# Build a canonical Zeta package; pass normal package builder flags.
+# Build a canonical Ash package; pass normal package builder flags.
 package *args:
     {{ python }} -B build/release/package/build.py {args}
 

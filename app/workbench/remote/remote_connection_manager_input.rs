@@ -1,21 +1,21 @@
 use std::time::Instant;
 
-use zeta_remote_connections::RemoteConnectionCatalog;
-use zeta_remote_connections::RemoteConnectionName;
-use zeta_remote_connections::RemoteConnectionSaveMode;
-use zeta_settings::REMOTE_CONNECTION_MANAGER;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_CLOSE;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_CONNECT;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_DELETE;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_DIRECTORY;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_HOST;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_NAME;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_NEW;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_SAVE;
-use zeta_settings::RemoteConnectionManagerField;
-use zeta_settings::RemoteConnectionSaveRequest;
-use zeta_settings::remote_connection_manager_item_id;
-use zeta_settings::remote_connection_manager_item_index;
+use ash_remote_connections::RemoteConnectionCatalog;
+use ash_remote_connections::RemoteConnectionName;
+use ash_remote_connections::RemoteConnectionSaveMode;
+use ash_settings::REMOTE_CONNECTION_MANAGER;
+use ash_settings::REMOTE_CONNECTION_MANAGER_CLOSE;
+use ash_settings::REMOTE_CONNECTION_MANAGER_CONNECT;
+use ash_settings::REMOTE_CONNECTION_MANAGER_DELETE;
+use ash_settings::REMOTE_CONNECTION_MANAGER_DIRECTORY;
+use ash_settings::REMOTE_CONNECTION_MANAGER_HOST;
+use ash_settings::REMOTE_CONNECTION_MANAGER_NAME;
+use ash_settings::REMOTE_CONNECTION_MANAGER_NEW;
+use ash_settings::REMOTE_CONNECTION_MANAGER_SAVE;
+use ash_settings::RemoteConnectionManagerField;
+use ash_settings::RemoteConnectionSaveRequest;
+use ash_settings::remote_connection_manager_item_id;
+use ash_settings::remote_connection_manager_item_index;
 use zui::input::ElementState;
 use zui::input::Key;
 use zui::input::KeyEvent;
@@ -48,7 +48,7 @@ impl WorkbenchApplication {
         }
         self.dismiss_remote_tunnel_manager();
         let connections =
-            match zeta_utils_home_dir::find_zeta_home()
+            match ash_utils_home_dir::find_ash_home()
                 .map_err(|error| error.to_string())
                 .and_then(|root| {
                     let catalog = RemoteConnectionCatalog::from_profile_root(root);
@@ -91,7 +91,7 @@ impl WorkbenchApplication {
     ) -> bool {
         self.dismiss_remote_tunnel_manager();
         let connections =
-            match zeta_utils_home_dir::find_zeta_home()
+            match ash_utils_home_dir::find_ash_home()
                 .map_err(|error| error.to_string())
                 .and_then(|root| {
                     let catalog = RemoteConnectionCatalog::from_profile_root(root);
@@ -368,7 +368,7 @@ impl WorkbenchApplication {
             self.remote_connection_manager_changed();
             return;
         };
-        let result = zeta_utils_home_dir::find_zeta_home()
+        let result = ash_utils_home_dir::find_ash_home()
             .map_err(|error| error.to_string())
             .and_then(|root| {
                 let catalog = RemoteConnectionCatalog::from_profile_root(root);
@@ -396,7 +396,7 @@ impl WorkbenchApplication {
             self.remote_connection_manager_changed();
             return;
         };
-        match zeta_utils_home_dir::find_zeta_home()
+        match ash_utils_home_dir::find_ash_home()
             .map_err(|error| error.to_string())
             .and_then(|root| {
                 RemoteConnectionCatalog::from_profile_root(root)

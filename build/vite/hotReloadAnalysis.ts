@@ -1,7 +1,7 @@
 import ts from "typescript";
 
 const conventionalUiClassPattern = /(?:Part|ViewPane|Widget)$/u;
-const explicitPrototypePatchMarker = "@zeta-hot-reload patch-prototype";
+const explicitPrototypePatchMarker = "@ash-hot-reload patch-prototype";
 
 export interface HotReloadClassAnalysis {
   readonly name: string;

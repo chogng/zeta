@@ -143,7 +143,7 @@ impl WorkbenchApplication {
                 Some(TabInputKey::Settings) => self.activate_settings_tab(),
                 None => {
                     self.main_surface.show_agent();
-                    self.pending_focus = Some(zeta_session::interaction::COMPOSER);
+                    self.pending_focus = Some(ash_session::interaction::COMPOSER);
                 }
             }
         }
@@ -447,7 +447,7 @@ impl WorkbenchApplication {
 impl WorkbenchApplication {
     /// Selects the singleton Settings workbench item and prepares its feature-owned state.
     pub(super) fn activate_settings_tab(&mut self) {
-        let remote_selected = self.settings.section() == zeta_settings::SettingsPageSection::Remote;
+        let remote_selected = self.settings.section() == ash_settings::SettingsPageSection::Remote;
         let remote_is_mounted = self.remote_connection_manager.is_settings();
         self.settings.reopen();
         let _ = self.workbench.activate_settings();
@@ -462,7 +462,7 @@ impl WorkbenchApplication {
         if remote_selected && !remote_is_mounted {
             let _ = self.open_remote_connection_settings();
         } else if !remote_selected {
-            self.pending_focus = Some(zeta_settings::SETTINGS_SEARCH_INPUT);
+            self.pending_focus = Some(ash_settings::SETTINGS_SEARCH_INPUT);
         }
         self.keybindings.cancel_chord();
     }
@@ -485,9 +485,9 @@ impl WorkbenchApplication {
         }
         self.settings.close();
         self.pending_focus = Some(if self.main_surface.is_editor() {
-            zeta_editor_host::FILE_EDITOR_DOCUMENT
+            ash_editor_host::FILE_EDITOR_DOCUMENT
         } else {
-            zeta_session::interaction::COMPOSER
+            ash_session::interaction::COMPOSER
         });
     }
 

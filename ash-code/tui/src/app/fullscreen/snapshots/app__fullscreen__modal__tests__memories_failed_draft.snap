@@ -1,0 +1,32 @@
+---
+source: ash-code/tui/src/app/fullscreen/modal_tests.rs
+expression: frame_text(&app)
+---
+  .                                                                            [— / —] [Dashboard]  
+                                                                                                    
+                                                                                                    
+            ┌── Memory content ───────────────────────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │  The memory changed in another window. Refresh before saving.           │             
+            │  Use Rust                                                               │             
+            │  保 留   两 个 空 格                                                          │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+  ╭─────────│  Esc to close                                                           │──────────╮  
+  │ > backgr└─────────────────────────────────────────────────────────────────────────┘          │  
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

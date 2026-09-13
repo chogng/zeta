@@ -1,0 +1,23 @@
+[package]
+name = "ash-goal"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+action-policy = { package = "ash-action-policy", path = "../../action-policy" }
+async-utils = { package = "ash-async-utils", path = "../../async-utils" }
+ash-core = { workspace = true }
+extension-api = { package = "ash-extension-api", path = "../extension-api" }
+prompts = { package = "ash-prompts", path = "../../prompts" }
+protocol = { package = "ash-protocol", path = "../../protocol" }
+utils-template = { package = "ash-utils-template", path = "../../utils/template" }
+
+[lints]
+workspace = true

@@ -6,8 +6,8 @@ use crate::{
     DiffEditorState,
 };
 use std::time::{Duration, Instant};
-use zeta_diff::DiffDocument;
-use zeta_ui_components::{ScrollAxis, ScrollCommand, ScrollDelta, ScrollState};
+use ash_diff::DiffDocument;
+use ash_ui_components::{ScrollAxis, ScrollCommand, ScrollDelta, ScrollState};
 use zui::ui::{
     AnimationBinding, AnimationKey, AnimationProperty, AnimationRegistry, Color, Component,
     CornerRadii, ElementId, InteractionFrame, Rect, ScalarAnimationSpec, UiFrame, UiScene,
@@ -205,7 +205,7 @@ fn large_multi_diff_binds_height_animation_only_for_visible_sections() {
         })
         .collect::<Vec<_>>();
     let layout = super::MultiDiffEditorLayout {
-        sections: zeta_ui_components::VirtualListLayout::variable(vec![100.0; item_count]),
+        sections: ash_ui_components::VirtualListLayout::variable(vec![100.0; item_count]),
         presentation: DiffEditorPresentation::Unified,
     };
     let editor = MultiDiffEditor::new(
@@ -506,27 +506,27 @@ fn measured_layout_reuses_section_metrics_for_scrolling_and_paint() {
 fn multi_diff_style_distinguishes_paint_changes_from_layout_changes() {
     let mut text_layout = zui::ui::TextInputLayoutEngine::new();
     let original_editor =
-        crate::CodeEditorStyle::from_theme(zeta_ui_theme::DEFAULT_UI_THEME, &mut text_layout)
+        crate::CodeEditorStyle::from_theme(ash_ui_theme::DEFAULT_UI_THEME, &mut text_layout)
             .unwrap();
     let original =
-        MultiDiffEditorStyle::from_theme(zeta_ui_theme::DEFAULT_UI_THEME, original_editor);
-    let mut recolored_theme = zeta_ui_theme::DEFAULT_UI_THEME;
+        MultiDiffEditorStyle::from_theme(ash_ui_theme::DEFAULT_UI_THEME, original_editor);
+    let mut recolored_theme = ash_ui_theme::DEFAULT_UI_THEME;
     recolored_theme.diff_inserted_line = Color::rgb(10, 80, 30);
     recolored_theme.content_background = Color::rgb(20, 20, 20);
     let recolored_editor =
         crate::CodeEditorStyle::from_theme(recolored_theme, &mut text_layout).unwrap();
     let recolored = MultiDiffEditorStyle::from_theme(recolored_theme, recolored_editor);
     let larger_text =
-        zui::ui::TextStyle::new(18.0, zeta_ui_theme::DEFAULT_UI_THEME.editor_foreground)
+        zui::ui::TextStyle::new(18.0, ash_ui_theme::DEFAULT_UI_THEME.editor_foreground)
             .with_family(zui::ui::FontFamily::Monospace)
             .with_line_height(28.0);
     let larger_editor = crate::CodeEditorStyle::from_theme_and_text_style(
-        zeta_ui_theme::DEFAULT_UI_THEME,
+        ash_ui_theme::DEFAULT_UI_THEME,
         larger_text,
         &mut text_layout,
     )
     .unwrap();
-    let larger = MultiDiffEditorStyle::from_theme(zeta_ui_theme::DEFAULT_UI_THEME, larger_editor);
+    let larger = MultiDiffEditorStyle::from_theme(ash_ui_theme::DEFAULT_UI_THEME, larger_editor);
 
     assert!(original.same_layout_as(&recolored));
     assert!(!original.same_layout_as(&larger));
@@ -580,9 +580,9 @@ fn measured_layout_indexes_variable_section_heights_and_spacing() {
 #[test]
 fn measured_layout_splices_changed_file_sections_without_mutating_retained_clones() {
     let mut layout = super::MultiDiffEditorLayout {
-        sections: zeta_ui_components::VirtualListLayout::variable([40.0, 60.0, 80.0])
+        sections: ash_ui_components::VirtualListLayout::variable([40.0, 60.0, 80.0])
             .with_item_gap(8.0)
-            .with_content_padding(zeta_ui_components::ListContentPadding::symmetric(8.0)),
+            .with_content_padding(ash_ui_components::ListContentPadding::symmetric(8.0)),
         presentation: DiffEditorPresentation::Unified,
     };
     let retained_clone = layout.clone();

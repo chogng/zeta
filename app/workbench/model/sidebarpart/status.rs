@@ -1,6 +1,6 @@
 //! Session manager status shown with a Sidebar item.
 
-pub use zeta_protocol::SessionManagerStatus as TabStatusKind;
+pub use ash_protocol::SessionManagerStatus as TabStatusKind;
 
 /// Application-supplied status shown by the Workbench tab chrome.
 ///

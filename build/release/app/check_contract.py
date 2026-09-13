@@ -8,9 +8,9 @@ from pathlib import Path
 
 
 EXPECTED_PLATFORMS = {
-    "darwin": ("codesign", "embedded", "ZETA_MACOS_SIGNING_IDENTITY"),
+    "darwin": ("codesign", "embedded", "ASH_MACOS_SIGNING_IDENTITY"),
     "linux": ("cosign", "detached", "APP_COSIGN_IDENTITY"),
-    "windows": ("signtool", "embedded", "ZETA_WINDOWS_SIGNING_THUMBPRINT"),
+    "windows": ("signtool", "embedded", "ASH_WINDOWS_SIGNING_THUMBPRINT"),
 }
 
 
@@ -55,7 +55,7 @@ def main() -> int:
         )
     if (
         contract.get("optionalRemoteRuntimeCatalog")
-        != "zeta-remote-runtimes/catalog.json"
+        != "ash-remote-runtimes/catalog.json"
     ):
         fail("package contract does not name the optional Remote runtime catalog")
     if contract.get("optionalNetworkRemoteRuntimeCatalog") != (
@@ -103,12 +103,12 @@ def main() -> int:
             fail(f"{platform} detached signing requires signatureFile")
     if (
         platforms["darwin"].get("notarizationProfileEnvironment")
-        != "ZETA_MACOS_NOTARY_PROFILE"
+        != "ASH_MACOS_NOTARY_PROFILE"
     ):
         fail("macOS signing must name the shared notarization profile")
     if (
         platforms["windows"].get("timestampUrlEnvironment")
-        != "ZETA_WINDOWS_TIMESTAMP_URL"
+        != "ASH_WINDOWS_TIMESTAMP_URL"
     ):
         fail("Windows signing must name the shared timestamp service")
 

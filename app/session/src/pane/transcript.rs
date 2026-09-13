@@ -1,11 +1,11 @@
 //! Retained transcript projection for one Session Pane.
 
-use zeta_protocol::SessionId;
-use zeta_protocol::ThreadId;
-use zeta_thread_transcript::ThreadTranscriptChange;
-use zeta_thread_transcript::ThreadTranscriptEntry;
-use zeta_thread_transcript::ThreadTranscriptSnapshot;
-use zeta_thread_transcript::ThreadTranscriptUpdateEnvelope;
+use ash_protocol::SessionId;
+use ash_protocol::ThreadId;
+use ash_thread_transcript::ThreadTranscriptChange;
+use ash_thread_transcript::ThreadTranscriptEntry;
+use ash_thread_transcript::ThreadTranscriptSnapshot;
+use ash_thread_transcript::ThreadTranscriptUpdateEnvelope;
 
 /// Result of mechanically applying one backend-assembled transcript update.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -17,7 +17,7 @@ pub(crate) enum TranscriptUpdateResult {
 /// Retained transcript entries for one Thread.
 ///
 /// Entry assembly, ordering decisions, stream accumulation, and transient bounds belong to
-/// `zeta-thread-transcript`. This state only applies the backend-provided list changes.
+/// `ash-thread-transcript`. This state only applies the backend-provided list changes.
 #[derive(Default)]
 pub(crate) struct TranscriptState {
     session_id: Option<SessionId>,

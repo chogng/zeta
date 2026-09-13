@@ -3,7 +3,7 @@
 //! Feature crates own the state and UI of the content mounted into Workbench panes. This crate
 //! owns the Workbench chrome around that content and the ordering of logical changes and bindings.
 
-use zeta_ui_components::*;
+use ash_ui_components::*;
 use zui::ui::*;
 
 mod application;

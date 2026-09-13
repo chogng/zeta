@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
-use zeta_protocol::Session;
-use zeta_protocol::SessionId;
-use zeta_protocol::SessionManagerInfo;
-use zeta_protocol::SessionManagerStatus;
-use zeta_protocol::SessionStatus;
+use ash_protocol::Session;
+use ash_protocol::SessionId;
+use ash_protocol::SessionManagerInfo;
+use ash_protocol::SessionManagerStatus;
+use ash_protocol::SessionStatus;
 
 use super::session_tab_input;
 
@@ -24,9 +24,9 @@ fn session_input_keeps_primary_and_additional_directories_in_display_order() {
     let input = session_tab_input(
         &session,
         [
-            PathBuf::from("/workspace/zeta"),
+            PathBuf::from("/workspace/ash"),
             PathBuf::from("/workspace/docs"),
-            PathBuf::from("/workspace/zeta"),
+            PathBuf::from("/workspace/ash"),
         ],
     );
 
@@ -36,7 +36,7 @@ fn session_input_keeps_primary_and_additional_directories_in_display_order() {
     assert_eq!(
         input.dirs(),
         [
-            PathBuf::from("/workspace/zeta"),
+            PathBuf::from("/workspace/ash"),
             PathBuf::from("/workspace/docs"),
         ]
     );

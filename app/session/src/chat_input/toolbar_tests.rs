@@ -3,7 +3,7 @@ use crate::SessionPaneContext;
 use crate::SessionPaneStyle;
 use crate::interaction::CONTEXT_TOOLBAR;
 use crate::interaction::ContextAction;
-use zeta_ui_theme::DEFAULT_UI_THEME;
+use ash_ui_theme::DEFAULT_UI_THEME;
 use zui::ui::{Component, FontWeight, Point, Rect, TextInputLayoutEngine, UiScene};
 use zui::ui::{InteractionFrame, UiDispatch, UiFrame};
 
@@ -26,7 +26,7 @@ fn context(path: &str, branch: Option<&str>, change_count: Option<usize>) -> Ses
 #[test]
 fn toolbar_projects_four_real_context_values_as_action_buttons() {
     let style = style();
-    let context = context("~/Desktop/zeta", Some("main"), Some(7));
+    let context = context("~/Desktop/ash", Some("main"), Some(7));
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let toolbar = ChatInputToolbar::new(
@@ -47,7 +47,7 @@ fn toolbar_projects_four_real_context_values_as_action_buttons() {
             .iter()
             .map(|block| block.text())
             .collect::<Vec<_>>(),
-        ["Local", "~/Desktop/zeta", "main", "Changes 7 • +7 -0"]
+        ["Local", "~/Desktop/ash", "main", "Changes 7 • +7 -0"]
     );
     assert_eq!(scene.rects().len(), 4);
     assert_eq!(toolbar.item_bounds(0).unwrap().origin.x, 24.0);
@@ -67,7 +67,7 @@ fn toolbar_projects_four_real_context_values_as_action_buttons() {
 #[test]
 fn changes_label_uses_text_success_and_error_colors() {
     let style = style();
-    let context = SessionPaneContext::new("Local", "~/Desktop/zeta", "main", "Changes 5 • +84 -39");
+    let context = SessionPaneContext::new("Local", "~/Desktop/ash", "main", "Changes 5 • +84 -39");
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let toolbar = ChatInputToolbar::new(
@@ -124,7 +124,7 @@ fn toolbar_scales_all_items_into_a_narrow_input_surface() {
 #[test]
 fn toolbar_registers_the_same_button_bounds_used_for_painting() {
     let style = style();
-    let context = context("~/Desktop/zeta", Some("main"), Some(7));
+    let context = context("~/Desktop/ash", Some("main"), Some(7));
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let toolbar = ChatInputToolbar::new(
@@ -149,7 +149,7 @@ fn toolbar_registers_the_same_button_bounds_used_for_painting() {
 #[test]
 fn toolbar_projects_host_hover_state_back_into_the_hit_button() {
     let style = style();
-    let context = context("~/Desktop/zeta", Some("main"), Some(7));
+    let context = context("~/Desktop/ash", Some("main"), Some(7));
     let mut text_layout = TextInputLayoutEngine::new();
     let mut dispatch = UiDispatch::default();
     let resting = ChatInputToolbar::new(
@@ -184,7 +184,7 @@ fn toolbar_projects_host_hover_state_back_into_the_hit_button() {
 #[test]
 fn toolbar_buttons_publish_accessible_labels_and_a_toolbar_parent() {
     let style = style();
-    let context = context("~/Desktop/zeta", Some("main"), Some(7));
+    let context = context("~/Desktop/ash", Some("main"), Some(7));
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let toolbar = ChatInputToolbar::new(

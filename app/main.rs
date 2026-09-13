@@ -4,5 +4,5 @@ fn main() -> std::process::ExitCode {
         std::process::exit(1);
     }
 
-    zeta_workbench::run()
+    ash_workbench::run()
 }

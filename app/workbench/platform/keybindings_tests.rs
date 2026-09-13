@@ -4,8 +4,8 @@ use super::{
     WorkbenchUserBindingTarget,
 };
 use std::time::{Duration, Instant};
-use zeta_commands::AppCommandId;
-use zeta_keybinding::{
+use ash_commands::AppCommandId;
+use ash_keybinding::{
     ContextExpression, HostPlatform, KeyStroke, LogicalKey, Modifiers, parse_key_sequence,
 };
 

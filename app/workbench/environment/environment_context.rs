@@ -1,15 +1,15 @@
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 
-use zeta_app_server_protocol::protocol::git::{GitChangeStatusDto, GitHeadDto, GitTextDiffResult};
-use zeta_diff::DiffDocument;
-use zeta_editor::{CodeEditorLanguage, DiffEditorDocument};
+use ash_app_server_protocol::protocol::git::{GitChangeStatusDto, GitHeadDto, GitTextDiffResult};
+use ash_diff::DiffDocument;
+use ash_editor::{CodeEditorLanguage, DiffEditorDocument};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct GitDiff {
     path: String,
     document: DiffEditorDocument,
-    staging: zeta_scm::ScmStaging,
+    staging: ash_scm::ScmStaging,
 }
 
 impl GitDiff {
@@ -21,7 +21,7 @@ impl GitDiff {
         &self.document
     }
 
-    pub(crate) const fn staging(&self) -> zeta_scm::ScmStaging {
+    pub(crate) const fn staging(&self) -> ash_scm::ScmStaging {
         self.staging
     }
 }
@@ -165,14 +165,14 @@ impl EnvironmentContext {
                     .changes
                     .iter()
                     .find(|change| change.path == diff.path)
-                    .map_or(zeta_scm::ScmStaging::Unstaged, |change| {
+                    .map_or(ash_scm::ScmStaging::Unstaged, |change| {
                         match (
                             change.index_status != GitChangeStatusDto::Unmodified,
                             change.worktree_status != GitChangeStatusDto::Unmodified,
                         ) {
-                            (true, true) => zeta_scm::ScmStaging::Partial,
-                            (true, false) => zeta_scm::ScmStaging::Staged,
-                            (false, _) => zeta_scm::ScmStaging::Unstaged,
+                            (true, true) => ash_scm::ScmStaging::Partial,
+                            (true, false) => ash_scm::ScmStaging::Staged,
+                            (false, _) => ash_scm::ScmStaging::Unstaged,
                         }
                     });
                 DiffDocument::from_text(&diff.original, &diff.modified)
@@ -228,7 +228,7 @@ impl EnvironmentContext {
                     .ok()
                     .map(|document| GitDiff {
                         path: format!("fixture-{index}.txt"),
-                        staging: zeta_scm::ScmStaging::Unstaged,
+                        staging: ash_scm::ScmStaging::Unstaged,
                         document: DiffEditorDocument::new(document, CodeEditorLanguage::PlainText),
                     })
             })

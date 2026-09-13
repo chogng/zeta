@@ -1,7 +1,7 @@
 # 配置系统
 
 > 本文拥有用户配置、目录配置、作用域合并和运行时生效点。实现见
-> [`zeta-config`](../zeta-rs/config/README.md)。目录能力的长期语义见
+> [`ash-config`](../ash-rs/config/README.md)。目录能力的长期语义见
 > [`environment-access.md`](environment-access.md)。
 
 ## 结论
@@ -64,11 +64,11 @@ editorLineHeight = 20
 
 `theme` 使用内置主题入口、用户主题 ID 或 `system`。`interfaceFontFamily` 和 `interfaceFontSize` 控制 Workbench 导航和设置页等界面文字；`editorFontFamily`、`editorFontSize` 和 `editorLineHeight` 只控制编辑器。字体族可用 `monospace`、`sans-serif`、`serif` 或具体字体名称，字号范围为 6–96 px，编辑器行高不能小于字号且不能超过 192 px。这些默认值、校验和生效方式都属于图形界面，不进入 Config 或 App Server 的领域类型。
 
-TUI 独立解释根级 `[tui]`，其中保存主题、屏幕模式、输入模式等界面设置；字段含义和交互见 [TUI 配置说明](../zeta-code/tui/README.md#终端生命周期)：
+TUI 独立解释根级 `[tui]`，其中保存主题、屏幕模式、输入模式等界面设置；字段含义和交互见 [TUI 配置说明](../ash-code/tui/README.md#终端生命周期)：
 
 ```toml
 [tui]
-theme = "zeta-code-dark"
+theme = "ash-code-dark"
 screenMode = "fullscreen"
 inputMode = "standard"
 ```
@@ -85,7 +85,7 @@ Config 和 App Server 将 `[gui]`、`[tui]` 作为不透明键值表保存，不
 
 ## 目录配置
 
-`DirConfigStore` 严格读取一个目录中的 `.zeta/config.toml`。Host 在文档之外提供 `DirId` 与内容
+`DirConfigStore` 严格读取一个目录中的 `.ash/config.toml`。Host 在文档之外提供 `DirId` 与内容
 revision；文件不能选择自己的身份或 generation。
 
 ```rust
@@ -174,7 +174,7 @@ BuiltInDefaults
 ├─ config.toml
 └─ state.sqlite3
 
-<dir>/.zeta/config.toml
+<dir>/.ash/config.toml
 ```
 
 公共类型使用 `DirConfigDocument`、`DirPermissionsConfig` 等完整名称，因为它们跨模块表达具体配置

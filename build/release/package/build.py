@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a canonical Zeta package directory."""
+"""Build a canonical Ash package directory."""
 
 import argparse
 import subprocess
@@ -11,7 +11,7 @@ from typing import Dict, Optional, Sequence
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from build.lib.zeta_build.targets import TARGETS, default_target
+from build.lib.ash_build.targets import TARGETS, default_target
 
 from build.release.package.bubblewrap import resolve_bubblewrap
 from build.release.package.cargo import build_binaries, validate_input_binary
@@ -28,7 +28,7 @@ DEFAULT_NODE_CACHE = REPOSITORY_ROOT / "third_party" / ".cache" / "node"
 
 
 def generate_protocol_metadata(repository_root: Path, cargo: str) -> Dict[str, object]:
-    with tempfile.TemporaryDirectory(prefix=".zeta-protocol-") as temporary:
+    with tempfile.TemporaryDirectory(prefix=".ash-protocol-") as temporary:
         output_directory = Path(temporary)
         subprocess.run(
             [
@@ -38,7 +38,7 @@ def generate_protocol_metadata(repository_root: Path, cargo: str) -> Dict[str, o
                 "--manifest-path",
                 str(repository_root / "Cargo.toml"),
                 "-p",
-                "zeta-app-server-protocol",
+                "ash-app-server-protocol",
                 "--bin",
                 "generate_protocol",
                 "--",
@@ -58,7 +58,7 @@ def generate_protocol_metadata(repository_root: Path, cargo: str) -> Dict[str, o
 def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Build the canonical Zeta package directory with pinned, "
+            "Build the canonical Ash package directory with pinned, "
             "checksum-verified runtime executables."
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -81,7 +81,7 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
     parser.add_argument(
         "--cli-bin",
         type=Path,
-        help="Prebuilt Zeta Code CLI executable to include in a managed CLI package.",
+        help="Prebuilt Ash Code CLI executable to include in a managed CLI package.",
     )
     parser.add_argument(
         "--update-public-key",
@@ -90,7 +90,7 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
     parser.add_argument(
         "--server-bin",
         type=Path,
-        help="Prebuilt product-neutral Zeta server executable. If omitted, Cargo builds it.",
+        help="Prebuilt product-neutral Ash server executable. If omitted, Cargo builds it.",
     )
     parser.add_argument(
         "--app-server-daemon-bin",
@@ -176,20 +176,20 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
     protocol_metadata = generate_protocol_metadata(REPOSITORY_ROOT, args.cargo)
     cli_binary = (
         validate_input_binary(
-            args.cli_bin, "Zeta CLI executable", "--cli-bin", spec.is_windows
+            args.cli_bin, "Ash CLI executable", "--cli-bin", spec.is_windows
         )
         if args.cli_bin is not None
         else None
     )
     inputs = {
-        "zeta-app-server": args.server_bin,
-        "zeta-app-server-daemon": args.app_server_daemon_bin,
-        "zeta-code-mode-host": args.code_mode_host_bin,
-        "zeta-remote": args.remote_bin,
-        "zeta-remote-server": args.remote_server_bin,
+        "ash-app-server": args.server_bin,
+        "ash-app-server-daemon": args.app_server_daemon_bin,
+        "ash-code-mode-host": args.code_mode_host_bin,
+        "ash-remote": args.remote_bin,
+        "ash-remote-server": args.remote_server_bin,
     }
     if spec.is_windows:
-        inputs["zeta-windows-sandbox"] = args.windows_sandbox_bin
+        inputs["ash-windows-sandbox"] = args.windows_sandbox_bin
     elif args.windows_sandbox_bin is not None:
         raise RuntimeError("Windows sandbox executable requires a Windows target")
     binaries = build_binaries(
@@ -233,11 +233,11 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         REPOSITORY_ROOT,
         version,
         spec,
-        binaries["zeta-app-server"],
-        binaries["zeta-remote"],
-        binaries["zeta-remote-server"],
-        binaries["zeta-app-server-daemon"],
-        binaries["zeta-code-mode-host"],
+        binaries["ash-app-server"],
+        binaries["ash-remote"],
+        binaries["ash-remote-server"],
+        binaries["ash-app-server-daemon"],
+        binaries["ash-code-mode-host"],
         ripgrep,
         node,
         bubblewrap,
@@ -245,11 +245,11 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         build_profile=args.cargo_profile,
         cli_binary=cli_binary,
         update_public_key=args.update_public_key,
-        windows_sandbox_binary=binaries["zeta-windows-sandbox"]
+        windows_sandbox_binary=binaries["ash-windows-sandbox"]
         if spec.is_windows
         else None,
     )
-    print("Built Zeta {} package at {}".format(target, output))
+    print("Built Ash {} package at {}".format(target, output))
     return 0
 
 

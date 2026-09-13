@@ -1,13 +1,13 @@
 use std::time::Instant;
 
-use zeta_remote_connections::RemoteConnectionCatalog;
-use zeta_settings::REMOTE_CONNECTION_ITEM_HEIGHT;
-use zeta_settings::REMOTE_CONNECTION_SEARCH_INPUT;
-use zeta_settings::RemoteConnectionPickerAction;
-use zeta_settings::RemoteConnectionPickerState;
-use zeta_settings::remote_connection_item_id;
-use zeta_ui_components::ScrollCommand;
-use zeta_ui_components::ScrollDelta;
+use ash_remote_connections::RemoteConnectionCatalog;
+use ash_settings::REMOTE_CONNECTION_ITEM_HEIGHT;
+use ash_settings::REMOTE_CONNECTION_SEARCH_INPUT;
+use ash_settings::RemoteConnectionPickerAction;
+use ash_settings::RemoteConnectionPickerState;
+use ash_settings::remote_connection_item_id;
+use ash_ui_components::ScrollCommand;
+use ash_ui_components::ScrollDelta;
 use zui::input::ElementState;
 use zui::input::Key;
 use zui::input::KeyEvent;
@@ -26,7 +26,7 @@ use zui::ui::UiDispatch;
 use crate::WorkbenchApplication;
 use crate::terminal_selection::read_clipboard_text;
 use crate::terminal_selection::write_clipboard_text;
-use zeta_session::interaction::CONTEXT_LOCATION;
+use ash_session::interaction::CONTEXT_LOCATION;
 
 const PICKER_ROWS_PER_WHEEL_STEP: f32 = 3.0;
 
@@ -44,7 +44,7 @@ impl WorkbenchApplication {
             return;
         };
         let connections =
-            match zeta_utils_home_dir::find_zeta_home()
+            match ash_utils_home_dir::find_ash_home()
                 .map_err(|error| error.to_string())
                 .and_then(|root| {
                     let catalog = RemoteConnectionCatalog::from_profile_root(root);

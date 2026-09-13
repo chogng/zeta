@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "keyring-store",
+    crate_name = "ash_keyring_store",
+)

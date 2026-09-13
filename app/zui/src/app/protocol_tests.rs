@@ -7,32 +7,32 @@ use super::urls_from_arguments;
 #[test]
 fn schemes_are_validated_and_normalized() {
     assert_eq!(
-        ProtocolScheme::new("Zeta+Agent").unwrap().as_str(),
-        "zeta+agent"
+        ProtocolScheme::new("Ash+Agent").unwrap().as_str(),
+        "ash+agent"
     );
-    assert!(ProtocolScheme::new("1zeta").is_err());
-    assert!(ProtocolScheme::new("zeta agent").is_err());
+    assert!(ProtocolScheme::new("1ash").is_err());
+    assert!(ProtocolScheme::new("ash agent").is_err());
     assert!(ProtocolScheme::new("").is_err());
 }
 
 #[test]
 fn protocol_urls_retain_absolute_serialization_and_scheme() {
-    let url = ProtocolUrl::parse("zeta://workspace/open?id=41").unwrap();
-    assert_eq!(url.scheme().as_str(), "zeta");
-    assert_eq!(url.as_str(), "zeta://workspace/open?id=41");
+    let url = ProtocolUrl::parse("ash://workspace/open?id=41").unwrap();
+    assert_eq!(url.scheme().as_str(), "ash");
+    assert_eq!(url.as_str(), "ash://workspace/open?id=41");
     assert!(ProtocolUrl::parse("relative/path").is_err());
 }
 
 #[test]
 fn launch_arguments_only_capture_explicitly_accepted_schemes() {
     let urls = urls_from_arguments(
-        &[ProtocolScheme::new("zeta").unwrap()],
+        &[ProtocolScheme::new("ash").unwrap()],
         [
             OsString::from("--verbose"),
             OsString::from("https://example.com"),
-            OsString::from("zeta://workspace/open"),
+            OsString::from("ash://workspace/open"),
         ],
     );
     assert_eq!(urls.len(), 1);
-    assert_eq!(urls[0].as_str(), "zeta://workspace/open");
+    assert_eq!(urls[0].as_str(), "ash://workspace/open");
 }

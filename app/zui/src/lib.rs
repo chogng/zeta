@@ -1,4 +1,4 @@
-//! Reusable native UI framework capabilities for Zeta applications.
+//! Reusable native UI framework capabilities for Ash applications.
 //!
 //! Public capability modules are also the physical source owners. Native adapters and backend
 //! glue remain private, while product state and reusable product components stay outside ZUI.

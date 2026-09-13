@@ -1,4 +1,4 @@
-// Modified by Zeta to use Cargo-provided protoc instead of a host installation.
+// Modified by Ash to use Cargo-provided protoc instead of a host installation.
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let protoc = protoc_bin_vendored::protoc_bin_path()?;

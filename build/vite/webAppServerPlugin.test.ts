@@ -38,23 +38,23 @@ test("passes only safe host environment into the development App Server", () => 
     workspaceRoot: "/workspace",
     platform: "linux",
     sourceEnvironment: {
-      HOME: "/home/zeta",
+      HOME: "/home/ash",
       LANG: "en_US.UTF-8",
       LC_ALL: "C.UTF-8",
       PATH: "/bin",
       OPENAI_API_KEY: "secret",
-      ZETA_PRODUCT_SERVICES_PATH: "/profile/product-services.json",
+      ASH_PRODUCT_SERVICES_PATH: "/profile/product-services.json",
     },
   });
   assert.deepEqual(environment, {
-    HOME: "/home/zeta",
+    HOME: "/home/ash",
     LANG: "en_US.UTF-8",
     PATH: "/bin",
     LC_ALL: "C.UTF-8",
-    ZETA_HOME: "/profile",
-    ZETA_PRODUCT_SERVICES_PATH: "/profile/product-services.json",
-    ZETA_RG_PATH: "/bin/rg",
-    ZETA_WORKSPACE_ROOT: "/workspace",
+    ASH_HOME: "/profile",
+    ASH_PRODUCT_SERVICES_PATH: "/profile/product-services.json",
+    ASH_RG_PATH: "/bin/rg",
+    ASH_WORKSPACE_ROOT: "/workspace",
   });
 });
 
@@ -67,12 +67,12 @@ test("normalizes the Windows host environment without leaking credentials", () =
     sourceEnvironment: {
       Path: "C:\\Windows\\System32",
       SystemRoot: "C:\\Windows",
-      UserProfile: "C:\\Users\\zeta",
+      UserProfile: "C:\\Users\\ash",
       AWS_SECRET_ACCESS_KEY: "secret",
     },
   });
   assert.equal(environment.PATH, "C:\\Windows\\System32");
   assert.equal(environment.SYSTEMROOT, "C:\\Windows");
-  assert.equal(environment.USERPROFILE, "C:\\Users\\zeta");
+  assert.equal(environment.USERPROFILE, "C:\\Users\\ash");
   assert.equal(environment.AWS_SECRET_ACCESS_KEY, undefined);
 });

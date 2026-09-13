@@ -3,8 +3,8 @@ use crate::{
     FIRST_TAB_CONTAINER_SESSION_TAB, SESSION_SEARCH_INPUT, TAB_CONTAINER_ACTION_BAR,
     TAB_CONTAINER_LIST, TAB_CONTAINER_TOOLBAR, TAB_CONTEXT_MENU, TabContextMenuAction,
 };
-use zeta_files::{FILE_SEARCH_INPUT, FILES_TOOLBAR};
-use zeta_session::interaction::SESSION_HEADER;
+use ash_files::{FILE_SEARCH_INPUT, FILES_TOOLBAR};
+use ash_session::interaction::SESSION_HEADER;
 
 #[test]
 fn sessions_toolbar_elements_have_stable_unique_identities() {

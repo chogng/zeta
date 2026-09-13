@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.renderer.json",
+  "exclude": [
+    "src/ash/**/test/**/*.ts",
+    "src/ash/**/electron-main/**/*.ts",
+    "src/ash/**/node/**/*.ts"
+  ]
+}

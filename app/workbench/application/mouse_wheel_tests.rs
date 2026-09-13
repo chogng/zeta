@@ -2,7 +2,7 @@ use super::{
     composer_interaction_scroll_command, file_list_scroll_pixels, multi_diff_scroll_pixels,
     settings_scroll_command, tab_container_scroll_command,
 };
-use zeta_ui_components::{ScrollCommand, ScrollDelta};
+use ash_ui_components::{ScrollCommand, ScrollDelta};
 use zui::input::{MouseScrollDelta, PhysicalPosition};
 
 #[test]

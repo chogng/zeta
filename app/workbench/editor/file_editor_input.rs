@@ -1,10 +1,10 @@
 use std::time::Instant;
 
-use zeta_editor::{CodeEditorCommand, CodeEditorSelectionMode};
-use zeta_editor_host::FileEditorAutoScrollDirection;
-use zeta_editor_host::FileEditorCloseRequest;
-use zeta_editor_host::FileEditorWheelDelta;
-use zeta_lsp_manager::LanguageRequestKind;
+use ash_editor::{CodeEditorCommand, CodeEditorSelectionMode};
+use ash_editor_host::FileEditorAutoScrollDirection;
+use ash_editor_host::FileEditorCloseRequest;
+use ash_editor_host::FileEditorWheelDelta;
+use ash_lsp_manager::LanguageRequestKind;
 use zui::input::{ElementState, Key, KeyEvent, MouseScrollDelta, NamedKey};
 use zui::ui::TextInputCompositionEvent;
 
@@ -12,7 +12,7 @@ use crate::WorkbenchApplication;
 use crate::file_editor_pane::{FileEditorPane, FileEditorPrompt};
 use crate::terminal_input::{code_editor_command, text_input_command};
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
-use zeta_editor_host::{
+use ash_editor_host::{
     FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_PANE, FILE_EDITOR_REPLACE_INPUT,
     FileEditorAction, file_editor_close_index, file_editor_fold_index, file_editor_tab_index,
 };
@@ -522,7 +522,7 @@ impl WorkbenchApplication {
             self.pending_focus = Some(FILE_EDITOR_DOCUMENT);
         } else {
             self.main_surface.show_agent();
-            self.pending_focus = Some(zeta_session::interaction::COMPOSER);
+            self.pending_focus = Some(ash_session::interaction::COMPOSER);
         }
         self.rebuild_presentation_on_next_redraw();
         self.request_redraw();

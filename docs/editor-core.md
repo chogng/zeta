@@ -1,19 +1,19 @@
 # 编辑器核心：Native Rust 与 Stanza TypeScript 边界
 
-> 状态：Current。`zeta-editor-core` 是 App Native editor 的纯 Rust document core；Stanza 是 Zeta
+> 状态：Current。`ash-editor-core` 是 App Native editor 的纯 Rust document core；Stanza 是 Ash
 > Renderer 内独立的 TypeScript editor，不通过 WASM 或 App Server RPC 复用该同步 core。Rust 实现契约见
-> [`zeta-editor-core`](../zeta-rs/editor-core/README.md)，app presentation 见
-> [`zeta-editor`](../app/editor/README.md)，Stanza 实现见
-> [`zeta-ts/src/zeta/editor/text-engine.md`](../zeta-ts/src/zeta/editor/text-engine.md)。
+> [`ash-editor-core`](../ash-rs/editor-core/README.md)，app presentation 见
+> [`ash-editor`](../app/editor/README.md)，Stanza 实现见
+> [`ash-ts/src/ash/editor/text-engine.md`](../ash-ts/src/ash/editor/text-engine.md)。
 
 ## 当前所有权
 
-| 能力 | Stanza（Zeta TS Renderer） | App（Native Rust） |
+| 能力 | Stanza（Ash TS Renderer） | App（Native Rust） |
 | --- | --- | --- |
 | 文本存储、transaction、version | `TextModel` / `TextBuffer` | `EditorCoreDocument` / `CodeEditorDocument` |
 | undo/redo 与 typing grouping | `TextModelHistory` | `EditorCoreDocument` + Native command policy |
-| selection、tracked range、IME | Stanza common/browser | `zeta-editor` |
-| layout 与 presentation | DOM、CSS、virtual viewport | `zeta-ui-components`、`zui`、GPU scene |
+| selection、tracked range、IME | Stanza common/browser | `ash-editor` |
+| layout 与 presentation | DOM、CSS、virtual viewport | `ash-ui-components`、`zui`、GPU scene |
 | 文件、LSP、workspace search | 异步调用 Rust App Server service | Native product adapter 按需组合 Rust crate |
 
 两套 editor 共享产品语义和 conformance 目标，但不共享同步运行时状态。Stanza 的输入必须在 Renderer 当前事件
@@ -40,13 +40,13 @@ Rust 后端适合拥有文件读写与冲突检测、language-server 生命周�
 formatting、rename、code action 和 parser-grade 分析。Stanza 始终拥有这些结果的交互状态与 presentation，并通过自己
 的 `TextModel.applyEdits` 应用后端返回的 edits。
 
-## `zeta-editor-core` 的 Native 契约
+## `ash-editor-core` 的 Native 契约
 
-`zeta-editor-core` 接受 UTF-16 code-unit range、revision-bound atomic edit 和显式 post-selection，拒绝 stale
+`ash-editor-core` 接受 UTF-16 code-unit range、revision-bound atomic edit 和显式 post-selection，拒绝 stale
 revision、代理对中间 offset、重叠 edit 和无效 selection。Native `CodeEditorDocument` 用 persistent core 持有
 committed text、selection、revision 与 history；Native text projection 只服务 line index、syntax、folding 和绘制。
 
-该 crate 不依赖 `zui`、`zeta-ui-components`、Native host、DOM、文件或 transport。若未来出现第二个真实 Rust consumer，应该
+该 crate 不依赖 `zui`、`ash-ui-components`、Native host、DOM、文件或 transport。若未来出现第二个真实 Rust consumer，应该
 直接依赖其纯 Rust API；不得为 Stanza 的同步输入路径预先增加 WASM 或 App Server adapter。
 
 ## 长期不变量
@@ -54,5 +54,5 @@ committed text、selection、revision 与 history；Native text projection 只�
 - Stanza 的同步 text/history/selection authority 在 TypeScript Renderer。
 - Rust App Server 结果必须携带并比较 Stanza document version；后端不可阻塞输入。
 - App Native 直接消费 Rust editor/core/UI crate，不绕经 Electron 或 Browser API。
-- `zeta-editor-core` 不依赖 presentation 或 transport；Stanza 不依赖 `zeta-editor-core`。
+- `ash-editor-core` 不依赖 presentation 或 transport；Stanza 不依赖 `ash-editor-core`。
 - 只有基准与真实消费者证明必要时才提取共享 wire contract，不能以潜在复用代替当前所有权。

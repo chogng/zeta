@@ -1,0 +1,18 @@
+[package]
+name = "ash-client"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "ash_client"
+path = "src/lib.rs"
+
+[dependencies]
+ash-async-utils = { workspace = true }
+ash-http-client = { workspace = true }
+
+[lints]
+workspace = true

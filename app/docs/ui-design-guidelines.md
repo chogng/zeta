@@ -1,10 +1,10 @@
-# Zeta App UI 视觉规范
+# Ash App UI 视觉规范
 
-> 状态：Current。本文定义 Zeta App 的视觉语言和组件配方。主题颜色体系由 [`Design Token`](../../docs/design-tokens.md) 维护，组件组合关系由 [`zeta-ui-components/ARCH.md`](../ui-components/ARCH.md) 维护。
+> 状态：Current。本文定义 Ash App 的视觉语言和组件配方。主题颜色体系由 [`Design Token`](../../docs/design-tokens.md) 维护，组件组合关系由 [`ash-ui-components/ARCH.md`](../ui-components/ARCH.md) 维护。
 
 ## 快速理解
 
-Zeta App 使用紧凑、克制、低噪声的桌面界面：信息密度高，但层级必须清楚；普通区域依靠表面色和留白区分，只有浮层使用阴影，只有模态弹窗使用遮罩。
+Ash App 使用紧凑、克制、低噪声的桌面界面：信息密度高，但层级必须清楚；普通区域依靠表面色和留白区分，只有浮层使用阴影，只有模态弹窗使用遮罩。
 
 | 场景 | 应有的感觉 | 主要手段 |
 | --- | --- | --- |
@@ -187,6 +187,6 @@ Settings 使用 `960×640` 的内容尺寸，QuickInput 使用 `660×470`；这�
 
 ## 8. 落地边界
 
-- `zeta-ui-components` 提供组件能力和 `Style` 输入，不固定 Zeta App 的具体视觉配方。
+- `ash-ui-components` 提供组件能力和 `Style` 输入，不固定 Ash App 的具体视觉配方。
 - 具体界面在自己的组合文件中按本文构建样式；重复配方通过该界面拥有的样式工厂收敛。
 - 语义颜色属于主题 token；字体等需要跨主题长期保存的偏好才进入 `[gui]`；焦点、命中和手势属于组件交互。

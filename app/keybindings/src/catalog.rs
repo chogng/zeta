@@ -1,6 +1,6 @@
-use zeta_keybinding::BindingSet;
-use zeta_keybinding::HostPlatform;
-use zeta_keybinding::KeySequence;
+use ash_keybinding::BindingSet;
+use ash_keybinding::HostPlatform;
+use ash_keybinding::KeySequence;
 
 /// Supplies host commands, builtin rules, conditions, and context matching.
 ///

@@ -1,5 +1,5 @@
-use zeta_ui_components::InputBoxState;
-use zeta_ui_components::InteractionRegion;
+use ash_ui_components::InputBoxState;
+use ash_ui_components::InteractionRegion;
 use zui::ui::AccessibilityRole;
 use zui::ui::CaretVisibility;
 use zui::ui::CursorFeedback;

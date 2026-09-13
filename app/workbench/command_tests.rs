@@ -1,11 +1,11 @@
-use zeta_commands::AppCommandId;
+use ash_commands::AppCommandId;
 
 use super::command_for_element;
 use crate::ADD_SESSION;
 use crate::CHANGES_PANE_BUTTON;
 use crate::TAB_CONTAINER_TOGGLE;
-use zeta_files::FILES_REFRESH;
-use zeta_session::interaction::CONTEXT_DIFF;
+use ash_files::FILES_REFRESH;
+use ash_session::interaction::CONTEXT_DIFF;
 
 #[test]
 fn workbench_elements_resolve_to_their_stable_commands() {

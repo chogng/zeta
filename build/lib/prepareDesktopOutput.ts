@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 import { desktopBuildPath } from "./paths.ts";
 
 const repositoryRoot = resolve(import.meta.dirname, "../..");
-const desktopNodeModules = join(repositoryRoot, "zeta-ts", "node_modules");
+const desktopNodeModules = join(repositoryRoot, "ash-ts", "node_modules");
 const outputRoot = desktopBuildPath(repositoryRoot);
 const outputNodeModules = join(outputRoot, "node_modules");
 

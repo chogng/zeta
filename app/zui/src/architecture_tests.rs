@@ -196,9 +196,9 @@ fn backend_neutral_sources_do_not_absorb_native_or_product_owners() {
         "accesskit_platform::",
         "wgpu::",
         "winit::",
-        "zeta_icons::",
-        "zeta_ui_components::",
-        "zeta_workbench::",
+        "ash_icons::",
+        "ash_ui_components::",
+        "ash_workbench::",
         "app::",
     ];
     let mut violations = Vec::new();
@@ -363,7 +363,7 @@ fn native_dependencies_stay_with_their_capability_owners() {
                 path.display()
             ));
         }
-        if ["zeta_icons", "zeta_ui_components", "zeta_workbench", "app"]
+        if ["ash_icons", "ash_ui_components", "ash_workbench", "app"]
             .iter()
             .any(|crate_name| imports_external_crate(&source, crate_name))
             && relative != "architecture_tests.rs"

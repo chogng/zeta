@@ -1,5 +1,5 @@
 [package]
-name = "zeta-ui-theme"
+name = "ash-ui-theme"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,13 +7,13 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "zeta_ui_theme"
+name = "ash_ui_theme"
 path = "src/lib.rs"
 
 [dependencies]
-zeta-icons = { workspace = true }
-zeta-theme = { workspace = true }
-zeta-ui-components = { workspace = true }
+ash-icons = { workspace = true }
+ash-theme = { workspace = true }
+ash-ui-components = { workspace = true }
 zui = { workspace = true, default-features = false }
 
 [lints]

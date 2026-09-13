@@ -30,7 +30,7 @@ use crate::Size;
 use crate::TextBlock;
 use crate::TextSpan;
 use crate::UiScene;
-use zeta_icons::icons;
+use ash_icons::icons;
 use zui::ui::CursorFeedback;
 use zui::ui::ElementId;
 use zui::ui::FocusBehavior;

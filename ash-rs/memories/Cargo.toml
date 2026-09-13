@@ -1,0 +1,26 @@
+[package]
+name = "ash-memories"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "ash_memories"
+path = "src/lib.rs"
+
+[dependencies]
+base64 = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+ts-rs = { workspace = true, features = ["no-serde-warnings"] }
+async-utils = { package = "ash-async-utils", path = "../async-utils" }
+ash-file-access = { workspace = true }
+ash-protocol = { workspace = true }
+
+[lints]
+workspace = true

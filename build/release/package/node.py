@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional
 from urllib.request import Request, urlopen
 
 from .cargo import validate_input_binary
-from build.lib.zeta_build.targets import TargetSpec
+from build.lib.ash_build.targets import TargetSpec
 
 
 DOWNLOAD_TIMEOUT_SECONDS = 60
@@ -169,7 +169,7 @@ def download_and_verify(artifact: LockedNodeArtifact, destination: Path) -> None
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(destination.name + ".partial")
     temporary.unlink(missing_ok=True)
-    request = Request(artifact.url, headers={"User-Agent": "zeta-package-builder"})
+    request = Request(artifact.url, headers={"User-Agent": "ash-package-builder"})
     try:
         with urlopen(request, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response:
             with open(temporary, "wb") as output:

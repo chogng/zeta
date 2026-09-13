@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "model-tokenizer",
+    crate_name = "ash_model_tokenizer",
+)

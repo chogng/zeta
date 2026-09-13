@@ -1,6 +1,6 @@
 use crate::WorkbenchApplication;
 use crate::memories::*;
-use zeta_editor::CodeEditorCommand;
+use ash_editor::CodeEditorCommand;
 use zui::input::ElementState;
 use zui::input::Key;
 use zui::input::KeyEvent;
@@ -112,7 +112,7 @@ impl WorkbenchApplication {
                         self.memories
                             .state
                             .body
-                            .move_to(position, zeta_editor::CodeEditorSelectionMode::Move);
+                            .move_to(position, ash_editor::CodeEditorSelectionMode::Move);
                     }
                 }
             } else if id == SEARCH {

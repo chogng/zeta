@@ -1,7 +1,7 @@
 //! Application event-loop adapter for editor-owned language-service events.
 
-use zeta_editor_host::FileEditorLanguageEvent;
-use zeta_editor_host::FileEditorLanguageEventSink;
+use ash_editor_host::FileEditorLanguageEvent;
+use ash_editor_host::FileEditorLanguageEventSink;
 use zui::app::AppProxy;
 
 use crate::workbench_event::WorkbenchEvent;

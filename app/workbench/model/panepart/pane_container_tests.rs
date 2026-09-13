@@ -4,7 +4,7 @@ use super::PaneContainer;
 use crate::PaneInput;
 use crate::PaneInputKind;
 use crate::PaneSplitDirection;
-use zeta_protocol::SessionId;
+use ash_protocol::SessionId;
 
 #[test]
 fn container_owns_multiple_groups_and_each_group_owns_multiple_panes() {

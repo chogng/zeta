@@ -1,17 +1,17 @@
 # MCP 集成系统
 
-> Product runtime 当前实现：[`zeta-rs/mcp/`](../zeta-rs/mcp/README.md)，
-> Rust crate：`zeta_mcp`
-> Low-level client 当前实现：[`zeta-rs/rmcp-client/`](../zeta-rs/rmcp-client/README.md)，
-> Rust crate：`zeta_rmcp_client`
+> Product runtime 当前实现：[`ash-rs/mcp/`](../ash-rs/mcp/README.md)，
+> Rust crate：`ash_mcp`
+> Low-level client 当前实现：[`ash-rs/rmcp-client/`](../ash-rs/rmcp-client/README.md)，
+> Rust crate：`ash_rmcp_client`
 > 当前状态：low-level client、tools-only product runtime、Config/Connector/Marketplace/legacy Plugin hot composition、
 > `tools/list_changed` rebuild、App Server/Core tools vertical slice、Connector disconnect dispatch fence、
 > 独立 Config MCP OAuth 编排、form elicitation 与只读 lifecycle projection 已实现
 > Core architecture：[`core.md`](core.md)
-> Agent runtime：[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md)
+> Agent runtime：[`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md)
 > Tool shared contract 与纯转换：[`tools.md`](tools.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
-> Marketplace package 入口：[`core-plugins.md`](../zeta-rs/docs/core-plugins.md)
+> Marketplace package 入口：[`core-plugins.md`](../ash-rs/docs/core-plugins.md)
 > Legacy Plugin 兼容来源：[`plugins.md`](plugins.md)
 > Connector account 与 ready binding：[`connectors.md`](connectors.md)
 > Skill 指令边界：[`skills.md`](skills.md)
@@ -23,12 +23,12 @@
 
 ## 快速理解
 
-MCP 客户端把外部 Server 的工具转换成 Zeta 的工具目录。外部客户端控制 Zeta 统一使用
-[`App Server API`](zeta-app-server-api.md)，不提供第二套 MCP Agent 接口。
+MCP 客户端把外部 Server 的工具转换成 Ash 的工具目录。外部客户端控制 Ash 统一使用
+[`App Server API`](ash-app-server-api.md)，不提供第二套 MCP Agent 接口。
 
 | 场景 | 使用的边界 | 当前状态 |
 | --- | --- | --- |
-| Zeta 连接外部 MCP Server | `zeta-rmcp-client` 建立单连接，`zeta-mcp` 管理多 Server 和工具目录 | 工具纵向切片已实现 |
+| Ash 连接外部 MCP Server | `ash-rmcp-client` 建立单连接，`ash-mcp` 管理多 Server 和工具目录 | 工具纵向切片已实现 |
 | MCP 暴露工具 | 转成带来源、绑定和失效 generation 的统一工具 | 已实现基础目录与调用路由 |
 | MCP 暴露资源或提示词 | 进入各自的上下文和产品契约 | 仍属计划设计 |
 | Server 需要 bearer 或 OAuth | 凭据保存在 SecretStore；具体 provider adapter 决定 discovery、scope 与 token wire | 独立 Config 与 Connector 路径均已具备窄实现 |
@@ -41,8 +41,8 @@ MCP 客户端把外部 Server 的工具转换成 Zeta 的工具目录。外部�
 
 ## 1. 结论
 
-MCP client 分成两个边界：Current `zeta-rmcp-client` 负责官方 RMCP SDK、单 server session、
-initialize、原始 tools API 和 stdio/Streamable HTTP transport；Current `zeta-mcp` tools-only
+MCP client 分成两个边界：Current `ash-rmcp-client` 负责官方 RMCP SDK、单 server session、
+initialize、原始 tools API 和 stdio/Streamable HTTP transport；Current `ash-mcp` tools-only
 runtime 负责多 server 启动、provider-neutral tool catalog/binding、分页/大小限制、调用路由、
 取消与失效标记。Current App Server adapter 将 user config 与 ready Connector snapshot 接入 Core
 `ToolService`、逐次用户 approval 和 durable result，并在两类 generation 变化时重建 tool port。
@@ -56,11 +56,11 @@ prompts、reconnect/health 和更完整的 interaction surface 仍是 Proposed�
 
 - Plugin 的安装器、包管理器或信任根；
 - Skill 的发现器、选择器或指令加载器；
-- 绕过 Zeta tool approval、sandbox 和 durable Tool Call/Result 的执行捷径；
+- 绕过 Ash tool approval、sandbox 和 durable Tool Call/Result 的执行捷径；
 - MCP server 输出、tool annotation 或 prompt 内容的信任背书；
-- Zeta Session、Thread、Turn 或 App Server connection 的替代品。
+- Ash Session、Thread、Turn 或 App Server connection 的替代品。
 
-Marketplace、Plugin、Connector 与 MCP 的 canonical 关系由 [`core-plugins.md`](../zeta-rs/docs/core-plugins.md)
+Marketplace、Plugin、Connector 与 MCP 的 canonical 关系由 [`core-plugins.md`](../ash-rs/docs/core-plugins.md)
 和 [`connectors.md`](connectors.md) 共同维护。从 MCP runtime 视角看，
 边界可压缩为：
 
@@ -86,22 +86,22 @@ server 启动，Connector connected 也不等于自动批准每次 Tool call。
 当前仓库已有低层 client、tools-only product runtime、配置面与启动时 tools vertical slice：
 
 - [`core.md`](core.md) 与
-  [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) 已将 MCP adapter
+  [`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md) 已将 MCP adapter
   放在 Core tool port 之外，并要求 HTTP/MCP cancellation 贯穿工具执行；
-- `zeta-rmcp-client` 已用官方 RMCP SDK 实现单连接 initialize、tools list/call、
+- `ash-rmcp-client` 已用官方 RMCP SDK 实现单连接 initialize、tools list/call、
   progress/list-changed/elicitation host callback、caller cancellation、request deadline、有界
   shutdown，以及 local stdio 与 reqwest Streamable HTTP connector；其实现契约见
-  [`zeta-rs/rmcp-client/README.md`](../zeta-rs/rmcp-client/README.md)；
-- `zeta-mcp` 已实现多 server `RequireAll` / `AllowPartial` 启动、分页和 byte/tool limits、
+  [`ash-rs/rmcp-client/README.md`](../ash-rs/rmcp-client/README.md)；
+- `ash-mcp` 已实现多 server `RequireAll` / `AllowPartial` 启动、分页和 byte/tool limits、
   deterministic alias、exact remote identity、connection/catalog generation、不可变
   catalog/binding、list-changed stale 标记、可取消 tools/call、结果大小限制和有界 shutdown；
-  其实现契约见 [`zeta-rs/mcp/README.md`](../zeta-rs/mcp/README.md)；
-- `zeta-config` 与 App Server config operations 已有 MCP server declaration CRUD；配置存在不
+  其实现契约见 [`ash-rs/mcp/README.md`](../ash-rs/mcp/README.md)；
+- `ash-config` 与 App Server config operations 已有 MCP server declaration CRUD；配置存在不
   等于 runtime 已启用；
-- `zeta-protocol` 已有 provider-independent `ToolDefinition`、`ToolCall`、`ToolResult`、
+- `ash-protocol` 已有 provider-independent `ToolDefinition`、`ToolCall`、`ToolResult`、
   `ToolName` 和 durable Thread tool item；
-- `zeta-core` 已有 approval policy 基础，`zeta-tool-executor` / `zeta-sandboxing` 已形成独立
-  本地进程执行边界；产品层 `zeta-exec` 不参与单个 MCP tool process 的执行；
+- `ash-core` 已有 approval policy 基础，`ash-tool-executor` / `ash-sandboxing` 已形成独立
+  本地进程执行边界；产品层 `ash-exec` 不参与单个 MCP tool process 的执行；
 - App Server 已把 enabled user declaration materialize 为 `McpServerDefinition`，通过持续运行
   的 Tokio worker 桥接同步 Core `ToolService`，合并 local/MCP definitions，并为每次 MCP call
   生成 exact `ActionSource::McpServer` review、durable one-time approval 与 unknown outcome；
@@ -147,15 +147,15 @@ operation。[官方架构](https://modelcontextprotocol.io/specification/2025-11
 | Roots | 尚未暴露 | 只暴露已授权目录，不能替代 OS sandbox |
 | Sampling | 尚未暴露 | 默认不声明；需独立预算、隐私和审批 |
 | Elicitation | Current host callback | Current form → durable Core interaction；URL/array/multiselect/跨重启 remote recovery 不支持 |
-| Tasks | 尚未暴露 | experimental，不等同 Zeta Turn/Task |
+| Tasks | 尚未暴露 | experimental，不等同 Ash Turn/Task |
 
 MCP 标准 transport 是
 [stdio 与 Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)。
-HTTP+SSE 是旧 revision 的兼容面，不进入 Zeta 第一版。
+HTTP+SSE 是旧 revision 的兼容面，不进入 Ash 第一版。
 
 ## 4. 职责与非职责
 
-### 4.1 当前状态 `zeta-rmcp-client` 拥有
+### 4.1 当前状态 `ash-rmcp-client` 拥有
 
 - MCP wire request/response/notification codec 和 protocol revision negotiation；
 - 每个 configured server 的隔离 client session；
@@ -165,7 +165,7 @@ HTTP+SSE 是旧 revision 的兼容面，不进入 Zeta 第一版。
 - 原始 tools list/call 与 progress、list-changed、elicitation host callback；
 - caller-provided RMCP transport 接入点。
 
-### 4.2 当前状态 `zeta-mcp` 拥有
+### 4.2 当前状态 `ash-mcp` 拥有
 
 - runtime-ready server set、connection/catalog generation 与原子/部分启动策略；
 - tools 的分页 discovery、list-changed invalidation 和 immutable catalog；
@@ -189,8 +189,8 @@ form elicitation，以及通用 OAuth metadata discovery 和 concrete provider a
 - 把 server instructions、prompt、resource 或 tool result 提升为 system instruction。
 
 独立 MCP declaration 的 auth adapter 拥有对应 credential/OAuth lifecycle；Connector-bound MCP 的认证和账号
-lifecycle 则属于 Connector auth adapter。两者都把 opaque token persistence 委托给 `zeta-secrets`，并只向
-MCP runtime 提供 materialized credential/binding。`zeta-sandboxing` / host capability 实施资源边界，
+lifecycle 则属于 Connector auth adapter。两者都把 opaque token persistence 委托给 `ash-secrets`，并只向
+MCP runtime 提供 materialized credential/binding。`ash-sandboxing` / host capability 实施资源边界，
 Agent runtime 决定何时调用工具，Core 负责 durable commit，App Server 是 composition root。
 
 ## 5. 目标依赖与运行时结构
@@ -198,33 +198,33 @@ Agent runtime 决定何时调用工具，Core 负责 durable commit，App Server
 ```mermaid
 flowchart TD
     P["Marketplace Manager：verified MCP/Connector capabilities"] --> A["App Server composition"]
-    L["zeta-plugin definitions + zeta-core-plugins activation"] --> A
+    L["ash-plugin definitions + ash-core-plugins activation"] --> A
     C["ext/connectors：ready runtime bindings"] --> A
     U["User / Directory MCP configuration"] --> A
     H["Credential materializer + process/HTTP host adapters"] --> A
-    A --> M["zeta-mcp：multi-server runtime"]
-    M --> R["zeta-rmcp-client：protocol session / transport"]
-    M --> Z["zeta-tools：provider-neutral definitions/results"]
-    Z --> K["zeta-core ToolService"]
+    A --> M["ash-mcp：multi-server runtime"]
+    M --> R["ash-rmcp-client：protocol session / transport"]
+    M --> Z["ash-tools：provider-neutral definitions/results"]
+    Z --> K["ash-core ToolService"]
     K --> D["Session / Thread durable records"]
 ```
 
 规则：
 
-- `zeta-rmcp-client` 依赖官方 `rmcp` 和通用 async/HTTP 库，不依赖 Zeta product crate；
-- `zeta-mcp` 可以依赖 `zeta-rmcp-client`、`zeta-tools`、`zeta-protocol` 和通用 async/JSON 库；
-- `zeta-mcp` 不依赖 `zeta-core`、stores、App Server、Desktop、CLI、Marketplace Manager 或 Plugin authority；
-- `zeta-mcp` 将 revision-specific wire descriptor 转成纯 `McpToolProjection`；
-  `zeta-tools` 再负责 schema normalization、model-facing definition 和 source-neutral output；
-- `zeta-core` 定义 consumer-owned `ToolService` port；App Server adapter 将 MCP tool
+- `ash-rmcp-client` 依赖官方 `rmcp` 和通用 async/HTTP 库，不依赖 Ash product crate；
+- `ash-mcp` 可以依赖 `ash-rmcp-client`、`ash-tools`、`ash-protocol` 和通用 async/JSON 库；
+- `ash-mcp` 不依赖 `ash-core`、stores、App Server、Desktop、CLI、Marketplace Manager 或 Plugin authority；
+- `ash-mcp` 将 revision-specific wire descriptor 转成纯 `McpToolProjection`；
+  `ash-tools` 再负责 schema normalization、model-facing definition 和 source-neutral output；
+- `ash-core` 定义 consumer-owned `ToolService` port；App Server adapter 将 MCP tool
   handle/catalog 适配到该 port，Core 不读取 MCP wire DTO；
 - Marketplace Manager 只拥有 artifact/install/lease；App Server adapter 产出 server declaration；两者都不持有 live MCP session；
 - legacy Plugin authority 只产出经过验证的 server declaration，不持有 live MCP session；
 - Connector runtime 只产出 generation-bound ready binding，不持有 live MCP session 或 Tool registry；
 - App Server 注入 credential materializer、process launcher、HTTP transport、directory roots 和
-  policy，不能让 `zeta-mcp` 自己扫描全局环境；
-- RMCP wire DTO 停在 `zeta-rmcp-client` / `zeta-mcp` adapter boundary，不进入
-  `zeta-protocol`、Core 或 App Server protocol。
+  policy，不能让 `ash-mcp` 自己扫描全局环境；
+- RMCP wire DTO 停在 `ash-rmcp-client` / `ash-mcp` adapter boundary，不进入
+  `ash-protocol`、Core 或 App Server protocol。
 
 每个 live server 运行时：
 
@@ -242,7 +242,7 @@ McpServerDefinition
 
 ### 6.1 Server 身份
 
-配置必须为每个 server 分配稳定 `McpServerId`。它标识 Zeta 配置中的逻辑 server，不使用 endpoint、
+配置必须为每个 server 分配稳定 `McpServerId`。它标识 Ash 配置中的逻辑 server，不使用 endpoint、
 child PID、MCP session ID 或 Plugin 显示名称充当 identity。
 
 ```rust
@@ -273,7 +273,7 @@ Plugin 贡献的 logical ID 解析为带 Plugin namespace 的 `McpServerId`；�
 ### 6.2 远程 primitive 身份
 
 MCP tool name 只保证在单个 server 内唯一；resource URI 和 prompt name 同样不能脱离 server
-解释。Zeta identity 必须保留二元组：
+解释。Ash identity 必须保留二元组：
 
 ```text
 McpToolRef     = (McpServerId, exact remote tool name)
@@ -286,7 +286,7 @@ McpPromptRef   = (McpServerId, exact prompt name)
 
 ### 6.3 工具 alias 与绑定
 
-当前 `zeta-protocol::ToolName` 允许 1–128 个 ASCII 字母、数字、`_`、`-`，而 MCP tool name
+当前 `ash-protocol::ToolName` 允许 1–128 个 ASCII 字母、数字、`_`、`-`，而 MCP tool name
 还可能包含 `.`。不能把不兼容字符简单替换成 `_` 后假定没有冲突。
 
 目标使用显式绑定：
@@ -387,14 +387,14 @@ HTTP adapter 必须实现：
 
 - 单一 MCP endpoint 的 POST/GET 与 JSON/SSE content negotiation；
 - `MCP-Protocol-Version`、可选 `MCP-Session-Id` 和 session termination；
-- SSE event ID / `Last-Event-ID` resume，但不把 event ID 当 Zeta durable sequence；
+- SSE event ID / `Last-Event-ID` resume，但不把 event ID 当 Ash durable sequence；
 - Origin、redirect、TLS、proxy 和 endpoint allowlist policy；
 - 401 challenge、OAuth metadata discovery 和 credential refresh；
 - response/body/SSE frame 大小及 idle/read deadline；
 - 同一 MCP message 不跨多个 SSE stream 重复交付。
 
 断开连接不等于 MCP request cancellation；client 必须显式 cancel。HTTP session ID 是远端 transport
-state，不进入 Zeta Session/Thread。
+state，不进入 Ash Session/Thread。
 
 第一版不实现 custom transport。新增 transport 必须先定义 threat model、framing、cancellation、
 authentication 和 shutdown contract，不能只提供 `send(Value)`。
@@ -403,7 +403,7 @@ authentication 和 shutdown contract，不能只提供 `send(Value)`。
 
 ### 9.1 工具
 
-`zeta-mcp` 先将 revision-specific descriptor 转成保留 exact remote identity 的
+`ash-mcp` 先将 revision-specific descriptor 转成保留 exact remote identity 的
 `McpToolProjection`，再由 [`tools.md`](tools.md) 的共享 adapter 产生 host tool definition。
 完整转换链必须：
 
@@ -415,7 +415,7 @@ authentication 和 shutdown contract，不能只提供 `send(Value)`。
 - 对 model 不支持的 content type 给出明确降级或拒绝。
 
 MCP `2025-11-25` 的 embedded schema 默认使用 JSON Schema 2020-12；tool output 若声明
-`outputSchema`，Zeta 应校验 `structuredContent`。规范明确区分
+`outputSchema`，Ash 应校验 `structuredContent`。规范明确区分
 [protocol error 与 tool execution error](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)：
 
 - unknown tool、malformed request、server protocol failure → MCP protocol error；
@@ -435,7 +435,7 @@ Resource 是 application-controlled context，不是可自动执行的 tool。�
 - binary 内容通过 Resource/content store 传递，不内嵌到普通日志。
 
 Server 返回的 `file://` URI 不授予本地文件权限。只有 MCP `resources/read` 的返回内容可作为该
-server resource；Zeta 不绕过 server 去读取同名本地路径。
+server resource；Ash 不绕过 server 去读取同名本地路径。
 
 ### 9.3 提示词
 
@@ -474,13 +474,13 @@ tool loop。第一版不声明 sampling capability。
 - server 不能指定或读取 provider credential；
 - Core ContextAssembler 只提供请求所需最小 context；
 - 每 server/session 有 token、费用、并发和递归深度预算；
-- user approval 与 model choice 由 Zeta host 决定；
+- user approval 与 model choice 由 Ash host 决定；
 - sampling 不能调用发起它的同一 tool 形成无界递归；
 - request/result 进入可审计 trace，但不伪装成用户 Turn。
 
 ### 10.3 询问（Elicitation）
 
-Elicitation 依赖 Zeta 的 typed Agent request/response delivery。App Server owner selection、deadline、
+Elicitation 依赖 Ash 的 typed Agent request/response delivery。App Server owner selection、deadline、
 disconnect re-selection 和 durable recovery 已完成。当前 MCP adapter 只在 App Server 为 Tool call
 注入 `ToolInteractionService` 时声明 form capability；RMCP callback 再通过 task-local binding 关联 exact
 Thread、Turn、request 与并发中的 MCP call，不能仅因共享 contract 存在就启用。
@@ -492,14 +492,14 @@ Thread、Turn、request 与并发中的 MCP call，不能仅因共享 contract �
 契约，返回 `Decline`。
 
 表单被持久化为 Core `AgentRequest::UserInput`。解决后 live waiter 唤醒同一次工具执行，App Server
-不会再启动第二个 backend resume；取消映射为 MCP `Cancel`。Zeta interaction 可以 durable，但 remote
+不会再启动第二个 backend resume；取消映射为 MCP `Cancel`。Ash interaction 可以 durable，但 remote
 MCP connection/request 本身不能跨重启恢复；恢复后已 started 且无 terminal result 的调用保持
 unknown outcome，不能向新 connection 发送旧 response。
 
 ### 10.4 实验性任务
 
-MCP task ID 只标识 MCP 协议中的异步 request 状态，不是 Zeta 产品 Session、Thread、Turn 或
-Codex 意义上的“任务”。在官方 capability 稳定且 Zeta 定义好 polling、expiry、authorization
+MCP task ID 只标识 MCP 协议中的异步 request 状态，不是 Ash 产品 Session、Thread、Turn 或
+Codex 意义上的“任务”。在官方 capability 稳定且 Ash 定义好 polling、expiry、authorization
 binding、cancel 和 recovery 前不启用。
 
 ## 11. 工具 loop、取消与 unknown 结果
@@ -510,7 +510,7 @@ MCP catalog snapshot
     → model emits Tool Call
     → resolve frozen McpToolBinding
     → validate arguments
-    → evaluate Zeta approval + policy
+    → evaluate Ash approval + policy
     → durable commit Tool Call
     → MCP tools/call outside Thread state owner
     → validate result
@@ -539,7 +539,7 @@ MCP adapter 不直接写 Thread。取消和 retry 遵循 Agent Runtime 的统一
 - tool output、resource link 与 embedded resource；
 - Plugin 声明的 command、endpoint、env 和 permission request。
 
-MCP 内容可能包含 prompt injection。Zeta 必须带 provenance 传入 Core ContextAssembler，用边界标记其
+MCP 内容可能包含 prompt injection。Ash 必须带 provenance 传入 Core ContextAssembler，用边界标记其
 来源，且不能允许其覆盖 system/developer policy、approval 或 sandbox。
 
 ### 12.2 HTTP 授权
@@ -548,7 +548,7 @@ MCP 内容可能包含 prompt injection。Zeta 必须带 provenance 传入 Core 
 [MCP authorization](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
 与 [security best practices](https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices)：
 
-- access/refresh token 的领域 lifecycle 属于 MCP auth，opaque bytes 只存于 `zeta-secrets`；
+- access/refresh token 的领域 lifecycle 属于 MCP auth，opaque bytes 只存于 `ash-secrets`；
 - config、Plugin manifest、snapshot、日志和 Thread event 只保存 `CredentialRef`；
 - OAuth 使用 PKCE、state 和 exact redirect URI；
 - token 必须绑定目标 resource/audience；
@@ -560,7 +560,7 @@ MCP 内容可能包含 prompt injection。Zeta 必须带 provenance 传入 Core 
 当前独立 Config MCP 的实现把上述责任拆为两层。`McpOAuthService` 拥有 process-local flow、S256
 PKCE、state、exact redirect/resource/Config target 复核、一次性 callback 和 SecretStore envelope；
 host 注入的 exact `McpOAuthProvider` 拥有 authorization-server discovery、endpoint allowlist、client
-identity、scope、token response parsing、audience、refresh 和 remote revoke。Zeta 当前不提供通用自动
+identity、scope、token response parsing、audience、refresh 和 remote revoke。Ash 当前不提供通用自动
 discovery 或内建 concrete provider；未注入 provider 时 OAuth capability 明确 unavailable。
 
 SecretStore envelope 分离 runtime bearer 与 lifecycle secret。MCP transport 只能 materialize bearer，
@@ -615,7 +615,7 @@ OAuth coordinator；complete/refresh 强制 reconcile 为 connect，revoke 先�
 | Auth | `mcp/oauth/start`、`mcp/oauth/complete`、`mcp/oauth/refresh`、`mcp/oauth/revoke` | Current process-local one-shot OAuth flow 与 credential lifecycle |
 | Diagnostics | `mcp/server/status`、`mcp/server/log/read` | status 已实现；log/read 尚未实现 |
 
-命名只是目标语义，实施时必须与 `zeta-app-server-protocol` 同步生成 schema/TypeScript。配置修改
+命名只是目标语义，实施时必须与 `ash-app-server-protocol` 同步生成 schema/TypeScript。配置修改
 继续使用 `CommandId` 和 exact typed payload replay；connect/disconnect 是 runtime intent，不占用
 Session/Thread sequence。
 
@@ -662,7 +662,7 @@ queue saturation 和 output rejection。
 当前仅工具运行时保持单 crate、私有模块和显式公共导出：
 
 ```text
-zeta-rs/mcp/src/
+ash-rs/mcp/src/
 ├── lib.rs
 ├── definition.rs
 ├── error.rs

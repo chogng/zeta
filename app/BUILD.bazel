@@ -28,7 +28,7 @@ filegroup(
         "//app/editor-host:editor-host_sources",
         "//app/files:files_sources",
         "//app/icons:icons_sources",
-        "//zeta-rs/keybinding:keybinding_sources",
+        "//ash-rs/keybinding:keybinding_sources",
         "//app/markdown:markdown_sources",
         "//app/scm:scm_sources",
         "//app/keybindings:keybindings_sources",

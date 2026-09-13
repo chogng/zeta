@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use anyhow::Result;
-use zeta_protocol::SessionId;
-use zeta_terminal::GridSize;
+use ash_protocol::SessionId;
+use ash_terminal::GridSize;
 
 mod blocks;
 mod history;

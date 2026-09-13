@@ -1,14 +1,14 @@
 # 模型目录系统
 
-> 物理位置：`zeta-rs/models-manager/`
-> Rust crate：`zeta_models_manager`
+> 物理位置：`ash-rs/models-manager/`
+> Rust crate：`ash_models_manager`
 > 当前状态：Phase 1 core 与 Ollama 动态目录已实现；跨 provider 的 Agent 模型选择、其他动态 provider adapters、持久缓存和完整 App Server snapshot API 尚未实现
-> Crate 实现说明：[`zeta-models-manager` README](../zeta-rs/models-manager/README.md)
-> Canonical model contract：[`zeta-protocol` model catalog](../zeta-rs/protocol/src/model/catalog.rs)
-> Provider wire adapter：[`zeta-api.md`](zeta-api.md)
+> Crate 实现说明：[`ash-models-manager` README](../ash-rs/models-manager/README.md)
+> Canonical model contract：[`ash-protocol` model catalog](../ash-rs/protocol/src/model/catalog.rs)
+> Provider wire adapter：[`ash-api.md`](ash-api.md)
 > Provider runtime：[`model-provider.md`](model-provider.md)
-> Operation client：[`zeta-client.md`](zeta-client.md)
-> 底层网络：[`zeta-http-client` README](../zeta-rs/http-client/README.md)
+> Operation client：[`ash-client.md`](ash-client.md)
+> 底层网络：[`ash-http-client` README](../ash-rs/http-client/README.md)
 
 > 官方资料核对日期：2026-07-25。Provider API 与模型生命周期会持续变化，本文固定架构边界和
 > 合并语义；具体 endpoint、字段映射与内置 metadata 必须以实现时的官方文档和 contract test
@@ -31,7 +31,7 @@
 
 ## 1. 结论
 
-`zeta-models-manager` 是 Zeta 的模型目录控制面。它统一管理各个 provider 可用模型的发现、
+`ash-models-manager` 是 Ash 的模型目录控制面。它统一管理各个 provider 可用模型的发现、
 缓存、合并、筛选和面向上层的 catalog snapshot，负责决定：
 
 - 何时请求 provider，何时直接使用缓存或静态 metadata；
@@ -69,15 +69,15 @@ model provider 负责“如何用已选模型执行一次调用”
 
 | 位置 | 已有职责 | 不应继续扩张的方向 |
 | --- | --- | --- |
-| `zeta-protocol::model::catalog` | identity、`ModelInfo`、capability、availability/freshness/lifecycle/quality value | 请求调度、缓存、provider DTO、refresh state |
-| `zeta-model-provider-config` | provider definition、endpoint/default、静态 seed models、配置归一化 | HTTP、凭据读取、动态 discovery、TTL |
-| `zeta-models-manager` | scope、静态 seed、memory cache、source port、singleflight、merge/filter/resolve、有效模型信息和 snapshot generation；长期拥有 provider 无关的模型候选选择 | provider DTO、secret、调用、Agent 定义解析、Config persistence、UI |
-| `zeta-model-provider` | provider runtime、adapter 选择、模型调用、manager static resolution consumer | catalog policy、跨 provider merge、UI 查询 |
-| `zeta-api` | endpoint/request/event 的 Provider wire codec | transport、retry、catalog authority、用户筛选 |
-| `zeta-http-client` | HTTP execution 与共享 proxy/TLS/target policy | Provider DTO、catalog policy、模型选择 |
-| `zeta-websocket-client` | WebSocket handshake/message execution | Provider event、session state、catalog policy、模型选择 |
-| `zeta-client` | operation retry、SSE/NDJSON framing、telemetry | Provider DTO、catalog policy、模型选择 |
-| `zeta-config` | 用户配置 authority、patch/merge/persistence | provider 请求和进程内 refresh task |
+| `ash-protocol::model::catalog` | identity、`ModelInfo`、capability、availability/freshness/lifecycle/quality value | 请求调度、缓存、provider DTO、refresh state |
+| `ash-model-provider-config` | provider definition、endpoint/default、静态 seed models、配置归一化 | HTTP、凭据读取、动态 discovery、TTL |
+| `ash-models-manager` | scope、静态 seed、memory cache、source port、singleflight、merge/filter/resolve、有效模型信息和 snapshot generation；长期拥有 provider 无关的模型候选选择 | provider DTO、secret、调用、Agent 定义解析、Config persistence、UI |
+| `ash-model-provider` | provider runtime、adapter 选择、模型调用、manager static resolution consumer | catalog policy、跨 provider merge、UI 查询 |
+| `ash-api` | endpoint/request/event 的 Provider wire codec | transport、retry、catalog authority、用户筛选 |
+| `ash-http-client` | HTTP execution 与共享 proxy/TLS/target policy | Provider DTO、catalog policy、模型选择 |
+| `ash-websocket-client` | WebSocket handshake/message execution | Provider event、session state、catalog policy、模型选择 |
+| `ash-client` | operation retry、SSE/NDJSON framing、telemetry | Provider DTO、catalog policy、模型选择 |
+| `ash-config` | 用户配置 authority、patch/merge/persistence | provider 请求和进程内 refresh task |
 | App Server / clients | 组合、RPC、展示与交互；Local App Server 已投影 shared manager | 各自维护模型表或推断 capability |
 
 `ProviderDefinition.models` 当前只作为启动 seed 和内置 metadata 来源，不兼任动态可用性缓存。
@@ -123,7 +123,7 @@ model provider 负责“如何用已选模型执行一次调用”
 - capability/workload/visibility filter；
 - `(ProviderId, ModelId)` 的解析、校验和稳定排序；
 - 启动前的 provider 无关模型选择：请求模型、同 provider 候选、跨 provider 候选、兼容性检查和替换说明；
-- 模型专化 instructions 的资产、revision 与准确模型选择；所有 Agent 共用规则由 `zeta-prompts` 拥有，详见 [指令组合](../zeta-rs/docs/agent-instructions.md)；
+- 模型专化 instructions 的资产、revision 与准确模型选择；所有 Agent 共用规则由 `ash-prompts` 拥有，详见 [指令组合](../ash-rs/docs/agent-instructions.md)；
 - immutable `ModelCatalogSnapshot` 及 generation 变化；
 - cache/refresh/merge 的诊断信息和不含秘密的 telemetry。
 
@@ -150,10 +150,10 @@ authority；实际费用以 provider 账单和调用 usage 为准。
 
 | 机制 | 含义 | 所属层 |
 | --- | --- | --- |
-| Catalog cache | Zeta 缓存模型列表、availability 和 metadata observation | `zeta-models-manager` |
-| Prompt/context cache | 厂商复用 prompt prefix/KV tensor，影响推理延迟、费用和 usage | `zeta-api` provider adapter |
-| Stream liveness | raw byte activity/读超时属于 `zeta-http-client`；SSE/NDJSON frame activity 属于 `zeta-client` | Provider event 语义由 `zeta-api` 解释 |
-| Model residency | 本地模型是否继续驻留 CPU/GPU 内存 | `zeta-model-provider` 本地 runtime；wire 参数仍由 `zeta-api` 编码 |
+| Catalog cache | Ash 缓存模型列表、availability 和 metadata observation | `ash-models-manager` |
+| Prompt/context cache | 厂商复用 prompt prefix/KV tensor，影响推理延迟、费用和 usage | `ash-api` provider adapter |
+| Stream liveness | raw byte activity/读超时属于 `ash-http-client`；SSE/NDJSON frame activity 属于 `ash-client` | Provider event 语义由 `ash-api` 解释 |
+| Model residency | 本地模型是否继续驻留 CPU/GPU 内存 | `ash-model-provider` 本地 runtime；wire 参数仍由 `ash-api` 编码 |
 
 官方行为已经证明这些机制不能抽象成 manager 中的统一 `heartbeat`：
 
@@ -174,15 +174,15 @@ capability metadata 暴露，不能创建、续期或命中厂商推理 cache。
 
 具体依赖边界固定为：
 
-- `zeta-protocol` 只在确实需要跨 crate/进程表达时定义 provider-independent 的 cache intent、
+- `ash-protocol` 只在确实需要跨 crate/进程表达时定义 provider-independent 的 cache intent、
   normalized usage 和 stream event value；
-- `zeta-api` 将 canonical request 转成 `prompt_cache_key`、`cache_control`、`cached_content`
+- `ash-api` 将 canonical request 转成 `prompt_cache_key`、`cache_control`、`cached_content`
   等 provider wire 字段，解析 cache usage，并过滤/解释 provider-specific 心跳帧；
-- `zeta-model-provider` 选择具体 `zeta-api` endpoint/profile，提供 resolved endpoint、固定 header 和
+- `ash-model-provider` 选择具体 `ash-api` endpoint/profile，提供 resolved endpoint、固定 header 和
   retry policy，但不解释某家厂商的 cache breakpoint、TTL 或 SSE event；
-- `zeta-http-client` 执行 HTTP、transport timeout 和 diagnostics；`zeta-client` 执行 operation
+- `ash-http-client` 执行 HTTP、transport timeout 和 diagnostics；`ash-client` 执行 operation
   retry 与 SSE/NDJSON framing，但都不解释 Provider event；
-- `zeta-models-manager` 只维护模型是否支持相关能力的 catalog metadata，不参与一次调用的
+- `ash-models-manager` 只维护模型是否支持相关能力的 catalog metadata，不参与一次调用的
   cache 生命周期或流式连接。
 
 ## 4. 依赖方向与组合
@@ -190,37 +190,37 @@ capability metadata 暴露，不能创建、续期或命中厂商推理 cache。
 目标依赖关系中，箭头表示“依赖”：
 
 ```text
-zeta-models-manager
-  ├──▶ zeta-protocol
-  └──▶ zeta-model-provider-config
+ash-models-manager
+  ├──▶ ash-protocol
+  └──▶ ash-model-provider-config
 
-zeta-model-provider
-  ├──▶ zeta-model-provider-config
-  ├──▶ zeta-models-manager       # implements ModelCatalogSource
-  ├──▶ zeta-api ───▶ zeta-client
-  ├──▶ zeta-client
-  ├──▶ zeta-http-client
-  └──▶ zeta-secrets             # direct-provider credential only
+ash-model-provider
+  ├──▶ ash-model-provider-config
+  ├──▶ ash-models-manager       # implements ModelCatalogSource
+  ├──▶ ash-api ───▶ ash-client
+  ├──▶ ash-client
+  ├──▶ ash-http-client
+  └──▶ ash-secrets             # direct-provider credential only
 
 App Server composition
-  ├──▶ zeta-model-provider
-  └──▶ zeta-models-manager
+  ├──▶ ash-model-provider
+  └──▶ ash-models-manager
 
-zeta-chatgpt
-  └──▶ zeta-model-provider       # subscription authenticated-target adapter
+ash-chatgpt
+  └──▶ ash-model-provider       # subscription authenticated-target adapter
 ```
 
 具体规则：
 
-- `zeta-models-manager` 可依赖 `zeta-protocol` 和 `zeta-model-provider-config`；
-- `zeta-models-manager` 不依赖 `zeta-model-provider`、`zeta-api`、`zeta-client`、
-  `zeta-http-client`、`zeta-secrets` 或 App Server；
+- `ash-models-manager` 可依赖 `ash-protocol` 和 `ash-model-provider-config`；
+- `ash-models-manager` 不依赖 `ash-model-provider`、`ash-api`、`ash-client`、
+  `ash-http-client`、`ash-secrets` 或 App Server；
 - manager 定义并拥有 `ModelCatalogSource` port，因为它是该 port 的消费者；
-- `zeta-model-provider` 实现该 port，复用已有 adapter、normalized endpoint、operation/HTTP
+- `ash-model-provider` 实现该 port，复用已有 adapter、normalized endpoint、operation/HTTP
   clients 和 credential materialization；
 - App Server composition root 将同一个 provider runtime 分别作为模型调用能力和 catalog source
   注入，不能再建第二个 HTTP client registry；
-- provider-specific discovery DTO 留在 `zeta-api` 或 `zeta-model-provider` 的私有 adapter
+- provider-specific discovery DTO 留在 `ash-api` 或 `ash-model-provider` 的私有 adapter
   module，不能进入 protocol。
 
 Google 和 Ollama 说明了为什么 discovery endpoint 不能从调用 base URL 盲目拼接：
@@ -358,7 +358,7 @@ App Server、Desktop 和 contract tests 比较。
 
 ### 6.1 官方能力矩阵
 
-`Discovery mode` 描述 Zeta 如何组合实时 availability 与 curated metadata，不代表厂商承诺了
+`Discovery mode` 描述 Ash 如何组合实时 availability 与 curated metadata，不代表厂商承诺了
 客户端刷新频率。
 
 | Provider | Discovery mode | 推荐 discovery | 官方响应可提供的信息 | 初始策略 |
@@ -499,9 +499,9 @@ Turn 创建 `ModelInvocationSnapshot` 时只解析已经选定的 `ModelRef`。�
 
 ## 8. 目录缓存语义
 
-本章只讨论 Zeta 对模型目录 observation 的缓存，不讨论厂商 prompt/context cache、stream
-keep-alive 或本地模型驻留。后三者的 provider-specific 行为分别留在 `zeta-api` codec、
-`zeta-http-client` transport、`zeta-client` framing 和本地 runtime。
+本章只讨论 Ash 对模型目录 observation 的缓存，不讨论厂商 prompt/context cache、stream
+keep-alive 或本地模型驻留。后三者的 provider-specific 行为分别留在 `ash-api` codec、
+`ash-http-client` transport、`ash-client` framing 和本地 runtime。
 
 ### 8.1 两层缓存
 
@@ -532,7 +532,7 @@ pub struct CatalogFreshnessPolicy {
 }
 ```
 
-以下是 Zeta 的建议默认值，不是厂商官方 TTL，也不是跨 provider 的协议保证：
+以下是 Ash 的建议默认值，不是厂商官方 TTL，也不是跨 provider 的协议保证：
 
 | Source | Fresh | 后台刷新可用期 | 临时错误最大 stale |
 | --- | --- | --- | --- |
@@ -541,7 +541,7 @@ pub struct CatalogFreshnessPolicy {
 | StaticOnly | 不过期 | 不适用 | 不适用 |
 | Unsupported discovery negative cache | 24 小时 | 不适用 | 配置变化时立即失效 |
 
-这些值由 manager policy/config 调整，不进入 `zeta-protocol`。测试必须使用注入 clock，禁止真实
+这些值由 manager policy/config 调整，不进入 `ash-protocol`。测试必须使用注入 clock，禁止真实
 sleep。
 
 ### 8.3 HTTP 校验器与退避
@@ -562,18 +562,18 @@ minimum/maximum freshness clamp，不能让异常 gateway 无限延长 availabil
 
 Models manager 第一版没有通用 heartbeat：
 
-- catalog 请求是有边界的普通 HTTP discovery；transport timeout/cancel 由 `zeta-http-client`
-  执行，operation retry 由 `zeta-client` 执行；
-- completions/messages 的 SSE/NDJSON framing 由 `zeta-client` 完成，Provider heartbeat event
-  由 `zeta-api` decoder 消费，不能进入
+- catalog 请求是有边界的普通 HTTP discovery；transport timeout/cancel 由 `ash-http-client`
+  执行，operation retry 由 `ash-client` 执行；
+- completions/messages 的 SSE/NDJSON framing 由 `ash-client` 完成，Provider heartbeat event
+  由 `ash-api` decoder 消费，不能进入
   `DiscoveredCatalog`；
 - Ollama daemon 的存活和模型驻留由本地 provider runtime 管理，manager 只响应
   `source revision changed` 或显式 invalidation；
 - 不允许通过定期 inference 请求充当 provider 健康探测。
 
 只有当某 provider 官方提供模型目录 watch/change feed 时，未来才增加 provider-specific
-invalidation source。长连接的 transport ping/pong 由 `zeta-http-client` 管理，SSE/NDJSON frame
-activity 由 `zeta-client` 管理；manager 只接收
+invalidation source。长连接的 transport ping/pong 由 `ash-http-client` 管理，SSE/NDJSON frame
+activity 由 `ash-client` 管理；manager 只接收
 `CatalogInvalidated { scope, revision }` 这类领域事件。
 
 ## 9. 合并规则
@@ -610,7 +610,7 @@ activity 由 `zeta-client` 管理；manager 只接收
 
 - availability 由当前 scope 下最近一次完整 provider observation 决定；
 - user hidden/disabled 是本地 visibility/policy，不伪装成 provider unavailable；
-- 静态 seed 表示“Zeta 知道该模型”，不表示当前 credential 一定有权限；
+- 静态 seed 表示“Ash 知道该模型”，不表示当前 credential 一定有权限；
 - provider 完整列表缺席可把该 scope 的模型标为 `Unavailable`，但不删除 metadata；
 - partial result 缺席不改变 availability；
 - persisted observation 在 live refresh 后只能补缺，不能覆盖更新的 live 字段。
@@ -712,7 +712,7 @@ Catalog 不应成为错误的授权替代品：
 
 > 状态：Proposed。当前 `ModelsManager::resolve` 只校验一个准确模型；本节规定 Agent、工作流和其他上层以后共用的模型选择契约。
 
-`zeta-models-manager` 应拥有 provider 无关的候选选择，不能把排序复制到 App Server、Core、Agent 定义或各 provider adapter。`zeta-agent-roles` 声明 Agent 的默认值、覆盖权限、替换范围和模型要求；App Server 将这些值连同 Session 或工作流基线转换成通用选择请求，manager 不依赖 `zeta-agent-roles`。
+`ash-models-manager` 应拥有 provider 无关的候选选择，不能把排序复制到 App Server、Core、Agent 定义或各 provider adapter。`ash-agent-roles` 声明 Agent 的默认值、覆盖权限、替换范围和模型要求；App Server 将这些值连同 Session 或工作流基线转换成通用选择请求，manager 不依赖 `ash-agent-roles`。
 
 计划中的通用输入与结果至少表达：
 
@@ -773,7 +773,7 @@ alias 展示，并明确 lifecycle，不自动排在 pinned version 之前。
 
 ### 11.1 协议值
 
-建议在 `zeta-protocol` 演进共享值，而不是在 App Server wire 层复制：
+建议在 `ash-protocol` 演进共享值，而不是在 App Server wire 层复制：
 
 ```text
 ModelCatalogSnapshot
@@ -789,14 +789,14 @@ ModelSelectionRecord
 ModelSubstitution
 ```
 
-`ModelInfo` 建议收敛为 provider-independent 的模型事实与 Zeta 默认 metadata：
+`ModelInfo` 建议收敛为 provider-independent 的模型事实与 Ash 默认 metadata：
 
 - exact `ModelId`、display name、description；
 - `TokenLimits { context, input, output }`，每项使用 Known/Unknown/NotApplicable；
 - input/output modalities；
 - tools、parallel tool calls、reasoning、structured output 等 capability；
 - supported/default reasoning effort；
-- Zeta personality/default 和 auto-compaction recommendation。
+- Ash personality/default 和 auto-compaction recommendation。
 
 Availability、freshness、source quality 和 warnings 属于 `ModelCatalogEntry/Snapshot`，不塞进
 可跨 scope 复用的 `ModelInfo`。
@@ -805,7 +805,7 @@ Availability、freshness、source quality 和 warnings 属于 `ModelCatalogEntry
 只保留序列化模型字段。已知窗口限制用户配置窗口；未给出压缩阈值时采用有效窗口的 90%，显式
 阈值也受此上限限制。调用方在独立副本上获得有效信息，不改写目录事实和来源。
 Context builder 根据有效信息、输出预留和安全余量计算可用输入预算；manager 不执行压缩。
-职责对照和当前静态调用预算边界见 [crate 说明](../zeta-rs/models-manager/README.md#有效模型信息与职责)。
+职责对照和当前静态调用预算边界见 [crate 说明](../ash-rs/models-manager/README.md#有效模型信息与职责)。
 
 ### 11.2 App Server API
 
@@ -900,7 +900,7 @@ catalog_stale_age_seconds{provider}
 遵守 workspace 的小模块和公开 API 规则，建议：
 
 ```text
-zeta-rs/models-manager/
+ash-rs/models-manager/
 ├── Cargo.toml
 ├── README.md
 └── src/
@@ -983,7 +983,7 @@ model/list(stale)
 
 ### 阶段 1：纯目录核心
 
-- ✅ 创建 `zeta-models-manager`；
+- ✅ 创建 `ash-models-manager`；
 - ✅ 定义 source port、scope、snapshot、read/refresh policy；
 - ✅ 从 `ProviderDefinition.models` 读取 seed；
 - ✅ 实现 memory cache、singleflight、merge/filter/resolve；
@@ -1034,7 +1034,7 @@ contract test；未文档化 cache header 不成为正确性依赖。
 
 ## 17. 固定决策
 
-1. `zeta-models-manager` 是 catalog control plane，不是 provider invocation runtime。
+1. `ash-models-manager` 是 catalog control plane，不是 provider invocation runtime。
 2. 唯一模型 identity 是 exact `(ProviderId, ModelId)`。
 3. 可用性按 endpoint + credential/tenant + config revision scope 缓存。
 4. Provider list API 只声明它实际返回的字段；缺失字段保持 `Unknown`。
@@ -1045,11 +1045,11 @@ contract test；未文档化 cache header 不成为正确性依赖。
 9. 静态 seed 不证明当前账号可用，动态列表也不一定提供完整能力 metadata。
 10. Catalog refresh 不修改已开始的 Agent 运行或 model invocation；模型替换只在运行创建前依据显式策略执行，并以警告展示请求模型和实际模型。
 11. Persisted catalog 是可删除 projection，不是 Config、Thread 或 billing authority。
-12. Provider runtime/认证留在 `zeta-model-provider`，wire endpoint/codec 留在 `zeta-api`，
-    raw HTTP/network policy 留在 `zeta-http-client`，retry/framing 留在 `zeta-client`。
+12. Provider runtime/认证留在 `ash-model-provider`，wire endpoint/codec 留在 `ash-api`，
+    raw HTTP/network policy 留在 `ash-http-client`，retry/framing 留在 `ash-client`。
 13. Prompt/context cache、stream heartbeat 和本地模型驻留不属于 catalog manager。
-14. Catalog TTL 是可配置的 Zeta policy；provider cache hint/validator 只有证据充分时才参与计算。
+14. Catalog TTL 是可配置的 Ash policy；provider cache hint/validator 只有证据充分时才参与计算。
 15. Provider discovery 必须逐家验证；`../pi` 或 OpenAI-compatible 行为不能作为其他厂商的协议
     证明。
-16. 不新增独立模型路由 crate；`zeta-models-manager` 拥有 provider 无关的候选筛选与选择，`zeta-agent-roles` 只声明 Agent 策略，`zeta-model-provider` 只调用已经选定的准确模型。
+16. 不新增独立模型路由 crate；`ash-models-manager` 拥有 provider 无关的候选筛选与选择，`ash-agent-roles` 只声明 Agent 策略，`ash-model-provider` 只调用已经选定的准确模型。
 17. 自动替换顺序固定为准确模型、同 scope 兼容模型、同 provider 的其他允许 scope、其他允许 provider；没有兼容候选才失败，任何 scope 或模型替换都不能静默发生。

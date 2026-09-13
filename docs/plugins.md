@@ -1,38 +1,38 @@
 # 插件系统
 
-> 物理位置：`zeta-rs/plugin/`、`zeta-rs/core-plugins/`
-> Rust crate：`zeta_plugin`、`zeta_core_plugins`
-> 当前状态：`zeta-plugin` 已拥有 Plugin identity、manifest、path 与 package observation；
-> `zeta-core-plugins` 已拥有 local/Marketplace package store、durable authority、activation、lease 与远端 registry 接入；
-> Connector 领域类型、目录发现、连接状态持久化和认证流程统一归 `zeta-rs/ext/connectors`。
+> 物理位置：`ash-rs/plugin/`、`ash-rs/core-plugins/`
+> Rust crate：`ash_plugin`、`ash_core_plugins`
+> 当前状态：`ash-plugin` 已拥有 Plugin identity、manifest、path 与 package observation；
+> `ash-core-plugins` 已拥有 local/Marketplace package store、durable authority、activation、lease 与远端 registry 接入；
+> Connector 领域类型、目录发现、连接状态持久化和认证流程统一归 `ash-rs/ext/connectors`。
 > App Server 已能从注入的 activation 自动接线 Connector 与 MCP，通用 OAuth
 > PKCE/device 状态机、App Server control plane、Desktop/TUI 产品入口与 GitHub providers 已实现；
 > PL4 的可执行 Editor Extension 本地安装/授权声明已实现，Host runtime 不由本 crate 拥有
-> crate 实现契约：[`zeta-plugin`](../zeta-rs/plugin/README.md)、[`zeta-core-plugins`](../zeta-rs/core-plugins/README.md)
-> 跨 package family 的 Marketplace source、共享验证与领域投影：[`core-plugins.md`](../zeta-rs/docs/core-plugins.md)
+> crate 实现契约：[`ash-plugin`](../ash-rs/plugin/README.md)、[`ash-core-plugins`](../ash-rs/core-plugins/README.md)
+> 跨 package family 的 Marketplace source、共享验证与领域投影：[`core-plugins.md`](../ash-rs/docs/core-plugins.md)
 > Connector account/lifecycle：[`connectors.md`](connectors.md)
 > MCP runtime：[`mcp.md`](mcp.md)
 > Skill runtime：[`skills.md`](skills.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
 > Editor Extension 双轨系统边界：[`editor-extensions.md`](editor-extensions.md)
-> 可执行 Host runtime 实现：[`zeta-rs/editor-extension-host/README.md`](../zeta-rs/editor-extension-host/README.md)
+> 可执行 Host runtime 实现：[`ash-rs/editor-extension-host/README.md`](../ash-rs/editor-extension-host/README.md)
 
 ## 快速理解
 
-Plugin 是可同时携带多种 capability 的集成 bundle。`zeta-plugin` 定义并校验这个 bundle；
-`zeta-core-plugins` 聚合内置 Zeta catalog 与其他来源，统一拥有安装、更新、启用、授权和 activation。
+Plugin 是可同时携带多种 capability 的集成 bundle。`ash-plugin` 定义并校验这个 bundle；
+`ash-core-plugins` 聚合内置 Ash catalog 与其他来源，统一拥有安装、更新、启用、授权和 activation。
 Marketplace 只是 Plugin 来源，Skill、MCP、Connector 等运行方不解释 Marketplace。
 
 | 用户动作 | 系统发生什么 | 不会自动发生什么 |
 | --- | --- | --- |
-| 安装 Marketplace Plugin bundle | `zeta-core-plugins` 校验不可变 package、签名和摘要后只写入一次 | 不自动启用或授权任一 capability |
+| 安装 Marketplace Plugin bundle | `ash-core-plugins` 校验不可变 package、签名和摘要后只写入一次 | 不自动启用或授权任一 capability |
 | 各领域启用 capability | Skill/MCP/Connector/Editor Extension consumer 分别应用自己的 policy | 不存在 bundle 级隐式全开 |
 | 启用 local Plugin | 允许 contribution 参与解析 | 不连接 Connector、不启动 MCP、不执行脚本 |
 | 批准请求的能力 | 记录精确的进程、网络、目录或凭据授权 | 不批准未来每一次工具调用 |
 | 激活贡献 | 生成带来源和 generation 的不可变快照 | 不把 live manager 注入 Agent |
 | 更新或回滚 | 并存校验后的版本并原子切换 | 不原地修改已安装包 |
 | 卸载 | 撤销后续激活并清理可回收内容 | 不删除其他领域拥有的秘密或历史 |
-| 打开正式打包的 Zeta | 从产品内固定的 root 刷新官方 HTTPS Marketplace | 不信任服务器提供的新 root，不自动安装或启用 Plugin |
+| 打开正式打包的 Ash | 从产品内固定的 root 刷新官方 HTTPS Marketplace | 不信任服务器提供的新 root，不自动安装或启用 Plugin |
 | 浏览 Marketplace | 读取已签名 manifest、能力、权限与包统计；离线时可使用仍有效的目录缓存 | 不预下载所有 Plugin ZIP |
 | 安装远端 Plugin | 重新检查 TUF 与撤销状态，只下载所选 exact ZIP，再校验内容摘要 | 不因已浏览或已下载而自动启用、授权 |
 
@@ -42,11 +42,11 @@ Plugin 的定义与产品生命周期分别由两个 crate 拥有，来源不会
 
 | 来源 | Package lifecycle owner | Capability activation owner |
 | --- | --- | --- |
-| Built-in / remote Marketplace Plugin bundle | `zeta-core-plugins` | Skill/MCP/Connector/Theme/Language/Editor Extension 各领域 |
-| Local Plugin v1 | `zeta-core-plugins` | App Server 交给各领域；enable/grant 后形成 activation snapshot |
+| Built-in / remote Marketplace Plugin bundle | `ash-core-plugins` | Skill/MCP/Connector/Theme/Language/Editor Extension 各领域 |
+| Local Plugin v1 | `ash-core-plugins` | App Server 交给各领域；enable/grant 后形成 activation snapshot |
 
 所有来源都可以提供 Skill、Connector、MCP、可执行 Editor Extension 或静态资源。
-`zeta-core-plugins` 先形成统一 installed Plugin 与 activation，再按 capability 交给各领域。
+`ash-core-plugins` 先形成统一 installed Plugin 与 activation，再按 capability 交给各领域。
 
 Plugin 不是：
 
@@ -61,7 +61,7 @@ Plugin 不是：
 
 ```mermaid
 flowchart TD
-    D["zeta-plugin definitions"] --> P["zeta-core-plugins installed and active set"]
+    D["ash-plugin definitions"] --> P["ash-core-plugins installed and active set"]
     M["Built-in / Marketplace / local sources"] --> P
     P --> S["Skill capability → Skill runtime"]
     P --> C
@@ -72,25 +72,25 @@ flowchart TD
     C -. "references exact MCP" .-> R
     C -->|"connected"| B["Ready MCP binding"]
     R -->|"standalone activation"| T["Tool Registry / Core"]
-    E --> H["zeta-editor-extension-host supervisor"]
-    D --> X["zeta-extensions immutable snapshot"]
+    E --> H["ash-editor-extension-host supervisor"]
+    D --> X["ash-extensions immutable snapshot"]
     B --> R
 ```
 
-`zeta-plugin` 只表达 bundle；来源聚合、package lifecycle 与 activation 属于 `zeta-core-plugins`。
+`ash-plugin` 只表达 bundle；来源聚合、package lifecycle 与 activation 属于 `ash-core-plugins`。
 Skill、Connector、MCP 和 Resource consumer 分别拥有自己的运行时语义；
 它们不是 bundle/compatibility authority 内部的 live 子对象。Plugin、Connector 与 MCP 的 canonical 关系由
 [`connectors.md`](connectors.md) 维护。
 
 静态 Editor Extension 保持另一套内容边界：它读取自己的 `package.json` 和声明式
 language/TextMate/snippet/theme/debugger 资源。Plugin v1 现在可用 `declarativeExtensions[]` 指向包内
-静态 Extension 目录；只有 effective exact Plugin package 会被 App Server 投影到 `zeta-extensions`。
+静态 Extension 目录；只有 effective exact Plugin package 会被 App Server 投影到 `ash-extensions`。
 这共享 install/enable/grant/revocation lifecycle，但不合并两种 manifest，也不把静态内容变成可执行
 runtime。其 canonical 文档是 [`editor-extensions.md`](editor-extensions.md)。
 
-Legacy Plugin v1 提供显式 `editorExtensions[]` bridge。每项指向包内一个可直接启动、自己实现 Zeta Host
+Legacy Plugin v1 提供显式 `editorExtensions[]` bridge。每项指向包内一个可直接启动、自己实现 Ash Host
 RPC v1 的程序；它不是由通用 Node/WASM runtime 加载的脚本。compatibility authority 只验证并授权声明，
-`zeta-editor-extension-host` supervisor 才拥有逐扩展进程隔离、RPC、crash recovery 和 provider
+`ash-editor-extension-host` supervisor 才拥有逐扩展进程隔离、RPC、crash recovery 和 provider
 lifecycle。静态 `package.json` catalog 不会被隐式转换成该 executable declaration。
 
 `declarativeExtensions[]` 是另一条显式 bridge：每项只有 manifest-local ID 和 package-relative
@@ -99,7 +99,7 @@ enable + grant 后才进入静态 catalog，disable、grant revoke、package rev
 下一次 catalog refresh 移除旧 exact package。Workbench 监听 Plugin activation generation 并自动刷新。
 生产第三方执行还必须由产品注入能够实施 sandbox、memory/CPU/process hard limits 和 process-tree
 termination 的 platform launcher；没有该 launcher 时 Host capability 必须为 false，不能用
-`TrustedDevelopmentLauncher` 降级。该 v1 是 Zeta executable RPC，不是 VS Code/Node Extension
+`TrustedDevelopmentLauncher` 降级。该 v1 是 Ash executable RPC，不是 VS Code/Node Extension
 Host。
 
 安装、启用、授权和调用是四个不同动作：
@@ -113,7 +113,7 @@ Host。
 
 ## 2. 当前仓库审计
 
-当前 `zeta-plugin` 实现 strict v1 manifest、Plugin identity/SemVer、portable package-relative path、本地 package 安全校验和确定性 digest。`zeta-core-plugins` 实现 discovery、稳定 staging snapshot、内容寻址 object、durable authority、原子 activation generation 与 Marketplace package lifecycle。
+当前 `ash-plugin` 实现 strict v1 manifest、Plugin identity/SemVer、portable package-relative path、本地 package 安全校验和确定性 digest。`ash-core-plugins` 实现 discovery、稳定 staging snapshot、内容寻址 object、durable authority、原子 activation generation 与 Marketplace package lifecycle。
 
 User/Directory TOML 与 App Server 已能表达 exact legacy Plugin request 和 desired enablement。
 Package store 安全保存既有 local-development immutable object，
@@ -127,13 +127,13 @@ TUI 只有在 Plugin domain 进入 App Server API 后才能增加管理能力。
 
 已有可复用边界：
 
-- `zeta-config` 提供 ordinary config authority、typed patch 和 `CommandId` replay；
-- 各 credential domain 是生命周期 owner，`zeta-secrets` 是 opaque secret persistence owner；
-- `zeta-sandboxing`、`zeta-tool-executor` 和 host capability 是已分离的本地进程执行权限边界；
-  产品层 `zeta-exec` 只运行完整的无界面 Agent Turn；
+- `ash-config` 提供 ordinary config authority、typed patch 和 `CommandId` replay；
+- 各 credential domain 是生命周期 owner，`ash-secrets` 是 opaque secret persistence owner；
+- `ash-sandboxing`、`ash-tool-executor` 和 host capability 是已分离的本地进程执行权限边界；
+  产品层 `ash-exec` 只运行完整的无界面 Agent Turn；
 - App Server 是本地 runtime 的 composition root；
 - Resource store 可承载大块只读内容，但不是 Plugin package authority；
-- `zeta-protocol` 已固定“共享纯语义进入 protocol，I/O 和 policy 留在执行层”的规则。
+- `ash-protocol` 已固定“共享纯语义进入 protocol，I/O 和 policy 留在执行层”的规则。
 
 因此第一版不应从“动态加载代码”开始，而应先完成一个 declarative package：
 
@@ -147,7 +147,7 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
 
 ## 3. 职责与非职责
 
-### 3.1 `zeta-plugin` 拥有
+### 3.1 `ash-plugin` 拥有
 
 - Plugin package layout 和 manifest schema；
 - stable Plugin identity、version、digest 和 origin；
@@ -155,7 +155,7 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
 - executable Editor Extension 的 exact program、Host RPC v1、activation trigger 与 capability ceiling 声明；
 - local package provenance、content validation 与 digest。
 
-### 3.2 `zeta-core-plugins` 拥有
+### 3.2 `ash-core-plugins` 拥有
 
 - built-in、Marketplace 与 local Plugin 来源聚合；
 - package staging、atomic install、side-by-side update 和 remove；
@@ -180,11 +180,11 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
 ## 4. 目标依赖与组合
 
 ```text
-                         zeta-plugin
+                         ash-plugin
                identity / manifest / package observation
                               ▲
                               │
-                     zeta-core-plugins
+                     ash-core-plugins
        sources / store / resolver / authority / activation
                  ▲                         ▲
                  │ package source          │ trust verifier
@@ -197,14 +197,14 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
              SkillContribution  ConnectorContribution  McpServerContribution
                          │          │          │
                          ▼          ▼          ▼
-                    zeta-skills  ext/connectors   zeta-mcp
+                    ash-skills  ext/connectors   ash-mcp
 ```
 
 具体规则：
 
-- `zeta-plugin` 不依赖 store、Marketplace、Skill、Connector 或 MCP runtime；
-- `zeta-core-plugins` 依赖 `zeta-plugin`，不反向依赖；
-- `zeta-core-plugins` 只输出 normalized descriptor 和 immutable root handle；
+- `ash-plugin` 不依赖 store、Marketplace、Skill、Connector 或 MCP runtime；
+- `ash-core-plugins` 依赖 `ash-plugin`，不反向依赖；
+- `ash-core-plugins` 只输出 normalized descriptor 和 immutable root handle；
 - App Server 将 Skill contribution 注册到 Skill source，将 Connector contribution 交给 Connector adapter，
   并将独立或 ready-bound MCP contribution 解析为 `McpServerDefinition`；
 - contribution consumer 必须再次执行自己领域的校验，不能因为 package 已验证就跳过 schema、
@@ -219,7 +219,7 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
 
 ```text
 plugin-root/
-├── .zeta-plugin/
+├── .ash-plugin/
 │   └── plugin.json
 ├── skills/
 │   └── code-review/
@@ -235,7 +235,7 @@ plugin-root/
 └── LICENSE
 ```
 
-目录可以省略，但 `.zeta-plugin/plugin.json` 必须存在。manifest 中只允许相对 package root 的
+目录可以省略，但 `.ash-plugin/plugin.json` 必须存在。manifest 中只允许相对 package root 的
 slash-separated path；绝对路径、`..`、空 segment、NUL、平台 device path 和 escape symlink
 全部拒绝。
 
@@ -252,7 +252,7 @@ slash-separated path；绝对路径、`..`、空 segment、NUL、平台 device p
   "description": "Review workflows and an optional MCP server.",
   "license": "Apache-2.0",
   "compatibility": {
-    "zeta": ">=0.1.0"
+    "ash": ">=0.1.0"
   },
   "contributions": {
     "skills": [
@@ -318,8 +318,8 @@ artifact fail closed。
 
 ### 5.3 身份
 
-通用插件标识采用 `name@marketplace`，规则见 [Core Plugins](../zeta-rs/docs/core-plugins.md#插件标识与-provider)。
-本节的 `PluginPackageId` 专指现有 `.zeta-plugin` manifest 中的 `publisher/name`，两段使用 lowercase ASCII、数字和单连字符，并限制总长度。
+通用插件标识采用 `name@marketplace`，规则见 [Core Plugins](../ash-rs/docs/core-plugins.md#插件标识与-provider)。
+本节的 `PluginPackageId` 专指现有 `.ash-plugin` manifest 中的 `publisher/name`，两段使用 lowercase ASCII、数字和单连字符，并限制总长度。
 display name 可本地化且可变化，不能充当 identity。
 
 ```rust
@@ -363,14 +363,14 @@ model 完成后再启用。
 - source type 与 origin；
 - install timestamp；
 - signature verification result 与 signer identity（若有）；
-- Zeta version/manifest schema compatibility；
+- Ash version/manifest schema compatibility；
 - requested permissions 和 granted permission revision；
 - package quarantine/blocked reason；
 - previous active version，供原子 rollback。
 
 信任规则：
 
-- BuiltIn 由 Zeta release trust 继承，但仍经过 manifest/content validation；
+- BuiltIn 由 Ash release trust 继承，但仍经过 manifest/content validation；
 - marketplace/registry package 必须 digest-pinned；生产 channel 还应验证受信 publisher 签名；
 - LocalDevelopment 可以 unsigned，但 UI、status 和 audit 必须显著标记；
 - signature 只证明来源/完整性，不证明 Skill 指令安全、MCP tool 无副作用或没有漏洞；
@@ -448,7 +448,7 @@ RuntimeHealth
 例子：
 
 - Installed + Disabled + Inactive：包存在但不参与解析；
-- Installed + Enabled + Blocked：缺 grant 或 Zeta version 不兼容；
+- Installed + Enabled + Blocked：缺 grant 或 Ash version 不兼容；
 - Installed + Enabled + Active + Degraded：Skill 可用，但某个 MCP server 当前认证失败；
 - Quarantined：任何 contribution 都不能激活。
 
@@ -641,7 +641,7 @@ Connector-bound MCP composition、通用 OAuth PKCE 状态机、Desktop browser 
 | Connector | account/tenant + credential binding；connect/revoke | 用户的某个 GitHub organization |
 | MCP server | server definition + connection generation | GitHub MCP session |
 | Skill | source + name + content digest；select/activate | PR review workflow |
-| Built-in tool | Zeta release 中的 compiled capability | 本地受控 command executor |
+| Built-in tool | Ash release 中的 compiled capability | 本地受控 command executor |
 
 卸载 legacy Plugin 只解除其 contribution 和 credential-slot binding；卸载 Marketplace bundle 则由
 Manager 撤销 installation，并等待 capability lease 排空。两者都不能擅自删除 auth domain 中可能被
@@ -662,15 +662,15 @@ Manager 撤销 installation，并等待 capability lease 排空。两者都不�
 
 已实现 Plugin mutation 使用 `CommandId + expectedRevision + exact package payload`。这些 mutation 不读取
 Marketplace catalog，也不接受 Renderer 提交宿主文件路径。远端信任、TUF、revocation、下载、artifact
-和安装状态由 [`core-plugins.md`](../zeta-rs/docs/core-plugins.md) 定义的 PluginsManager 链路统一拥有。
+和安装状态由 [`core-plugins.md`](../ash-rs/docs/core-plugins.md) 定义的 PluginsManager 链路统一拥有。
 
 正式 package 把只读配置和公开信任根放在
-`zeta-resources/product-services/{product-services.json,marketplace-root.json}`。Desktop/server、
-`zeta code`/TUI 与 app 通过共享 App Server client + `zeta-install-context` 边界发现该资源，默认注册 `https://chogng.github.io/marketplace/` 的 `zeta`
-Marketplace；`ZETA_PRODUCT_SERVICES_PATH` 与 App Server 的 `--product-services PATH` 仍是产品宿主的
+`ash-resources/product-services/{product-services.json,marketplace-root.json}`。Desktop/server、
+`ash code`/TUI 与 app 通过共享 App Server client + `ash-install-context` 边界发现该资源，默认注册 `https://chogng.github.io/marketplace/` 的 `ash`
+Marketplace；`ASH_PRODUCT_SERVICES_PATH` 与 App Server 的 `--product-services PATH` 仍是产品宿主的
 显式覆盖入口。远端 metadata、Plugin、用户配置和 Directory 都不能更换这份 root。发行源仓库仍为
 private，Pages 只暴露经过 Marketplace 自身独立 validator 和 TUF verifier 复核的 `metadata/` 与
-`targets/` 静态产物。Marketplace 不依赖 Zeta 源码或发布状态；Zeta 只是通过 pinned root 和 consumer
+`targets/` 静态产物。Marketplace 不依赖 Ash 源码或发布状态；Ash 只是通过 pinned root 和 consumer
 adapter 选择性消费它。
 默认产品文件只启用官方源；第三方源只能由 host 在同一只读文件中追加，不能从 Plugin、自身远端 metadata
 或普通用户设置提升为发行信任。
@@ -690,7 +690,7 @@ CLI/TUI/Desktop 不直接扫描 Plugin 目录，不解析 manifest，也不自�
 ## 15. 安全
 
 Legacy local package ingestion 必须防御以下问题；remote Marketplace ingestion 的 TUF/archive 契约由
-[`core-plugins.md`](../zeta-rs/docs/core-plugins.md) 单独拥有：
+[`core-plugins.md`](../ash-rs/docs/core-plugins.md) 单独拥有：
 
 - archive path traversal、absolute path 和 drive/device path；
 - symlink/hardlink escape；
@@ -741,7 +741,7 @@ CommandConflict
 Plugin 定义与产品生命周期保持两个 crate：
 
 ```text
-zeta-rs/plugin/src/
+ash-rs/plugin/src/
 ├── lib.rs
 ├── identity.rs
 ├── path.rs
@@ -755,7 +755,7 @@ zeta-rs/plugin/src/
     ├── local.rs
     └── digest.rs
 
-zeta-rs/core-plugins/src/
+ash-rs/core-plugins/src/
 ├── lib.rs
 ├── plugin_activation.rs
 ├── plugin_authority.rs
@@ -801,16 +801,16 @@ zeta-rs/core-plugins/src/
 
 - ✅ package-rooted strict MCP definition 与 standalone/Connector projection；
 - ✅ manifest process/network/credential ceiling 校验；
-- ✅ 与 `zeta-mcp` 的 prepare/publish 和 safe-point old-generation drain；
+- ✅ 与 `ash-mcp` 的 prepare/publish 和 safe-point old-generation drain；
 - ✅ Plugin disable/update authority 触发 live activation、safe-point replacement 与 dispatch drain。
 
 完成条件：安装不启动进程，enable 无 grant 不启动，update 不劫持 in-flight tool binding。
 
 ### 阶段 PL3：远端分发迁移（已完成）
 
-- ✅ `zeta-core-plugins::registry` 隔离远端 catalog/TUF/download；
-- ✅ `zeta-core-plugins` 统一拥有 local/Marketplace artifact、install/update/uninstall、authority 与 lease；
-- ✅ `zeta-plugin` 只拥有共享 Plugin 定义与 package observation；
+- ✅ `ash-core-plugins::registry` 隔离远端 catalog/TUF/download；
+- ✅ `ash-core-plugins` 统一拥有 local/Marketplace artifact、install/update/uninstall、authority 与 lease；
+- ✅ `ash-plugin` 只拥有共享 Plugin 定义与 package observation；
 - ✅ Plugin bundle 经统一 installed/activation state 后按 capability 交给领域 consumer；
 - 尚未完成：统一 UI 中跨 capability 的 permission/contribution diff。
 
@@ -822,7 +822,7 @@ zeta-rs/core-plugins/src/
 
 - ✅ Plugin manifest/immutable package 对可执行 Editor Extension program 的 strict declaration；
 - ✅ exact process permission、Host RPC API v1、activation/capability ceiling 与 regular-file 校验；
-- 委托 `zeta-editor-extension-host`：进程隔离、RPC、crash supervisor、provider lifecycle；
+- 委托 `ash-editor-extension-host`：进程隔离、RPC、crash supervisor、provider lifecycle；
 - ❌ generic Node/WASM loader、VS Code Extension API compatibility 与 `workspaceContains` scanner。
 
 其余能力只有在具体需求有独立 threat model 和 stable port 后，才分别评审：

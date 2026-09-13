@@ -1,14 +1,14 @@
 use std::path::PathBuf;
 
-use zeta_app_server_protocol::protocol::language::LanguageCodeActionDiagnosticDto;
-use zeta_app_server_protocol::protocol::language::LanguageCompletionInsertTextFormatDto;
-use zeta_app_server_protocol::protocol::language::LanguageCompletionItemDto;
-use zeta_app_server_protocol::protocol::language::LanguageCompletionItemKindDto;
-use zeta_app_server_protocol::protocol::language::LanguageCompletionsResult;
-use zeta_app_server_protocol::protocol::language::LanguageDiagnosticSeverityDto;
-use zeta_app_server_protocol::protocol::language::LanguagePositionDto;
-use zeta_app_server_protocol::protocol::language::LanguageRangeDto;
-use zeta_lsp_manager::LanguageDocumentPosition;
+use ash_app_server_protocol::protocol::language::LanguageCodeActionDiagnosticDto;
+use ash_app_server_protocol::protocol::language::LanguageCompletionInsertTextFormatDto;
+use ash_app_server_protocol::protocol::language::LanguageCompletionItemDto;
+use ash_app_server_protocol::protocol::language::LanguageCompletionItemKindDto;
+use ash_app_server_protocol::protocol::language::LanguageCompletionsResult;
+use ash_app_server_protocol::protocol::language::LanguageDiagnosticSeverityDto;
+use ash_app_server_protocol::protocol::language::LanguagePositionDto;
+use ash_app_server_protocol::protocol::language::LanguageRangeDto;
+use ash_lsp_manager::LanguageDocumentPosition;
 
 use super::project_completions;
 use super::project_diagnostics;

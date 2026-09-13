@@ -10,9 +10,9 @@
     "darwin": {
       "tool": "codesign",
       "signatureMode": "embedded",
-      "identityEnvironment": "ZETA_MACOS_SIGNING_IDENTITY",
+      "identityEnvironment": "ASH_MACOS_SIGNING_IDENTITY",
       "verification": ["codesign", "--verify", "--strict", "--verbose=2"],
-      "notarizationProfileEnvironment": "ZETA_MACOS_NOTARY_PROFILE"
+      "notarizationProfileEnvironment": "ASH_MACOS_NOTARY_PROFILE"
     },
     "linux": {
       "tool": "cosign",
@@ -24,8 +24,8 @@
     "windows": {
       "tool": "signtool",
       "signatureMode": "embedded",
-      "identityEnvironment": "ZETA_WINDOWS_SIGNING_THUMBPRINT",
-      "timestampUrlEnvironment": "ZETA_WINDOWS_TIMESTAMP_URL",
+      "identityEnvironment": "ASH_WINDOWS_SIGNING_THUMBPRINT",
+      "timestampUrlEnvironment": "ASH_WINDOWS_TIMESTAMP_URL",
       "verification": ["signtool", "verify", "/pa", "/all", "/v"]
     }
   }

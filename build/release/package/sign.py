@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply and verify system signatures for a canonical Zeta package."""
+"""Apply and verify system signatures for a canonical Ash package."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from build.lib.zeta_build.targets import TARGETS, target_spec  # noqa: E402
+from build.lib.ash_build.targets import TARGETS, target_spec  # noqa: E402
 from build.release.system_signing import run_command  # noqa: E402
 from build.release.system_signing import sha256  # noqa: E402
 from build.release.system_signing import sign_and_verify  # noqa: E402
@@ -31,22 +31,22 @@ def sign_package(package: Path, target: str, runner=None, *, verify_only=False) 
         raise RuntimeError("Linux packages do not use embedded system signatures")
     if not verify_only:
         validate_package_directory(package, spec)
-    metadata = json.loads((package / "zeta-package.json").read_text(encoding="utf-8"))
+    metadata = json.loads((package / "ash-package.json").read_text(encoding="utf-8"))
     if metadata.get("target") != target or not isinstance(metadata.get("files"), dict):
-        raise RuntimeError("Zeta package metadata does not match the signing target")
+        raise RuntimeError("Ash package metadata does not match the signing target")
     signed = {}
     for name, path in sorted(system_signing_artifacts(package, spec).items()):
         relative = path.relative_to(package).as_posix()
         unsigned_digest = metadata["files"].get(relative)
         if not isinstance(unsigned_digest, str) or len(unsigned_digest) != 64:
-            raise RuntimeError(f"Zeta package has no unsigned digest for {relative}")
+            raise RuntimeError(f"Ash package has no unsigned digest for {relative}")
         if verify_only:
             run_command(verify_command(path, spec.operating_system.value), runner)
             signed_digest = sha256(path)
         else:
             result = sign_and_verify(path, spec.operating_system.value, runner)
             if result.unsigned_sha256 != unsigned_digest:
-                raise RuntimeError(f"Zeta package changed before signing {relative}")
+                raise RuntimeError(f"Ash package changed before signing {relative}")
             signed_digest = result.signed_sha256
         signed[name] = {
             "unsignedSha256": unsigned_digest,

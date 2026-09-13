@@ -1,0 +1,25 @@
+[package]
+name = "ash-uds"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "ash_uds"
+path = "src/lib.rs"
+
+[target.'cfg(windows)'.dependencies]
+uds_windows = { workspace = true }
+windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_System_SystemServices", "Win32_Networking_WinSock", "Win32_System_IO"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+# This socket boundary owns the audited OS calls for endpoint ACLs and peer credentials.
+[lints.rust]
+unsafe_code = "deny"

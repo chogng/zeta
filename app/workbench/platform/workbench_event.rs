@@ -4,12 +4,12 @@ use crate::remote_connection_process::RemoteWindowLaunchEvent;
 use crate::remote_tunnel_process::RemoteTunnelEvent;
 use crate::session_host::SessionRuntimeEvent;
 use crate::terminal_session::{TerminalSessionEventEnvelope, TerminalSessionReady};
-use zeta_editor_host::FileEditorLanguageEvent;
-use zeta_terminal_runtime::TerminalRuntimeEvent;
+use ash_editor_host::FileEditorLanguageEvent;
+use ash_terminal_runtime::TerminalRuntimeEvent;
 
 pub(crate) enum WorkbenchEvent {
     InputHistoryReady,
-    InputClassified(zeta_session::ComposerClassificationResult),
+    InputClassified(ash_session::ComposerClassificationResult),
     Memory(crate::memory::MemoryCompletion),
     Memories(crate::memories::Completion),
     Session(SessionRuntimeEvent),

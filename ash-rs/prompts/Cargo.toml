@@ -1,0 +1,18 @@
+[package]
+name = "ash-prompts"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+readme = "README.md"
+
+[lib]
+doctest = false
+name = "ash_prompts"
+path = "src/lib.rs"
+
+[dependencies]
+ash-protocol = { workspace = true }
+
+[lints]
+workspace = true

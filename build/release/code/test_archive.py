@@ -16,16 +16,16 @@ from unittest.mock import patch
 from build.release.code import archive as archive_builder
 
 
-class ZetaCodeArchiveTests(unittest.TestCase):
+class AshCodeArchiveTests(unittest.TestCase):
     def test_archive_is_rootless_deterministic_and_has_a_named_checksum(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             package = root / "package"
-            executable = package / "bin/zeta"
+            executable = package / "bin/ash"
             executable.parent.mkdir(parents=True)
-            executable.write_bytes(b"zeta")
+            executable.write_bytes(b"ash")
             executable.chmod(0o755)
-            (package / "zeta-package.json").write_text(
+            (package / "ash-package.json").write_text(
                 json.dumps(
                     {
                         "layoutVersion": 2,
@@ -35,8 +35,8 @@ class ZetaCodeArchiveTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            first = root / "first/zeta-code-aarch64-unknown-linux-gnu.tar.gz"
-            second = root / "second/zeta-code-aarch64-unknown-linux-gnu.tar.gz"
+            first = root / "first/ash-code-aarch64-unknown-linux-gnu.tar.gz"
+            second = root / "second/ash-code-aarch64-unknown-linux-gnu.tar.gz"
 
             with patch.object(archive_builder, "validate_package_directory"):
                 checksum = archive_builder.create_archive(package, first)
@@ -52,11 +52,11 @@ class ZetaCodeArchiveTests(unittest.TestCase):
             with tarfile.open(first, "r:gz") as archive:
                 self.assertEqual(
                     archive.getnames(),
-                    ["bin", "bin/zeta", "zeta-package.json"],
+                    ["bin", "bin/ash", "ash-package.json"],
                 )
-                self.assertEqual(archive.extractfile("bin/zeta").read(), b"zeta")
-                self.assertEqual(archive.getmember("bin/zeta").mode, 0o755)
-                self.assertEqual(archive.getmember("zeta-package.json").mode, 0o644)
+                self.assertEqual(archive.extractfile("bin/ash").read(), b"ash")
+                self.assertEqual(archive.getmember("bin/ash").mode, 0o755)
+                self.assertEqual(archive.getmember("ash-package.json").mode, 0o644)
                 for member in archive.getmembers():
                     self.assertEqual((member.uid, member.gid, member.mtime), (0, 0, 0))
                     self.assertEqual((member.uname, member.gname), ("", ""))
@@ -65,11 +65,11 @@ class ZetaCodeArchiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             package = root / "package"
-            executable = package / "bin/zeta"
+            executable = package / "bin/ash"
             executable.parent.mkdir(parents=True)
-            executable.write_bytes(b"zeta")
+            executable.write_bytes(b"ash")
             executable.chmod(0o755)
-            (package / "zeta-package.json").write_text(
+            (package / "ash-package.json").write_text(
                 json.dumps(
                     {
                         "layoutVersion": 2,
@@ -79,8 +79,8 @@ class ZetaCodeArchiveTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            first = root / "first/zeta-code-aarch64-apple-darwin.zip"
-            second = root / "second/zeta-code-aarch64-apple-darwin.zip"
+            first = root / "first/ash-code-aarch64-apple-darwin.zip"
+            second = root / "second/ash-code-aarch64-apple-darwin.zip"
 
             with (
                 patch.object(archive_builder, "validate_package_directory"),
@@ -92,7 +92,7 @@ class ZetaCodeArchiveTests(unittest.TestCase):
             self.assertEqual(first.read_bytes(), second.read_bytes())
             with zipfile.ZipFile(first) as archive:
                 self.assertEqual(
-                    archive.namelist(), ["bin/", "bin/zeta", "zeta-package.json"]
+                    archive.namelist(), ["bin/", "bin/ash", "ash-package.json"]
                 )
 
     def test_archive_requires_cli_package_identity_and_new_output(self) -> None:
@@ -100,7 +100,7 @@ class ZetaCodeArchiveTests(unittest.TestCase):
             root = Path(temporary)
             package = root / "package"
             package.mkdir()
-            (package / "zeta-package.json").write_text(
+            (package / "ash-package.json").write_text(
                 json.dumps(
                     {
                         "layoutVersion": 2,
@@ -110,7 +110,7 @@ class ZetaCodeArchiveTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            output = root / "zeta-code-aarch64-apple-darwin.zip"
+            output = root / "ash-code-aarch64-apple-darwin.zip"
             with self.assertRaisesRegex(RuntimeError, "identity is invalid"):
                 archive_builder.create_archive(package, output)
 
@@ -119,7 +119,7 @@ class ZetaCodeArchiveTests(unittest.TestCase):
             root = Path(temporary)
             package = root / "package"
             package.mkdir()
-            (package / "zeta-package.json").write_text(
+            (package / "ash-package.json").write_text(
                 json.dumps(
                     {
                         "layoutVersion": 2,
@@ -129,7 +129,7 @@ class ZetaCodeArchiveTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            output = root / "zeta-code-aarch64-apple-darwin.zip"
+            output = root / "ash-code-aarch64-apple-darwin.zip"
             with patch.object(archive_builder, "validate_package_directory"):
                 with self.assertRaisesRegex(RuntimeError, "system signing"):
                     archive_builder.create_archive(package, output)
@@ -139,10 +139,10 @@ class ZetaCodeArchiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             fixture = root / "fixture"
-            executable = fixture / "bin/zeta"
+            executable = fixture / "bin/ash"
             executable.parent.mkdir(parents=True)
             executable.write_text(
-                "#!/bin/sh\nprintf 'zeta 1.2.3\\n'\n", encoding="utf-8"
+                "#!/bin/sh\nprintf 'ash 1.2.3\\n'\n", encoding="utf-8"
             )
             executable.chmod(0o755)
             target = {
@@ -155,13 +155,13 @@ class ZetaCodeArchiveTests(unittest.TestCase):
                 archive = root / "package.zip"
                 with zipfile.ZipFile(archive, "w") as output:
                     output.write(fixture / "bin", arcname="bin/")
-                    output.write(executable, arcname="bin/zeta")
-                release_name = f"zeta-code-{target}.zip"
+                    output.write(executable, arcname="bin/ash")
+                release_name = f"ash-code-{target}.zip"
             else:
                 archive = root / "package.tar.gz"
                 with tarfile.open(archive, "w:gz") as output:
                     output.add(fixture / "bin", arcname="bin")
-                release_name = f"zeta-code-{target}.tar.gz"
+                release_name = f"ash-code-{target}.tar.gz"
             digest = hashlib.sha256(archive.read_bytes()).hexdigest()
             checksum = root / "package.sha256"
             checksum.write_text(f"{digest}  {release_name}\n", encoding="ascii")
@@ -175,8 +175,8 @@ class ZetaCodeArchiveTests(unittest.TestCase):
                 "  shift\n"
                 "done\n"
                 'case "$output" in\n'
-                '  *.sha256) cp "$ZETA_TEST_CHECKSUM" "$output" ;;\n'
-                '  *) cp "$ZETA_TEST_ARCHIVE" "$output" ;;\n'
+                '  *.sha256) cp "$ASH_TEST_CHECKSUM" "$output" ;;\n'
+                '  *) cp "$ASH_TEST_ARCHIVE" "$output" ;;\n'
                 "esac\n",
                 encoding="utf-8",
             )
@@ -186,14 +186,14 @@ class ZetaCodeArchiveTests(unittest.TestCase):
             environment = {
                 **os.environ,
                 "PATH": f"{tools}:/usr/bin:/bin",
-                "ZETA_INSTALL_ROOT": str(install_root),
-                "ZETA_BIN_DIR": str(launcher_root),
-                "ZETA_TEST_ARCHIVE": str(archive),
-                "ZETA_TEST_CHECKSUM": str(checksum),
+                "ASH_INSTALL_ROOT": str(install_root),
+                "ASH_BIN_DIR": str(launcher_root),
+                "ASH_TEST_ARCHIVE": str(archive),
+                "ASH_TEST_CHECKSUM": str(checksum),
             }
 
             result = subprocess.run(
-                ["sh", "scripts/zeta-code/install.sh"],
+                ["sh", "scripts/ash-code/install.sh"],
                 cwd=archive_builder.REPOSITORY_ROOT,
                 env=environment,
                 check=True,
@@ -201,13 +201,13 @@ class ZetaCodeArchiveTests(unittest.TestCase):
                 text=True,
             )
 
-            self.assertIn("Installed Zeta Code 1.2.3", result.stdout)
+            self.assertIn("Installed Ash Code 1.2.3", result.stdout)
             selected = (install_root / "current").readlink()
             self.assertEqual(selected.parts[0], "versions")
-            self.assertTrue((install_root / selected / "bin/zeta").is_file())
+            self.assertTrue((install_root / selected / "bin/ash").is_file())
             self.assertEqual(
-                (launcher_root / "zeta").readlink(),
-                install_root / "current/bin/zeta",
+                (launcher_root / "ash").readlink(),
+                install_root / "current/bin/ash",
             )
 
 

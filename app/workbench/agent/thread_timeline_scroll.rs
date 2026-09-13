@@ -3,8 +3,8 @@
 use zui::input::MouseScrollDelta;
 
 use crate::WorkbenchApplication;
-use zeta_session::TimelineScrollDelta;
-use zeta_session::interaction::THREAD_TIMELINE;
+use ash_session::TimelineScrollDelta;
+use ash_session::interaction::THREAD_TIMELINE;
 
 impl WorkbenchApplication {
     pub(super) fn route_thread_timeline_wheel(&mut self, delta: MouseScrollDelta) -> bool {

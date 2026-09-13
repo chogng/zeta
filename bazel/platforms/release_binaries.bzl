@@ -1,4 +1,4 @@
-"""Rules for exposing one Zeta binary across supported release platforms."""
+"""Rules for exposing one Ash binary across supported release platforms."""
 
 load("@rules_platform//platform_data:defs.bzl", "platform_data")
 

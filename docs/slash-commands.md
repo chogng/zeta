@@ -1,10 +1,10 @@
 # Slash Commands 与 Slash Launcher 架构
 
 > 本文拥有 Slash Commands 的跨产品语义、运行时边界与当前接入状态。Rust 实现细节由
-> [`zeta-slash-commands` README](../zeta-rs/slash-commands/README.md) 拥有；通用斜杠启动面板
+> [`ash-slash-commands` README](../ash-rs/slash-commands/README.md) 拥有；通用斜杠启动面板
 > （Slash Launcher）的实现契约由
-> [`zeta-slash-launcher` README](../zeta-rs/slash-launcher/README.md) 拥有；App Server wire snapshot
-> 由 [`zeta-app-server-api.md`](zeta-app-server-api.md) 拥有。Slash Command 与
+> [`ash-slash-launcher` README](../ash-rs/slash-launcher/README.md) 拥有；App Server wire snapshot
+> 由 [`ash-app-server-api.md`](ash-app-server-api.md) 拥有。Slash Command 与
 > Instructions/Skills/Agents artifact 的关系由
 > [`agent-customizations.md`](agent-customizations.md) 统一定义。
 
@@ -15,7 +15,7 @@ Slash Command 是一种真正可调用的命令；斜杠启动面板只是用户
 | 用户看到或产品要做的事 | 正确抽象 | 谁决定内容 |
 | --- | --- | --- |
 | 输入 `/` 后出现快速选择面板 | Slash Launcher | 产品选择并组合列表 |
-| TUI 展示可执行 `/command` | Slash Command list | `zeta-code` 的命令 adapter |
+| TUI 展示可执行 `/command` | Slash Command list | `ash-code` 的命令 adapter |
 | TUI/Desktop 展示可调用 Skills | `$name` Skill selector | 客户端的 Skill adapter |
 | app 展示文件或 Plugin 上下文 | `@` context selector | 对应上下文来源 |
 | 选中一项后真正执行或注入上下文 | 来源自己的 typed binding | 对应产品/领域 owner |
@@ -24,7 +24,7 @@ App Server 当前在 `initialize.slashCommands` 发布服务端命令；每个�
 
 ## Launcher 分层
 
-`zeta-slash-launcher` 只接受产品构造的 `SlashLauncherList`，并返回稳定的 `(list_id, item_id)` 选择。它不依赖 `zeta-slash-commands`，但产品的 `/` 入口只传 Slash Command list：
+`ash-slash-launcher` 只接受产品构造的 `SlashLauncherList`，并返回稳定的 `(list_id, item_id)` 选择。它不依赖 `ash-slash-commands`，但产品的 `/` 入口只传 Slash Command list：
 
 - TUI、Desktop 和 app 都只传 Slash Command list；
 - `$` Skill selector 和 `@` context selector 使用各自的 catalog、typed binding 与输入状态；
@@ -39,8 +39,8 @@ App Server 当前在 `initialize.slashCommands` 发布服务端命令；每个�
 
 | 现有 Surface | Catalog 来源 | Core/adapter | Renderer owner |
 | --- | --- | --- | --- |
-| TUI | built-ins + initialize snapshot | 直接使用 `zeta-slash-commands` | Ratatui popup |
-| Codex Rust UI | local `/model` + initialize snapshot | 直接使用 `zeta-slash-commands`；该端另拥有 model picker | WGPU composer interaction rows |
+| TUI | built-ins + initialize snapshot | 直接使用 `ash-slash-commands` | Ratatui popup |
+| Codex Rust UI | local `/model` + initialize snapshot | 直接使用 `ash-slash-commands`；该端另拥有 model picker | WGPU composer interaction rows |
 | Desktop Chat | Workbench actions + initialize snapshot | canonical generated `SlashCommandDefinition` + action binding | Stanza completion widget；textarea/legacy editor runtime 可复用同一 catalog |
 
 TUI 与 Desktop 的 Skill adapter 独立消费 `skills/list` metadata，并为 `$name` 候选绑定 exact pinned `SkillRef`；Skill 不再生成 command definition，也不参与 Slash Command 冲突检查。
@@ -67,8 +67,8 @@ Server-advertised Slash Command 必须有真实执行语义，不能仅凭 origi
 当前对话；它不会把 `/compact` 文本发给模型。其他 server prompt command 继续把 unchanged invocation
 作为普通 `StartTurn.input`。Local command 必须存在真实 client execution path，否则不能进入 catalog。
 Desktop 的 `/new`、`/history` 属于
-Workbench command mapping；Codex TUI 的 `/model` 属于 Session model selector；Zeta TUI 的 `/theme` 属于
-device-local presentation preference：无参数时打开由 `theme` 拥有的固定 Zeta Code
+Workbench command mapping；Codex TUI 的 `/model` 属于 Session model selector；Ash TUI 的 `/theme` 属于
+device-local presentation preference：无参数时打开由 `theme` 拥有的固定 Ash Code
 Theme picker，带 ID 时静默直接切换；Theme picker 不启用搜索，通用 `ListSelection` 则以显式
 的上下焦点移动进入 SearchBox。其他 built-ins 属于 TUI coordination。任意 local/server 同名都拒绝
 整份合并结果，不按客户端优先级静默覆盖。Skill 与命令使用不同前缀；同名 Skill 仍因来源歧义不进入无来源限定的 `$name` 候选，但不会覆盖或屏蔽 `/name` 命令。
@@ -117,13 +117,13 @@ Theme picker，带 ID 时静默直接切换；Theme picker 不启用搜索，通
 
 ## 当前限制
 
-Rust surfaces 直接共享 `zeta-slash-commands` 的 headless state。Desktop 直接消费同一个 generated
+Rust surfaces 直接共享 `ash-slash-commands` 的 headless state。Desktop 直接消费同一个 generated
 `SlashCommandDefinition` model，并由 Stanza Editor 的通用 completion/session state 投影交互；TypeScript
 只保留运行时 catalog binding。Rust crate 与 Desktop adapter 共同执行
-`zeta-rs/slash-commands/fixtures/conformance.json`，确保名称校验、大小写、前缀匹配和参数规则一致。
+`ash-rs/slash-commands/fixtures/conformance.json`，确保名称校验、大小写、前缀匹配和参数规则一致。
 
 ## 修改影响
 
-新增 wire 字段先修改 `zeta-app-server-protocol` 并重新生成 TypeScript/schema。修改名称、参数、匹配或
+新增 wire 字段先修改 `ash-app-server-protocol` 并重新生成 TypeScript/schema。修改名称、参数、匹配或
 输入规则必须同时更新 crate tests、跨运行时 fixture、TUI/Rust UI adapter tests 和 Desktop tests。
 纯视觉变化只修改对应 renderer，不得把 host-specific state 反推到 catalog 或 protocol。

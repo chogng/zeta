@@ -1,14 +1,14 @@
 use std::time::Instant;
 
-use zeta_ui_components::{ScrollCommand, ScrollDelta};
+use ash_ui_components::{ScrollCommand, ScrollDelta};
 use zui::input::MouseScrollDelta;
 
 use crate::WorkbenchApplication;
 use crate::terminal_history::scroll_limit;
 use crate::terminal_pointer::TerminalPointerRouting;
-use zeta_files::FILE_LIST_ROW_HEIGHT;
-use zeta_files::FILES_PANE;
-use zeta_scm::MULTI_DIFF_EDITOR;
+use ash_files::FILE_LIST_ROW_HEIGHT;
+use ash_files::FILES_PANE;
+use ash_scm::MULTI_DIFF_EDITOR;
 
 const LINES_PER_WHEEL_STEP: f32 = 3.0;
 const TAB_CONTAINER_PIXELS_PER_LINE: f32 = 18.0;
@@ -28,7 +28,7 @@ impl WorkbenchApplication {
                 if let Some(panel) = presentation.element_bounds(crate::memories::ROOT) {
                     let bounds = crate::memories::list_bounds(panel);
                     if bounds.contains(point) {
-                        let list = zeta_ui_components::ListView::new(
+                        let list = ash_ui_components::ListView::new(
                             bounds,
                             self.memories.state.entries.len(),
                             28.0,
@@ -36,11 +36,11 @@ impl WorkbenchApplication {
                             self.palette.file_list_scroll_view_style(),
                         );
                         self.memories.state.list_scroll.apply(
-                            zeta_ui_components::ScrollCommand::ByPixels(
-                                zeta_ui_components::ScrollDelta::vertical(pixels),
+                            ash_ui_components::ScrollCommand::ByPixels(
+                                ash_ui_components::ScrollDelta::vertical(pixels),
                             ),
                             list.scroll_view().metrics(),
-                            zeta_ui_components::ScrollAxis::Vertical,
+                            ash_ui_components::ScrollAxis::Vertical,
                         );
                     } else if let Some(body) = presentation.element_bounds(crate::memories::BODY)
                         && body.contains(point)
@@ -170,7 +170,7 @@ impl WorkbenchApplication {
             return false;
         };
         let Some(bounds) = self.presentation.as_ref().and_then(|presentation| {
-            presentation.element_bounds(zeta_settings::SETTINGS_KEYBINDINGS_LIST)
+            presentation.element_bounds(ash_settings::SETTINGS_KEYBINDINGS_LIST)
         }) else {
             return false;
         };
@@ -200,12 +200,12 @@ impl WorkbenchApplication {
         if !presentation
             .interaction_frame()
             .ancestry(target)
-            .contains(&zeta_session::interaction::COMPOSER_INTERACTION)
+            .contains(&ash_session::interaction::COMPOSER_INTERACTION)
         {
             return false;
         }
         let Some(interaction_bounds) =
-            presentation.element_bounds(zeta_session::interaction::COMPOSER_INTERACTION)
+            presentation.element_bounds(ash_session::interaction::COMPOSER_INTERACTION)
         else {
             return true;
         };
@@ -214,8 +214,8 @@ impl WorkbenchApplication {
             .composer_interaction_view()
             .map(|view| view.items().len())
             .unwrap_or(0);
-        let viewport = zeta_session::interaction_list_bounds(interaction_bounds);
-        let content = zeta_session::interaction_content_size(viewport, item_count);
+        let viewport = ash_session::interaction_list_bounds(interaction_bounds);
+        let content = ash_session::interaction_content_size(viewport, item_count);
         if self.session_pane.scroll_composer_interaction(
             composer_interaction_scroll_command(delta),
             viewport.size,
@@ -306,7 +306,7 @@ impl WorkbenchApplication {
 fn composer_interaction_scroll_command(delta: MouseScrollDelta) -> ScrollCommand {
     let pixels = match delta {
         MouseScrollDelta::LineDelta(_, vertical) => {
-            vertical * LINES_PER_WHEEL_STEP * zeta_session::INTERACTION_ROW_HEIGHT
+            vertical * LINES_PER_WHEEL_STEP * ash_session::INTERACTION_ROW_HEIGHT
         }
         MouseScrollDelta::PixelDelta(position) => position.y as f32,
     };

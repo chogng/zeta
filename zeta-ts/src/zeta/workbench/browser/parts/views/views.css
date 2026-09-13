@@ -1,9 +1,0 @@
-.zeta-view-pane-container { display: flex; min-width: 0; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow: hidden; }
-.zeta-pane-composite-pane-layout-fill > .zeta-pane-view { min-height: 0; flex: 1 1 auto; }
-.zeta-pane-composite-pane-headers-hidden > .zeta-pane-view > .zeta-pane-view-header { display: none; }
-.zeta-view-pane-placeholder {
-  margin: 0;
-  padding: 8px;
-  color: color-mix(in srgb, currentColor 70%, transparent);
-  font-size: 12px;
-}

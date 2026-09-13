@@ -58,7 +58,7 @@ native = [
     "dep:uds_windows",
     "dep:x11rb",
     "dep:zbus",
-    "dep:zeta-product-update",
+    "dep:ash-product-update",
 ]
 wgpu = [
     "native",
@@ -96,7 +96,7 @@ url = { workspace = true, optional = true }
 ureq = { workspace = true, optional = true }
 wgpu = { workspace = true, optional = true }
 winit = { workspace = true, optional = true }
-zeta-product-update = { workspace = true, optional = true }
+ash-product-update = { workspace = true, optional = true }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 arboard = { workspace = true, optional = true }
@@ -166,7 +166,7 @@ unsafe_code = "allow"
 ed25519-dalek = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "sync"] }
-zeta-product-update = { workspace = true, features = ["signing"] }
+ash-product-update = { workspace = true, features = ["signing"] }
 
 [target.'cfg(unix)'.dev-dependencies]
 ashpd = { workspace = true, features = ["global_shortcuts", "tokio"] }

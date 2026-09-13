@@ -4,12 +4,12 @@ use crate::FileEditorSearchMode;
 use crate::FileEditorSearchState;
 use crate::LanguageCompletionPopover;
 use crate::LanguageHoverPopover;
-use zeta_editor::{
+use ash_editor::{
     CodeEditor, CodeEditorDiagnostic, CodeEditorFoldControl, CodeEditorHeader,
     CodeEditorLineWrapping, CodeEditorNavigation, CodeEditorPosition, CodeEditorStyle,
 };
-use zeta_text_file::TextFileStatus;
-use zeta_ui_components::{
+use ash_text_file::TextFileStatus;
+use ash_ui_components::{
     ButtonBackgrounds, ButtonState, ButtonStyle, InputBoxState, Radio, RadioGroup,
     RadioGroupOrientation, RadioGroupStyle, RadioSelection, SearchBox,
 };
@@ -22,7 +22,7 @@ use crate::interaction::{
     FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_NOTICE, FILE_EDITOR_PANE,
     FILE_EDITOR_REPLACE_INPUT, FILE_EDITOR_SEARCH_BAR, FileEditorAction,
 };
-use zeta_ui_theme::UiTheme;
+use ash_ui_theme::UiTheme;
 use zui::ui::{AccessibilityRole, UiNode};
 
 #[path = "pane_interaction.rs"]
@@ -88,8 +88,8 @@ pub struct FileEditorPane<'a> {
     search_replacement: Option<SearchBox>,
     search_match_count: usize,
     diagnostics: &'a [CodeEditorDiagnostic],
-    language_hover: Option<&'a zeta_lsp_manager::LanguageHover>,
-    language_completions: Option<&'a zeta_lsp_manager::LanguageCompletions>,
+    language_hover: Option<&'a ash_lsp_manager::LanguageHover>,
+    language_completions: Option<&'a ash_lsp_manager::LanguageCompletions>,
     completion_selection: usize,
     pointer_position: Option<zui::ui::Point>,
 }
@@ -149,8 +149,8 @@ impl<'a> FileEditorPane<'a> {
 
     pub const fn with_language_features(
         mut self,
-        hover: Option<&'a zeta_lsp_manager::LanguageHover>,
-        completions: Option<&'a zeta_lsp_manager::LanguageCompletions>,
+        hover: Option<&'a ash_lsp_manager::LanguageHover>,
+        completions: Option<&'a ash_lsp_manager::LanguageCompletions>,
     ) -> Self {
         self.language_hover = hover;
         self.language_completions = completions;

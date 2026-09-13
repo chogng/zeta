@@ -1,15 +1,15 @@
 use serde_json::Map;
 use serde_json::Value;
-use zeta_keybinding::HostPlatform;
-use zeta_keybinding::KeySequence;
-use zeta_keybinding::serialize_key_sequence;
+use ash_keybinding::HostPlatform;
+use ash_keybinding::KeySequence;
+use ash_keybinding::serialize_key_sequence;
 
 use crate::catalog::KeybindingCatalog;
 use crate::runtime::UserBinding;
 use crate::runtime::UserBindingTarget;
 
 /// Shared validation error for malformed user keybinding configuration.
-pub type KeybindingsConfigError = zeta_keybinding::UserBindingsError;
+pub type KeybindingsConfigError = ash_keybinding::UserBindingsError;
 
 /// Compiles a complete product-owned keybinding value without mutating an active engine.
 pub fn compile_user_bindings<C: KeybindingCatalog>(
@@ -18,17 +18,17 @@ pub fn compile_user_bindings<C: KeybindingCatalog>(
 ) -> Result<Vec<UserBinding<C>>, KeybindingsConfigError> {
     let empty = Value::Array(Vec::new());
     let value = value.unwrap_or(&empty);
-    zeta_keybinding::compile_user_bindings(value, platform, C::command_from_id, C::parse_condition)
+    ash_keybinding::compile_user_bindings(value, platform, C::command_from_id, C::parse_condition)
         .map(|rules| {
             rules
                 .into_iter()
                 .map(|rule| UserBinding {
                     keybinding: rule.keybinding,
                     target: match rule.target {
-                        zeta_keybinding::UserBindingTarget::Command(command) => {
+                        ash_keybinding::UserBindingTarget::Command(command) => {
                             UserBindingTarget::Command(command)
                         }
-                        zeta_keybinding::UserBindingTarget::Block => UserBindingTarget::Block,
+                        ash_keybinding::UserBindingTarget::Block => UserBindingTarget::Block,
                     },
                     when: rule.when,
                     when_source: rule.when_source,
@@ -80,17 +80,17 @@ pub fn binding_diagnostics<C: KeybindingCatalog>(
 ) -> Vec<String> {
     let shared_rules = rules
         .iter()
-        .map(|rule| zeta_keybinding::UserBinding {
+        .map(|rule| ash_keybinding::UserBinding {
             keybinding: rule.keybinding.clone(),
             target: match rule.target {
                 UserBindingTarget::Command(command) => {
-                    zeta_keybinding::UserBindingTarget::Command(command)
+                    ash_keybinding::UserBindingTarget::Command(command)
                 }
-                UserBindingTarget::Block => zeta_keybinding::UserBindingTarget::Block,
+                UserBindingTarget::Block => ash_keybinding::UserBindingTarget::Block,
             },
             when: rule.when.clone(),
             when_source: rule.when_source.clone(),
         })
         .collect::<Vec<_>>();
-    zeta_keybinding::user_binding_diagnostics(&shared_rules, platform)
+    ash_keybinding::user_binding_diagnostics(&shared_rules, platform)
 }

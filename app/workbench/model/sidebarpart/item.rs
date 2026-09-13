@@ -4,7 +4,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use zeta_protocol::SessionId;
+use ash_protocol::SessionId;
 
 use crate::TabStatus;
 

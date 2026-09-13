@@ -1,14 +1,14 @@
-# `zeta-editor`
+# `ash-editor`
 
 > 本 README 是代码编辑器与差异编辑器 presentation 的 crate-level canonical contract。
 > 跨 crate 的依赖与产品宿主边界见
-> [`docs/zeta-rs-architecture.md`](../../docs/zeta-rs-architecture.md)；`zeta-diff` 算法契约见
-> [`zeta-diff`](../../zeta-rs/diff/README.md)；异步结构分析与 revision binding 见
+> [`docs/ash-rs-architecture.md`](../../docs/ash-rs-architecture.md)；`ash-diff` 算法契约见
+> [`ash-diff`](../../ash-rs/diff/README.md)；异步结构分析与 revision binding 见
 > [`docs/syntax-analysis.md`](../../docs/syntax-analysis.md)；文件保存基线与冲突状态由
-> [`zeta-text-file`](../../zeta-rs/text-file/README.md) 独立拥有。共享 Rust document core 与跨运行时迁移边界见
+> [`ash-text-file`](../../ash-rs/text-file/README.md) 独立拥有。共享 Rust document core 与跨运行时迁移边界见
 > [`docs/editor-core.md`](../../docs/editor-core.md)。
 
-`zeta-editor` 拥有 Native UI 使用的多行代码编辑模型、caret/selection、键盘命令、有界
+`ash-editor` 拥有 Native UI 使用的多行代码编辑模型、caret/selection、键盘命令、有界
 undo/redo、IME composition、语法 token、结构折叠、viewport soft wrap、代码行与视口绘制，以及由两个代码视口组成的并排差异
 展示、适合窄 surface 的单列 unified 差异展示，以及纵向组合多个文件差异的
 `MultiDiffEditor`。它不读取文件、不执行 Git、不计算 diff，也不拥有 changed-file collection、
@@ -21,8 +21,8 @@ undo/redo、IME composition、语法 token、结构折叠、viewport soft wrap�
 | `CodeEditor` | public | 绘制可见代码行、caret/selection、preedit、syntax token、gutter 与 fold control；拥有 fold-control geometry 和 hit test，`within_viewport` 限制嵌入式宿主实际投影的行 |
 | `CodeEditorPresentation` | public | 选择带 document chrome 的普通编辑器或隐藏 gutter 的 compact 嵌入式编辑器 |
 | `CodeEditorLineWrapping` / `CodeEditorNavigation` | public | 选择不换行或 viewport soft wrap，并把 presentation 解析出的显示列宽和可见行容量交给 document 的上下键与翻页导航 |
-| `CodeEditorDocument` | public | 拥有 Native 的语言、行 range、composition、syntax snapshot、fold/visible-row projection；committed text、selection、revision 与 undo/redo 委托 persistent `zeta-editor-core`，同步 text projection 仅供 Native 计算/绘制 |
-| `CodeEditorRevision` | public | `zeta-editor-core::EditorCoreRevision` 的 Native 名称；为宿主提供与文本 mutation 绑定的单调 revision，navigation 不推进，insert/replace/undo/redo 推进 |
+| `CodeEditorDocument` | public | 拥有 Native 的语言、行 range、composition、syntax snapshot、fold/visible-row projection；committed text、selection、revision 与 undo/redo 委托 persistent `ash-editor-core`，同步 text projection 仅供 Native 计算/绘制 |
+| `CodeEditorRevision` | public | `ash-editor-core::EditorCoreRevision` 的 Native 名称；为宿主提供与文本 mutation 绑定的单调 revision，navigation 不推进，insert/replace/undo/redo 推进 |
 | `CodeEditorFoldingRange` / `CodeEditorFoldState` | public | 表达零基 source-row 结构范围及每个 document 实例独立的展开状态；start row 保留可见 |
 | `CodeEditorFoldControl` | public | 发布当前帧可见 gutter control 的 editor-owned range、state 与命中 bounds |
 | `CodeEditorCommand` | public | 表达插入、自动缩进换行、indent/outdent、语言声明的行注释、行复制/移动/删除空行/合并/插入/行尾空白清理/排序/反转/去重、Unicode navigation、选择、删除与 undo/redo |
@@ -44,8 +44,8 @@ undo/redo、IME composition、语法 token、结构折叠、viewport soft wrap�
 | `MultiDiffEditor` | public | 把多个文件标题和 `DiffEditor` section 组合为一个纵向裁剪 surface |
 | `MultiDiffEditorItem` | public | 为一帧借用文件名、`DiffEditorDocument`、两侧标签和该文件的 `DiffEditorState`；产品 host 应通过 `with_identity` 提供稳定 changed-file identity |
 | `MultiDiffEditorItemIdentity` | public | 从 host-owned stable slot 派生 section/header/diff/fold `ElementId`，并提供折叠 section 的 `AnimationProperty::Height` key |
-| `MultiDiffEditorLayout` | public | 用 `zeta-ui-components::VirtualListLayout` 缓存精确 item/state/presentation snapshot 的可变 section heights、平衡分块高度索引与总内容高度，并允许宿主更新一个 section measurement 或 splice changed-file 区间 |
-| `zeta-ui-components::ScrollState` | delegated | 保存 MultiDiffEditor 整体 logical-pixel offset；clamp 与 transition 由通用滚动基座执行 |
+| `MultiDiffEditorLayout` | public | 用 `ash-ui-components::VirtualListLayout` 缓存精确 item/state/presentation snapshot 的可变 section heights、平衡分块高度索引与总内容高度，并允许宿主更新一个 section measurement 或 splice changed-file 区间 |
+| `ash-ui-components::ScrollState` | delegated | 保存 MultiDiffEditor 整体 logical-pixel offset；clamp 与 transition 由通用滚动基座执行 |
 | `MultiDiffEditorStyle` | public | 拥有文件 header、section 间距与嵌套 DiffEditor 样式 |
 | `DiffEditorPalette` / `MultiDiffEditorPalette` | public | 让产品宿主通过命名字段注入 diff marker/background、scrollbar 与文件 header 视觉 |
 | `DiffSideRows` | private | 把 `DiffEditorDocument` 的一侧惰性转换为带 editor-owned syntax token 的 `CodeEditorRow` |
@@ -149,7 +149,7 @@ Unified projection 以 `DiffDocument::hunks` 的间隙作为可折叠区间，�
 ## 执行、失败与宿主义务
 
 `CodeEditor`、`DiffEditor` 和 `MultiDiffEditor` 构造与绘制没有 I/O 或独立 error channel。编辑命令以 Unicode
-grapheme boundary 修改 committed text；CRLF 在删除时作为一个换行边界处理。`zeta-editor-core` 为 Native
+grapheme boundary 修改 committed text；CRLF 在删除时作为一个换行边界处理。`ash-editor-core` 为 Native
 保留最多 100 个完整 snapshot，新编辑会清空 redo；当前不合并连续输入。IME preedit 与 committed text
 分离，只有 Commit 建立一个可撤销 checkpoint，Cancel 不修改文档。`CodeEditor::caret_bounds`
 向平台宿主提供候选框锚点，`text_position_at` 与 `CodeEditorDocument::move_to` /
@@ -175,7 +175,7 @@ layout inspection hierarchy。`MultiDiffFoldControl` 与 `MultiDiffScrollbar` �
 paint 与子组件放在一个宿主根下时，使用 `ComponentContext::with_component` 保持 inspector 与 interaction
 父链一致。
 
-`DiffDocument` 的输入验证、资源限制和取消在进入本 crate 前由 `zeta-diff` 完成。宿主随后用
+`DiffDocument` 的输入验证、资源限制和取消在进入本 crate 前由 `ash-diff` 完成。宿主随后用
 语言构造 retained `DiffEditorDocument`；组件只根据该不可变 editor snapshot 生成 `UiScene`。
 
 产品宿主必须：
@@ -183,7 +183,7 @@ paint 与子组件放在一个宿主根下时，使用 `ComponentContext::with_c
 - 为每个文件保存独立的 document identity 与 editor viewport，并在创建 document 时选择
   `CodeEditorLanguage`；
 - 为 `MultiDiffEditorItem` 提供已排序的 changed-file snapshot，并保留整体
-  `zeta-ui-components::ScrollState`；产品 host 必须为 changed file 分配稳定的
+  `ash-ui-components::ScrollState`；产品 host 必须为 changed file 分配稳定的
   `MultiDiffEditorItemIdentity`，不能用当前列表 index 作为 retained 或 animation key；
 - 保存每文件 `DiffEditorState`，并用 `fold_controls` 发布的 identity 与 bounds 路由未修改区间
   的展开/收起输入；
@@ -193,17 +193,17 @@ paint 与子组件放在一个宿主根下时，使用 `ComponentContext::with_c
 - 用 `caret_bounds` 同步平台 IME candidate area，并由 host 控制 caret blink；
 - 在接入异步 diff 或 LSP 结果时丢弃不再匹配当前 document revision 的结果；CodeEditor 的
   tree-sitter revision 不暴露给宿主。
-- 把 `zeta-theme` 或其他主题 runtime 的 snapshot 映射成公开 palette；本 crate 不读取主题文件，
+- 把 `ash-theme` 或其他主题 runtime 的 snapshot 映射成公开 palette；本 crate 不读取主题文件，
   也不依赖具体产品宿主。
 
-`app` 是当前 GPU presentation host；`zeta-tui` 不依赖本 crate，而是直接消费
-`zeta-diff` 并拥有自己的 Ratatui projection。
+`app` 是当前 GPU presentation host；`ash-tui` 不依赖本 crate，而是直接消费
+`ash-diff` 并拥有自己的 Ratatui projection。
 
 ## 测试、修改影响与限制
 
 ```bash
-cargo test --manifest-path Cargo.toml -p zeta-editor
-cargo clippy --manifest-path Cargo.toml -p zeta-editor --all-targets -- -D warnings
+cargo test --manifest-path Cargo.toml -p ash-editor
+cargo clippy --manifest-path Cargo.toml -p ash-editor --all-targets -- -D warnings
 ```
 
 测试覆盖 LF/CRLF/CR 行索引、多行 Unicode 编辑、跨行列导航、选择替换、有界撤销/重做、IME

@@ -1,6 +1,6 @@
 //! Diff-specific decorations layered on CodeEditor tokens.
 
-use zeta_diff::DiffRowKind;
+use ash_diff::DiffRowKind;
 use zui::ui::Color;
 
 use super::DiffEditorSide;

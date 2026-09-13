@@ -1,0 +1,80 @@
+.ash-dialog {
+  width: min(440px, calc(100vw - 32px));
+  max-width: none;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--ash-dialog-border);
+  border-radius: 6px;
+  color: var(--ash-foreground);
+  background: var(--ash-dialog-background);
+  box-shadow: 0 12px 36px var(--ash-dialog-shadow);
+  font: inherit;
+}
+
+.ash-dialog::backdrop {
+  background: var(--ash-dialog-backdrop-background);
+}
+
+.ash-dialog-title {
+  margin: 0;
+  padding: 16px 18px 8px;
+  color: var(--ash-foreground);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ash-dialog-body {
+  padding: 0 18px 16px;
+}
+
+.ash-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ash-dialog-message,
+.ash-dialog-detail {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ash-dialog-message {
+  color: var(--ash-foreground);
+  font-size: 13px;
+}
+
+.ash-dialog-detail {
+  color: var(--ash-description-foreground);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.ash-dialog-actions {
+  display: flex;
+  flex-direction: row-reverse;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.ash-dialog-actions .ash-button {
+  min-width: 80px;
+}
+
+.ash-dialog-actions .ash-dialog-primary-button {
+  color: var(--ash-button-primary-foreground);
+  background: var(--ash-button-primary-background);
+}
+
+.ash-dialog-actions .ash-dialog-primary-button:hover {
+  background: var(--ash-button-primary-hover-background);
+}
+
+.ash-dialog[data-dialog-severity="warning"] {
+  border-top-color: var(--ash-warning-foreground);
+}
+
+.ash-dialog[data-dialog-severity="error"] {
+  border-top-color: var(--ash-error-foreground);
+}

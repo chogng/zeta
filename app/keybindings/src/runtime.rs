@@ -1,14 +1,14 @@
 use std::time::Duration;
 use std::time::Instant;
 
-use zeta_keybinding::BindingPriority;
-use zeta_keybinding::BindingSet;
-use zeta_keybinding::BindingSource;
-use zeta_keybinding::HostPlatform;
-use zeta_keybinding::KeySequence;
-use zeta_keybinding::KeyStroke;
-use zeta_keybinding::KeybindingResolver;
-use zeta_keybinding::ResolveResult;
+use ash_keybinding::BindingPriority;
+use ash_keybinding::BindingSet;
+use ash_keybinding::BindingSource;
+use ash_keybinding::HostPlatform;
+use ash_keybinding::KeySequence;
+use ash_keybinding::KeyStroke;
+use ash_keybinding::KeybindingResolver;
+use ash_keybinding::ResolveResult;
 use zui::input::KeyEvent;
 use zui::input::ModifiersState;
 

@@ -1,4 +1,4 @@
-//! Native code and diff editor presentation shared by Zeta product hosts.
+//! Native code and diff editor presentation shared by Ash product hosts.
 //!
 //! This crate owns code-row projection, viewport geometry, line-number and decoration paint, and
 //! side-by-side and unified diff composition. It owns editor-local syntax analysis, but does not

@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from build.lib.zeta_build.targets import TARGETS
+from build.lib.ash_build.targets import TARGETS
 from build.release.package.cargo import build_binaries
 from build.release.package.cargo import resolve_windows_sandbox_binary
 
@@ -27,7 +27,7 @@ class CargoBuildTests(unittest.TestCase):
         return path
 
     def test_prebuilt_inputs_skip_cargo_and_v8_resolution(self) -> None:
-        inputs = {"zeta-app-server": self.executable("prebuilt")}
+        inputs = {"ash-app-server": self.executable("prebuilt")}
         with (
             patch("build.release.package.cargo.subprocess.run") as run,
             patch("build.release.package.cargo.cargo_environment") as environment,
@@ -44,7 +44,7 @@ class CargoBuildTests(unittest.TestCase):
         reported = self.executable("cargo-reported-output")
         artifact = {
             "reason": "compiler-artifact",
-            "target": {"kind": ["bin"], "name": "zeta-remote"},
+            "target": {"kind": ["bin"], "name": "ash-remote"},
             "executable": str(reported),
         }
         completed = subprocess.CompletedProcess(["cargo"], 0, json.dumps(artifact))
@@ -60,17 +60,17 @@ class CargoBuildTests(unittest.TestCase):
             result = build_binaries(
                 self.root,
                 self.spec,
-                {"zeta-app-server": prebuilt, "zeta-remote": None},
+                {"ash-app-server": prebuilt, "ash-remote": None},
                 cargo="cargo",
                 cargo_profile="release",
             )
-        self.assertEqual({"zeta-app-server": prebuilt, "zeta-remote": reported}, result)
+        self.assertEqual({"ash-app-server": prebuilt, "ash-remote": reported}, result)
         run.assert_called_once()
         command = run.call_args.args[0]
         self.assertEqual(1, command.count("--bin"))
-        self.assertEqual("zeta-remote", command[command.index("--bin") + 1])
+        self.assertEqual("ash-remote", command[command.index("--bin") + 1])
         self.assertEqual(
-            "zeta-remote-connections", command[command.index("--package") + 1]
+            "ash-remote-connections", command[command.index("--package") + 1]
         )
         self.assertEqual(self.spec.target, command[command.index("--target") + 1])
         self.assertEqual({"V8": "locked"}, run.call_args.kwargs["env"])
@@ -78,7 +78,7 @@ class CargoBuildTests(unittest.TestCase):
 
     def test_success_without_reported_executable_rejects_stale_output(self) -> None:
         stale = (
-            self.root / ".build/cargo" / self.spec.target / "release/zeta-app-server"
+            self.root / ".build/cargo" / self.spec.target / "release/ash-app-server"
         )
         stale.parent.mkdir(parents=True)
         stale.write_bytes(b"stale")
@@ -94,7 +94,7 @@ class CargoBuildTests(unittest.TestCase):
             build_binaries(
                 self.root,
                 self.spec,
-                {"zeta-app-server": None},
+                {"ash-app-server": None},
                 cargo="cargo",
                 cargo_profile="release",
             )
@@ -118,7 +118,7 @@ class CargoBuildTests(unittest.TestCase):
             build_binaries(
                 self.root,
                 self.spec,
-                {"zeta-app-server": None},
+                {"ash-app-server": None},
                 cargo="cargo",
                 cargo_profile="release",
             )
@@ -139,7 +139,7 @@ class CargoBuildTests(unittest.TestCase):
         executable = self.executable("sandbox.exe")
         artifact = {
             "reason": "compiler-artifact",
-            "target": {"kind": ["bin"], "name": "zeta-windows-sandbox"},
+            "target": {"kind": ["bin"], "name": "ash-windows-sandbox"},
             "executable": str(executable),
         }
         with (

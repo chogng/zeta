@@ -1,11 +1,11 @@
 use std::ops::Range;
 
-use zeta_ui_components::{
+use ash_ui_components::{
     ScrollAxis, ScrollCommand, ScrollState, ScrollView, ScrollViewport, ScrollbarPresentation,
 };
 use zui::ui::{Point, Rect, Size, UiScene};
 
-use zeta_ui_theme::UiTheme;
+use ash_ui_theme::UiTheme;
 
 /// Product adapter from bottom-relative terminal history to a top-relative ScrollView.
 #[derive(Clone, Copy)]
@@ -79,7 +79,7 @@ impl TerminalOutputScrollView {
         })
     }
 
-    fn metrics(self) -> zeta_ui_components::ScrollMetrics {
+    fn metrics(self) -> ash_ui_components::ScrollMetrics {
         let rendered_height = self.line_count as f32 * self.line_height;
         let content_height = if self.line_count > self.line_capacity {
             let unused_viewport_height =
@@ -88,7 +88,7 @@ impl TerminalOutputScrollView {
         } else {
             rendered_height.min(self.bounds.size.height)
         };
-        zeta_ui_components::ScrollMetrics::new(
+        ash_ui_components::ScrollMetrics::new(
             self.bounds.size,
             Size::new(self.bounds.size.width, content_height),
         )

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://zeta.dev/schemas/design-tokens.schema.json",
-  "title": "Zeta design token manifest",
+  "$id": "https://ash.dev/schemas/design-tokens.schema.json",
+  "title": "Ash design token manifest",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -46,7 +46,7 @@
         },
         "cssVariable": {
           "type": "string",
-          "pattern": "^--zeta-"
+          "pattern": "^--ash-"
         },
         "owner": {
           "type": "string",

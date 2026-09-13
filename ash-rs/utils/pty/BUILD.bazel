@@ -1,0 +1,11 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "pty",
+    crate_name = "ash_utils_pty",
+    # Real terminal scenarios use the host Python, shell, and Windows console commands.
+    test_env_inherit = ["PATH"] + select({
+        "@platforms//os:windows": ["COMSPEC", "PATHEXT", "SystemRoot"],
+        "//conditions:default": [],
+    }),
+)

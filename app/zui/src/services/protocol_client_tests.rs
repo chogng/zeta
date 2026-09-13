@@ -86,12 +86,12 @@ fn absolute_executable() -> PathBuf {
 
 #[test]
 fn desktop_file_names_are_canonical_reverse_dns_identities() {
-    let name = DesktopFileName::new("dev.zeta.App").unwrap();
-    assert_eq!(name.as_str(), "dev.zeta.App.desktop");
-    assert_eq!(name.application_id(), "dev.zeta.App");
-    assert_eq!(DesktopFileName::new("dev.zeta.App.desktop").unwrap(), name);
+    let name = DesktopFileName::new("dev.ash.App").unwrap();
+    assert_eq!(name.as_str(), "dev.ash.App.desktop");
+    assert_eq!(name.application_id(), "dev.ash.App");
+    assert_eq!(DesktopFileName::new("dev.ash.App.desktop").unwrap(), name);
 
-    for invalid in ["app", ".desktop", "dev..app", "dev.zeta_app"] {
+    for invalid in ["app", ".desktop", "dev..app", "dev.ash_app"] {
         assert!(DesktopFileName::new(invalid).is_err(), "accepted {invalid}");
     }
 }
@@ -99,9 +99,9 @@ fn desktop_file_names_are_canonical_reverse_dns_identities() {
 #[test]
 fn explicit_registration_options_reach_the_injected_backend_exactly() {
     let (handle, operations) = recording_handle(true, ProtocolClientRemoval::Removed);
-    let scheme = ProtocolScheme::new("zeta+agent").unwrap();
+    let scheme = ProtocolScheme::new("ash+agent").unwrap();
     let executable = absolute_executable();
-    let desktop_file = DesktopFileName::new("dev.zeta.App").unwrap();
+    let desktop_file = DesktopFileName::new("dev.ash.App").unwrap();
     let arguments = [OsString::from("--profile"), OsString::from("A B")];
     let options = ProtocolClientOptions::new()
         .with_executable(&executable)
@@ -139,11 +139,11 @@ fn explicit_registration_options_reach_the_injected_backend_exactly() {
 #[test]
 fn configured_desktop_identity_is_the_default_for_protocol_requests() {
     let (handle, operations) = recording_handle(false, ProtocolClientRemoval::NotCurrent);
-    let desktop_file = DesktopFileName::new("dev.zeta.Configured").unwrap();
+    let desktop_file = DesktopFileName::new("dev.ash.Configured").unwrap();
     handle.set_desktop_file_name(Some(desktop_file.clone()));
     handle
         .is_default_with(
-            ProtocolScheme::new("zeta").unwrap(),
+            ProtocolScheme::new("ash").unwrap(),
             ProtocolClientOptions::new().with_executable(absolute_executable()),
         )
         .unwrap();
@@ -158,7 +158,7 @@ fn configured_desktop_identity_is_the_default_for_protocol_requests() {
 #[test]
 fn invalid_commands_are_rejected_before_the_backend() {
     let (handle, operations) = recording_handle(false, ProtocolClientRemoval::NotCurrent);
-    let scheme = ProtocolScheme::new("zeta").unwrap();
+    let scheme = ProtocolScheme::new("ash").unwrap();
     let error = handle
         .set_default_with(
             scheme.clone(),
@@ -184,7 +184,7 @@ fn removal_is_explicitly_unsupported_when_a_backend_omits_it() {
     let handle = ProtocolClientHandle::new(RequiredOperationsOnly);
     let error = handle
         .remove_default_with(
-            ProtocolScheme::new("zeta").unwrap(),
+            ProtocolScheme::new("ash").unwrap(),
             ProtocolClientOptions::new().with_executable(absolute_executable()),
         )
         .unwrap_err();

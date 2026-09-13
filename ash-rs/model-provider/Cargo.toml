@@ -1,0 +1,40 @@
+[package]
+name = "ash-model-provider"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "ash_model_provider"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tokio = { workspace = true, features = ["rt"] }
+url = { workspace = true }
+ash-api = { workspace = true }
+ash-async-utils = { workspace = true }
+ash-chatgpt = { workspace = true }
+ash-client = { workspace = true }
+ash-context-engine = { workspace = true }
+ash-http-client = { workspace = true }
+ash-kimi = { workspace = true }
+ash-model-provider-config = { workspace = true }
+ash-models-manager = { workspace = true }
+ash-model-tokenizer = { workspace = true }
+ash-protocol = { workspace = true }
+ash-ollama = { workspace = true }
+ash-secrets = { workspace = true }
+ash-websocket-client = { workspace = true }
+
+[dev-dependencies]
+base64 = { workspace = true }
+tempfile = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

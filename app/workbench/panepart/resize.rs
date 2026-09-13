@@ -1,7 +1,7 @@
 use std::time::Instant;
 
-use zeta_ui_components::Resizable;
-use zeta_ui_components::SashOrientation;
+use ash_ui_components::Resizable;
+use ash_ui_components::SashOrientation;
 use zui::ui::HoverPresence;
 use zui::ui::Point;
 use zui::ui::SplitViewResizeSnapshot;

@@ -1,7 +1,7 @@
 # Workbench Pane Composite 设计规范
 
-> 本文是 Zeta Desktop Browser Workbench 中 pane-like Part 的结构、槽位、命名和状态投影的 canonical 文档。
-> Renderer 控件与 CSS 状态所有权以 [`ui-styling-ownership.md`](ui-styling-ownership.md) 为准；Command、MenuId 与 Context Key 组合以 [`menu-system.md`](menu-system.md) 为准；Workbench 整体拓扑和持久化边界以 [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) 为准。
+> 本文是 Ash Desktop Browser Workbench 中 pane-like Part 的结构、槽位、命名和状态投影的 canonical 文档。
+> Renderer 控件与 CSS 状态所有权以 [`ui-styling-ownership.md`](ui-styling-ownership.md) 为准；Command、MenuId 与 Context Key 组合以 [`menu-system.md`](menu-system.md) 为准；Workbench 整体拓扑和持久化边界以 [`ash-desktop-architecture.md`](ash-desktop-architecture.md) 为准。
 
 ## 快速理解
 
@@ -32,7 +32,7 @@
 
 ```text
 PaneCompositePart
-├─ titleElement (.zeta-pane-composite-title)
+├─ titleElement (.ash-pane-composite-title)
 │  ├─ titleContentElement
 │  │  └─ CompositeBar 或 partTitleProjection.content
 │  └─ titleActionsSlotElement
@@ -118,7 +118,7 @@ Agent Sidebar 的空 `CompositeBar` root 仍是统一标题结构的一部分，
 - ❌ 在展开/收起时把同一个 action DOM 从 Chat title 搬到 Agent Sidebar title。
 - ❌ 在仍需多个 container item 的 Part 中，隐藏整个 `CompositeBar` 来删除其中一个冗余 item。
 - ❌ 保留空 toolbar 的布局占位，再由 Part CSS 猜测是否应隐藏。
-- ❌ 在 Part CSS 中穿透 `.zeta-action-bar`、`.zeta-button` 或 `.zeta-tab` 调整 hover/checked 视觉。
+- ❌ 在 Part CSS 中穿透 `.ash-action-bar`、`.ash-button` 或 `.ash-tab` 调整 hover/checked 视觉。
 - ❌ 让 contribution 直接增删 Grid pane 或读写布局尺寸。
 
 ## 8. 修改流程
@@ -135,11 +135,11 @@ Agent Sidebar 的空 `CompositeBar` root 仍是统一标题结构的一部分，
 
 当前实现的关键入口是：
 
-- `zeta-ts/src/zeta/workbench/browser/parts/paneCompositePart.ts`
-- `zeta-ts/src/zeta/workbench/browser/parts/sidebar/sidebarPart.ts`
-- `zeta-ts/src/zeta/workbench/browser/parts/auxiliarybar/auxiliarybarPart.ts`
-- `zeta-ts/src/zeta/workbench/browser/parts/panel/panelPart.ts`
-- `zeta-ts/src/zeta/workbench/browser/parts/compositebar/compositeBar.ts`
-- `zeta-ts/src/zeta/workbench/browser/workbench.ts`
+- `ash-ts/src/ash/workbench/browser/parts/paneCompositePart.ts`
+- `ash-ts/src/ash/workbench/browser/parts/sidebar/sidebarPart.ts`
+- `ash-ts/src/ash/workbench/browser/parts/auxiliarybar/auxiliarybarPart.ts`
+- `ash-ts/src/ash/workbench/browser/parts/panel/panelPart.ts`
+- `ash-ts/src/ash/workbench/browser/parts/compositebar/compositeBar.ts`
+- `ash-ts/src/ash/workbench/browser/workbench.ts`
 
 相关改动至少运行 Desktop TypeScript 编译，以及 Workbench layout、Chat view、toolbar/action view item 和 UI styling ownership 测试。视觉改动还需要在 Browser Workbench 中验证收起、展开、hover、拖拽与窄宽度 overflow。

@@ -1,8 +1,8 @@
 use anyhow::Result;
-use zeta_terminal::TerminalMousePosition;
+use ash_terminal::TerminalMousePosition;
 use zui::input::{ElementState, ModifiersState, MouseButton, MouseScrollDelta};
 
-pub(crate) use zeta_terminal_runtime::{PointerInput, TerminalPointer};
+pub(crate) use ash_terminal_runtime::{PointerInput, TerminalPointer};
 
 use crate::PaneGroupId as PaneId;
 use crate::WorkbenchApplication;

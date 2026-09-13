@@ -1,8 +1,8 @@
-use zeta_ui_components::ListView;
-use zeta_ui_components::ScrollState;
-use zeta_ui_components::ScrollViewStyle;
-use zeta_ui_components::ScrollbarLayout;
-use zeta_ui_components::ScrollbarPresentation;
+use ash_ui_components::ListView;
+use ash_ui_components::ScrollState;
+use ash_ui_components::ScrollViewStyle;
+use ash_ui_components::ScrollbarLayout;
+use ash_ui_components::ScrollbarPresentation;
 use zui::ui::AccessibilityRole;
 use zui::ui::Component;
 use zui::ui::ComponentContext;
@@ -61,7 +61,7 @@ impl SettingsKeybindingsViewport {
     }
 }
 
-pub type SettingsScrollbarPointerOutcome = zeta_ui_components::ScrollbarInteractionOutcome;
+pub type SettingsScrollbarPointerOutcome = ash_ui_components::ScrollbarInteractionOutcome;
 
 pub(crate) struct KeybindingsSection<'a> {
     bounds: Rect,

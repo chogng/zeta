@@ -1,6 +1,6 @@
 use super::ChatInputEditor;
 use super::ChatInputFocus;
-use zeta_editor::{CodeEditorCommand, CodeEditorLanguage};
+use ash_editor::{CodeEditorCommand, CodeEditorLanguage};
 use zui::ui::{CaretVisibility, Color, Component, Rect, UiScene};
 
 #[test]
@@ -33,7 +33,7 @@ fn page_navigation_uses_the_chat_input_visible_row_cap() {
     );
 
     editor.apply(CodeEditorCommand::MovePageUp(
-        zeta_editor::CodeEditorSelectionMode::Move,
+        ash_editor::CodeEditorSelectionMode::Move,
     ));
     editor.apply(CodeEditorCommand::Insert("x".to_owned()));
 
@@ -47,7 +47,7 @@ fn empty_editor_paints_placeholder_and_only_exposes_a_focused_visible_caret() {
     let mut scene = UiScene::new(Color::WHITE);
     let blurred = editor.view(
         bounds,
-        "Ask Zeta anything…",
+        "Ask Ash anything…",
         ChatInputFocus::Blurred,
         Color::rgb(126, 126, 132),
     );
@@ -58,12 +58,12 @@ fn empty_editor_paints_placeholder_and_only_exposes_a_focused_visible_caret() {
         scene
             .text_blocks()
             .iter()
-            .any(|block| block.text() == "Ask Zeta anything…")
+            .any(|block| block.text() == "Ask Ash anything…")
     );
 
     let focused = editor.view(
         bounds,
-        "Ask Zeta anything…",
+        "Ask Ash anything…",
         ChatInputFocus::Focused(CaretVisibility::Visible),
         Color::rgb(126, 126, 132),
     );
@@ -81,7 +81,7 @@ fn empty_editor_paints_placeholder_and_only_exposes_a_focused_visible_caret() {
     let placeholder = scene
         .text_blocks()
         .iter()
-        .find(|block| block.text() == "Ask Zeta anything…")
+        .find(|block| block.text() == "Ask Ash anything…")
         .unwrap();
     assert_eq!(
         placeholder.origin().x,

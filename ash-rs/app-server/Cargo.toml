@@ -1,0 +1,138 @@
+[package]
+name = "ash-app-server"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "ash-app-server"
+path = "src/main.rs"
+
+[lib]
+doctest = false
+name = "ash_app_server"
+path = "src/lib.rs"
+
+[dependencies]
+clock = { workspace = true }
+git-attribution = { workspace = true }
+image-generation = { workspace = true }
+history-notes = { workspace = true }
+goal = { workspace = true }
+agent = { workspace = true }
+guardian-v2 = { workspace = true }
+ash-utils-home-dir = { workspace = true }
+ash-app-server-daemon = { workspace = true }
+arg0 = { workspace = true }
+ash-package-store = { workspace = true }
+process-hardening = { workspace = true }
+memories = { workspace = true }
+memories-extension = { workspace = true }
+extension-items = { workspace = true }
+queue = { workspace = true }
+ash-otel = { workspace = true }
+build-info = { workspace = true }
+analytics = { workspace = true }
+diagnostics = { workspace = true }
+feedback = { workspace = true }
+features = { workspace = true }
+mxc-sandbox = { workspace = true }
+network-proxy = { workspace = true }
+ash-memory-diagnostics = { workspace = true }
+ash-automation = { workspace = true }
+base64 = { workspace = true }
+dunce = { workspace = true }
+getrandom = { workspace = true }
+ignore = { workspace = true }
+log = { workspace = true }
+pollster = { workspace = true }
+semver = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time", "signal"] }
+zeroize = { workspace = true }
+url = { workspace = true }
+ash-app-server-protocol = { workspace = true }
+ash-app-server-transport = { workspace = true }
+ash-agent-environment = { workspace = true }
+ash-apply-patch = { workspace = true }
+agent-roles = { workspace = true }
+ash-async-utils = { workspace = true }
+ash-attachments = { workspace = true }
+ash-collaboration = { workspace = true }
+ash-codebase = { workspace = true }
+ash-codebase-store = { workspace = true }
+ash-cloud-codebase = { workspace = true }
+ash-chatgpt = { workspace = true }
+ash-config = { workspace = true }
+connectors = { workspace = true }
+ash-core = { workspace = true, features = ["code-mode"] }
+ash-client = { workspace = true }
+ash-diff = { workspace = true }
+ash-debug-adapter = { workspace = true }
+ash-extensions = { workspace = true }
+ash-editor-extension-host = { workspace = true }
+ash-extension-api = { workspace = true }
+ash-mcp-extension = { workspace = true }
+ash-mcp = { workspace = true }
+ash-file-system = { workspace = true }
+ash-file-watcher = { workspace = true }
+ash-fast-regex-search = { workspace = true }
+ash-git = { workspace = true }
+github = { workspace = true }
+ash-http-client = { workspace = true }
+ash-hooks = { workspace = true }
+ash-install-context = { workspace = true }
+ash-tool-executor = { workspace = true }
+ash-instructions = { workspace = true }
+ash-kimi = { workspace = true }
+ash-lsp-server-provider = { workspace = true }
+ash-lsp-manager = { workspace = true }
+ash-login = { workspace = true }
+ash-core-plugins = { workspace = true }
+ash-model-provider = { workspace = true }
+ash-model-provider-config = { workspace = true }
+ash-models-manager = { workspace = true }
+ash-prompts = { workspace = true }
+ash-action-policy = { workspace = true }
+ash-execpolicy = { workspace = true }
+ash-plugin = { workspace = true }
+ash-protocol = { workspace = true }
+ash-projects = { workspace = true }
+ash-rollout = { workspace = true }
+ash-state = { workspace = true }
+ash-rmcp-client = { workspace = true }
+ash-sandboxing = { workspace = true }
+ash-file-access = { workspace = true }
+ash-content-search = { workspace = true }
+ash-secrets = { workspace = true }
+ash-shell-command = { workspace = true }
+ash-slash-commands = { workspace = true }
+ash-skills = { workspace = true }
+ash-skills-extension = { workspace = true }
+ash-syntax = { workspace = true }
+ash-thread-transcript = { workspace = true }
+ash-thread-store = { workspace = true }
+git-turn-changes = { workspace = true }
+ash-tools = { workspace = true }
+ash-web-search-extension = { workspace = true }
+ash-typst = { workspace = true }
+ash-utils-pty = { workspace = true }
+worktree = { workspace = true }
+
+[dev-dependencies]
+ash-app-server-client = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures = { workspace = true }
+ash-context-engine = { workspace = true }
+image = { workspace = true, features = ["png"] }
+tempfile = { workspace = true }
+ash-uds = { workspace = true }
+
+[lints]
+workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sandbox = { workspace = true }

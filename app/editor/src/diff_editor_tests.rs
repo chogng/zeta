@@ -3,7 +3,7 @@ use super::{
     DiffEditorState, DiffEditorStyle,
 };
 use crate::CodeEditorLanguage;
-use zeta_diff::DiffDocument;
+use ash_diff::DiffDocument;
 use zui::ui::{Color, Component, Point, Rect, UiScene};
 
 fn document() -> DiffEditorDocument {

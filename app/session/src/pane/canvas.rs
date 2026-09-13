@@ -1,7 +1,7 @@
 //! Header and timeline canvas owned by one Session Pane.
 
-use zeta_protocol::ThreadStatus;
-use zeta_protocol::TurnStatus;
+use ash_protocol::ThreadStatus;
+use ash_protocol::TurnStatus;
 use zui::ui::AccessibilityRole;
 use zui::ui::Border;
 use zui::ui::Component;
@@ -110,7 +110,7 @@ impl SessionHeaderStyle {
 pub struct SessionHeader<'a> {
     bounds: Rect,
     title: &'a str,
-    thread: Option<&'a zeta_protocol::Thread>,
+    thread: Option<&'a ash_protocol::Thread>,
     metadata: String,
     style: SessionHeaderStyle,
     parent: ElementId,
@@ -122,7 +122,7 @@ impl<'a> SessionHeader<'a> {
         bounds: Rect,
         title: &'a str,
         metadata: String,
-        thread: Option<&'a zeta_protocol::Thread>,
+        thread: Option<&'a ash_protocol::Thread>,
         style: SessionHeaderStyle,
         parent: ElementId,
     ) -> Self {

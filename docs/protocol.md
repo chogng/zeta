@@ -1,6 +1,6 @@
-# Zeta 协议模型
+# Ash 协议模型
 
-> 本文说明共享领域协议的长期边界。概念命名以 [`domain-model.md`](domain-model.md) 为准，App Server 的 JSON-RPC 方法以 [`zeta-app-server-api.md`](zeta-app-server-api.md) 为准。
+> 本文说明共享领域协议的长期边界。概念命名以 [`domain-model.md`](domain-model.md) 为准，App Server 的 JSON-RPC 方法以 [`ash-app-server-api.md`](ash-app-server-api.md) 为准。
 
 ## 1. 唯一事实源
 
@@ -11,12 +11,12 @@ ThreadCommand
     │ Core 接受并执行
     ▼
 ThreadEvent
-    │ zeta-history 包装稳定存储元数据
+    │ ash-history 包装稳定存储元数据
     ▼
 StoredEvent
-    │ zeta-thread-store 校验原子追加
+    │ ash-thread-store 校验原子追加
     ▼
-zeta-state / SQLite
+ash-state / SQLite
 ```
 
 `ThreadEvent` 保存 Thread、Turn、Item、交互、目标和分支事实。Thread 自己拥有 sequence；任何写入都必须针对一个明确的 Thread 检查 `expected_sequence`。
@@ -77,13 +77,13 @@ Session 订阅没有 Session update gap。它返回当前树视图、各 Thread 
 
 | crate | 负责什么 |
 | --- | --- |
-| `zeta-protocol` | 共享领域类型、稳定 ID、serde/schema |
-| `zeta-history` | `ThreadEvent` 的持久记录格式 |
-| `zeta-agent-graph-store` | Agent 身份、Thread 绑定和委托关系读取契约 |
-| `zeta-thread-store` | Thread 流读取、Session 成员查询、原子追加和冲突校验 |
-| `zeta-core` | 命令执行、reducer、恢复与运行状态 |
-| `zeta-state` | SQLite 实现与迁移 |
-| `zeta-app-server-protocol` | JSON-RPC DTO、方法注册和生成 schema |
+| `ash-protocol` | 共享领域类型、稳定 ID、serde/schema |
+| `ash-history` | `ThreadEvent` 的持久记录格式 |
+| `ash-agent-graph-store` | Agent 身份、Thread 绑定和委托关系读取契约 |
+| `ash-thread-store` | Thread 流读取、Session 成员查询、原子追加和冲突校验 |
+| `ash-core` | 命令执行、reducer、恢复与运行状态 |
+| `ash-state` | SQLite 实现与迁移 |
+| `ash-app-server-protocol` | JSON-RPC DTO、方法注册和生成 schema |
 
 ## 6. 消息恢复点与共享历史
 

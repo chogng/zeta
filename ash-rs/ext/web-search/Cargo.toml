@@ -1,0 +1,29 @@
+[package]
+name = "ash-web-search-extension"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "ash_web_search_extension"
+path = "src/lib.rs"
+
+[dependencies]
+extension-items = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+url = { workspace = true }
+ash-async-utils = { workspace = true }
+ash-client = { workspace = true }
+ash-extension-api = { workspace = true }
+ash-http-client = { workspace = true }
+ash-tools = { workspace = true }
+
+[dev-dependencies]
+pollster = { workspace = true }
+ash-protocol = { workspace = true }
+
+[lints]
+workspace = true

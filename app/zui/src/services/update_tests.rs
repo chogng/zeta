@@ -37,17 +37,17 @@ impl UpdateInstaller for NoopInstaller {
 }
 
 fn signed_manifest(signing_key: &SigningKey, version: &str) -> Vec<u8> {
-    zeta_product_update::sign_release(
-        zeta_product_update::ReleaseInput {
-            product: zeta_product_update::UpdateProduct::RustDesktop,
-            policy: zeta_product_update::UpdatePolicy::Latest,
+    ash_product_update::sign_release(
+        ash_product_update::ReleaseInput {
+            product: ash_product_update::UpdateProduct::RustDesktop,
+            policy: ash_product_update::UpdatePolicy::Latest,
             version: semver::Version::parse(version).unwrap(),
             release_identity: format!("v{version}"),
             target: "aarch64-apple-darwin".into(),
-            package: zeta_product_update::ReleasePackageInput {
+            package: ash_product_update::ReleasePackageInput {
                 url: "https://example.com/demo.pkg".into(),
                 file_name: "demo.pkg".into(),
-                format: zeta_product_update::PackageFormat::MacOsPackage,
+                format: ash_product_update::PackageFormat::MacOsPackage,
                 size: 7,
                 sha256: "00".repeat(32),
             },
@@ -65,9 +65,9 @@ fn updater(bytes: Vec<u8>, signing_key: &SigningKey) -> SignedHttpUpdater {
             "aarch64-apple-darwin",
             UpdatePublicKey::from_bytes(signing_key.verifying_key().to_bytes()),
             "/tmp/zui-update-tests",
-            zeta_product_update::UpdateProduct::RustDesktop,
-            zeta_product_update::UpdatePolicy::Latest,
-            zeta_product_update::PackageFormat::MacOsPackage,
+            ash_product_update::UpdateProduct::RustDesktop,
+            ash_product_update::UpdatePolicy::Latest,
+            ash_product_update::PackageFormat::MacOsPackage,
         ),
         StaticTransport(bytes),
         NoopInstaller,

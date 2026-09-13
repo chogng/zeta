@@ -14,7 +14,7 @@ from build.release.package.cargo_paths import resolve_cargo_target_directory
 class CargoPathsTests(unittest.TestCase):
     def test_uses_canonical_build_directory_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary) / "workspace" / "zeta"
+            root = Path(temporary) / "workspace" / "ash"
             self.assertEqual(
                 resolve_cargo_target_directory(root, {}),
                 (root / ".build" / "cargo").resolve(),
@@ -22,7 +22,7 @@ class CargoPathsTests(unittest.TestCase):
 
     def test_resolves_relative_override_from_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary) / "workspace" / "zeta"
+            root = Path(temporary) / "workspace" / "ash"
             self.assertEqual(
                 resolve_cargo_target_directory(
                     root, {"CARGO_TARGET_DIR": "build/cargo"}
@@ -32,8 +32,8 @@ class CargoPathsTests(unittest.TestCase):
 
     def test_canonicalizes_absolute_override(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary) / "workspace" / "zeta"
-            target = Path(temporary) / "cache" / "zeta"
+            root = Path(temporary) / "workspace" / "ash"
+            target = Path(temporary) / "cache" / "ash"
             self.assertEqual(
                 resolve_cargo_target_directory(root, {"CARGO_TARGET_DIR": str(target)}),
                 target.resolve(),

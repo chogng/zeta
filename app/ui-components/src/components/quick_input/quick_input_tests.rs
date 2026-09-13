@@ -4,7 +4,7 @@ use crate::{
     InputBoxStyle, InteractionFrame, Point, Rect, SearchBoxStyle, TextInput, TextInputLayoutEngine,
     TextStyle, UiDispatch, UiFrame,
 };
-use zeta_icons::icons;
+use ash_icons::icons;
 
 const PARENT: ElementId = ElementId::scoped(76, 1);
 const ROOT: ElementId = ElementId::scoped(76, 2);

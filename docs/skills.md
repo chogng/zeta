@@ -1,22 +1,22 @@
 # Skill 指令系统
 
-> 物理位置：`zeta-rs/skills/`
-> Rust crate：`zeta_skills`
+> 物理位置：`ash-rs/skills/`
+> Rust crate：`ash_skills`
 > 当前状态：Phase S0、S1 显式选择、可信 built-in metadata 自动 selector、模型按需读取、通用 package resource、有界文本模型切片与 binary asset Resource materialization 已实现；Renderer preview、script execution adapter 与 S3–S4 仍为 Proposed。TUI 与 Desktop 已把
 > 可直接调用的 Skill 通过独立的 `$name` 选择器调用；`/skills` 只承担目录管理。
-> Crate 实现契约：[`zeta-rs/skills/README.md`](../zeta-rs/skills/README.md)
-> Runtime extension 实现契约：[`zeta-rs/ext/skills/README.md`](../zeta-rs/ext/skills/README.md)
-> 通用扩展生命周期：[`zeta-rs/ext/extension-api/README.md`](../zeta-rs/ext/extension-api/README.md)
+> Crate 实现契约：[`ash-rs/skills/README.md`](../ash-rs/skills/README.md)
+> Runtime extension 实现契约：[`ash-rs/ext/skills/README.md`](../ash-rs/ext/skills/README.md)
+> 通用扩展生命周期：[`ash-rs/ext/extension-api/README.md`](../ash-rs/ext/extension-api/README.md)
 > Core architecture：[`core.md`](core.md)
-> Agent runtime：[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md)
+> Agent runtime：[`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
 > Instructions/Skills/Agents 领域划分与外部导入：[`agent-customizations.md`](agent-customizations.md)
-> Marketplace package 入口：[`core-plugins.md`](../zeta-rs/docs/core-plugins.md)
+> Marketplace package 入口：[`core-plugins.md`](../ash-rs/docs/core-plugins.md)
 > Legacy Plugin 兼容来源：[`plugins.md`](plugins.md)
 > MCP runtime：[`mcp.md`](mcp.md)
 
 > 外部格式核对日期：2026-07-28。Skill package 以
-> [Agent Skills specification](https://agentskills.io/specification) 为兼容基线；Zeta 自己的
+> [Agent Skills specification](https://agentskills.io/specification) 为兼容基线；Ash 自己的
 > source、trust、activation 和执行权限语义由本文定义。
 
 ## 快速理解
@@ -38,8 +38,8 @@ Skill 是按任务逐步加载的工作方法和参考资料，不是工具权�
 
 ## 1. 结论
 
-`zeta-skills` 是 Zeta 的 Skill 文件、catalog、解析和 exact activation 底层 authority；
-`zeta-skills-extension` 负责来源组合、选择策略、watcher 和向 Core 注入上下文。Skill 是一个以
+`ash-skills` 是 Ash 的 Skill 文件、catalog、解析和 exact activation 底层 authority；
+`ash-skills-extension` 负责来源组合、选择策略、watcher 和向 Core 注入上下文。Skill 是一个以
 `SKILL.md` 为入口的指令目录，可以附带 references、scripts 和 assets。它帮助 Agent 判断“这类
 任务应采用什么工作流”，但本身不是可执行权限、tool implementation、MCP server 或 Plugin。
 
@@ -53,7 +53,7 @@ Skill 是按任务逐步加载的工作方法和参考资料，不是工具权�
 
 Skill 内容是带来源的外部 instruction：
 
-- 它低于 Zeta system/developer/product policy；
+- 它低于 Ash system/developer/product policy；
 - 它不能授权 tool、network、filesystem、credential 或 sandbox bypass；
 - 它可以建议使用工具或脚本，但实际执行仍经过标准 tool loop；
 - 它不能通过“忽略上层规则”改变 instruction precedence；
@@ -61,23 +61,23 @@ Skill 内容是带来源的外部 instruction：
 
 ## 2. 当前仓库状态
 
-当前 `zeta-skills` 已实现 S0 format/catalog：built-in/user/Directory controlled root、bounded
+当前 `ash-skills` 已实现 S0 format/catalog：built-in/user/Directory controlled root、bounded
 frontmatter parse、metadata-only scan、完整 `SKILL.md` digest、isolated diagnostic 和 immutable
-catalog generation。内置内容由 `zeta-rs/skills/assets/` 拥有，release staging 将其复制到
-`zeta-resources/skills/`，`zeta-install-context` 提供 directory candidate，host 再构造
+catalog generation。内置内容由 `ash-rs/skills/assets/` 拥有，release staging 将其复制到
+`ash-resources/skills/`，`ash-install-context` 提供 directory candidate，host 再构造
 `SkillSourceRoot::built_in`。当前正式内置内容只有 `skill-creator`；新增 built-in 需要明确的
 产品语义、触发边界和选择评测，不能把 catalog fixture 直接升级为产品能力。实现细节与 limits 由
-[`zeta-rs/skills/README.md`](../zeta-rs/skills/README.md) 维护。
+[`ash-rs/skills/README.md`](../ash-rs/skills/README.md) 维护。
 
-`zeta-skills-extension` 当前拥有 catalog runtime：它组合 release built-in root、user config 中
-明确 enabled 的绝对 source root 和 active Directory 的 `.zeta/skills`，叠加 durable per-Skill
+`ash-skills-extension` 当前拥有 catalog runtime：它组合 release built-in root、user config 中
+明确 enabled 的绝对 source root 和 active Directory 的 `.ash/skills`，叠加 durable per-Skill
 enablement，缓存 immutable projection，并通过通用 contributor 提供 Turn activation 与 context
 fragment。App Server 提供 `skills/list`、`skill/enablement/set`、digest-pinned
 `skill/resource/open` 与 `skills/changed` 协议投影。
-`zeta-file-watcher` 的
+`ash-file-watcher` 的
 invalidation 会触发完整重扫；只有 entry、diagnostic 或 enablement 的 consumer-visible projection
 变化才推进 runtime generation。共享的 `SkillName`、`SkillSourceId` 与 `SkillId` 已下沉到
-`zeta-protocol`，因此 config、catalog、App Server 与客户端不再靠 raw string 隐式绑定。
+`ash-protocol`，因此 config、catalog、App Server 与客户端不再靠 raw string 隐式绑定。
 
 TUI 与 Desktop 消费同一 typed catalog，并把 enabled、compatible、名称无歧义的 Skill 显示为 `$name` 候选。选择 `$commit` 后，客户端保留用户可见的 `$commit …` 文本，同时提交 exact pinned `SkillRef`；目录发现阶段不读取正文。Skill 与 Slash Command 使用不同前缀，因此同名不会冲突。`skills/changed` 会刷新 `$` 候选列表。
 
@@ -90,7 +90,7 @@ TUI `/skills` 提供 All/Enabled/Disabled/Manage/Errors tabs、搜索、左右�
 UserInput::Skill { skill: SkillRef }
 ```
 
-Core 在接受 Turn 前调用 extension registry；`zeta-skills-extension` 先从当前 enabled/compatible
+Core 在接受 Turn 前调用 extension registry；`ash-skills-extension` 先从当前 enabled/compatible
 catalog 解析显式 `SkillRef`，再对未显式选择的 `BuiltInVerified` 候选运行 metadata-only、唯一
 高置信 selector。两条路径都先得到 exact pinned `SkillRef`，再完整读取受控根中的 `SKILL.md`，冻结
 `SkillId + content digest + catalog generation + activation reason` 并持久化到 `TurnAccepted`。
@@ -106,7 +106,7 @@ source 仍能提供 exact bytes。已经开始的 Turn 即使随后被 catalog d
 App Server 先按 durable command receipt 校验输入并返回原 Turn 结果，不重新读取当前 catalog 或
 Skill 文件；因此源文件删除不会破坏已完成命令的幂等重放。
 
-当前 runtime source composition 包含 built-in、user、active Directory 的 `.zeta/skills` source、
+当前 runtime source composition 包含 built-in、user、active Directory 的 `.ash/skills` source、
 Marketplace Manager 安装的 exact Skill capability，以及 effective legacy Plugin manifest 声明的 exact
 Skill directory。Manager installation generation 或 Plugin activation generation 变化都会触发 catalog
 refresh，未声明的同包 sibling directory 不会进入 catalog。Marketplace provenance 作为独立
@@ -116,13 +116,13 @@ Skill source intent 与 script execution adapter 尚未接入；正文读取、�
 
 仓库已有可复用边界：
 
-- `zeta-protocol` 的 UserInput、Resource、ToolName 和 provider-independent model contract；
+- `ash-protocol` 的 UserInput、Resource、ToolName 和 provider-independent model contract；
 - Core `ContextAssembler`、`ModelInvocationSnapshot` 与 durable checkpoint pipeline；
 - App Server 的 typed command、Resource store 和 generated client contract；
 - Marketplace Manager 提供 digest-pinned immutable Skill capability root；
 - legacy Plugin authority 提供 manifest-declared exact Skill contribution root；
-- 目标 `zeta-tool-executor` / `zeta-sandboxing` 负责脚本执行，而不是 Skill loader；产品层
-  `zeta-exec` 是 headless Agent runner。
+- 目标 `ash-tool-executor` / `ash-sandboxing` 负责脚本执行，而不是 Skill loader；产品层
+  `ash-exec` 是 headless Agent runner。
 
 ## 3. 格式基线
 
@@ -148,17 +148,17 @@ description: Reviews code changes for correctness and maintainability. Use for P
 
 兼容字段：
 
-| Field | Zeta 处理 |
+| Field | Ash 处理 |
 | --- | --- |
 | `name` | 严格校验，并要求与 Skill 目录名一致 |
 | `description` | discovery/selection metadata，必须同时说明做什么和何时使用 |
 | `license` | 展示与分发 metadata，不影响 runtime permission |
 | `compatibility` | 环境提示；解析为 warning/gate，但不自动安装依赖 |
-| `metadata` | string map；只允许 namespaced extension 影响 Zeta 展示 |
-| `allowed-tools` | experimental hint；绝不作为 Zeta approval grant |
+| `metadata` | string map；只允许 namespaced extension 影响 Ash 展示 |
+| `allowed-tools` | experimental hint；绝不作为 Ash approval grant |
 | Markdown body | Skill 激活后作为完整 instruction 加载 |
 
-Zeta 不修改第三方 Skill format 来塞入 executable grant、credential 或 MCP launch config。这些属于
+Ash 不修改第三方 Skill format 来塞入 executable grant、credential 或 MCP launch config。这些属于
 Plugin manifest/config。独立 Skill 需要额外能力时只能产生明确 compatibility diagnostic。
 
 ## 4. 职责与非职责
@@ -195,15 +195,15 @@ config / Directory / built-in roots
 Marketplace Manager / legacy Plugin authority
                 │
                 ▼
-          zeta-skills
+          ash-skills
   file / catalog / exact loader
                 │
                 ▼
-     zeta-skills-extension
+     ash-skills-extension
  source composition / watcher / selection / fragment contribution
                 │ implements
                 ▼
-       zeta-extension-api
+       ash-extension-api
  activation + model-safe-point contracts
                 │ invoked by
                 ▼
@@ -217,24 +217,24 @@ App Server 只在组合根安装 extension，并把 Config、RPC DTO 和 `skills
 
 规则：
 
-- `zeta-skills` 不依赖 `zeta-core`、stores、App Server 或 Plugin live manager；
-- `zeta-file-identity` 只提供已打开文件的跨平台 identity/link-count，不拥有 Skill path
+- `ash-skills` 不依赖 `ash-core`、stores、App Server 或 Plugin live manager；
+- `ash-file-identity` 只提供已打开文件的跨平台 identity/link-count，不拥有 Skill path
   policy；具体 Win32/Unix contract 见
-  [`zeta-rs/file-identity/README.md`](../zeta-rs/file-identity/README.md)；
+  [`ash-rs/file-identity/README.md`](../ash-rs/file-identity/README.md)；
 - Skill source 以窄 `SkillSourceRoot`/file resolver port 注入；
 - Marketplace Manager 或 legacy Plugin authority 只提供 immutable exact root，Skill manager 仍重新校验 Skill format；
 - Core ContextAssembler 只接收通用 `PromptFragment`，不依赖 Skill catalog 或 filesystem；
-- `zeta-skills-extension` 在 safe point 按 frozen digest 精确重读已激活正文，但不重新做选择；
-- Skill scripts 通过普通 Tool/exec port 执行，`zeta-skills` 不依赖
-  `zeta-tool-executor`；
+- `ash-skills-extension` 在 safe point 按 frozen digest 精确重读已激活正文，但不重新做选择；
+- Skill scripts 通过普通 Tool/exec port 执行，`ash-skills` 不依赖
+  `ash-tool-executor`；
 - 只有 `SkillId`、`SkillRef`、选择 intent 等至少跨两个组件共享的稳定 value 才进入
-  `zeta-protocol`；catalog cache、filesystem handle、parse error 留在 `zeta-skills`。
+  `ash-protocol`；catalog cache、filesystem handle、parse error 留在 `ash-skills`。
 
 ## 6. 身份、来源与优先级
 
 ### 6.1 稳定身份
 
-Skill format 的 `name` 只在一个 source root 内唯一。Zeta identity 必须包含 source：
+Skill format 的 `name` 只在一个 source root 内唯一。Ash identity 必须包含 source：
 
 ```rust
 pub struct SkillId {
@@ -341,13 +341,13 @@ pub struct SkillCatalogEntry {
 排序必须确定，相同 generation 的序列化结果稳定。只有 consumer-visible metadata、digest、
 availability 或 diagnostic 变化才递增 generation。
 
-当前 `zeta-file-watcher` 已提供共享、多订阅者的 filesystem invalidation substrate：
+当前 `ash-file-watcher` 已提供共享、多订阅者的 filesystem invalidation substrate：
 `PathsChanged` 传递排序去重后的 coarse path hint，backend error/overflow 通过
 `RescanRequired` 传递 subscriber 自己的 watched roots。其 backend/ref-count/path fallback contract
-由 [`zeta-rs/file-watcher/README.md`](../zeta-rs/file-watcher/README.md) 维护。
+由 [`ash-rs/file-watcher/README.md`](../ash-rs/file-watcher/README.md) 维护。
 
 Watcher 仍只发 invalidation hint。当前 App Server adapter 订阅 built-in/user roots、active
-Directory 的 `.zeta` metadata root 与 user config authority path；收到普通 change、backend error
+Directory 的 `.ash` metadata root 与 user config authority path；收到普通 change、backend error
 或 overflow 后都调用
 `SkillCatalog::refresh` 重新扫描/校验，再按可见 projection 决定是否发布 `skills/changed`。
 Watcher backend 无法启动时不会阻止 App Server 启动，调用方仍可用
@@ -393,8 +393,8 @@ compatibility、exact identity 与文件安全。它与下一节的受信任 pre
 形态不同：手动选择在 `TurnAccepted.activated_skills` 中预先冻结；模型选择发生在 tool loop 中，
 由 durable Tool Result 保存已读取内容。
 
-`zeta-extension-api::ReadOnlyToolContributor` 是通用接入面，`SkillReadTool` 属于
-`zeta-skills-extension`，App Server 只把 executor 适配到已有 Extension ToolPort 与策略管线。
+`ash-extension-api::ReadOnlyToolContributor` 是通用接入面，`SkillReadTool` 属于
+`ash-skills-extension`，App Server 只把 executor 适配到已有 Extension ToolPort 与策略管线。
 因此该能力不依赖目录 shell/file tool，也不要求产品端了解 Skill 读取协议。
 
 ### 8.3 后端自动 selector（已实现，严格受信任）
@@ -470,7 +470,7 @@ Core ContextAssembler 使用明确层级：
 
 ```text
 1. system safety / platform policy
-2. Zeta developer/product instructions
+2. Ash developer/product instructions
 3. directory policy and active Turn constraints
 4. Skill instructions（带 source + digest 边界）
 5. user input
@@ -552,13 +552,13 @@ Skill instruction suggests script
 → materialize command without shell concatenation
 → evaluate Plugin/source trust and executable grant
 → approval + sandbox + resource limits
-→ zeta-tool-executor
+→ ash-tool-executor
 → durable Tool Call/Result
 ```
 
 独立 user/directory Skill 默认没有 Plugin activation grant。用户可以显式通过普通 exec tool 运行
 已审阅脚本，但仍遵守 directory sandbox。`allowed-tools` 是 Agent Skills experimental field，
-只能作为作者意图/兼容性提示，不能跳过 Zeta approval。
+只能作为作者意图/兼容性提示，不能跳过 Ash approval。
 
 Skill manager 绝不自动执行：
 
@@ -587,7 +587,7 @@ Skill package。Renderer 的 sandboxed/sanitized preview 仍未实现。
 
 ## 12. 兼容性
 
-Agent Skills `compatibility` 是自由文本，不能作为 machine-enforced permission。Zeta 处理为：
+Agent Skills `compatibility` 是自由文本，不能作为 machine-enforced permission。Ash 处理为：
 
 ```text
 Compatible
@@ -599,7 +599,7 @@ RequiresUserAction { requirements }
 BuiltIn/Plugin Skill 可以由受控 manifest contribution 提供额外 machine-readable requirement：
 
 ```text
-required Zeta version
+required Ash version
 required tool capability
 required MCP contribution ID
 required platform/architecture
@@ -651,7 +651,7 @@ activation reason、bytes/token count、duration 和 error code。
 
 Skill catalog 是可重建 projection，不是 authority。Authority 分布为：
 
-- BuiltIn Skill：Zeta release；
+- BuiltIn Skill：Ash release；
 - Plugin Skill：Plugin installed/activation authority；
 - User/directory Skill：显式 configured source；
 - current Turn selection：typed UserInput/command。
@@ -695,7 +695,7 @@ Skill install/remove 不属于 Skill manager：
 
 ### 15.1 外部 Agent Skill 导入（仅限 Desktop）
 
-[`zeta-agent-import`](../zeta-rs/agent-import/README.md) 当前已经能只读发现 Codex 的
+[`ash-agent-import`](../ash-rs/agent-import/README.md) 当前已经能只读发现 Codex 的
 `~/.agents/skills`、项目 `.agents/skills`、Claude 的 `~/.claude/skills` 和项目
 `.claude/skills`，并把 canonical path、来源、scope 与 review category 放入 metadata-only
 `AgentPathInspection`；它不读取或转换 Skill 正文，也不修改 Config。
@@ -719,13 +719,13 @@ Desktop 导入，其 Skill 可以与其他来源一起出现在 TUI catalog 中�
 - 导入来源必须可查询、禁用和移除，移除后不能继续激活其中的 Skill；
 - 导入只建立只读内容来源，不授予脚本执行、网络、凭据或沙箱绕过能力。
 
-外部路径发现和导入计划由 `zeta-agent-import` 拥有，来源注册与内容解析仍属于 Config/Skill
+外部路径发现和导入计划由 `ash-agent-import` 拥有，来源注册与内容解析仍属于 Config/Skill
 边界，不属于通用 `utils`；只有不理解外部 Agent 格式的路径规范化、目录 containment 和文件
 identity 原语可以下沉到已有基础 crate。Desktop 交互所有权与其他外部配置类型的映射见
-[`zeta-desktop-architecture.md`](zeta-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)；
-TUI 当前不提供外部 Agent 导入入口；Zeta Code 的公共边界以其[API 入口](../zeta-code/README.md)为准。
+[`ash-desktop-architecture.md`](ash-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)；
+TUI 当前不提供外部 Agent 导入入口；Ash Code 的公共边界以其[API 入口](../ash-code/README.md)为准。
 
-目录贡献不是 Import。`zeta-file-access` 拥有目录来源与能力契约；只有带 `DiscoverSkills` 的有效 Grant 才能发现 Skill。该发现可以复用 `zeta-agent-import` 的安全路径检查，但不写入 Config、不产生 imported source，也不改变 `cwd`。完整语义见 [`environment-access.md`](environment-access.md#5-来源权限取代目录-trust)。
+目录贡献不是 Import。`ash-file-access` 拥有目录来源与能力契约；只有带 `DiscoverSkills` 的有效 Grant 才能发现 Skill。该发现可以复用 `ash-agent-import` 的安全路径检查，但不写入 Config、不产生 imported source，也不改变 `cwd`。完整语义见 [`environment-access.md`](environment-access.md#5-来源权限取代目录-trust)。
 
 ## 16. 错误与诊断
 
@@ -754,7 +754,7 @@ CatalogStale
 
 ## 17. 性能与预算
 
-建议第一版本地上限作为 Zeta policy，而不是 Agent Skills 标准：
+建议第一版本地上限作为 Ash policy，而不是 Agent Skills 标准：
 
 | 项目 | 初始 policy |
 | --- | --- |
@@ -772,7 +772,7 @@ CatalogStale
 ## 18. 目标目录
 
 ```text
-zeta-rs/skills/src/
+ash-rs/skills/src/
 ├── lib.rs
 ├── identity.rs
 ├── source.rs

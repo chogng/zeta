@@ -6,14 +6,14 @@ import test from "node:test";
 const repositoryRoot = resolve(import.meta.dirname, "..");
 
 test("repository build orchestration and developer scripts have separate root owners", () => {
-  for (const directory of ["zeta-ts/scripts"]) {
+  for (const directory of ["ash-ts/scripts"]) {
     const path = join(repositoryRoot, directory);
     assert.equal(existsSync(path), false, `${directory} must not own repository tooling`);
   }
-  for (const category of ["desktop", "download", "lib", "pnpm", "release", "resources", "vite", "zeta-package"]) {
+  for (const category of ["desktop", "download", "lib", "pnpm", "release", "resources", "vite", "ash-package"]) {
     assert.equal(existsSync(join(import.meta.dirname, category)), true, category);
   }
-  for (const entry of ["cargo.py", "format.py", "just-shell.py", "test-python.py", "test.ts", "test-editor.ts", "test-extensions.ts", "test-integration.ts", "test-smoke.ts", "test-web-integration.ts", "test", "zeta.py"]) {
+  for (const entry of ["cargo.py", "format.py", "just-shell.py", "test-python.py", "test.ts", "test-editor.ts", "test-extensions.ts", "test-integration.ts", "test-smoke.ts", "test-web-integration.ts", "test", "ash.py"]) {
     assert.equal(existsSync(join(repositoryRoot, "scripts", entry)), true, entry);
   }
   for (const retiredEntry of ["cargo_with_v8.py", "lib/just_shell.py"]) {
@@ -34,7 +34,7 @@ test("general repository commands do not depend on release package internals", (
   ].filter((path) => extname(path) === ".py");
 
   for (const path of files) {
-    assert.doesNotMatch(readFileSync(path, "utf8"), /zeta_package\./, path);
+    assert.doesNotMatch(readFileSync(path, "utf8"), /ash_package\./, path);
   }
 });
 

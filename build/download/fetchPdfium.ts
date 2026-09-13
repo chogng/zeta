@@ -103,7 +103,7 @@ async function outputExists(path: string): Promise<boolean> {
 async function verifyExistingOutput(output: string, artifact: PdfiumArtifact, version: string): Promise<boolean> {
   try {
     await access(resolve(output, artifact.library));
-    const receipt = JSON.parse(await readFile(resolve(output, ".zeta-pdfium-receipt.json"), "utf8")) as Record<string, unknown>;
+    const receipt = JSON.parse(await readFile(resolve(output, ".ash-pdfium-receipt.json"), "utf8")) as Record<string, unknown>;
     return receipt.version === version && receipt.archive === artifact.archive && receipt.sha256 === artifact.sha256;
   } catch {
     return false;
@@ -155,7 +155,7 @@ async function main(): Promise<void> {
     await rm(stagingDirectory, { recursive: true, force: true });
     throw new Error(`Archive ${artifact.archive} does not contain ${artifact.library}`);
   }
-  await writeFile(resolve(stagingDirectory, ".zeta-pdfium-receipt.json"), `${JSON.stringify({
+  await writeFile(resolve(stagingDirectory, ".ash-pdfium-receipt.json"), `${JSON.stringify({
     version: lock.version,
     target: argumentsResult.target,
     archive: artifact.archive,

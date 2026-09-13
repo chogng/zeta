@@ -284,8 +284,8 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 name = "app"
 version = "0.1.0"
 dependencies = [
- "zeta-process-hardening",
- "zeta-workbench",
+ "ash-process-hardening",
+ "ash-workbench",
 ]
 
 [[package]]
@@ -3109,9 +3109,9 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "tokio",
- "zeta-file-watcher",
- "zeta-git",
- "zeta-protocol",
+ "ash-file-watcher",
+ "ash-git",
+ "ash-protocol",
 ]
 
 [[package]]
@@ -11008,9 +11008,9 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "tokio",
- "zeta-file-access",
- "zeta-git",
- "zeta-protocol",
+ "ash-file-access",
+ "ash-git",
+ "ash-protocol",
 ]
 
 [[package]]
@@ -11480,18 +11480,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-action-policy"
+name = "ash-action-policy"
 version = "0.1.0"
 dependencies = [
  "serde",
  "sha2 0.10.9",
- "zeta-async-utils",
- "zeta-execpolicy",
- "zeta-sandboxing",
+ "ash-async-utils",
+ "ash-execpolicy",
+ "ash-sandboxing",
 ]
 
 [[package]]
-name = "zeta-agent"
+name = "ash-agent"
 version = "0.1.0"
 dependencies = [
  "futures",
@@ -11499,45 +11499,45 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "zeta-action-policy",
- "zeta-agent-roles",
- "zeta-async-utils",
- "zeta-core",
- "zeta-instructions",
- "zeta-models-manager",
- "zeta-prompts",
- "zeta-protocol",
- "zeta-skills-extension",
+ "ash-action-policy",
+ "ash-agent-roles",
+ "ash-async-utils",
+ "ash-core",
+ "ash-instructions",
+ "ash-models-manager",
+ "ash-prompts",
+ "ash-protocol",
+ "ash-skills-extension",
 ]
 
 [[package]]
-name = "zeta-agent-environment"
+name = "ash-agent-environment"
 version = "0.1.0"
 dependencies = [
  "chrono",
  "chrono-tz",
- "zeta-protocol",
- "zeta-utils-absolute-path",
+ "ash-protocol",
+ "ash-utils-absolute-path",
 ]
 
 [[package]]
-name = "zeta-agent-graph-store"
+name = "ash-agent-graph-store"
 version = "0.1.0"
 dependencies = [
  "serde",
- "zeta-protocol",
+ "ash-protocol",
 ]
 
 [[package]]
-name = "zeta-agent-import"
+name = "ash-agent-import"
 version = "0.1.0"
 dependencies = [
  "tempfile",
- "zeta-utils-path",
+ "ash-utils-path",
 ]
 
 [[package]]
-name = "zeta-agent-roles"
+name = "ash-agent-roles"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -11548,7 +11548,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-analytics"
+name = "ash-analytics"
 version = "0.1.0"
 dependencies = [
  "schemars",
@@ -11559,7 +11559,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-ansi-escape"
+name = "ash-ansi-escape"
 version = "0.1.0"
 dependencies = [
  "ansi-to-tui",
@@ -11567,7 +11567,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-api"
+name = "ash-api"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -11576,15 +11576,15 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "url",
- "zeta-async-utils",
- "zeta-client",
- "zeta-http-client",
- "zeta-protocol",
- "zeta-websocket-client",
+ "ash-async-utils",
+ "ash-client",
+ "ash-http-client",
+ "ash-protocol",
+ "ash-websocket-client",
 ]
 
 [[package]]
-name = "zeta-app-server"
+name = "ash-app-server"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -11607,105 +11607,105 @@ dependencies = [
  "url",
  "worktree",
  "zeroize",
- "zeta-action-policy",
- "zeta-agent",
- "zeta-agent-environment",
- "zeta-agent-roles",
- "zeta-analytics",
- "zeta-app-server-client",
- "zeta-app-server-daemon",
- "zeta-app-server-protocol",
- "zeta-app-server-transport",
- "zeta-apply-patch",
- "zeta-arg0",
- "zeta-async-utils",
- "zeta-attachments",
- "zeta-automation",
- "zeta-build-info",
- "zeta-chatgpt",
- "zeta-client",
- "zeta-cloud-codebase",
- "zeta-codebase",
- "zeta-codebase-store",
- "zeta-collaboration",
- "zeta-config",
- "zeta-connectors-extension",
- "zeta-content-search",
- "zeta-context-engine",
- "zeta-core",
- "zeta-core-plugins",
- "zeta-debug-adapter",
- "zeta-diagnostics",
- "zeta-diff",
- "zeta-editor-extension-host",
- "zeta-execpolicy",
- "zeta-extension-api",
- "zeta-extension-items",
- "zeta-extensions",
- "zeta-fast-regex-search",
- "zeta-features",
- "zeta-feedback",
- "zeta-file-access",
- "zeta-file-system",
- "zeta-file-watcher",
- "zeta-git",
- "zeta-git-attribution",
- "zeta-github",
- "zeta-goal",
- "zeta-guardian-v2",
- "zeta-history-notes",
- "zeta-hooks",
- "zeta-http-client",
- "zeta-image-generation",
- "zeta-install-context",
- "zeta-instructions",
- "zeta-kimi",
- "zeta-login",
- "zeta-lsp-manager",
- "zeta-lsp-server-provider",
- "zeta-mcp",
- "zeta-mcp-extension",
- "zeta-memories",
- "zeta-memories-extension",
- "zeta-memory-diagnostics",
- "zeta-model-provider",
- "zeta-model-provider-config",
- "zeta-models-manager",
- "zeta-mxc-sandbox",
- "zeta-network-proxy",
- "zeta-otel",
- "zeta-package-store",
- "zeta-plugin",
- "zeta-process-hardening",
- "zeta-projects",
- "zeta-prompts",
- "zeta-protocol",
- "zeta-queue",
- "zeta-rmcp-client",
- "zeta-rollout",
- "zeta-sandboxing",
- "zeta-secrets",
- "zeta-shell-command",
- "zeta-skills",
- "zeta-skills-extension",
- "zeta-slash-commands",
- "zeta-sleep",
- "zeta-state",
- "zeta-syntax",
- "zeta-thread-store",
- "zeta-thread-transcript",
- "zeta-tool-executor",
- "zeta-tools",
- "zeta-typst",
- "zeta-uds",
- "zeta-utils-home-dir",
- "zeta-utils-pty",
- "zeta-web-search-extension",
- "zeta-windows-sandbox",
+ "ash-action-policy",
+ "ash-agent",
+ "ash-agent-environment",
+ "ash-agent-roles",
+ "ash-analytics",
+ "ash-app-server-client",
+ "ash-app-server-daemon",
+ "ash-app-server-protocol",
+ "ash-app-server-transport",
+ "ash-apply-patch",
+ "ash-arg0",
+ "ash-async-utils",
+ "ash-attachments",
+ "ash-automation",
+ "ash-build-info",
+ "ash-chatgpt",
+ "ash-client",
+ "ash-cloud-codebase",
+ "ash-codebase",
+ "ash-codebase-store",
+ "ash-collaboration",
+ "ash-config",
+ "ash-connectors-extension",
+ "ash-content-search",
+ "ash-context-engine",
+ "ash-core",
+ "ash-core-plugins",
+ "ash-debug-adapter",
+ "ash-diagnostics",
+ "ash-diff",
+ "ash-editor-extension-host",
+ "ash-execpolicy",
+ "ash-extension-api",
+ "ash-extension-items",
+ "ash-extensions",
+ "ash-fast-regex-search",
+ "ash-features",
+ "ash-feedback",
+ "ash-file-access",
+ "ash-file-system",
+ "ash-file-watcher",
+ "ash-git",
+ "ash-git-attribution",
+ "ash-github",
+ "ash-goal",
+ "ash-guardian-v2",
+ "ash-history-notes",
+ "ash-hooks",
+ "ash-http-client",
+ "ash-image-generation",
+ "ash-install-context",
+ "ash-instructions",
+ "ash-kimi",
+ "ash-login",
+ "ash-lsp-manager",
+ "ash-lsp-server-provider",
+ "ash-mcp",
+ "ash-mcp-extension",
+ "ash-memories",
+ "ash-memories-extension",
+ "ash-memory-diagnostics",
+ "ash-model-provider",
+ "ash-model-provider-config",
+ "ash-models-manager",
+ "ash-mxc-sandbox",
+ "ash-network-proxy",
+ "ash-otel",
+ "ash-package-store",
+ "ash-plugin",
+ "ash-process-hardening",
+ "ash-projects",
+ "ash-prompts",
+ "ash-protocol",
+ "ash-queue",
+ "ash-rmcp-client",
+ "ash-rollout",
+ "ash-sandboxing",
+ "ash-secrets",
+ "ash-shell-command",
+ "ash-skills",
+ "ash-skills-extension",
+ "ash-slash-commands",
+ "ash-sleep",
+ "ash-state",
+ "ash-syntax",
+ "ash-thread-store",
+ "ash-thread-transcript",
+ "ash-tool-executor",
+ "ash-tools",
+ "ash-typst",
+ "ash-uds",
+ "ash-utils-home-dir",
+ "ash-utils-pty",
+ "ash-web-search-extension",
+ "ash-windows-sandbox",
 ]
 
 [[package]]
-name = "zeta-app-server-client"
+name = "ash-app-server-client"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -11713,24 +11713,24 @@ dependencies = [
  "serde_json",
  "tempfile",
  "zeroize",
- "zeta-app-server",
- "zeta-app-server-protocol",
- "zeta-app-server-transport",
- "zeta-async-utils",
- "zeta-client",
- "zeta-core",
- "zeta-diagnostics",
- "zeta-feedback",
- "zeta-file-access",
- "zeta-memories",
- "zeta-memory-diagnostics",
- "zeta-protocol",
- "zeta-queue",
- "zeta-utils-pty",
+ "ash-app-server",
+ "ash-app-server-protocol",
+ "ash-app-server-transport",
+ "ash-async-utils",
+ "ash-client",
+ "ash-core",
+ "ash-diagnostics",
+ "ash-feedback",
+ "ash-file-access",
+ "ash-memories",
+ "ash-memory-diagnostics",
+ "ash-protocol",
+ "ash-queue",
+ "ash-utils-pty",
 ]
 
 [[package]]
-name = "zeta-app-server-daemon"
+name = "ash-app-server-daemon"
 version = "0.1.0"
 dependencies = [
  "dunce",
@@ -11742,18 +11742,18 @@ dependencies = [
  "signal-hook",
  "tempfile",
  "windows-sys 0.59.0",
- "zeta-app-server-protocol",
- "zeta-app-server-transport",
- "zeta-build-info",
- "zeta-install-context",
- "zeta-package-store",
- "zeta-process-hardening",
- "zeta-uds",
- "zeta-utils-home-dir",
+ "ash-app-server-protocol",
+ "ash-app-server-transport",
+ "ash-build-info",
+ "ash-install-context",
+ "ash-package-store",
+ "ash-process-hardening",
+ "ash-uds",
+ "ash-utils-home-dir",
 ]
 
 [[package]]
-name = "zeta-app-server-protocol"
+name = "ash-app-server-protocol"
 version = "0.1.0"
 dependencies = [
  "schemars",
@@ -11763,24 +11763,24 @@ dependencies = [
  "ts-rs",
  "url",
  "zeroize",
- "zeta-analytics",
- "zeta-build-info",
- "zeta-collaboration",
- "zeta-diagnostics",
- "zeta-environment",
- "zeta-extension-items",
- "zeta-features",
- "zeta-feedback",
- "zeta-file-access",
- "zeta-memories",
- "zeta-memory-diagnostics",
- "zeta-protocol",
- "zeta-queue",
- "zeta-thread-transcript",
+ "ash-analytics",
+ "ash-build-info",
+ "ash-collaboration",
+ "ash-diagnostics",
+ "ash-environment",
+ "ash-extension-items",
+ "ash-features",
+ "ash-feedback",
+ "ash-file-access",
+ "ash-memories",
+ "ash-memory-diagnostics",
+ "ash-protocol",
+ "ash-queue",
+ "ash-thread-transcript",
 ]
 
 [[package]]
-name = "zeta-app-server-transport"
+name = "ash-app-server-transport"
 version = "0.1.0"
 dependencies = [
  "futures",
@@ -11790,31 +11790,31 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-tungstenite",
- "zeta-app-server-protocol",
- "zeta-uds",
+ "ash-app-server-protocol",
+ "ash-uds",
 ]
 
 [[package]]
-name = "zeta-apply-patch"
+name = "ash-apply-patch"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "zeta-async-utils",
- "zeta-file-access",
- "zeta-protocol",
- "zeta-tools",
+ "ash-async-utils",
+ "ash-file-access",
+ "ash-protocol",
+ "ash-tools",
 ]
 
 [[package]]
-name = "zeta-arg0"
+name = "ash-arg0"
 version = "0.1.0"
 dependencies = [
- "zeta-fast-regex-search",
+ "ash-fast-regex-search",
 ]
 
 [[package]]
-name = "zeta-async-utils"
+name = "ash-async-utils"
 version = "0.1.0"
 dependencies = [
  "async-io",
@@ -11823,7 +11823,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-attachments"
+name = "ash-attachments"
 version = "0.1.0"
 dependencies = [
  "image",
@@ -11831,14 +11831,14 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "url",
- "zeta-http-client",
- "zeta-protocol",
- "zeta-utils-image",
- "zeta-utils-path",
+ "ash-http-client",
+ "ash-protocol",
+ "ash-utils-image",
+ "ash-utils-path",
 ]
 
 [[package]]
-name = "zeta-automation"
+name = "ash-automation"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -11848,11 +11848,11 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.19",
- "zeta-protocol",
+ "ash-protocol",
 ]
 
 [[package]]
-name = "zeta-build-info"
+name = "ash-build-info"
 version = "0.1.0"
 dependencies = [
  "schemars",
@@ -11863,7 +11863,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-bwrap"
+name = "ash-bwrap"
 version = "0.1.0"
 dependencies = [
  "cc",
@@ -11872,7 +11872,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-chatgpt"
+name = "ash-chatgpt"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -11886,16 +11886,16 @@ dependencies = [
  "toml 0.9.12+spec-1.1.0",
  "urlencoding",
  "zeroize",
- "zeta-async-utils",
- "zeta-client",
- "zeta-http-client",
- "zeta-keyring-store",
- "zeta-login",
- "zeta-secrets",
+ "ash-async-utils",
+ "ash-client",
+ "ash-http-client",
+ "ash-keyring-store",
+ "ash-login",
+ "ash-secrets",
 ]
 
 [[package]]
-name = "zeta-cli"
+name = "ash-cli"
 version = "0.1.0"
 dependencies = [
  "ed25519-dalek",
@@ -11911,37 +11911,37 @@ dependencies = [
  "tar",
  "tempfile",
  "ureq",
- "zeta-app-server",
- "zeta-app-server-client",
- "zeta-app-server-daemon",
- "zeta-app-server-protocol",
- "zeta-arg0",
- "zeta-build-info",
- "zeta-exec",
- "zeta-fast-regex-search",
- "zeta-file-access",
- "zeta-install-context",
- "zeta-process-hardening",
- "zeta-product-update",
- "zeta-protocol",
- "zeta-remote",
- "zeta-remote-connections",
- "zeta-terminal",
- "zeta-tui",
- "zeta-utils-home-dir",
+ "ash-app-server",
+ "ash-app-server-client",
+ "ash-app-server-daemon",
+ "ash-app-server-protocol",
+ "ash-arg0",
+ "ash-build-info",
+ "ash-exec",
+ "ash-fast-regex-search",
+ "ash-file-access",
+ "ash-install-context",
+ "ash-process-hardening",
+ "ash-product-update",
+ "ash-protocol",
+ "ash-remote",
+ "ash-remote-connections",
+ "ash-terminal",
+ "ash-tui",
+ "ash-utils-home-dir",
  "zip 4.6.1",
 ]
 
 [[package]]
-name = "zeta-client"
+name = "ash-client"
 version = "0.1.0"
 dependencies = [
- "zeta-async-utils",
- "zeta-http-client",
+ "ash-async-utils",
+ "ash-http-client",
 ]
 
 [[package]]
-name = "zeta-cloud-codebase"
+name = "ash-cloud-codebase"
 version = "0.1.0"
 dependencies = [
  "rusqlite",
@@ -11949,54 +11949,54 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.19",
- "zeta-codebase",
- "zeta-file-access",
- "zeta-state",
+ "ash-codebase",
+ "ash-file-access",
+ "ash-state",
 ]
 
 [[package]]
-name = "zeta-code-mode"
+name = "ash-code-mode"
 version = "0.1.0"
 dependencies = [
  "serde_json",
- "zeta-code-mode-protocol",
- "zeta-code-mode-runtime",
+ "ash-code-mode-protocol",
+ "ash-code-mode-runtime",
 ]
 
 [[package]]
-name = "zeta-code-mode-host"
+name = "ash-code-mode-host"
 version = "0.1.0"
 dependencies = [
  "serde_json",
- "zeta-code-mode-protocol",
- "zeta-code-mode-runtime",
- "zeta-package-store",
+ "ash-code-mode-protocol",
+ "ash-code-mode-runtime",
+ "ash-package-store",
 ]
 
 [[package]]
-name = "zeta-code-mode-protocol"
+name = "ash-code-mode-protocol"
 version = "0.1.0"
 dependencies = [
  "schemars",
  "serde",
  "serde_json",
  "ts-rs",
- "zeta-protocol",
+ "ash-protocol",
 ]
 
 [[package]]
-name = "zeta-code-mode-runtime"
+name = "ash-code-mode-runtime"
 version = "0.1.0"
 dependencies = [
  "deno_core_icudata",
  "serde_json",
  "v8",
- "zeta-code-mode-protocol",
- "zeta-protocol",
+ "ash-code-mode-protocol",
+ "ash-protocol",
 ]
 
 [[package]]
-name = "zeta-codebase"
+name = "ash-codebase"
 version = "0.1.0"
 dependencies = [
  "ignore",
@@ -12004,29 +12004,29 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.19",
- "zeta-api",
- "zeta-async-utils",
- "zeta-file-access",
- "zeta-model-provider",
- "zeta-syntax",
+ "ash-api",
+ "ash-async-utils",
+ "ash-file-access",
+ "ash-model-provider",
+ "ash-syntax",
 ]
 
 [[package]]
-name = "zeta-codebase-store"
+name = "ash-codebase-store"
 version = "0.1.0"
 dependencies = [
  "rusqlite",
  "tempfile",
- "zeta-api",
- "zeta-codebase",
- "zeta-file-access",
- "zeta-model-provider",
- "zeta-state",
- "zeta-syntax",
+ "ash-api",
+ "ash-codebase",
+ "ash-file-access",
+ "ash-model-provider",
+ "ash-state",
+ "ash-syntax",
 ]
 
 [[package]]
-name = "zeta-collaboration"
+name = "ash-collaboration"
 version = "0.1.0"
 dependencies = [
  "getrandom 0.2.17",
@@ -12040,22 +12040,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-collaboration-server"
+name = "ash-collaboration-server"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "zeta-collaboration",
- "zeta-process-hardening",
+ "ash-collaboration",
+ "ash-process-hardening",
 ]
 
 [[package]]
-name = "zeta-commands"
+name = "ash-commands"
 version = "0.1.0"
 
 [[package]]
-name = "zeta-config"
+name = "ash-config"
 version = "0.1.0"
 dependencies = [
  "rusqlite",
@@ -12064,27 +12064,27 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "toml 0.9.12+spec-1.1.0",
- "zeta-agent-environment",
- "zeta-execpolicy",
- "zeta-features",
- "zeta-file-access",
- "zeta-model-provider-config",
- "zeta-plugin",
- "zeta-protocol",
- "zeta-state",
+ "ash-agent-environment",
+ "ash-execpolicy",
+ "ash-features",
+ "ash-file-access",
+ "ash-model-provider-config",
+ "ash-plugin",
+ "ash-protocol",
+ "ash-state",
 ]
 
 [[package]]
-name = "zeta-config-schema"
+name = "ash-config-schema"
 version = "0.1.0"
 dependencies = [
  "schemars",
  "serde_json",
- "zeta-config",
+ "ash-config",
 ]
 
 [[package]]
-name = "zeta-connectors-extension"
+name = "ash-connectors-extension"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -12096,59 +12096,59 @@ dependencies = [
  "tempfile",
  "url",
  "zeroize",
- "zeta-core-plugins",
- "zeta-file-system",
- "zeta-http-client",
- "zeta-plugin",
- "zeta-secrets",
- "zeta-state",
- "zeta-tools",
+ "ash-core-plugins",
+ "ash-file-system",
+ "ash-http-client",
+ "ash-plugin",
+ "ash-secrets",
+ "ash-state",
+ "ash-tools",
 ]
 
 [[package]]
-name = "zeta-content-search"
+name = "ash-content-search"
 version = "0.1.0"
 dependencies = [
  "serde_json",
- "zeta-async-utils",
- "zeta-file-access",
- "zeta-shell-command",
+ "ash-async-utils",
+ "ash-file-access",
+ "ash-shell-command",
 ]
 
 [[package]]
-name = "zeta-context-engine"
+name = "ash-context-engine"
 version = "0.1.0"
 
 [[package]]
-name = "zeta-core"
+name = "ash-core"
 version = "0.1.0"
 dependencies = [
  "image",
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "zeta-action-policy",
- "zeta-agent-environment",
- "zeta-agent-graph-store",
- "zeta-async-utils",
- "zeta-attachments",
- "zeta-code-mode",
- "zeta-code-mode-protocol",
- "zeta-context-engine",
- "zeta-execpolicy",
- "zeta-extension-api",
- "zeta-history",
- "zeta-model-accounting",
- "zeta-prompts",
- "zeta-protocol",
- "zeta-sandboxing",
- "zeta-thread-store",
- "zeta-utils-image",
- "zeta-utils-stream-parser",
+ "ash-action-policy",
+ "ash-agent-environment",
+ "ash-agent-graph-store",
+ "ash-async-utils",
+ "ash-attachments",
+ "ash-code-mode",
+ "ash-code-mode-protocol",
+ "ash-context-engine",
+ "ash-execpolicy",
+ "ash-extension-api",
+ "ash-history",
+ "ash-model-accounting",
+ "ash-prompts",
+ "ash-protocol",
+ "ash-sandboxing",
+ "ash-thread-store",
+ "ash-utils-image",
+ "ash-utils-stream-parser",
 ]
 
 [[package]]
-name = "zeta-core-plugins"
+name = "ash-core-plugins"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -12162,25 +12162,25 @@ dependencies = [
  "tokio",
  "tough",
  "url",
- "zeta-file-identity",
- "zeta-plugin",
- "zeta-tools",
- "zeta-utils-path",
+ "ash-file-identity",
+ "ash-plugin",
+ "ash-tools",
+ "ash-utils-path",
  "zip 4.6.1",
 ]
 
 [[package]]
-name = "zeta-debug-adapter"
+name = "ash-debug-adapter"
 version = "0.1.0"
 dependencies = [
  "serde_json",
  "thiserror 2.0.19",
  "tokio",
- "zeta-file-access",
+ "ash-file-access",
 ]
 
 [[package]]
-name = "zeta-diagnostics"
+name = "ash-diagnostics"
 version = "0.1.0"
 dependencies = [
  "schemars",
@@ -12188,12 +12188,12 @@ dependencies = [
  "serde_json",
  "tempfile",
  "ts-rs",
- "zeta-analytics",
- "zeta-build-info",
+ "ash-analytics",
+ "ash-build-info",
 ]
 
 [[package]]
-name = "zeta-diff"
+name = "ash-diff"
 version = "0.1.0"
 dependencies = [
  "thiserror 2.0.19",
@@ -12201,21 +12201,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-editor"
+name = "ash-editor"
 version = "0.1.0"
 dependencies = [
  "unicode-segmentation",
  "unicode-width 0.2.0",
- "zeta-diff",
- "zeta-editor-core",
- "zeta-syntax",
- "zeta-ui-components",
- "zeta-ui-theme",
+ "ash-diff",
+ "ash-editor-core",
+ "ash-syntax",
+ "ash-ui-components",
+ "ash-ui-theme",
  "zui",
 ]
 
 [[package]]
-name = "zeta-editor-core"
+name = "ash-editor-core"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -12223,7 +12223,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-editor-extension-host"
+name = "ash-editor-extension-host"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -12232,25 +12232,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-editor-host"
+name = "ash-editor-host"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "serde_json",
- "zeta-app-server-client",
- "zeta-app-server-protocol",
- "zeta-editor",
- "zeta-install-context",
- "zeta-lsp-manager",
- "zeta-lsp-server-provider",
- "zeta-text-file",
- "zeta-ui-components",
- "zeta-ui-theme",
+ "ash-app-server-client",
+ "ash-app-server-protocol",
+ "ash-editor",
+ "ash-install-context",
+ "ash-lsp-manager",
+ "ash-lsp-server-provider",
+ "ash-text-file",
+ "ash-ui-components",
+ "ash-ui-theme",
  "zui",
 ]
 
 [[package]]
-name = "zeta-environment"
+name = "ash-environment"
 version = "0.1.0"
 dependencies = [
  "schemars",
@@ -12259,21 +12259,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-exec"
+name = "ash-exec"
 version = "0.1.0"
 dependencies = [
  "schemars",
  "serde",
  "serde_json",
  "thiserror 2.0.19",
- "zeta-app-server-client",
- "zeta-app-server-protocol",
- "zeta-async-utils",
- "zeta-protocol",
+ "ash-app-server-client",
+ "ash-app-server-protocol",
+ "ash-async-utils",
+ "ash-protocol",
 ]
 
 [[package]]
-name = "zeta-execpolicy"
+name = "ash-execpolicy"
 version = "0.1.0"
 dependencies = [
  "schemars",
@@ -12283,19 +12283,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-extension-api"
+name = "ash-extension-api"
 version = "0.1.0"
 dependencies = [
  "serde_json",
- "zeta-action-policy",
- "zeta-async-utils",
- "zeta-extension-items",
- "zeta-protocol",
- "zeta-tools",
+ "ash-action-policy",
+ "ash-async-utils",
+ "ash-extension-items",
+ "ash-protocol",
+ "ash-tools",
 ]
 
 [[package]]
-name = "zeta-extension-items"
+name = "ash-extension-items"
 version = "0.1.0"
 dependencies = [
  "schemars",
@@ -12304,18 +12304,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-extensions"
+name = "ash-extensions"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
- "zeta-file-identity",
+ "ash-file-identity",
 ]
 
 [[package]]
-name = "zeta-fast-regex-search"
+name = "ash-fast-regex-search"
 version = "0.1.0"
 dependencies = [
  "globset",
@@ -12328,13 +12328,13 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.19",
- "zeta-file-access",
- "zeta-immutable-generation-store",
- "zeta-uds",
+ "ash-file-access",
+ "ash-immutable-generation-store",
+ "ash-uds",
 ]
 
 [[package]]
-name = "zeta-features"
+name = "ash-features"
 version = "0.1.0"
 dependencies = [
  "schemars",
@@ -12344,7 +12344,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-feedback"
+name = "ash-feedback"
 version = "0.1.0"
 dependencies = [
  "schemars",
@@ -12354,14 +12354,14 @@ dependencies = [
  "tempfile",
  "ts-rs",
  "url",
- "zeta-async-utils",
- "zeta-client",
- "zeta-diagnostics",
- "zeta-http-client",
+ "ash-async-utils",
+ "ash-client",
+ "ash-diagnostics",
+ "ash-http-client",
 ]
 
 [[package]]
-name = "zeta-file-access"
+name = "ash-file-access"
 version = "0.1.0"
 dependencies = [
  "dunce",
@@ -12371,21 +12371,21 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "ts-rs",
- "zeta-environment",
- "zeta-protocol",
- "zeta-utils-absolute-path",
- "zeta-utils-path",
+ "ash-environment",
+ "ash-protocol",
+ "ash-utils-absolute-path",
+ "ash-utils-path",
 ]
 
 [[package]]
-name = "zeta-file-identity"
+name = "ash-file-identity"
 version = "0.1.0"
 dependencies = [
  "windows-sys 0.59.0",
 ]
 
 [[package]]
-name = "zeta-file-search"
+name = "ash-file-search"
 version = "0.1.0"
 dependencies = [
  "clap",
@@ -12395,29 +12395,29 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-file-system"
+name = "ash-file-system"
 version = "0.1.0"
 dependencies = [
  "sha2 0.10.9",
  "tempfile",
- "zeta-file-access",
+ "ash-file-access",
 ]
 
 [[package]]
-name = "zeta-file-system-tool"
+name = "ash-file-system-tool"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "zeta-async-utils",
- "zeta-file-access",
- "zeta-file-system",
- "zeta-protocol",
- "zeta-tools",
+ "ash-async-utils",
+ "ash-file-access",
+ "ash-file-system",
+ "ash-protocol",
+ "ash-tools",
 ]
 
 [[package]]
-name = "zeta-file-watcher"
+name = "ash-file-watcher"
 version = "0.1.0"
 dependencies = [
  "log",
@@ -12427,18 +12427,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-files"
+name = "ash-files"
 version = "0.1.0"
 dependencies = [
- "zeta-file-search",
- "zeta-icons",
- "zeta-ui-components",
- "zeta-ui-theme",
+ "ash-file-search",
+ "ash-icons",
+ "ash-ui-components",
+ "ash-ui-theme",
  "zui",
 ]
 
 [[package]]
-name = "zeta-git"
+name = "ash-git"
 version = "0.1.0"
 dependencies = [
  "dunce",
@@ -12447,21 +12447,21 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
- "zeta-diff",
- "zeta-install-context",
- "zeta-utils-pty",
+ "ash-diff",
+ "ash-install-context",
+ "ash-utils-pty",
 ]
 
 [[package]]
-name = "zeta-git-attribution"
+name = "ash-git-attribution"
 version = "0.1.0"
 dependencies = [
- "zeta-extension-api",
- "zeta-protocol",
+ "ash-extension-api",
+ "ash-protocol",
 ]
 
 [[package]]
-name = "zeta-github"
+name = "ash-github"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -12469,97 +12469,97 @@ dependencies = [
  "tempfile",
  "tokio",
  "url",
- "zeta-protocol",
+ "ash-protocol",
 ]
 
 [[package]]
-name = "zeta-goal"
+name = "ash-goal"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "zeta-action-policy",
- "zeta-async-utils",
- "zeta-core",
- "zeta-extension-api",
- "zeta-prompts",
- "zeta-protocol",
- "zeta-utils-template",
+ "ash-action-policy",
+ "ash-async-utils",
+ "ash-core",
+ "ash-extension-api",
+ "ash-prompts",
+ "ash-protocol",
+ "ash-utils-template",
 ]
 
 [[package]]
-name = "zeta-guardian-reviewer"
+name = "ash-guardian-reviewer"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "zeta-action-policy",
- "zeta-async-utils",
- "zeta-sandboxing",
+ "ash-action-policy",
+ "ash-async-utils",
+ "ash-sandboxing",
 ]
 
 [[package]]
-name = "zeta-guardian-v2"
+name = "ash-guardian-v2"
 version = "0.1.0"
 dependencies = [
  "serde_json",
  "tempfile",
- "zeta-action-policy",
- "zeta-async-utils",
- "zeta-config",
- "zeta-core",
- "zeta-extension-api",
- "zeta-guardian-reviewer",
- "zeta-model-provider",
- "zeta-model-provider-config",
- "zeta-protocol",
+ "ash-action-policy",
+ "ash-async-utils",
+ "ash-config",
+ "ash-core",
+ "ash-extension-api",
+ "ash-guardian-reviewer",
+ "ash-model-provider",
+ "ash-model-provider-config",
+ "ash-protocol",
 ]
 
 [[package]]
-name = "zeta-history"
+name = "ash-history"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "zeta-protocol",
+ "ash-protocol",
 ]
 
 [[package]]
-name = "zeta-history-notes"
+name = "ash-history-notes"
 version = "0.1.0"
 dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
  "tempfile",
- "zeta-async-utils",
- "zeta-core",
- "zeta-extension-api",
- "zeta-protocol",
- "zeta-state",
- "zeta-tools",
+ "ash-async-utils",
+ "ash-core",
+ "ash-extension-api",
+ "ash-protocol",
+ "ash-state",
+ "ash-tools",
 ]
 
 [[package]]
-name = "zeta-hooks"
+name = "ash-hooks"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "zeta-action-policy",
- "zeta-async-utils",
- "zeta-config",
- "zeta-core",
- "zeta-file-access",
- "zeta-install-context",
- "zeta-mxc-sandbox",
- "zeta-protocol",
- "zeta-sandboxing",
- "zeta-tool-executor",
+ "ash-action-policy",
+ "ash-async-utils",
+ "ash-config",
+ "ash-core",
+ "ash-file-access",
+ "ash-install-context",
+ "ash-mxc-sandbox",
+ "ash-protocol",
+ "ash-sandboxing",
+ "ash-tool-executor",
 ]
 
 [[package]]
-name = "zeta-http-client"
+name = "ash-http-client"
 version = "0.1.0"
 dependencies = [
  "rustls",
@@ -12572,14 +12572,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-icons"
+name = "ash-icons"
 version = "0.1.0"
 dependencies = [
  "zui",
 ]
 
 [[package]]
-name = "zeta-image-generation"
+name = "ash-image-generation"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -12589,17 +12589,17 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "url",
- "zeta-async-utils",
- "zeta-client",
- "zeta-extension-api",
- "zeta-extension-items",
- "zeta-http-client",
- "zeta-protocol",
- "zeta-tools",
+ "ash-async-utils",
+ "ash-client",
+ "ash-extension-api",
+ "ash-extension-items",
+ "ash-http-client",
+ "ash-protocol",
+ "ash-tools",
 ]
 
 [[package]]
-name = "zeta-immutable-generation-store"
+name = "ash-immutable-generation-store"
 version = "0.1.0"
 dependencies = [
  "fs2",
@@ -12608,7 +12608,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-input-classifier"
+name = "ash-input-classifier"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -12622,19 +12622,19 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "tokenizers",
- "zeta-shell-completion",
+ "ash-shell-completion",
 ]
 
 [[package]]
-name = "zeta-install-context"
+name = "ash-install-context"
 version = "0.1.0"
 dependencies = [
  "dunce",
- "zeta-utils-path",
+ "ash-utils-path",
 ]
 
 [[package]]
-name = "zeta-instructions"
+name = "ash-instructions"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -12643,7 +12643,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-keybinding"
+name = "ash-keybinding"
 version = "0.1.0"
 dependencies = [
  "serde_json",
@@ -12651,26 +12651,26 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-keybindings-host"
+name = "ash-keybindings-host"
 version = "0.1.0"
 dependencies = [
  "serde_json",
- "zeta-keybinding",
+ "ash-keybinding",
  "zui",
 ]
 
 [[package]]
-name = "zeta-keyring-store"
+name = "ash-keyring-store"
 version = "0.1.0"
 dependencies = [
  "keyring",
  "sha2 0.10.9",
  "tempfile",
- "zeta-secrets",
+ "ash-secrets",
 ]
 
 [[package]]
-name = "zeta-kimi"
+name = "ash-kimi"
 version = "0.1.0"
 dependencies = [
  "getrandom 0.2.17",
@@ -12678,19 +12678,19 @@ dependencies = [
  "serde_json",
  "urlencoding",
  "zeroize",
- "zeta-async-utils",
- "zeta-client",
- "zeta-http-client",
- "zeta-login",
- "zeta-secrets",
+ "ash-async-utils",
+ "ash-client",
+ "ash-http-client",
+ "ash-login",
+ "ash-secrets",
 ]
 
 [[package]]
-name = "zeta-login"
+name = "ash-login"
 version = "0.1.0"
 
 [[package]]
-name = "zeta-lsp"
+name = "ash-lsp"
 version = "0.1.0"
 dependencies = [
  "lsp-types",
@@ -12698,11 +12698,11 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.19",
  "tokio",
- "zeta-async-utils",
+ "ash-async-utils",
 ]
 
 [[package]]
-name = "zeta-lsp-manager"
+name = "ash-lsp-manager"
 version = "0.1.0"
 dependencies = [
  "serde_json",
@@ -12710,24 +12710,24 @@ dependencies = [
  "thiserror 2.0.19",
  "tokio",
  "url",
- "zeta-async-utils",
- "zeta-lsp",
- "zeta-lsp-server-provider",
+ "ash-async-utils",
+ "ash-lsp",
+ "ash-lsp-server-provider",
 ]
 
 [[package]]
-name = "zeta-lsp-server-provider"
+name = "ash-lsp-server-provider"
 version = "0.1.0"
 dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.19",
- "zeta-install-context",
- "zeta-lsp",
+ "ash-install-context",
+ "ash-lsp",
 ]
 
 [[package]]
-name = "zeta-markdown"
+name = "ash-markdown"
 version = "0.1.0"
 dependencies = [
  "image",
@@ -12741,27 +12741,27 @@ dependencies = [
  "syntect",
  "thiserror 2.0.19",
  "url",
- "zeta-ui-components",
+ "ash-ui-components",
  "zui",
 ]
 
 [[package]]
-name = "zeta-mcp"
+name = "ash-mcp"
 version = "0.1.0"
 dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "thiserror 2.0.19",
  "tokio",
- "zeta-async-utils",
- "zeta-config",
- "zeta-protocol",
- "zeta-rmcp-client",
- "zeta-tools",
+ "ash-async-utils",
+ "ash-config",
+ "ash-protocol",
+ "ash-rmcp-client",
+ "ash-tools",
 ]
 
 [[package]]
-name = "zeta-mcp-extension"
+name = "ash-mcp-extension"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -12773,25 +12773,25 @@ dependencies = [
  "tokio",
  "url",
  "zeroize",
- "zeta-action-policy",
- "zeta-async-utils",
- "zeta-config",
- "zeta-connectors-extension",
- "zeta-core",
- "zeta-core-plugins",
- "zeta-extension-api",
- "zeta-file-access",
- "zeta-file-system",
- "zeta-mcp",
- "zeta-plugin",
- "zeta-protocol",
- "zeta-rmcp-client",
- "zeta-secrets",
- "zeta-tools",
+ "ash-action-policy",
+ "ash-async-utils",
+ "ash-config",
+ "ash-connectors-extension",
+ "ash-core",
+ "ash-core-plugins",
+ "ash-extension-api",
+ "ash-file-access",
+ "ash-file-system",
+ "ash-mcp",
+ "ash-plugin",
+ "ash-protocol",
+ "ash-rmcp-client",
+ "ash-secrets",
+ "ash-tools",
 ]
 
 [[package]]
-name = "zeta-memories"
+name = "ash-memories"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -12801,13 +12801,13 @@ dependencies = [
  "sha2 0.10.9",
  "thiserror 2.0.19",
  "ts-rs",
- "zeta-async-utils",
- "zeta-file-access",
- "zeta-protocol",
+ "ash-async-utils",
+ "ash-file-access",
+ "ash-protocol",
 ]
 
 [[package]]
-name = "zeta-memories-extension"
+name = "ash-memories-extension"
 version = "0.1.0"
 dependencies = [
  "pollster 1.0.1",
@@ -12815,16 +12815,16 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
- "zeta-async-utils",
- "zeta-extension-api",
- "zeta-memories",
- "zeta-protocol",
- "zeta-state",
- "zeta-tools",
+ "ash-async-utils",
+ "ash-extension-api",
+ "ash-memories",
+ "ash-protocol",
+ "ash-state",
+ "ash-tools",
 ]
 
 [[package]]
-name = "zeta-memory-diagnostics"
+name = "ash-memory-diagnostics"
 version = "0.1.0"
 dependencies = [
  "schemars",
@@ -12836,22 +12836,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-message-history"
+name = "ash-message-history"
 version = "0.1.0"
 
 [[package]]
-name = "zeta-model-accounting"
+name = "ash-model-accounting"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "thiserror 2.0.19",
- "zeta-protocol",
+ "ash-protocol",
 ]
 
 [[package]]
-name = "zeta-model-provider"
+name = "ash-model-provider"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -12861,35 +12861,35 @@ dependencies = [
  "tempfile",
  "tokio",
  "url",
- "zeta-api",
- "zeta-async-utils",
- "zeta-chatgpt",
- "zeta-client",
- "zeta-context-engine",
- "zeta-http-client",
- "zeta-kimi",
- "zeta-model-provider-config",
- "zeta-model-tokenizer",
- "zeta-models-manager",
- "zeta-ollama",
- "zeta-protocol",
- "zeta-secrets",
- "zeta-websocket-client",
+ "ash-api",
+ "ash-async-utils",
+ "ash-chatgpt",
+ "ash-client",
+ "ash-context-engine",
+ "ash-http-client",
+ "ash-kimi",
+ "ash-model-provider-config",
+ "ash-model-tokenizer",
+ "ash-models-manager",
+ "ash-ollama",
+ "ash-protocol",
+ "ash-secrets",
+ "ash-websocket-client",
 ]
 
 [[package]]
-name = "zeta-model-provider-config"
+name = "ash-model-provider-config"
 version = "0.1.0"
 dependencies = [
  "schemars",
  "serde",
  "serde_json",
  "url",
- "zeta-protocol",
+ "ash-protocol",
 ]
 
 [[package]]
-name = "zeta-model-tokenizer"
+name = "ash-model-tokenizer"
 version = "0.1.0"
 dependencies = [
  "hf-chat-template",
@@ -12897,23 +12897,23 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokenizers",
- "zeta-http-client",
- "zeta-protocol",
- "zeta-utils-path",
+ "ash-http-client",
+ "ash-protocol",
+ "ash-utils-path",
 ]
 
 [[package]]
-name = "zeta-models-manager"
+name = "ash-models-manager"
 version = "0.1.0"
 dependencies = [
  "tokio",
- "zeta-model-provider-config",
- "zeta-prompts",
- "zeta-protocol",
+ "ash-model-provider-config",
+ "ash-prompts",
+ "ash-protocol",
 ]
 
 [[package]]
-name = "zeta-mxc-sandbox"
+name = "ash-mxc-sandbox"
 version = "0.1.0"
 dependencies = [
  "dunce",
@@ -12921,17 +12921,17 @@ dependencies = [
  "mxc-sdk",
  "tempfile",
  "tracelogging",
- "zeta-async-utils",
- "zeta-file-access",
- "zeta-install-context",
- "zeta-network-proxy",
- "zeta-protocol",
- "zeta-sandboxing",
- "zeta-tool-executor",
+ "ash-async-utils",
+ "ash-file-access",
+ "ash-install-context",
+ "ash-network-proxy",
+ "ash-protocol",
+ "ash-sandboxing",
+ "ash-tool-executor",
 ]
 
 [[package]]
-name = "zeta-network-proxy"
+name = "ash-network-proxy"
 version = "0.1.0"
 dependencies = [
  "bytes",
@@ -12940,37 +12940,37 @@ dependencies = [
  "hyper-util",
  "tokio",
  "url",
- "zeta-async-utils",
+ "ash-async-utils",
 ]
 
 [[package]]
-name = "zeta-ollama"
+name = "ash-ollama"
 version = "0.1.0"
 dependencies = [
  "semver",
  "serde",
  "serde_json",
  "url",
- "zeta-async-utils",
- "zeta-client",
- "zeta-http-client",
+ "ash-async-utils",
+ "ash-client",
+ "ash-http-client",
 ]
 
 [[package]]
-name = "zeta-otel"
+name = "ash-otel"
 version = "0.1.0"
 dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
  "serde",
  "serde_json",
- "zeta-client",
- "zeta-diagnostics",
- "zeta-http-client",
+ "ash-client",
+ "ash-diagnostics",
+ "ash-http-client",
 ]
 
 [[package]]
-name = "zeta-package-store"
+name = "ash-package-store"
 version = "0.1.0"
 dependencies = [
  "fs2",
@@ -12982,14 +12982,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-pdf"
+name = "ash-pdf"
 version = "0.1.0"
 dependencies = [
  "pdfium-render",
 ]
 
 [[package]]
-name = "zeta-plugin"
+name = "ash-plugin"
 version = "0.1.0"
 dependencies = [
  "semver",
@@ -13000,7 +13000,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-process-hardening"
+name = "ash-process-hardening"
 version = "0.1.0"
 dependencies = [
  "ctor",
@@ -13009,7 +13009,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-product-update"
+name = "ash-product-update"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -13021,26 +13021,26 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-projects"
+name = "ash-projects"
 version = "0.1.0"
 dependencies = [
  "pretty_assertions",
  "serde",
  "thiserror 2.0.19",
- "zeta-environment",
- "zeta-file-access",
- "zeta-protocol",
+ "ash-environment",
+ "ash-file-access",
+ "ash-protocol",
 ]
 
 [[package]]
-name = "zeta-prompts"
+name = "ash-prompts"
 version = "0.1.0"
 dependencies = [
- "zeta-protocol",
+ "ash-protocol",
 ]
 
 [[package]]
-name = "zeta-protocol"
+name = "ash-protocol"
 version = "0.1.0"
 dependencies = [
  "schemars",
@@ -13051,7 +13051,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-queue"
+name = "ash-queue"
 version = "0.1.0"
 dependencies = [
  "rusqlite",
@@ -13061,17 +13061,17 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "ts-rs",
- "zeta-extension-api",
- "zeta-extension-items",
- "zeta-protocol",
+ "ash-extension-api",
+ "ash-extension-items",
+ "ash-protocol",
 ]
 
 [[package]]
-name = "zeta-remote"
+name = "ash-remote"
 version = "0.1.0"
 
 [[package]]
-name = "zeta-remote-connections"
+name = "ash-remote-connections"
 version = "0.1.0"
 dependencies = [
  "flate2",
@@ -13081,30 +13081,30 @@ dependencies = [
  "tar",
  "tempfile",
  "url",
- "zeta-app-server",
- "zeta-app-server-client",
- "zeta-app-server-protocol",
- "zeta-build-info",
- "zeta-http-client",
- "zeta-install-context",
- "zeta-package-store",
- "zeta-process-hardening",
- "zeta-remote",
- "zeta-utils-home-dir",
- "zeta-utils-path",
+ "ash-app-server",
+ "ash-app-server-client",
+ "ash-app-server-protocol",
+ "ash-build-info",
+ "ash-http-client",
+ "ash-install-context",
+ "ash-package-store",
+ "ash-process-hardening",
+ "ash-remote",
+ "ash-utils-home-dir",
+ "ash-utils-path",
 ]
 
 [[package]]
-name = "zeta-remote-host"
+name = "ash-remote-host"
 version = "0.1.0"
 dependencies = [
  "tempfile",
- "zeta-remote",
- "zeta-remote-connections",
+ "ash-remote",
+ "ash-remote-connections",
 ]
 
 [[package]]
-name = "zeta-remote-server"
+name = "ash-remote-server"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -13113,21 +13113,21 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
- "zeta-app-server",
- "zeta-app-server-client",
- "zeta-app-server-protocol",
- "zeta-arg0",
- "zeta-build-info",
- "zeta-fast-regex-search",
- "zeta-file-access",
- "zeta-install-context",
- "zeta-package-store",
- "zeta-process-hardening",
- "zeta-utils-home-dir",
+ "ash-app-server",
+ "ash-app-server-client",
+ "ash-app-server-protocol",
+ "ash-arg0",
+ "ash-build-info",
+ "ash-fast-regex-search",
+ "ash-file-access",
+ "ash-install-context",
+ "ash-package-store",
+ "ash-process-hardening",
+ "ash-utils-home-dir",
 ]
 
 [[package]]
-name = "zeta-rmcp-client"
+name = "ash-rmcp-client"
 version = "0.1.0"
 dependencies = [
  "rmcp",
@@ -13136,54 +13136,54 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-rollout"
+name = "ash-rollout"
 version = "0.1.0"
 dependencies = [
- "zeta-attachments",
- "zeta-core",
- "zeta-protocol",
- "zeta-state",
- "zeta-thread-store",
+ "ash-attachments",
+ "ash-core",
+ "ash-protocol",
+ "ash-state",
+ "ash-thread-store",
 ]
 
 [[package]]
-name = "zeta-rollout-trace"
+name = "ash-rollout-trace"
 version = "0.1.0"
 dependencies = [
  "serde",
- "zeta-core",
- "zeta-history",
- "zeta-protocol",
- "zeta-rollout",
- "zeta-state",
- "zeta-thread-store",
+ "ash-core",
+ "ash-history",
+ "ash-protocol",
+ "ash-rollout",
+ "ash-state",
+ "ash-thread-store",
 ]
 
 [[package]]
-name = "zeta-sandboxing"
+name = "ash-sandboxing"
 version = "0.1.0"
 dependencies = [
  "globset",
  "tempfile",
- "zeta-file-access",
- "zeta-utils-pty",
+ "ash-file-access",
+ "ash-utils-pty",
 ]
 
 [[package]]
-name = "zeta-scm"
+name = "ash-scm"
 version = "0.1.0"
 dependencies = [
- "zeta-app-server-protocol",
- "zeta-diff",
- "zeta-editor",
- "zeta-icons",
- "zeta-ui-components",
- "zeta-ui-theme",
+ "ash-app-server-protocol",
+ "ash-diff",
+ "ash-editor",
+ "ash-icons",
+ "ash-ui-components",
+ "ash-ui-theme",
  "zui",
 ]
 
 [[package]]
-name = "zeta-secrets"
+name = "ash-secrets"
 version = "0.1.0"
 dependencies = [
  "getrandom 0.2.17",
@@ -13191,66 +13191,66 @@ dependencies = [
  "tempfile",
  "windows-sys 0.59.0",
  "zeroize",
- "zeta-utils-path",
+ "ash-utils-path",
 ]
 
 [[package]]
-name = "zeta-session"
+name = "ash-session"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "serde_json",
  "tempfile",
- "zeta-app-server-client",
- "zeta-app-server-protocol",
- "zeta-editor",
- "zeta-icons",
- "zeta-input-classifier",
- "zeta-message-history",
- "zeta-protocol",
- "zeta-slash-commands",
- "zeta-state",
- "zeta-thread-transcript",
- "zeta-ui-components",
- "zeta-ui-theme",
+ "ash-app-server-client",
+ "ash-app-server-protocol",
+ "ash-editor",
+ "ash-icons",
+ "ash-input-classifier",
+ "ash-message-history",
+ "ash-protocol",
+ "ash-slash-commands",
+ "ash-state",
+ "ash-thread-transcript",
+ "ash-ui-components",
+ "ash-ui-theme",
  "zui",
 ]
 
 [[package]]
-name = "zeta-settings"
+name = "ash-settings"
 version = "0.1.0"
 dependencies = [
- "zeta-commands",
- "zeta-icons",
- "zeta-keybinding",
- "zeta-keybindings-host",
- "zeta-remote",
- "zeta-remote-connections",
- "zeta-remote-host",
- "zeta-ui-components",
- "zeta-ui-theme",
+ "ash-commands",
+ "ash-icons",
+ "ash-keybinding",
+ "ash-keybindings-host",
+ "ash-remote",
+ "ash-remote-connections",
+ "ash-remote-host",
+ "ash-ui-components",
+ "ash-ui-theme",
  "zui",
 ]
 
 [[package]]
-name = "zeta-shell-command"
+name = "ash-shell-command"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "zeta-async-utils",
- "zeta-file-access",
- "zeta-install-context",
- "zeta-mxc-sandbox",
- "zeta-network-proxy",
- "zeta-protocol",
- "zeta-sandboxing",
- "zeta-tool-executor",
- "zeta-tools",
+ "ash-async-utils",
+ "ash-file-access",
+ "ash-install-context",
+ "ash-mxc-sandbox",
+ "ash-network-proxy",
+ "ash-protocol",
+ "ash-sandboxing",
+ "ash-tool-executor",
+ "ash-tools",
 ]
 
 [[package]]
-name = "zeta-shell-completion"
+name = "ash-shell-completion"
 version = "0.1.0"
 dependencies = [
  "serde_json",
@@ -13258,19 +13258,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-skills"
+name = "ash-skills"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_yaml",
  "sha2 0.10.9",
  "tempfile",
- "zeta-file-identity",
- "zeta-protocol",
+ "ash-file-identity",
+ "ash-protocol",
 ]
 
 [[package]]
-name = "zeta-skills-extension"
+name = "ash-skills-extension"
 version = "0.1.0"
 dependencies = [
  "pollster 1.0.1",
@@ -13278,43 +13278,43 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
- "zeta-async-utils",
- "zeta-config",
- "zeta-extension-api",
- "zeta-file-watcher",
- "zeta-protocol",
- "zeta-skills",
- "zeta-tools",
+ "ash-async-utils",
+ "ash-config",
+ "ash-extension-api",
+ "ash-file-watcher",
+ "ash-protocol",
+ "ash-skills",
+ "ash-tools",
 ]
 
 [[package]]
-name = "zeta-slash-commands"
+name = "ash-slash-commands"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "zeta-app-server-protocol",
+ "ash-app-server-protocol",
 ]
 
 [[package]]
-name = "zeta-slash-launcher"
+name = "ash-slash-launcher"
 version = "0.1.0"
 
 [[package]]
-name = "zeta-sleep"
+name = "ash-sleep"
 version = "0.1.0"
 dependencies = [
  "pollster 1.0.1",
  "serde_json",
- "zeta-async-utils",
- "zeta-extension-api",
- "zeta-extension-items",
- "zeta-protocol",
- "zeta-tools",
+ "ash-async-utils",
+ "ash-extension-api",
+ "ash-extension-items",
+ "ash-protocol",
+ "ash-tools",
 ]
 
 [[package]]
-name = "zeta-sprite"
+name = "ash-sprite"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -13325,7 +13325,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-state"
+name = "ash-state"
 version = "0.1.0"
 dependencies = [
  "fs2",
@@ -13335,23 +13335,23 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
- "zeta-agent-graph-store",
- "zeta-async-utils",
- "zeta-core",
- "zeta-environment",
- "zeta-file-access",
- "zeta-github",
- "zeta-history",
- "zeta-memories",
- "zeta-message-history",
- "zeta-projects",
- "zeta-protocol",
- "zeta-thread-store",
- "zeta-utils-path",
+ "ash-agent-graph-store",
+ "ash-async-utils",
+ "ash-core",
+ "ash-environment",
+ "ash-file-access",
+ "ash-github",
+ "ash-history",
+ "ash-memories",
+ "ash-message-history",
+ "ash-projects",
+ "ash-protocol",
+ "ash-thread-store",
+ "ash-utils-path",
 ]
 
 [[package]]
-name = "zeta-syntax"
+name = "ash-syntax"
 version = "0.1.0"
 dependencies = [
  "thiserror 2.0.19",
@@ -13364,7 +13364,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-terminal"
+name = "ash-terminal"
 version = "0.1.0"
 dependencies = [
  "pretty_assertions",
@@ -13374,101 +13374,101 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-terminal-detection"
+name = "ash-terminal-detection"
 version = "0.1.0"
 dependencies = [
  "pretty_assertions",
 ]
 
 [[package]]
-name = "zeta-terminal-runtime"
+name = "ash-terminal-runtime"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
  "tokio",
  "unicode-width 0.2.0",
- "zeta-app-server-client",
- "zeta-app-server-protocol",
- "zeta-protocol",
- "zeta-remote-connections",
- "zeta-terminal",
- "zeta-ui-components",
- "zeta-ui-theme",
- "zeta-utils-pty",
+ "ash-app-server-client",
+ "ash-app-server-protocol",
+ "ash-protocol",
+ "ash-remote-connections",
+ "ash-terminal",
+ "ash-ui-components",
+ "ash-ui-theme",
+ "ash-utils-pty",
  "zui",
 ]
 
 [[package]]
-name = "zeta-text-file"
+name = "ash-text-file"
 version = "0.1.0"
 
 [[package]]
-name = "zeta-theme"
+name = "ash-theme"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.19",
- "zeta-utils-home-dir",
- "zeta-utils-path",
+ "ash-utils-home-dir",
+ "ash-utils-path",
 ]
 
 [[package]]
-name = "zeta-thread-store"
+name = "ash-thread-store"
 version = "0.1.0"
 dependencies = [
  "serde",
- "zeta-agent-graph-store",
- "zeta-history",
- "zeta-protocol",
+ "ash-agent-graph-store",
+ "ash-history",
+ "ash-protocol",
 ]
 
 [[package]]
-name = "zeta-thread-transcript"
+name = "ash-thread-transcript"
 version = "0.1.0"
 dependencies = [
  "schemars",
  "serde",
  "ts-rs",
- "zeta-protocol",
+ "ash-protocol",
 ]
 
 [[package]]
-name = "zeta-tool-executor"
+name = "ash-tool-executor"
 version = "0.1.0"
 dependencies = [
  "getrandom 0.2.17",
  "pollster 1.0.1",
  "tempfile",
- "zeta-async-utils",
- "zeta-file-access",
- "zeta-install-context",
- "zeta-mxc-sandbox",
- "zeta-network-proxy",
- "zeta-protocol",
- "zeta-sandboxing",
- "zeta-utils-pty",
+ "ash-async-utils",
+ "ash-file-access",
+ "ash-install-context",
+ "ash-mxc-sandbox",
+ "ash-network-proxy",
+ "ash-protocol",
+ "ash-sandboxing",
+ "ash-utils-pty",
 ]
 
 [[package]]
-name = "zeta-tools"
+name = "ash-tools"
 version = "0.1.0"
 dependencies = [
  "bm25",
  "regex",
  "serde_json",
  "sha2 0.10.9",
- "zeta-async-utils",
- "zeta-environment",
- "zeta-network-proxy",
- "zeta-protocol",
- "zeta-sandboxing",
- "zeta-utils-output-truncation",
+ "ash-async-utils",
+ "ash-environment",
+ "ash-network-proxy",
+ "ash-protocol",
+ "ash-sandboxing",
+ "ash-utils-output-truncation",
 ]
 
 [[package]]
-name = "zeta-tui"
+name = "ash-tui"
 version = "0.1.0"
 dependencies = [
  "arboard",
@@ -13493,33 +13493,33 @@ dependencies = [
  "url",
  "windows-sys 0.59.0",
  "zeroize",
- "zeta-ansi-escape",
- "zeta-app-server",
- "zeta-app-server-client",
- "zeta-app-server-protocol",
- "zeta-client",
- "zeta-diff",
- "zeta-file-access",
- "zeta-file-search",
- "zeta-keybinding",
- "zeta-memories",
- "zeta-memory-diagnostics",
- "zeta-message-history",
- "zeta-product-update",
- "zeta-protocol",
- "zeta-queue",
- "zeta-slash-commands",
- "zeta-sprite",
- "zeta-state",
- "zeta-terminal-detection",
- "zeta-utils-elapsed",
- "zeta-utils-home-dir",
- "zeta-utils-image",
- "zeta-utils-path",
+ "ash-ansi-escape",
+ "ash-app-server",
+ "ash-app-server-client",
+ "ash-app-server-protocol",
+ "ash-client",
+ "ash-diff",
+ "ash-file-access",
+ "ash-file-search",
+ "ash-keybinding",
+ "ash-memories",
+ "ash-memory-diagnostics",
+ "ash-message-history",
+ "ash-product-update",
+ "ash-protocol",
+ "ash-queue",
+ "ash-slash-commands",
+ "ash-sprite",
+ "ash-state",
+ "ash-terminal-detection",
+ "ash-utils-elapsed",
+ "ash-utils-home-dir",
+ "ash-utils-image",
+ "ash-utils-path",
 ]
 
 [[package]]
-name = "zeta-typst"
+name = "ash-typst"
 version = "0.1.0"
 dependencies = [
  "typst",
@@ -13528,7 +13528,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-uds"
+name = "ash-uds"
 version = "0.1.0"
 dependencies = [
  "libc",
@@ -13538,25 +13538,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-ui-components"
+name = "ash-ui-components"
 version = "0.1.0"
 dependencies = [
- "zeta-icons",
+ "ash-icons",
  "zui",
 ]
 
 [[package]]
-name = "zeta-ui-theme"
+name = "ash-ui-theme"
 version = "0.1.0"
 dependencies = [
- "zeta-icons",
- "zeta-theme",
- "zeta-ui-components",
+ "ash-icons",
+ "ash-theme",
+ "ash-ui-components",
  "zui",
 ]
 
 [[package]]
-name = "zeta-update-sign"
+name = "ash-update-sign"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -13567,12 +13567,12 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "zeroize",
- "zeta-process-hardening",
- "zeta-product-update",
+ "ash-process-hardening",
+ "ash-product-update",
 ]
 
 [[package]]
-name = "zeta-user-verification"
+name = "ash-user-verification"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -13592,7 +13592,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-utils-absolute-path"
+name = "ash-utils-absolute-path"
 version = "0.1.0"
 dependencies = [
  "dirs",
@@ -13606,7 +13606,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-utils-cache"
+name = "ash-utils-cache"
 version = "0.1.0"
 dependencies = [
  "lru 0.18.3",
@@ -13615,11 +13615,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-utils-elapsed"
+name = "ash-utils-elapsed"
 version = "0.1.0"
 
 [[package]]
-name = "zeta-utils-home-dir"
+name = "ash-utils-home-dir"
 version = "0.1.0"
 dependencies = [
  "dirs",
@@ -13628,7 +13628,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-utils-image"
+name = "ash-utils-image"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -13637,11 +13637,11 @@ dependencies = [
  "sha2 0.10.9",
  "thiserror 2.0.19",
  "tokio",
- "zeta-utils-cache",
+ "ash-utils-cache",
 ]
 
 [[package]]
-name = "zeta-utils-json-to-toml"
+name = "ash-utils-json-to-toml"
 version = "0.1.0"
 dependencies = [
  "pretty_assertions",
@@ -13650,11 +13650,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-utils-output-truncation"
+name = "ash-utils-output-truncation"
 version = "0.1.0"
 
 [[package]]
-name = "zeta-utils-path"
+name = "ash-utils-path"
 version = "0.1.0"
 dependencies = [
  "dunce",
@@ -13663,7 +13663,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-utils-path-uri"
+name = "ash-utils-path-uri"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -13676,11 +13676,11 @@ dependencies = [
  "ts-rs",
  "url",
  "urlencoding",
- "zeta-utils-absolute-path",
+ "ash-utils-absolute-path",
 ]
 
 [[package]]
-name = "zeta-utils-pty"
+name = "ash-utils-pty"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -13696,21 +13696,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-utils-stream-parser"
+name = "ash-utils-stream-parser"
 version = "0.1.0"
 dependencies = [
  "pretty_assertions",
 ]
 
 [[package]]
-name = "zeta-utils-template"
+name = "ash-utils-template"
 version = "0.1.0"
 dependencies = [
  "pretty_assertions",
 ]
 
 [[package]]
-name = "zeta-v8-poc"
+name = "ash-v8-poc"
 version = "0.1.0"
 dependencies = [
  "pretty_assertions",
@@ -13718,24 +13718,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-web-search-extension"
+name = "ash-web-search-extension"
 version = "0.1.0"
 dependencies = [
  "pollster 1.0.1",
  "serde",
  "serde_json",
  "url",
- "zeta-async-utils",
- "zeta-client",
- "zeta-extension-api",
- "zeta-extension-items",
- "zeta-http-client",
- "zeta-protocol",
- "zeta-tools",
+ "ash-async-utils",
+ "ash-client",
+ "ash-extension-api",
+ "ash-extension-items",
+ "ash-http-client",
+ "ash-protocol",
+ "ash-tools",
 ]
 
 [[package]]
-name = "zeta-websocket-client"
+name = "ash-websocket-client"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -13744,11 +13744,11 @@ dependencies = [
  "tokio-tungstenite",
  "url",
  "zeroize",
- "zeta-http-client",
+ "ash-http-client",
 ]
 
 [[package]]
-name = "zeta-windows-sandbox"
+name = "ash-windows-sandbox"
 version = "0.1.0"
 dependencies = [
  "getrandom 0.2.17",
@@ -13761,17 +13761,17 @@ dependencies = [
  "windows-sys 0.61.2",
  "winreg 0.55.0",
  "wxc_common",
- "zeta-async-utils",
- "zeta-file-access",
- "zeta-install-context",
- "zeta-network-proxy",
- "zeta-sandboxing",
- "zeta-tool-executor",
- "zeta-utils-pty",
+ "ash-async-utils",
+ "ash-file-access",
+ "ash-install-context",
+ "ash-network-proxy",
+ "ash-sandboxing",
+ "ash-tool-executor",
+ "ash-utils-pty",
 ]
 
 [[package]]
-name = "zeta-workbench"
+name = "ash-workbench"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -13782,43 +13782,43 @@ dependencies = [
  "tar",
  "tempfile",
  "unicode-width 0.2.0",
- "zeta-app-server",
- "zeta-app-server-client",
- "zeta-app-server-daemon",
- "zeta-app-server-protocol",
- "zeta-arg0",
- "zeta-commands",
- "zeta-diff",
- "zeta-editor",
- "zeta-editor-host",
- "zeta-file-access",
- "zeta-file-search",
- "zeta-files",
- "zeta-icons",
- "zeta-input-classifier",
- "zeta-keybinding",
- "zeta-keybindings-host",
- "zeta-lsp-manager",
- "zeta-memories",
- "zeta-memory-diagnostics",
- "zeta-message-history",
- "zeta-protocol",
- "zeta-remote",
- "zeta-remote-connections",
- "zeta-remote-host",
- "zeta-scm",
- "zeta-session",
- "zeta-settings",
- "zeta-slash-commands",
- "zeta-state",
- "zeta-terminal",
- "zeta-terminal-runtime",
- "zeta-text-file",
- "zeta-theme",
- "zeta-ui-components",
- "zeta-ui-theme",
- "zeta-utils-home-dir",
- "zeta-utils-path",
+ "ash-app-server",
+ "ash-app-server-client",
+ "ash-app-server-daemon",
+ "ash-app-server-protocol",
+ "ash-arg0",
+ "ash-commands",
+ "ash-diff",
+ "ash-editor",
+ "ash-editor-host",
+ "ash-file-access",
+ "ash-file-search",
+ "ash-files",
+ "ash-icons",
+ "ash-input-classifier",
+ "ash-keybinding",
+ "ash-keybindings-host",
+ "ash-lsp-manager",
+ "ash-memories",
+ "ash-memory-diagnostics",
+ "ash-message-history",
+ "ash-protocol",
+ "ash-remote",
+ "ash-remote-connections",
+ "ash-remote-host",
+ "ash-scm",
+ "ash-session",
+ "ash-settings",
+ "ash-slash-commands",
+ "ash-state",
+ "ash-terminal",
+ "ash-terminal-runtime",
+ "ash-text-file",
+ "ash-theme",
+ "ash-ui-components",
+ "ash-ui-theme",
+ "ash-utils-home-dir",
+ "ash-utils-path",
  "zui",
 ]
 
@@ -13922,7 +13922,7 @@ dependencies = [
  "winit",
  "x11rb",
  "zbus 5.19.0",
- "zeta-product-update",
+ "ash-product-update",
 ]
 
 [[package]]

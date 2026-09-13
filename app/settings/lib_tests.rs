@@ -1,10 +1,10 @@
-use zeta_icons::icons;
-use zeta_ui_components::ButtonBackgrounds;
-use zeta_ui_components::ButtonStyle;
-use zeta_ui_components::InputBoxStateColors;
-use zeta_ui_components::InputBoxStyle;
-use zeta_ui_components::InteractionRegion;
-use zeta_ui_components::SearchBoxStyle;
+use ash_icons::icons;
+use ash_ui_components::ButtonBackgrounds;
+use ash_ui_components::ButtonStyle;
+use ash_ui_components::InputBoxStateColors;
+use ash_ui_components::InputBoxStyle;
+use ash_ui_components::InteractionRegion;
+use ash_ui_components::SearchBoxStyle;
 use zui::ui::AccessibilityRole;
 use zui::ui::AccessibilitySelection;
 use zui::ui::CaretVisibility;
@@ -110,8 +110,8 @@ fn page_uses_resolved_interface_typography_for_navigation() {
     let dispatch = UiDispatch::default();
     let input = zui::ui::TextInput::default();
     let mut text_layout = TextInputLayoutEngine::new();
-    let typography = zeta_ui_theme::UiTypography::from_theme(
-        zeta_ui_theme::DEFAULT_UI_THEME,
+    let typography = ash_ui_theme::UiTypography::from_theme(
+        ash_ui_theme::DEFAULT_UI_THEME,
         FontFamily::Named("Inter".into()),
         15.0,
     );
@@ -119,7 +119,7 @@ fn page_uses_resolved_interface_typography_for_navigation() {
         zui::ui::Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
         &input,
         CaretVisibility::Visible,
-        SettingsPageStyle::from_theme(zeta_ui_theme::DEFAULT_UI_THEME, &typography),
+        SettingsPageStyle::from_theme(ash_ui_theme::DEFAULT_UI_THEME, &typography),
         &dispatch,
         &mut text_layout,
     );

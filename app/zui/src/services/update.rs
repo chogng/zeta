@@ -75,9 +75,9 @@ pub struct UpdateConfig {
     pub target: String,
     pub public_key: UpdatePublicKey,
     pub staging_directory: PathBuf,
-    pub product: zeta_product_update::UpdateProduct,
-    pub policy: zeta_product_update::UpdatePolicy,
-    pub package_format: zeta_product_update::PackageFormat,
+    pub product: ash_product_update::UpdateProduct,
+    pub policy: ash_product_update::UpdatePolicy,
+    pub package_format: ash_product_update::PackageFormat,
 }
 
 impl UpdateConfig {
@@ -88,9 +88,9 @@ impl UpdateConfig {
         target: impl Into<String>,
         public_key: UpdatePublicKey,
         staging_directory: impl Into<PathBuf>,
-        product: zeta_product_update::UpdateProduct,
-        policy: zeta_product_update::UpdatePolicy,
-        package_format: zeta_product_update::PackageFormat,
+        product: ash_product_update::UpdateProduct,
+        policy: ash_product_update::UpdatePolicy,
+        package_format: ash_product_update::PackageFormat,
     ) -> Self {
         Self {
             manifest_url,
@@ -261,10 +261,10 @@ impl SignedHttpUpdater {
     }
 
     fn parse_manifest(&self, bytes: &[u8]) -> Result<Option<UpdateRelease>, SystemServiceError> {
-        let release = zeta_product_update::verify_release(
+        let release = ash_product_update::verify_release(
             bytes,
-            zeta_product_update::UpdatePublicKey::from_bytes(self.config.public_key.0),
-            &zeta_product_update::ExpectedRelease {
+            ash_product_update::UpdatePublicKey::from_bytes(self.config.public_key.0),
+            &ash_product_update::ExpectedRelease {
                 product: self.config.product,
                 policy: self.config.policy,
                 target: self.config.target.clone(),

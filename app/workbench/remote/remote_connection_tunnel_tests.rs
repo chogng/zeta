@@ -1,5 +1,5 @@
 use tempfile::TempDir;
-use zeta_remote_connections::RemoteConnectionCatalog;
+use ash_remote_connections::RemoteConnectionCatalog;
 
 use crate::remote_connection_cli::AppInvocation;
 use crate::remote_connection_cli::AppInvocationParseError;
@@ -78,7 +78,7 @@ fn tunnel_requires_a_saved_connection_and_remote_port() {
 #[test]
 fn tunnel_uses_named_host_and_fixed_loopback_forward_in_the_foreground() {
     use crate::launch_test_support::make_executable;
-    use zeta_remote_connections::select_available_loopback_port;
+    use ash_remote_connections::select_available_loopback_port;
 
     let directory = TempDir::new().unwrap();
     let catalog = RemoteConnectionCatalog::new(directory.path().join("targets.json"));

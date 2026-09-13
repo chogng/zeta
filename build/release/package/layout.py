@@ -1,4 +1,4 @@
-"""Canonical Zeta package directory assembly and validation."""
+"""Canonical Ash package directory assembly and validation."""
 
 import hashlib
 import json
@@ -13,11 +13,11 @@ from typing import Dict, Optional
 from .bubblewrap import BubblewrapResolution
 from .node import NodeResolution
 from .ripgrep import RipgrepResolution
-from build.lib.zeta_build.targets import TargetSpec
+from build.lib.ash_build.targets import TargetSpec
 
 
 LAYOUT_VERSION = 2
-METADATA_FILE = "zeta-package.json"
+METADATA_FILE = "ash-package.json"
 SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
@@ -26,14 +26,14 @@ def copy_uds_notices(repository_root: Path, licenses: Path) -> None:
     destination = licenses / "uds"
     destination.mkdir(parents=True)
     for name in ("LICENSE-APACHE", "NOTICE"):
-        shutil.copyfile(repository_root / "zeta-rs" / "uds" / name, destination / name)
+        shutil.copyfile(repository_root / "ash-rs" / "uds" / name, destination / name)
 
 
 def copy_windows_sandbox_notices(repository_root: Path, licenses: Path) -> None:
     destination = licenses / "windows-sandbox"
     destination.mkdir(parents=True)
     for name in ("LICENSE-APACHE", "NOTICE"):
-        shutil.copyfile(repository_root / "zeta-rs/windows-sandbox" / name, destination / name)
+        shutil.copyfile(repository_root / "ash-rs/windows-sandbox" / name, destination / name)
 
 
 def build_package_directory(
@@ -68,21 +68,21 @@ def build_package_directory(
     )
     try:
         binary_directory = staging / "bin"
-        path_directory = staging / "zeta-path"
-        skills_directory = staging / "zeta-resources" / "skills"
-        extensions_directory = staging / "zeta-resources" / "extensions"
-        product_services_directory = staging / "zeta-resources" / "product-services"
-        license_directory = staging / "zeta-resources" / "licenses" / "ripgrep"
-        vscode_license_directory = staging / "zeta-resources" / "licenses" / "vscode"
+        path_directory = staging / "ash-path"
+        skills_directory = staging / "ash-resources" / "skills"
+        extensions_directory = staging / "ash-resources" / "extensions"
+        product_services_directory = staging / "ash-resources" / "product-services"
+        license_directory = staging / "ash-resources" / "licenses" / "ripgrep"
+        vscode_license_directory = staging / "ash-resources" / "licenses" / "vscode"
         binary_directory.mkdir()
         if windows_sandbox_binary is not None:
-            copy_executable(windows_sandbox_binary, binary_directory / "zeta-windows-sandbox.exe", is_windows=True)
-            copy_windows_sandbox_notices(repository_root, staging / "zeta-resources" / "licenses")
+            copy_executable(windows_sandbox_binary, binary_directory / "ash-windows-sandbox.exe", is_windows=True)
+            copy_windows_sandbox_notices(repository_root, staging / "ash-resources" / "licenses")
         path_directory.mkdir()
         license_directory.mkdir(parents=True)
         vscode_license_directory.mkdir()
         copy_builtin_skills(
-            repository_root / "zeta-rs" / "skills" / "assets",
+            repository_root / "ash-rs" / "skills" / "assets",
             skills_directory,
         )
         copy_builtin_extensions(
@@ -124,8 +124,8 @@ def build_package_directory(
             is_windows=spec.is_windows,
         )
         if node is not None:
-            node_directory = staging / "zeta-resources" / "node" / "bin"
-            node_license_directory = staging / "zeta-resources" / "licenses" / "node"
+            node_directory = staging / "ash-resources" / "node" / "bin"
+            node_license_directory = staging / "ash-resources" / "licenses" / "node"
             node_directory.mkdir(parents=True)
             node_license_directory.mkdir(parents=True)
             copy_executable(
@@ -134,13 +134,13 @@ def build_package_directory(
                 is_windows=spec.is_windows,
             )
             shutil.copyfile(node.license_file, node_license_directory / "LICENSE")
-        mxc_license_directory = staging / "zeta-resources" / "licenses" / "mxc"
+        mxc_license_directory = staging / "ash-resources" / "licenses" / "mxc"
         mxc_license_directory.mkdir()
         shutil.copyfile(
-            repository_root / "zeta-rs" / "vendor" / "mxc" / "LICENSE.md",
+            repository_root / "ash-rs" / "vendor" / "mxc" / "LICENSE.md",
             mxc_license_directory / "LICENSE.md",
         )
-        copy_uds_notices(repository_root, staging / "zeta-resources" / "licenses")
+        copy_uds_notices(repository_root, staging / "ash-resources" / "licenses")
         for name in ("LICENSE-MIT", "UNLICENSE"):
             shutil.copyfile(
                 repository_root / "third_party" / "ripgrep" / name,
@@ -155,11 +155,11 @@ def build_package_directory(
         if bubblewrap is not None:
             copy_executable(
                 bubblewrap.executable,
-                staging / "zeta-resources" / "bwrap",
+                staging / "ash-resources" / "bwrap",
                 is_windows=False,
             )
             bubblewrap_license_directory = (
-                staging / "zeta-resources" / "licenses" / "bubblewrap"
+                staging / "ash-resources" / "licenses" / "bubblewrap"
             )
             bubblewrap_license_directory.mkdir()
             for license_file in bubblewrap.license_files:
@@ -211,7 +211,7 @@ def build_package_directory(
                 or re.fullmatch(r"[a-f0-9]{64}", update_public_key) is None
             ):
                 raise RuntimeError(
-                    "Zeta Code packages require a 32-byte hexadecimal update public key"
+                    "Ash Code packages require a 32-byte hexadecimal update public key"
                 )
             components["cli"] = {
                 "source": "cargo-build",
@@ -231,7 +231,7 @@ def build_package_directory(
         if bubblewrap_metadata is not None:
             components["bubblewrap"] = bubblewrap_metadata
         if windows_sandbox_binary is not None:
-            components["windowsSandbox"] = {"source": "cargo-build", "binarySha256": file_sha256(binary_directory / "zeta-windows-sandbox.exe")}
+            components["windowsSandbox"] = {"source": "cargo-build", "binarySha256": file_sha256(binary_directory / "ash-windows-sandbox.exe")}
         protocol = (
             protocol_metadata
             if protocol_metadata is not None
@@ -245,8 +245,8 @@ def build_package_directory(
             "version": version,
             "target": spec.target,
             "entrypoint": "bin/" + spec.server_name,
-            "pathDir": "zeta-path",
-            "resourcesDir": "zeta-resources",
+            "pathDir": "ash-path",
+            "resourcesDir": "ash-resources",
             "javascriptRuntime": {
                 "kind": runtime_kind,
             },
@@ -269,8 +269,8 @@ def build_package_directory(
 def validate_package_directory(package: Path, spec: TargetSpec) -> None:
     required_directories = (
         package / "bin",
-        package / "zeta-path",
-        package / "zeta-resources",
+        package / "ash-path",
+        package / "ash-resources",
     )
     for directory in required_directories:
         if not directory.is_dir():
@@ -284,8 +284,8 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
         "layoutVersion": LAYOUT_VERSION,
         "target": spec.target,
         "entrypoint": "bin/" + spec.server_name,
-        "pathDir": "zeta-path",
-        "resourcesDir": "zeta-resources",
+        "pathDir": "ash-path",
+        "resourcesDir": "ash-resources",
     }
     for key, expected_value in expected.items():
         if metadata.get(key) != expected_value:
@@ -301,7 +301,7 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
         package / "bin" / spec.remote_server_name,
         package / "bin" / spec.app_server_daemon_name,
         package / "bin" / spec.code_mode_host_name,
-        package / "zeta-path" / spec.ripgrep_name,
+        package / "ash-path" / spec.ripgrep_name,
     ]
     components = metadata.get("components")
     if not isinstance(components, dict):
@@ -314,8 +314,8 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
         "remoteServer": package / "bin" / spec.remote_server_name,
     }
     if spec.is_windows:
-        first_party_artifacts["windowsSandbox"] = package / "bin/zeta-windows-sandbox.exe"
-        executables.append(package / "bin/zeta-windows-sandbox.exe")
+        first_party_artifacts["windowsSandbox"] = package / "bin/ash-windows-sandbox.exe"
+        executables.append(package / "bin/ash-windows-sandbox.exe")
     if "cli" in components:
         cli = components["cli"]
         if (
@@ -354,15 +354,15 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
     if javascript_runtime == {"kind": "packagedNode"}:
         if not isinstance(components.get("node"), dict):
             raise RuntimeError("Packaged Node runtime metadata is missing")
-        executables.append(package / "zeta-resources" / "node" / "bin" / spec.node_name)
+        executables.append(package / "ash-resources" / "node" / "bin" / spec.node_name)
     elif javascript_runtime == {"kind": "hostProvidedNode"}:
         if "node" in components:
             raise RuntimeError("Host-provided runtime package contains Node metadata")
-        if (package / "zeta-resources" / "node").exists():
+        if (package / "ash-resources" / "node").exists():
             raise RuntimeError(
                 "Host-provided runtime package contains a Node executable"
             )
-        if (package / "zeta-resources" / "licenses" / "node").exists():
+        if (package / "ash-resources" / "licenses" / "node").exists():
             raise RuntimeError("Host-provided runtime package contains a Node license")
     else:
         raise RuntimeError("Invalid package JavaScript runtime declaration")
@@ -373,38 +373,38 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
             raise RuntimeError("Package file is not executable: {}".format(executable))
     for license_name in ("LICENSE-MIT", "UNLICENSE"):
         license_path = (
-            package / "zeta-resources" / "licenses" / "ripgrep" / license_name
+            package / "ash-resources" / "licenses" / "ripgrep" / license_name
         )
         if not license_path.is_file():
             raise RuntimeError("Missing ripgrep license: {}".format(license_path))
     for name in ("LICENSE-APACHE", "NOTICE"):
-        notice = package / "zeta-resources" / "licenses" / "uds" / name
+        notice = package / "ash-resources" / "licenses" / "uds" / name
         if notice.is_symlink() or not notice.is_file():
             raise RuntimeError("Missing UDS notice: {}".format(notice))
-    mxc_license = package / "zeta-resources" / "licenses" / "mxc" / "LICENSE.md"
+    mxc_license = package / "ash-resources" / "licenses" / "mxc" / "LICENSE.md"
     if mxc_license.is_symlink() or not mxc_license.is_file():
         raise RuntimeError("Missing MXC license")
-    vscode_license = package / "zeta-resources" / "licenses" / "vscode" / "LICENSE.txt"
+    vscode_license = package / "ash-resources" / "licenses" / "vscode" / "LICENSE.txt"
     if vscode_license.is_symlink() or not vscode_license.is_file():
         raise RuntimeError(
             "Missing VS Code extension license: {}".format(vscode_license)
         )
     if javascript_runtime == {"kind": "packagedNode"}:
-        node_license = package / "zeta-resources" / "licenses" / "node" / "LICENSE"
+        node_license = package / "ash-resources" / "licenses" / "node" / "LICENSE"
         if node_license.is_symlink() or not node_license.is_file():
             raise RuntimeError("Missing Node.js license: {}".format(node_license))
-    validate_builtin_skills(package / "zeta-resources" / "skills")
-    validate_builtin_extensions(package / "zeta-resources" / "extensions")
-    validate_product_services(package / "zeta-resources" / "product-services")
+    validate_builtin_skills(package / "ash-resources" / "skills")
+    validate_builtin_extensions(package / "ash-resources" / "extensions")
+    validate_product_services(package / "ash-resources" / "product-services")
     if spec.is_linux:
-        bubblewrap = package / "zeta-resources" / "bwrap"
+        bubblewrap = package / "ash-resources" / "bwrap"
         if not bubblewrap.is_file() or not is_executable(bubblewrap):
             raise RuntimeError(
-                "Linux package is missing executable zeta-resources/bwrap"
+                "Linux package is missing executable ash-resources/bwrap"
             )
         for license_name in ("COPYING",):
             license_path = (
-                package / "zeta-resources" / "licenses" / "bubblewrap" / license_name
+                package / "ash-resources" / "licenses" / "bubblewrap" / license_name
             )
             if not license_path.is_file():
                 raise RuntimeError(
@@ -421,17 +421,17 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
     artifacts = {
         "appServerDaemon": package / "bin" / spec.app_server_daemon_name,
         "codeModeHost": package / "bin" / spec.code_mode_host_name,
-        "ripgrep": package / "zeta-path" / spec.ripgrep_name,
+        "ripgrep": package / "ash-path" / spec.ripgrep_name,
         "appServer": package / "bin" / spec.server_name,
         "remote": package / "bin" / spec.remote_name,
         "remoteServer": package / "bin" / spec.remote_server_name,
     }
     if spec.is_windows:
-        artifacts["windowsSandbox"] = package / "bin/zeta-windows-sandbox.exe"
+        artifacts["windowsSandbox"] = package / "bin/ash-windows-sandbox.exe"
     if "cli" in components:
         artifacts["cli"] = package / "bin" / spec.cli_name
     if metadata.get("javascriptRuntime") == {"kind": "packagedNode"}:
-        artifacts["node"] = package / "zeta-resources" / "node" / "bin" / spec.node_name
+        artifacts["node"] = package / "ash-resources" / "node" / "bin" / spec.node_name
     for path in artifacts.values():
         if path.is_symlink() or not path.is_file():
             raise RuntimeError("Missing package signing artifact: {}".format(path))
@@ -700,9 +700,9 @@ def validate_product_services(product_services_directory: Path) -> None:
             raise RuntimeError("Package Marketplace names must be valid and unique")
         names.add(name)
         relative = source.get("trustedRoot")
-        if name == "zeta" and relative != "marketplace-root.json":
+        if name == "ash" and relative != "marketplace-root.json":
             raise RuntimeError(
-                "Package product services does not pin the Zeta Marketplace root"
+                "Package product services does not pin the Ash Marketplace root"
             )
         if not isinstance(relative, str) or "\\" in relative or ":" in relative:
             raise RuntimeError("Package trust root must be a contained relative file")
@@ -725,9 +725,9 @@ def validate_product_services(product_services_directory: Path) -> None:
                 raise RuntimeError(
                     "Package trust root must be a bounded regular file inside product services"
                 )
-    if "zeta" not in names:
+    if "ash" not in names:
         raise RuntimeError(
-            "Package product services does not pin the Zeta Marketplace root"
+            "Package product services does not pin the Ash Marketplace root"
         )
 
 
@@ -772,7 +772,7 @@ def package_files(package: Path) -> Dict[str, str]:
 
 def package_build_id(identity: Dict[str, object], files: Dict[str, str]) -> str:
     digest = hashlib.sha256()
-    digest.update(b"zeta-package-build-v2\0")
+    digest.update(b"ash-package-build-v2\0")
     digest.update(
         json.dumps(
             identity,
@@ -805,7 +805,7 @@ def load_protocol_metadata(
     generated = (
         generated_typescript
         or repository_root
-        / "zeta-rs"
+        / "ash-rs"
         / "app-server-protocol"
         / "schema"
         / "typescript"

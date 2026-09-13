@@ -1,10 +1,10 @@
-use zeta_ui_components::Button;
-use zeta_ui_components::ButtonState;
-use zeta_ui_components::InputBox;
-use zeta_ui_components::InputBoxState;
-use zeta_ui_components::InteractionRegion;
-use zeta_ui_components::ListView;
-use zeta_ui_components::ScrollMetrics;
+use ash_ui_components::Button;
+use ash_ui_components::ButtonState;
+use ash_ui_components::InputBox;
+use ash_ui_components::InputBoxState;
+use ash_ui_components::InteractionRegion;
+use ash_ui_components::ListView;
+use ash_ui_components::ScrollMetrics;
 use zui::ui::AccessibilityRole;
 use zui::ui::Border;
 use zui::ui::CaretVisibility;
@@ -385,7 +385,7 @@ impl Component for RemoteTunnelManager<'_> {
 mod tests {
     use super::*;
     use std::num::NonZeroU16;
-    use zeta_remote_host::RemoteTunnelId;
+    use ash_remote_host::RemoteTunnelId;
     use zui::ui::{InteractionFrame, UiFrame};
 
     #[test]

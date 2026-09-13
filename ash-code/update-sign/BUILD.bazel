@@ -1,0 +1,8 @@
+load("//:defs.bzl", "ash_rust_binary")
+
+ash_rust_binary(
+    name = "ash-update-sign",
+    crate_name = "ash_update_sign",
+    crate_root = "src/main.rs",
+    deps = ["//ash-rs/product-update:product-update"],
+)

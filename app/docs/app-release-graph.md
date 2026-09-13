@@ -11,7 +11,7 @@
 owned crates、shared backend crates 和 `app` 的 target graph，不再需要跨 workspace metadata
 patch 或重复 product hub。
 
-`app/` 与 `zeta-rs/` 仍保持物理目录和依赖 ownership 分离：app 可以依赖 shared backend，shared
+`app/` 与 `ash-rs/` 仍保持物理目录和依赖 ownership 分离：app 可以依赖 shared backend，shared
 backend 不得依赖 app/UI。workspace 是统一构建图，不替代产品架构边界；boundary script 和 CI
 继续验证反向依赖不会出现。
 
@@ -32,8 +32,8 @@ backend 不得依赖 app/UI。workspace 是统一构建图，不替代产品架�
 
 - [`MODULE.bazel`](../../MODULE.bazel) 固定 `rules_rs`、LLVM Rust toolchain、hermetic macOS SDK 和系统 Framework；
 - [`.bazelrc`](../../.bazelrc) 禁止探测本机 Xcode，并按宿主系统选择 Linux/Windows 的 platform constraint；
-- [`BUILD.bazel`](../../BUILD.bazel) 提供 `//:zeta` 产品入口、`disable_xcode` 和宿主 platform 定义；
-- `app/BUILD.bazel`、`zeta-code/BUILD.bazel` 和各 crate 的 `BUILD.bazel` 继续拥有各自产品/ crate target。
+- [`BUILD.bazel`](../../BUILD.bazel) 提供 `//:ash` 产品入口、`disable_xcode` 和宿主 platform 定义；
+- `app/BUILD.bazel`、`ash-code/BUILD.bazel` 和各 crate 的 `BUILD.bazel` 继续拥有各自产品/ crate target。
 
 当前不引入 Codex 专属的 RBE、Wine 或 workspace-root test launcher。RBE 需要真实的远程执行/缓存后端和 CI 凭证；
 Wine 只有在 Linux 主机交叉运行 Windows 测试时才有价值；专用 launcher 只有在测试需要 Codex 式 workspace-root、runfiles
@@ -59,7 +59,7 @@ flowchart LR
 
 所有 app-owned crate 和 shared backend 通过根 `Cargo.toml` 解析。Bazel 的 `//app:app` 使用同一份
 Cargo metadata-derived dependency graph；package builder 只接受 Cargo 生成的 `app` binary 或
-从 app package 构建它，它不从 `zeta-rs` 的旧 Native target 取 binary。未显式传 `--target` 时，
+从 app package 构建它，它不从 `ash-rs` 的旧 Native target 取 binary。未显式传 `--target` 时，
 source build 保持 Cargo 的原生 host 输出拓扑；显式交叉 target 才产生 target-triple 子目录。两者都遵循
 `CARGO_TARGET_DIR`，并从 Cargo JSON artifact 消息取得真实 executable，不猜测 profile 输出路径。
 
@@ -84,16 +84,16 @@ app-package/
 目录，并把状态标成 `unsigned`。这一步不取得密钥、不签名，也不宣称 artifact 可发布。
 
 需要支持只安装 app 的用户时，先运行 `build/release/remote/bundle.py`，输入一个或多个
-canonical packaged-node Zeta package directory，再给 staging 追加
+canonical packaged-node Ash package directory，再给 staging 追加
 `--remote-runtime-bundle <bundle>`。builder 将 catalog SHA-256 通过
 `APP_REMOTE_RUNTIME_CATALOG_SHA256` 编译进 app，并输出：
 
 ```text
 app-package/
 ├── bin/app[.exe]
-├── zeta-remote-runtimes/
+├── ash-remote-runtimes/
 │   ├── catalog.json
-│   └── artifacts/zeta-<target>.tar.gz
+│   └── artifacts/ash-<target>.tar.gz
 ├── app-package.json
 └── app-signing-policy.json
 ```
@@ -106,21 +106,21 @@ catalog digest。由此平台签名认证 binary，binary 认证 catalog，catal
 ```bash
 just app-package \
   --package-dir /absolute/path/to/app-package \
-  --remote-runtime-catalog-url https://releases.example/zeta/<version>/catalog.json \
+  --remote-runtime-catalog-url https://releases.example/ash/<version>/catalog.json \
   --remote-runtime-catalog-sha256 <catalog-digest>
 ```
 
 此时 builder 把 URL 和摘要同时编译进 binary，`app-package.json` 记录
 `url + sha256 + compiledIntoSignedBinary`，sign/verify 检查两者都存在于签名 artifact。package 不含
-`zeta-remote-runtimes/`；运行时由本机 updater 下载并完整验证，远端主机仍不联网取包。
+`ash-remote-runtimes/`；运行时由本机 updater 下载并完整验证，远端主机仍不联网取包。
 
 ### 3. Sign 与 verify
 
 `app/packaging/app-signing-policy.json` 是 release job 的输入，不是开发机默认行为：
 
-- macOS 使用 `codesign` 和 `ZETA_MACOS_SIGNING_IDENTITY`，验证后再打包/公证；
+- macOS 使用 `codesign` 和 `ASH_MACOS_SIGNING_IDENTITY`，验证后再打包/公证；
 - Linux 使用 `cosign sign-blob`，签名文件和 binary digest 一起进入 provenance artifact；
-- Windows 使用 `signtool` 和 `ZETA_WINDOWS_SIGNING_THUMBPRINT`，签名时加入 RFC 3161
+- Windows 使用 `signtool` 和 `ASH_WINDOWS_SIGNING_THUMBPRINT`，签名时加入 RFC 3161
   SHA-256 时间戳，并验证 Authenticode chain；GitHub Release 应使用 Azure Artifact Signing 后执行
   `build/release/app/signing.py record`，不把代码签名私钥下载到 runner；
 - 签名 job 只能读取 staging 输出，不能重建 binary；verify job 必须重新计算 digest，并检查与
@@ -140,7 +140,7 @@ python3 -B build/release/app/build.py \
   --package-dir /absolute/path/to/app-package \
   --remote-runtime-bundle /absolute/path/to/remote-runtimes
 
-ZETA_MACOS_SIGNING_IDENTITY="Developer ID Application: ..." \
+ASH_MACOS_SIGNING_IDENTITY="Developer ID Application: ..." \
 python3 -B build/release/app/signing.py sign \
   --package-dir /absolute/path/to/app-package
 
@@ -152,7 +152,7 @@ python3 -B build/release/app/signing.py verify \
 `--remote-runtime-catalog-sha256`，两者必须同时提供。
 
 Linux 使用 `APP_COSIGN_IDENTITY` 指向 cosign key。本地或自管 Windows runner 使用
-`ZETA_WINDOWS_SIGNING_THUMBPRINT` 选择已经安装在用户证书库中的代码签名证书；GitHub-hosted runner
+`ASH_WINDOWS_SIGNING_THUMBPRINT` 选择已经安装在用户证书库中的代码签名证书；GitHub-hosted runner
 由 Azure Artifact Signing 修改 binary 后运行 `build/release/app/signing.py record`，重新验证签名并更新
 metadata 和 signature record。脚本完成后，`app-package.json` 和
 `app-signature.json` 都必须是 `verified` 状态，才允许进入 publish step。

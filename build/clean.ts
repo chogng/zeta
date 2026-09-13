@@ -5,14 +5,14 @@ const repositoryRoot = resolve(import.meta.dirname, "..");
 const outputRoots = [
   join(repositoryRoot, ".build"),
   join(repositoryRoot, "build", "release", "__pycache__"),
-  join(repositoryRoot, "build", "release", "zeta_package", "__pycache__"),
-  join(repositoryRoot, "zeta-ts", ".tmp"),
-  join(repositoryRoot, "zeta-ts", "build"),
-  join(repositoryRoot, "zeta-ts", "dist"),
-  join(repositoryRoot, "zeta-ts", "output"),
+  join(repositoryRoot, "build", "release", "ash_package", "__pycache__"),
+  join(repositoryRoot, "ash-ts", ".tmp"),
+  join(repositoryRoot, "ash-ts", "build"),
+  join(repositoryRoot, "ash-ts", "dist"),
+  join(repositoryRoot, "ash-ts", "output"),
   join(repositoryRoot, "output"),
   join(repositoryRoot, "target"),
-  join(repositoryRoot, "zeta-rs", "target"),
+  join(repositoryRoot, "ash-rs", "target"),
 ];
 
 for (const outputRoot of outputRoots) {

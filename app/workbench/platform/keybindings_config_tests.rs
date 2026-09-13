@@ -2,13 +2,13 @@ use std::time::Instant;
 
 use serde_json::json;
 use std::collections::BTreeMap;
-use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
-use zeta_commands::AppCommandId;
-use zeta_keybinding::HostPlatform;
-use zeta_keybinding::KeyStroke;
-use zeta_keybinding::LogicalKey;
-use zeta_keybinding::Modifiers;
-use zeta_keybinding::parse_key_sequence;
+use ash_app_server_protocol::protocol::config::FrontendConfigDto;
+use ash_commands::AppCommandId;
+use ash_keybinding::HostPlatform;
+use ash_keybinding::KeyStroke;
+use ash_keybinding::LogicalKey;
+use ash_keybinding::Modifiers;
+use ash_keybinding::parse_key_sequence;
 
 use super::binding_diagnostics;
 use super::compile_user_bindings;

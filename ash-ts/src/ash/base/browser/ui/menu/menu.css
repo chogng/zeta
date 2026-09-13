@@ -1,0 +1,81 @@
+.ash-context-view-menu {
+  color: var(--ash-foreground);
+  background: var(--ash-editor-background);
+  border: 1px solid var(--ash-border);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px var(--ash-widget-shadow);
+  overflow: auto;
+}
+
+.ash-menu {
+  display: grid;
+  min-width: 180px;
+  padding: 4px;
+}
+.ash-menu .ash-action-view-item { display: block; }
+.ash-menu .ash-button {
+  width: 100%;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+  justify-content: flex-start;
+  cursor: default;
+}
+.ash-menu .ash-action-view-item.focused > .ash-button {
+  color: var(--ash-menu-selection-foreground);
+  background: var(--ash-menu-selection-background);
+  outline: 0;
+}
+.ash-menu-leading-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+.ash-menu-leading-check > .ash-icon {
+  visibility: hidden;
+}
+.ash-menu .ash-button.checked > .ash-menu-leading-check > .ash-icon {
+  visibility: visible;
+}
+.ash-menu .ash-action-view-item-separator {
+  width: auto;
+  height: 1px;
+  margin: 4px 8px;
+}
+.ash-menu .ash-submenu-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  padding-left: 12px;
+}
+.ash-menu .ash-submenu-indicator > .ash-icon [stroke] {
+  stroke-width: 1.5;
+}
+.ash-menu .ash-menu-keybinding {
+  margin-left: auto;
+  padding-left: 24px;
+  opacity: .8;
+}
+.ash-menu .ash-menu-badge {
+  margin-left: auto;
+  padding: 1px 6px;
+  border: 1px solid var(--ash-widget-border);
+  border-radius: 999px;
+  color: var(--ash-description-foreground);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+}
+.ash-menu .ash-menu-badge + .ash-menu-keybinding {
+  margin-left: 8px;
+  padding-left: 0;
+}

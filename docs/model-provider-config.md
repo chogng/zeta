@@ -1,14 +1,14 @@
 # 模型供应商配置
 
-> - 物理位置：`zeta-rs/model-provider-config/`
-> - Rust crate：`zeta_model_provider_config`
+> - 物理位置：`ash-rs/model-provider-config/`
+> - Rust crate：`ash_model_provider_config`
 > - 层次：声明配置层
 > - 当前状态：基础实现已包含声明式默认 `ApiProfile` 和独立 input-token count binding；invocation
 >   WebSocket profile 也已使用独立的 fail-closed capability；多 profile allow-list 与用户 override
 >   仍待实现
-> - Crate 实现与修改路径：[`zeta-rs/model-provider-config/README.md`](../zeta-rs/model-provider-config/README.md)
+> - Crate 实现与修改路径：[`ash-rs/model-provider-config/README.md`](../ash-rs/model-provider-config/README.md)
 > - Provider runtime：[`model-provider.md`](model-provider.md)
-> - API 协议层：[`zeta-api.md`](zeta-api.md)
+> - API 协议层：[`ash-api.md`](ash-api.md)
 
 ## 快速理解
 
@@ -25,7 +25,7 @@
 
 ## 1. 结论
 
-`zeta-model-provider-config` 描述“一个 Provider 可以怎样被配置”。它只包含可序列化、可校验、
+`ash-model-provider-config` 描述“一个 Provider 可以怎样被配置”。它只包含可序列化、可校验、
 可生成 schema 的声明值，不创建 HTTP client，不读取 credential，也不执行模型调用。
 
 这里的“静态”主要指校验不依赖运行时状态；其中 built-in model 目录确实由一个 Rust 常量维护：
@@ -40,9 +40,9 @@
 ```text
 model-provider-config 负责描述和归一化
 model-provider        负责解析并运行
-zeta-api              负责协议编解码
-zeta-client           负责 API operation retry/framing
-zeta-http-client      负责底层网络传输
+ash-api              负责协议编解码
+ash-client           负责 API operation retry/framing
+ash-http-client      负责底层网络传输
 ```
 
 ## 2. 拥有与不拥有
@@ -100,7 +100,7 @@ zeta-http-client      负责底层网络传输
 
 | 当前形态 | 问题 | 目标 |
 | --- | --- | --- |
-| `ProviderAdapter` 同时近似 Provider 名称和 runtime 实现 | 容易与 `zeta-api::Api` 再建一套分派 | 明确它是 runtime adapter identity，API endpoint 由 runtime 选择 |
+| `ProviderAdapter` 同时近似 Provider 名称和 runtime 实现 | 容易与 `ash-api::Api` 再建一套分派 | 明确它是 runtime adapter identity，API endpoint 由 runtime 选择 |
 | `EndpointPolicy` 只描述 base URL | 名称容易被理解为 `/messages` 等协议 endpoint | 改称或文档化为 `BaseUrlPolicy` 语义 |
 | definition 目前只有一个 `api_profile` | 无法表达 Google、xAI、Ollama 等多个正式 API profile | 扩展为 typed default/allowed API profile policy |
 | count binding 已独立声明 profile/target/models | invocation 与 count 可能不共享 base path | 保持 definition 显式，禁止 runtime 剥 URL 或猜 model 前缀 |
@@ -144,17 +144,17 @@ pub enum ApiProfileConfig {
 }
 ```
 
-`ApiProfileConfig` 是可序列化的配置值，不是 `zeta-api` runtime object。`zeta-model-provider`
-负责把它映射为具体 endpoint implementation，配置 crate 不依赖 `zeta-api`。
+`ApiProfileConfig` 是可序列化的配置值，不是 `ash-api` runtime object。`ash-model-provider`
+负责把它映射为具体 endpoint implementation，配置 crate 不依赖 `ash-api`。
 
 当前 `WebSocketApiProfile::{Unavailable, OpenAiResponses}` 只表达 exact wire eligibility。OpenAI
 definition 声明 `OpenAiResponses`；xAI 虽然上游另有 Responses WebSocket，但当前 definition 仍绑定
 Chat Completions，因此保持 `Unavailable`。Generic OpenAI-compatible 也始终默认 unavailable，不能从
 HTTP compatibility 推导 WebSocket。
 
-`RealtimeApiProfile::{Unavailable, OpenAiRealtime}` 独立声明公共 Realtime GA 协议。OpenAI 内置定义启用它，其他定义默认不可用；反序列化旧定义时缺少 `realtimeApiProfile` 也保持不可用。该声明表示协议可用性，不代表账户已经获得服务权限。运行时还需使用对应凭据与模型；Luna 等 ChatGPT 文本订阅不能用于公共 Realtime。实现及验证范围见[端点实现](zeta-api.md#46-端点归属与-websocket-实现)。
+`RealtimeApiProfile::{Unavailable, OpenAiRealtime}` 独立声明公共 Realtime GA 协议。OpenAI 内置定义启用它，其他定义默认不可用；反序列化旧定义时缺少 `realtimeApiProfile` 也保持不可用。该声明表示协议可用性，不代表账户已经获得服务权限。运行时还需使用对应凭据与模型；Luna 等 ChatGPT 文本订阅不能用于公共 Realtime。实现及验证范围见[端点实现](ash-api.md#46-端点归属与-websocket-实现)。
 
-ChatGPT subscription rows 复用 typed `OpenAiResponses` codec，但不复用 Platform target 或 API key。`runtime = chatgpt_subscription` 使 `zeta-model-provider` 从 `zeta-chatgpt` 获取固定 target 与 fresh OAuth headers；用户配置不得覆盖为任意 URL。
+ChatGPT subscription rows 复用 typed `OpenAiResponses` codec，但不复用 Platform target 或 API key。`runtime = chatgpt_subscription` 使 `ash-model-provider` 从 `ash-chatgpt` 获取固定 target 与 fresh OAuth headers；用户配置不得覆盖为任意 URL。
 
 Provider-specific compatibility 也必须 typed：
 
@@ -219,7 +219,7 @@ Normalization 不得：
 | --- | --- | --- |
 | 默认 base URL | `model-provider-config` | `https://api.anthropic.com` |
 | resolved runtime target | `model-provider` | base URL + credential/runtime headers |
-| relative API endpoint | `zeta-api` | `POST /v1/messages` |
+| relative API endpoint | `ash-api` | `POST /v1/messages` |
 
 配置层禁止把完整 invocation URL 当成通用字符串模板，也禁止通过删除 `/v1` 猜测 catalog 或原生
 endpoint。Google 和 Ollama 的 invocation/catalog 地址可能不共享同一个 base path，必须由
@@ -233,9 +233,9 @@ definition/runtime 显式声明。
 
 `ModelAccess` 当前区分 `ApiKey`、`Subscription`、`Local`、`Enterprise` 和 `Unknown`。`Subscription` 要求客户端使用登录系统中的用户账户，`ApiKey` 要求模型凭据领域中的开发者密钥；二者不能互相降级。它们不能承担 backend routing，`StaticModelRuntime::{ProviderApi, ChatGptSubscription, KimiCode}` 才是独立执行事实；`ModelRef.provider` 只表示模型厂商。当前认证、订阅权益和远端可用性仍只在实际 Turn 中验证。
 
-> Proposed：自动替换上线前，provider runtime 需要按不含秘密的 catalog scope 向 `zeta-models-manager` 提供凭据存在、账号授权和执行 runtime 可用性的受控事实；manager 只能自动选择已经证实可用的 scope。真实调用仍是最终 authority，选择前检查不能保证之后没有限流、撤权或服务故障，也不能把 credential 内容放进目录。
+> Proposed：自动替换上线前，provider runtime 需要按不含秘密的 catalog scope 向 `ash-models-manager` 提供凭据存在、账号授权和执行 runtime 可用性的受控事实；manager 只能自动选择已经证实可用的 scope。真实调用仍是最终 authority，选择前检查不能保证之后没有限流、撤权或服务故障，也不能把 credential 内容放进目录。
 
-> Proposed：为了支持 [`zeta-models-manager` 的兼容模型替换](models-manager.md#103-模型选择与替换)，静态模型清单还需要增加可选、带来源的模型族和替换排序 metadata。它们只能来自 provider 明确声明或内置可审阅资料，不能根据模型 ID、价格或发布时间猜测；动态目录返回的明确事实按字段合并，未知继续保持 `Unknown`。执行 runtime 和访问来源继续作为独立事实参与候选检查，同 provider 的 API key、用户订阅和企业 endpoint 不能互相伪装。这些字段只提供目录事实，不在本 crate 执行候选选择。
+> Proposed：为了支持 [`ash-models-manager` 的兼容模型替换](models-manager.md#103-模型选择与替换)，静态模型清单还需要增加可选、带来源的模型族和替换排序 metadata。它们只能来自 provider 明确声明或内置可审阅资料，不能根据模型 ID、价格或发布时间猜测；动态目录返回的明确事实按字段合并，未知继续保持 `Unknown`。执行 runtime 和访问来源继续作为独立事实参与候选检查，同 provider 的 API key、用户订阅和企业 endpoint 不能互相伪装。这些字段只提供目录事实，不在本 crate 执行候选选择。
 
 这些 rows 是：
 
@@ -252,7 +252,7 @@ definition/runtime 显式声明。
 - runtime health probe。
 
 动态发现、缓存、字段级 merge 和筛选属于
-[`zeta-models-manager`](models-manager.md)。`ListedOnly` / `AllowUnlisted` 的最终判断应逐步消费
+[`ash-models-manager`](models-manager.md)。`ListedOnly` / `AllowUnlisted` 的最终判断应逐步消费
 manager resolution，而不是让静态 definition 永久承担动态 catalog。新增 row 会自动进入通用 contract
 tests；测试验证 identity 唯一、metadata 自洽、provider/default/count binding 有效，不维护第二份 expected
 model 枚举。
@@ -260,35 +260,35 @@ model 枚举。
 ## 8. 依赖方向
 
 ```text
-zeta-protocol
+ash-protocol
       ▲
       │ shared IDs/model metadata
-zeta-model-provider-config
+ash-model-provider-config
       ▲
       │ normalized declaration
-zeta-model-provider
+ash-model-provider
 ```
 
 允许：
 
-- `zeta-model-provider-config → zeta-protocol`；
-- `zeta-model-provider → zeta-model-provider-config`。
+- `ash-model-provider-config → ash-protocol`；
+- `ash-model-provider → ash-model-provider-config`。
 
 禁止：
 
 ```text
-zeta-model-provider-config → zeta-model-provider
-zeta-model-provider-config → zeta-api
-zeta-model-provider-config → zeta-client
-zeta-model-provider-config → zeta-http-client
-zeta-model-provider-config → credentials
-zeta-model-provider-config → Core/App Server
+ash-model-provider-config → ash-model-provider
+ash-model-provider-config → ash-api
+ash-model-provider-config → ash-client
+ash-model-provider-config → ash-http-client
+ash-model-provider-config → credentials
+ash-model-provider-config → Core/App Server
 ```
 
 ## 9. 目标目录
 
 ```text
-zeta-rs/model-provider-config/
+ash-rs/model-provider-config/
 ├── BUILD.bazel
 ├── Cargo.toml
 ├── README.md
@@ -339,6 +339,6 @@ zeta-rs/model-provider-config/
 1. 本 crate 是声明配置层，不是运行时。
 2. “静态”表示无需网络和进程状态，不表示编译期硬编码。
 3. 默认 base URL 属于本 crate，resolved target 不属于。
-4. API profile 可以被声明，但具体 `zeta-api` endpoint object 由 runtime 选择。
+4. API profile 可以被声明，但具体 `ash-api` endpoint object 由 runtime 选择。
 5. Secret、transport、retry、SSE、telemetry 和动态 catalog 永不进入本 crate。
 6. Provider-specific option 必须 typed，禁止任意 JSON escape hatch。

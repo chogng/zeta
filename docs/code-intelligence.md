@@ -9,7 +9,7 @@
 
 ## 快速理解
 
-Zeta 不用一个巨型数据库同时冒充语法树、语言服务器、搜索索引和 AI 上下文。当前系统已经具备
+Ash 不用一个巨型数据库同时冒充语法树、语言服务器、搜索索引和 AI 上下文。当前系统已经具备
 增量语法事实、完整 LSP 请求链路、本地持久化符号索引、未保存 Buffer 覆盖层、本地优先的代码
 检索，以及符号感知的精确声明候选。它们共享由绑定 `Dir` 派生的 source identity，但分别拥有 freshness、
 失败与排序语义。跨语言代码图和 navigation cache 仍未建立：前者缺少 compiler/SCIP/resolver
@@ -34,32 +34,32 @@ Zeta 不用一个巨型数据库同时冒充语法树、语言服务器、搜索
 
 | 能力 | 当前 owner | 当前状态 |
 | --- | --- | --- |
-| 单文档增量 parse、token、fold、document symbol、parse diagnostic | `zeta-syntax` | Current |
-| 打开文档的文本、selection、undo/redo 与 Editor revision | Stanza / `zeta-editor` | Current |
-| completion、definition、references、hierarchy、workspace symbol 等精确语义 | `zeta-lsp-manager` + `zeta-lsp` | Current |
-| `Dir` scan、ignore、结构辅助切块、source/chunk identity、SQLite FTS | `zeta-codebase` | Current |
-| embedding cache、vector recall、optional rerank | `zeta-codebase` | Current |
-| lexical/semantic/optional remote 融合、源码复核与 byte budget | `zeta-codebase` | Current |
+| 单文档增量 parse、token、fold、document symbol、parse diagnostic | `ash-syntax` | Current |
+| 打开文档的文本、selection、undo/redo 与 Editor revision | Stanza / `ash-editor` | Current |
+| completion、definition、references、hierarchy、workspace symbol 等精确语义 | `ash-lsp-manager` + `ash-lsp` | Current |
+| `Dir` scan、ignore、结构辅助切块、source/chunk identity、SQLite FTS | `ash-codebase` | Current |
+| embedding cache、vector recall、optional rerank | `ash-codebase` | Current |
+| lexical/semantic/optional remote 融合、源码复核与 byte budget | `ash-codebase` | Current |
 | `search_code` 与可选 first-invocation evidence | App Server + Core | Current |
-| 持久化本地 symbol projection、overlay symbol 与 fuzzy matcher | `zeta-codebase` | Current |
-| Codebase 未保存 Buffer overlay、dirty suppression 与 save handoff | `zeta-codebase` + App Server | Current |
+| 持久化本地 symbol projection、overlay symbol 与 fuzzy matcher | `ash-codebase` | Current |
+| Codebase 未保存 Buffer overlay、dirty suppression 与 save handoff | `ash-codebase` + App Server | Current |
 | Workspace Symbol staged aggregation、取消、dedupe 与 accept-time hash verification | Desktop | Current |
-| 语言请求取消与隐私安全指标 | `zeta-lsp-manager` + App Server sink | Current |
+| 语言请求取消与隐私安全指标 | `ash-lsp-manager` + App Server sink | Current |
 | references/navigation semantic cache | 无 | 未安装；等待指标门禁 |
 | SCIP、occurrence/edge graph 与跨语言 resolver | 无 | 尚未完成 |
-| revision-bound structural selection scopes + Smart Select | `zeta-syntax` + Stanza | Current；mutation 尚未完成 |
+| revision-bound structural selection scopes + Smart Select | `ash-syntax` + Stanza | Current；mutation 尚未完成 |
 
-当前 `zeta-codebase` 的 `ChunkReference` 仍只表达 root、path、source revision、chunk key、content
-hash 和范围；`zeta-codebase` 单独保存 name、kind 与声明/选择范围。两者通过 source identity 与
+当前 `ash-codebase` 的 `ChunkReference` 仍只表达 root、path、source revision、chunk key、content
+hash 和范围；`ash-codebase` 单独保存 name、kind 与声明/选择范围。两者通过 source identity 与
 verified excerpt 交汇，而不是共享存储。当前系统仍不保存 occurrence 或 edge，因此“代码索引/RAG”、
 “符号索引”和“代码图”是相邻能力，不是一个数据库的不同表名。
 
 ### 1.1 与统一 Code Intelligence Store / FileShard 方案的差异
 
 外部方案对能力分类是对的，但其“一份 `FileShard` 写入一个 Store，再由所有功能读取”的实现不适合
-当前 Zeta。这里采用共享 authority/identity、分离 projection/runtime：
+当前 Ash。这里采用共享 authority/identity、分离 projection/runtime：
 
-| 设计点 | 统一 Store / FileShard 方案 | Zeta 当前选择 | 结论 |
+| 设计点 | 统一 Store / FileShard 方案 | Ash 当前选择 | 结论 |
 | --- | --- | --- | --- |
 | 持久化 | files/symbols/occurrences/edges/chunks/cache 共用一个 SQLite | lexical、symbol、semantic、cloud control 各自持有可删除 projection | failure、schema、retention 与权限不同，不合库 |
 | 文件事实 | parser/LSP/SCIP 合成一个 immutable shard | `CodebaseManifest` 只发布绑定 `Dir` 内的 sources/chunks；LSP 结果仍由 service incarnation 管理 | 不把不同 freshness 压成一个 revision |
@@ -71,7 +71,7 @@ verified excerpt 交汇，而不是共享存储。当前系统仍不保存 occur
 | 坐标转换 | 全系统共用一个 LineIndex | 每个 authority 内部使用 canonical coordinate，协议边界显式转换并验证 Unicode | 避免把 Editor/LSP/source revision 生命周期绑成共享 mutable service |
 | AI retrieval | graph/semantic/context store 统一读取 | retrieval 独立融合 symbol/FTS/vector/cloud，并在发给模型前由 Codebase 复核 exact excerpt | candidate provider 不拥有最终上下文 |
 
-实现顺序也不同。Zeta 在本计划前已经具备 LSP、SQLite lexical、semantic vector/rerank 和 Agent
+实现顺序也不同。Ash 在本计划前已经具备 LSP、SQLite lexical、semantic vector/rerank 和 Agent
 retrieval，因此没有按“先 FileShard、再 LSP、最后 semantic search”重建已有系统；本轮补的是实际缺口：
 本轮落地顺序是 symbol index → dirty overlay → symbol-aware retrieval → metrics/cancellation → on-demand Smart Select。Graph、
 resolver 和 cache 继续由证据门控制。
@@ -80,23 +80,23 @@ resolver 和 cache 继续由证据门控制。
 
 ```mermaid
 flowchart TD
-    Disk["Dir 内的磁盘源码"] --> Index["zeta-codebase<br/>scan / ignore / revision / chunks"]
+    Disk["Dir 内的磁盘源码"] --> Index["ash-codebase<br/>scan / ignore / revision / chunks"]
     Index --> Sources["verified manifest<br/>+ materialized sources"]
-    Sources --> Symbols["zeta-codebase<br/>symbol projection + fuzzy search"]
-    Sources --> Semantic["zeta-codebase<br/>embedding / vector / rerank"]
+    Sources --> Symbols["ash-codebase<br/>symbol projection + fuzzy search"]
+    Sources --> Semantic["ash-codebase<br/>embedding / vector / rerank"]
 
     Buffer["Editor 未保存 Buffer"] --> Overlay["App Server<br/>ephemeral document overlay"]
     Overlay --> Index
     Overlay --> Symbols
 
-    Lsp["zeta-lsp-manager<br/>精确语言语义"] --> WorkspaceSymbols["Workspace Symbol aggregator"]
+    Lsp["ash-lsp-manager<br/>精确语言语义"] --> WorkspaceSymbols["Workspace Symbol aggregator"]
     Symbols --> WorkspaceSymbols
     WorkspaceSymbols --> UI["Ctrl/Cmd+T"]
 
-    Index --> Retrieval["zeta-codebase"]
+    Index --> Retrieval["ash-codebase"]
     Semantic --> Retrieval
     Symbols --> Retrieval
-    Graph["Potential zeta-code-graph"] --> Retrieval
+    Graph["Potential ash-code-graph"] --> Retrieval
     Retrieval --> Agent["search_code / automatic evidence"]
 ```
 
@@ -113,26 +113,26 @@ flowchart TD
 
 | 组件 | 拥有 | 明确不拥有 |
 | --- | --- | --- |
-| `zeta-syntax` | grammar/query、增量 tree、revision-bound syntax facts | 文件扫描、SQLite、LSP semantic identity |
-| `zeta-codebase` | `Dir` scan、ignore、读取、source/chunk identity、磁盘与未来 overlay chunk authority | symbol graph、模型选择、最终 AI 排名 |
-| `zeta-codebase` | verified source 与 dirty overlay 的声明 projection、持久化复用、本地 exact/fuzzy symbol search | 自主扫描文件、LSP request、跨语言猜测 |
-| `zeta-lsp-manager` | server route/incarnation、document freshness、精确 LSP 请求 | 本地 symbol database、AI retrieval |
-| `zeta-codebase` | 模型输入、embedding persistence、vector recall、rerank 与来源内排序 | scan、chunk、跨来源融合 |
-| `zeta-codebase` | 多来源候选融合、identity dedupe、current-source verification 与内容预算 | 模型 transport、目录 Grant、Editor state |
-| Potential `zeta-code-graph` | semantic symbol、occurrence、typed edge、evidence/confidence | filesystem authority、UI、模型调用 |
+| `ash-syntax` | grammar/query、增量 tree、revision-bound syntax facts | 文件扫描、SQLite、LSP semantic identity |
+| `ash-codebase` | `Dir` scan、ignore、读取、source/chunk identity、磁盘与未来 overlay chunk authority | symbol graph、模型选择、最终 AI 排名 |
+| `ash-codebase` | verified source 与 dirty overlay 的声明 projection、持久化复用、本地 exact/fuzzy symbol search | 自主扫描文件、LSP request、跨语言猜测 |
+| `ash-lsp-manager` | server route/incarnation、document freshness、精确 LSP 请求 | 本地 symbol database、AI retrieval |
+| `ash-codebase` | 模型输入、embedding persistence、vector recall、rerank 与来源内排序 | scan、chunk、跨来源融合 |
+| `ash-codebase` | 多来源候选融合、identity dedupe、current-source verification 与内容预算 | 模型 transport、目录 Grant、Editor state |
+| Potential `ash-code-graph` | semantic symbol、occurrence、typed edge、evidence/confidence | filesystem authority、UI、模型调用 |
 | App Server | 目录 Grant 校验、watcher、projection 调度、ephemeral overlay、RPC、metrics sink 与 fallback composition | parser、fuzzy 算法、Renderer 展示 |
 | Desktop | frontend service、provider 聚合、取消、渐进结果和导航展示 | 索引存储、semantic cache authority |
 
 固定依赖方向：
 
 ```text
-zeta-codebase → zeta-codebase + zeta-syntax
-zeta-codebase → zeta-codebase + optional semantic/symbol/graph sources
+ash-codebase → ash-codebase + ash-syntax
+ash-codebase → ash-codebase + optional semantic/symbol/graph sources
 App Server → 上述 backend-neutral crates
 Desktop → generated protocol + frontend-owned service contracts
 ```
 
-禁止 `zeta-codebase` 直接遍历未授权目录。它必须比较 `CodebaseManifest.sources` 与自身 projection，
+禁止 `ash-codebase` 直接遍历未授权目录。它必须比较 `CodebaseManifest.sources` 与自身 projection，
 并通过 `Codebase::materialize_sources` 只读取经过当前 source revision 复核的文件。这样 scan、ignore、
 权限、symlink 和资源限制不会出现第二套实现。
 
@@ -190,12 +190,12 @@ SymbolIndexSnapshot
 1. 读取当前 `CodebaseManifest`。
 2. 按 `relative_path + source_revision + language` 复用未变化文件的 symbol rows。
 3. 批量 materialize 新增或变化 sources。
-4. 用 `zeta-syntax` 提取有界 document symbols。
+4. 用 `ash-syntax` 提取有界 document symbols。
 5. 删除 manifest 已不存在的文件。
 6. 在一个 SQLite transaction 中发布新 generation。
 7. 由新 generation 构造只读内存 fuzzy candidate snapshot。
 
-`zeta-syntax` 必须提供能使持久化消费者失效的 syntax-facts identity。grammar 或 tags query 改变但
+`ash-syntax` 必须提供能使持久化消费者失效的 syntax-facts identity。grammar 或 tags query 改变但
 identity 不变会静默复用不兼容 projection，属于 correctness bug。
 
 ### 4.3 不同 revision 不得混用
@@ -291,7 +291,7 @@ Unix persistent file 使用普通文件和 `0600`。路径、错误和日志不�
 
 ### P1：本地 Symbol 索引纵向链路（已完成）
 
-- 新增 `zeta-codebase` crate、README、Cargo/Bazel target。
+- 新增 `ash-codebase` crate、README、Cargo/Bazel target。
 - 定义 revision-bound symbol types、limits、error 和 storage。
 - 实现 manifest reconcile、syntax extraction、SQLite publication、persistent reuse。
 - 实现内存 Nucleo matcher、exact/fuzzy Top K 和 query cancellation。
@@ -300,7 +300,7 @@ Unix persistent file 使用普通文件和 `0600`。路径、错误和日志不�
 - Desktop 增加 `ICodebaseSymbolsService`、App Server implementation 和 workspace-symbol provider。
 - Workspace Symbol service 支持并发 provider 和阶段性结果。
 
-完成状态：`zeta-codebase`、App Server status/search RPC、Desktop service/provider 和 staged
+完成状态：`ash-codebase`、App Server status/search RPC、Desktop service/provider 和 staged
 Workspace Symbol fusion 已接通。Language Server 缺席或单个 provider 失败时本地结果仍可用；旧 query
 generation 不会发布，接受结果前以 SHA-256 对当前文件进行复核。
 
@@ -308,9 +308,9 @@ generation 不会发布，接受结果前以 SHA-256 对当前文件进行复核
 
 - 建立 App Server ephemeral `WorkspaceDocumentOverlay`。
 - host 把 open/change/close snapshot 同步投影给 overlay 与 LSP。
-- `zeta-codebase` 查询合并 overlay symbols 并抑制同路径磁盘 rows。
-- `zeta-codebase` 增加 canonical in-memory chunk overlay。
-- `zeta-codebase` 对 dirty paths 抑制全部持久化/remote candidates，并从 overlay 复核正文。
+- `ash-codebase` 查询合并 overlay symbols 并抑制同路径磁盘 rows。
+- `ash-codebase` 增加 canonical in-memory chunk overlay。
+- `ash-codebase` 对 dirty paths 抑制全部持久化/remote candidates，并从 overlay 复核正文。
 - 实现 save handoff：content hash 相同的磁盘 generation ready 后才删除 overlay。
 
 完成状态：Editor snapshot 通过 `codeIntelligence/document/synchronize|close` 同步；Codebase
@@ -332,7 +332,7 @@ generation 不会发布，接受结果前以 SHA-256 对当前文件进行复核
 ### P4：导航指标与可选会话缓存（指标已完成；缓存 gated）
 
 - 记录 request kind、server incarnation、cold/warm latency、结果数、取消率与配置 generation。
-- 只有指标证明重复请求成本显著时，增加 `zeta-lsp-manager` 内存 cache。
+- 只有指标证明重复请求成本显著时，增加 `ash-lsp-manager` 内存 cache。
 - cache key 至少绑定 server incarnation、semantic config generation、request kind、source revision、
   position 和请求选项。
 - server replacement、配置变化或相关 document revision 变化时失效。
@@ -346,7 +346,7 @@ server incarnation、configuration generation 或 document revision 时，才进
 
 ### P5：Semantic graph 与 SCIP（gated）
 
-- 在第一个真实 indexer/resolver 与消费场景同时出现时建立 `zeta-code-graph`。
+- 在第一个真实 indexer/resolver 与消费场景同时出现时建立 `ash-code-graph`。
 - 定义 semantic symbol、occurrence、typed edge、origin、evidence、confidence 和 freshness identity。
 - 第一批只接入 compiler/SCIP、generator source map、Protobuf/OpenAPI/GraphQL 等强证据关系。
 - 同名和路径启发式只产生候选，不产生精确跳转。
@@ -374,7 +374,7 @@ indexer/resolver、真实 consumer、可追溯 freshness 和 failure tests 同�
   回退 word/pair/line/document，shrink 使用 Editor-owned history。
 - 后续顺序实现 select declaration、argument/expression/statement selection，之后
   才实现 delete/move/wrap 等编辑。
-- `zeta-syntax` 返回 range 或 `StructuralEditPlan`；Editor 拥有 undo transaction、edit application、
+- `ash-syntax` 返回 range 或 `StructuralEditPlan`；Editor 拥有 undo transaction、edit application、
   reparse validation 和 formatting。
 - 连续输入热路径不触发结构范围请求；当前 App Server round trip 只发生在离散 Smart Select command。
   若未来操作进入 typing hot path，必须迁移到 editor-owned worker/in-process parser。
@@ -429,19 +429,19 @@ comment，public module 保持 private implementation + named exports。
 
 | 变更 | 主要落点 | 必须同步检查 |
 | --- | --- | --- |
-| 新 symbol kind/language | `zeta-syntax` + `zeta-codebase` mapping | extractor identity、fixtures、DTO mapping |
-| symbol identity/range | `zeta-codebase` | SQLite schema、dedupe、accept-time validation、AI excerpt |
-| Codebase generation/materialization | `zeta-codebase` | semantic、symbol、cloud consumers 与 stale tests |
+| 新 symbol kind/language | `ash-syntax` + `ash-codebase` mapping | extractor identity、fixtures、DTO mapping |
+| symbol identity/range | `ash-codebase` | SQLite schema、dedupe、accept-time validation、AI excerpt |
+| Codebase generation/materialization | `ash-codebase` | semantic、symbol、cloud consumers 与 stale tests |
 | watcher scheduling | App Server refresh worker | semantic/symbol jobs、coalescing、shutdown |
 | Workspace Symbol aggregation | Desktop language service | extension/LSP/local providers、query cancellation、Quick Pick |
 | overlay lifecycle | Editor host + App Server + Codebase/SymbolIndex | save、close、host teardown、Editor Workspace replacement |
-| new retrieval source | `zeta-codebase` | RRF、origin/degradation、materialization、Core evidence |
+| new retrieval source | `ash-codebase` | RRF、origin/degradation、materialization、Core evidence |
 | semantic edge | future graph owner | source freshness、resolver identity、navigation/AI consumers |
 
-`zeta-ts/src/zeta/code/*/workbench/modes/code.ts` 只允许导入 Code 模式 contribution 与宿主 adapter；
+`ash-ts/src/ash/code/*/workbench/modes/code.ts` 只允许导入 Code 模式 contribution 与宿主 adapter；
 `workbenchServiceContributions.ts` 只拥有静态安装机制；`workbench.ts` 只组合所有产品共同的服务。
 `extensionHost.contribution.ts` 在 Extension Host 明确支持 workspace-symbol operation 前不参与内置
-symbol index。`zeta-tools` 保持通用 Tool contract，不拥有 `search_code` 的候选或排名。
+symbol index。`ash-tools` 保持通用 Tool contract，不拥有 `search_code` 的候选或排名。
 
 ## 11. 拒绝的替代方案
 
@@ -460,7 +460,7 @@ symbol index。`zeta-tools` 保持通用 Tool contract，不拥有 `search_code`
 
 - Codebase 只对绑定 `Dir` 执行 scan、ignore、读取和切块，并为其产生 revision/chunk identity。
 - Editor authority 决定未保存文本；磁盘 projection 不得覆盖同路径 dirty Buffer。
-- `zeta-syntax` 提供 syntax facts，不声称 compiler/LSP semantic truth。
+- `ash-syntax` 提供 syntax facts，不声称 compiler/LSP semantic truth。
 - Language Server restart、配置变化和 document revision 必须使旧精确语义结果失效。
 - model provider 只执行 embedding/rerank 调用，不决定 candidates、graph traversal 或最终排序。
 - 云端只能消费本地 Codebase 已切分、已复核且 `CloudCodebaseGrant` 允许外发的 exact chunks，不能读取整文件后重新切块。

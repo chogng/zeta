@@ -1,5 +1,5 @@
 [package]
-name = "zeta-markdown"
+name = "ash-markdown"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,7 +7,7 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "zeta_markdown"
+name = "ash_markdown"
 path = "src/lib.rs"
 
 [dependencies]
@@ -22,7 +22,7 @@ sha2 = { workspace = true }
 syntect = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
-zeta-ui-components = { workspace = true }
+ash-ui-components = { workspace = true }
 zui = { workspace = true, default-features = false }
 
 [lints]

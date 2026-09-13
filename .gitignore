@@ -11,26 +11,26 @@ __pycache__/
 /user.bazelrc
 
 # Per-workspace runtime state
-.zeta/
+.ash/
 .playwright-*/
 .temp
 .tmp/
 .snow
 output/
-!zeta-ts/src/zeta/workbench/contrib/output/
-!zeta-ts/src/zeta/workbench/contrib/output/**
-!zeta-ts/src/zeta/workbench/services/output/
-!zeta-ts/src/zeta/workbench/services/output/**
+!ash-ts/src/ash/workbench/contrib/output/
+!ash-ts/src/ash/workbench/contrib/output/**
+!ash-ts/src/ash/workbench/services/output/
+!ash-ts/src/ash/workbench/services/output/**
 
 # Legacy Desktop build products
-zeta-ts/node_modules/
-zeta-ts/dist/
-zeta-ts/test/editor/browser/dist/
-zeta-ts/.tmp/
-zeta-ts/debug.log
+ash-ts/node_modules/
+ash-ts/dist/
+ash-ts/test/editor/browser/dist/
+ash-ts/.tmp/
+ash-ts/debug.log
 node_modules/
 .pnpm-store/
-zeta-ts/generated/app-server/
+ash-ts/generated/app-server/
 schemas/app-server/
 
 # Downloaded, checksum-verified third-party native runtime artifacts.

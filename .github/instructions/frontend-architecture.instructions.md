@@ -1,5 +1,5 @@
 ---
-description: Zeta TypeScript frontend layers, services, adapters, and base boundaries.
+description: Ash TypeScript frontend layers, services, adapters, and base boundaries.
 applyTo: "**/src/**/*.ts,**/src/**/*.cts,**/test/**/*.ts"
 ---
 
@@ -24,7 +24,7 @@ Transport APIs, generated DTOs, and wire validation stay inside the runtime adap
 
 ## Base layer
 
-Modules under `src/zeta/base` are domain-neutral. Higher-level features may depend on base; base must not import or mention them.
+Modules under `src/ash/base` are domain-neutral. Higher-level features may depend on base; base must not import or mention them.
 
 Define URI parsing, URI identity, resource collections, UUID validation, and lifecycle primitives in terms of their general contracts. Preserve exact URI identity by default; a domain that needs alternate semantics, such as ignoring fragments, selects that policy explicitly.
 

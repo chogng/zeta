@@ -1,0 +1,21 @@
+[package]
+name = "ash-file-identity"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "ash_file_identity"
+path = "src/lib.rs"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+] }
+
+[lints.rust]
+# The crate denies unsafe internally and re-allows it only in the private Windows FFI module.
+unsafe_code = "allow"

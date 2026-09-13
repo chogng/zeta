@@ -1,0 +1,23 @@
+[package]
+name = "ash-http-client"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "ash_http_client"
+path = "src/lib.rs"
+
+[dependencies]
+rustls = { workspace = true }
+rustls-native-certs = { workspace = true }
+tokio = { workspace = true, features = ["io-util"] }
+tokio-rustls = { workspace = true }
+ureq = { workspace = true }
+url = { workspace = true }
+zeroize = { workspace = true }
+
+[lints]
+workspace = true

@@ -3,7 +3,7 @@ import { defineConfig } from "vite";
 import { hotReloadPlugin } from "./hotReloadPlugin.ts";
 
 const repositoryRoot = resolve(import.meta.dirname, "../..");
-const desktopRoot = resolve(repositoryRoot, "zeta-ts");
+const desktopRoot = resolve(repositoryRoot, "ash-ts");
 
 export default defineConfig({
   base: "./",

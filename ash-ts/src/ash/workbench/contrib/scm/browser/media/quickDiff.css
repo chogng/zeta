@@ -1,0 +1,71 @@
+.stanza-editor-line-decoration.ash-quick-diff-gutter {
+  width: 4px;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.stanza-editor-line-decoration.ash-quick-diff-added {
+  background: var(--ash-diff-editor-inserted-line-marker);
+}
+
+.stanza-editor-line-decoration.ash-quick-diff-modified {
+  background: var(--ash-focus-border);
+}
+
+.stanza-editor-line-decoration.ash-quick-diff-deleted {
+  width: 0;
+  height: 0;
+  top: 50%;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid var(--ash-diff-editor-removed-line-marker);
+  transform: translateY(-50%);
+}
+
+@media (forced-colors: active) {
+  .stanza-editor-line-decoration.ash-quick-diff-gutter {
+    background: CanvasText;
+    border-left-color: CanvasText;
+  }
+}
+
+.ash-quick-diff-peek .stanza-editor-peek-view-body {
+  padding: 0;
+  overflow: hidden;
+}
+
+.ash-quick-diff-peek-body {
+  display: flex;
+  min-height: 180px;
+  flex-direction: column;
+}
+
+.ash-quick-diff-peek-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--ash-widget-border);
+}
+
+.ash-quick-diff-peek-action {
+  min-width: 24px;
+  padding: 2px 6px;
+  color: var(--ash-editor-foreground);
+  font: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+}
+
+.ash-quick-diff-peek-action:hover,
+.ash-quick-diff-peek-action:focus-visible {
+  background: var(--ash-list-hover-background);
+  outline: 1px solid var(--ash-focus-border);
+}
+
+.ash-quick-diff-peek-diff {
+  min-height: 0;
+  flex: 1;
+  height: 220px;
+}

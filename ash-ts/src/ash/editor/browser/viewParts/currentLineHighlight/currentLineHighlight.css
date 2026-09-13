@@ -1,0 +1,48 @@
+.stanza-editor .view-overlays .current-line {
+	display: block;
+	position: absolute;
+	left: 0;
+	top: 0;
+	box-sizing: border-box;
+	height: 100%;
+	background-color: var(--ash-editor-inactive-line-highlight-background);
+}
+
+.stanza-editor .view-overlays.focused .current-line {
+	background-color: var(--ash-editor-line-highlight-background);
+}
+
+.stanza-editor .margin-view-overlays .current-line {
+	display: block;
+	position: absolute;
+	left: 0;
+	top: 0;
+	box-sizing: border-box;
+	height: 100%;
+}
+
+.stanza-editor .margin-view-overlays .current-line-margin {
+	background-color: var(--ash-editor-inactive-line-highlight-background);
+}
+
+.stanza-editor .margin-view-overlays.focused .current-line-margin {
+	background-color: var(--ash-editor-line-highlight-background);
+}
+
+.stanza-editor .view-overlays .current-line-exact,
+.stanza-editor .margin-view-overlays .current-line-exact-margin {
+	border: 2px solid var(--ash-editor-line-highlight-border);
+}
+
+[data-color-scheme="high-contrast-dark"] .stanza-editor .view-overlays .current-line-exact,
+[data-color-scheme="high-contrast-dark"] .stanza-editor .margin-view-overlays .current-line-exact-margin,
+[data-color-scheme="high-contrast-light"] .stanza-editor .view-overlays .current-line-exact,
+[data-color-scheme="high-contrast-light"] .stanza-editor .margin-view-overlays .current-line-exact-margin {
+	border-width: var(--ash-stroke-thickness);
+}
+
+.stanza-editor
+	.margin-view-overlays
+	.current-line.current-line-margin.current-line-margin-both {
+	border-right: 0;
+}

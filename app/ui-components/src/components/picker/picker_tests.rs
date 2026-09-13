@@ -18,7 +18,7 @@ use crate::TextInput;
 use crate::TextInputLayoutEngine;
 use crate::TextStyle;
 use crate::UiDispatch;
-use zeta_icons::icons;
+use ash_icons::icons;
 
 const PARENT: crate::ElementId = crate::ElementId::scoped(30, 1);
 const ROOT: crate::ElementId = crate::ElementId::scoped(30, 2);

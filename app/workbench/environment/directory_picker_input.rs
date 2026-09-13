@@ -1,5 +1,5 @@
 use std::time::Instant;
-use zeta_ui_components::{ScrollCommand, ScrollDelta};
+use ash_ui_components::{ScrollCommand, ScrollDelta};
 use zui::input::{ElementState, Key, KeyEvent, MouseButton, MouseScrollDelta, NamedKey};
 use zui::ui::Point;
 use zui::ui::{
@@ -14,8 +14,8 @@ use crate::directory_picker::{
 };
 use crate::session_host::EnvCwdSetResult;
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
-use zeta_editor_host::FileEditorCloseRequest;
-use zeta_session::interaction::CONTEXT_WORKING_DIRECTORY;
+use ash_editor_host::FileEditorCloseRequest;
+use ash_session::interaction::CONTEXT_WORKING_DIRECTORY;
 
 const PICKER_ROWS_PER_WHEEL_STEP: f32 = 3.0;
 
@@ -112,7 +112,7 @@ impl WorkbenchApplication {
         ) {
             let _ = self.bind_agent_pane();
         }
-        self.pending_focus = Some(zeta_session::interaction::COMPOSER);
+        self.pending_focus = Some(ash_session::interaction::COMPOSER);
         self.session_pane
             .set_working_directory(self.env.working_directory());
         true

@@ -1,7 +1,7 @@
-use zeta_ui_components::ButtonBackgrounds;
-use zeta_ui_components::ButtonStyle;
-use zeta_ui_components::InputBoxStateColors;
-use zeta_ui_components::InputBoxStyle;
+use ash_ui_components::ButtonBackgrounds;
+use ash_ui_components::ButtonStyle;
+use ash_ui_components::InputBoxStateColors;
+use ash_ui_components::InputBoxStyle;
 use zui::ui::Border;
 use zui::ui::CornerRadii;
 use zui::ui::Edges;

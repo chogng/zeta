@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "model-provider",
+    crate_name = "ash_model_provider",
+)

@@ -1,4 +1,4 @@
-use zeta_ui_components::{ScrollAxis, ScrollCommand, ScrollDelta, ScrollMetrics, ScrollState};
+use ash_ui_components::{ScrollAxis, ScrollCommand, ScrollDelta, ScrollMetrics, ScrollState};
 use zui::ui::{Color, Component, FontFamily, FontStyle, FontWeight, Point, Rect, Size, UiScene};
 
 use super::{

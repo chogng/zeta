@@ -1,4 +1,4 @@
-use zeta_ui_components::ScrollMetrics;
+use ash_ui_components::ScrollMetrics;
 use zui::ui::CaretVisibility;
 use zui::ui::ComponentContext;
 use zui::ui::ElementId;

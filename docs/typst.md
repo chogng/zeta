@@ -2,18 +2,18 @@
 
 ```yaml
 status: current narrow integration
-owner: zeta-rs/utils/typst and zeta-rs/app-server
+owner: ash-rs/utils/typst and ash-rs/app-server
 consumers:
   - desktop
 lastUpdated: 2026-07-28
 ```
 
 本文负责跨 crate 的架构与信任模型。编译器实现细节以
-[`zeta-rs/utils/typst/README.md`](../zeta-rs/utils/typst/README.md) 为准。
+[`ash-rs/utils/typst/README.md`](../ash-rs/utils/typst/README.md) 为准。
 
 ## 快速理解
 
-Zeta 将 Typst 0.15.1 作为 Rust 库嵌入，不调用系统安装的 `typst` 可执行文件。第一阶段能力把
+Ash 将 Typst 0.15.1 作为 Rust 库嵌入，不调用系统安装的 `typst` 可执行文件。第一阶段能力把
 内存中的 Typst 源码字符串转换为当前连接拥有的 PDF 资源。这样既能让 Agent 编辑文本表示并
 生成排版后的论文，也不需要授予渲染进程或编译器访问宿主路径的权限。
 
@@ -33,9 +33,9 @@ Zeta 将 Typst 0.15.1 作为 Rust 库嵌入，不调用系统安装的 `typst` �
 
 | 组件 | 职责 |
 | --- | --- |
-| `zeta-typst` | 编译器 `World`、内置字体、源码限制、诊断和 PDF 字节 |
-| `zeta-app-server-protocol` | `document/typst/compile` 数据结构与能力协商 |
-| `zeta-app-server` | 请求分发和当前连接拥有的 PDF 资源创建 |
+| `ash-typst` | 编译器 `World`、内置字体、源码限制、诊断和 PDF 字节 |
+| `ash-app-server-protocol` | `document/typst/compile` 数据结构与能力协商 |
+| `ash-app-server` | 请求分发和当前连接拥有的 PDF 资源创建 |
 | Desktop Main/Preload | 精确 IPC 校验和类型化能力桥接 |
 | Academic Workbench 贡献 | Stanza Document Engine；未来的 Typst 序列化、诊断、预览和保存/导出 |
 
@@ -48,7 +48,7 @@ Academic Stanza 文档
 → 沙箱化 Preload API：typst.compile
 → 可信 Electron Main IPC 路由
 → document/typst/compile
-→ zeta-typst 内存 World
+→ ash-typst 内存 World
 → PDF 字节
 → App Server ResourceStore
 → resource/read 分块读取

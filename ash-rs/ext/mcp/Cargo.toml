@@ -1,0 +1,42 @@
+[package]
+name = "ash-mcp-extension"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "ash_mcp_extension"
+path = "src/lib.rs"
+
+[dependencies]
+extension-api = { package = "ash-extension-api", path = "../extension-api" }
+file-system = { package = "ash-file-system", path = "../../file-system" }
+file-access = { package = "ash-file-access", path = "../../file-access" }
+base64 = { workspace = true }
+getrandom = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync"] }
+url = { workspace = true }
+zeroize = { workspace = true }
+ash-async-utils = { workspace = true }
+ash-config = { workspace = true }
+connectors = { workspace = true }
+ash-core = { workspace = true }
+ash-mcp = { workspace = true }
+ash-action-policy = { workspace = true }
+ash-core-plugins = { workspace = true }
+ash-plugin = { workspace = true }
+ash-protocol = { workspace = true }
+ash-rmcp-client = { workspace = true }
+ash-secrets = { workspace = true }
+ash-tools = { workspace = true }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile = { workspace = true }

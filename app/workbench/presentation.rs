@@ -1,20 +1,20 @@
-use zeta_commands::AppCommandId;
-use zeta_editor_host::{
+use ash_commands::AppCommandId;
+use ash_editor_host::{
     FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT, FileEditorHost,
     FileEditorPane, FileEditorPrompt, FileEditorSearchState,
 };
-use zeta_keybinding::{HostPlatform, KeySequence};
-use zeta_settings::REMOTE_CONNECTION_SEARCH_INPUT;
-use zeta_settings::REMOTE_TUNNEL_REMOTE_PORT;
-use zeta_settings::RemoteConnectionManager;
-use zeta_settings::RemoteConnectionManagerField;
-use zeta_settings::RemoteConnectionManagerState;
-use zeta_settings::RemoteConnectionPicker;
-use zeta_settings::RemoteConnectionPickerState;
-use zeta_settings::RemoteTunnelManager;
-use zeta_settings::RemoteTunnelManagerState;
-use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore, TerminalMousePosition};
-use zeta_ui_components::{
+use ash_keybinding::{HostPlatform, KeySequence};
+use ash_settings::REMOTE_CONNECTION_SEARCH_INPUT;
+use ash_settings::REMOTE_TUNNEL_REMOTE_PORT;
+use ash_settings::RemoteConnectionManager;
+use ash_settings::RemoteConnectionManagerField;
+use ash_settings::RemoteConnectionManagerState;
+use ash_settings::RemoteConnectionPicker;
+use ash_settings::RemoteConnectionPickerState;
+use ash_settings::RemoteTunnelManager;
+use ash_settings::RemoteTunnelManagerState;
+use ash_terminal::{GridSize, ScreenBuffer, TerminalCore, TerminalMousePosition};
+use ash_ui_components::{
     Dialog, DialogIds, DialogStyle, InteractionRegion, Sash, SashOrientation, SashState, SashStyle,
     ScrollMetrics, ScrollView, ScrollbarPresentation,
 };
@@ -37,21 +37,21 @@ use crate::{
     MainSurfaceKind, SESSION_SEARCH_INPUT, TabContextMenu, TabContextMenuState, WINDOW,
     paint_chord_hint,
 };
-use zeta_files::FILE_SEARCH_INPUT;
-use zeta_files::FilesLayout;
-use zeta_files::FilesPane;
-use zeta_files::FilesState;
-use zeta_files::FilesToolbar;
-use zeta_scm::EditorPane;
-use zeta_scm::ScmState;
-use zeta_scm::{GIT_BRANCH_SEARCH_INPUT, GitBranchPicker, GitBranchPickerState};
-use zeta_session::SessionPaneContext;
-use zeta_session::SessionPaneLayout;
-use zeta_session::SessionPaneState;
-use zeta_session::SessionPaneView;
-use zeta_session::draw_session_pane;
-use zeta_terminal_runtime::TerminalSelectionRange;
-use zeta_ui_theme::UiTheme;
+use ash_files::FILE_SEARCH_INPUT;
+use ash_files::FilesLayout;
+use ash_files::FilesPane;
+use ash_files::FilesState;
+use ash_files::FilesToolbar;
+use ash_scm::EditorPane;
+use ash_scm::ScmState;
+use ash_scm::{GIT_BRANCH_SEARCH_INPUT, GitBranchPicker, GitBranchPickerState};
+use ash_session::SessionPaneContext;
+use ash_session::SessionPaneLayout;
+use ash_session::SessionPaneState;
+use ash_session::SessionPaneView;
+use ash_session::draw_session_pane;
+use ash_terminal_runtime::TerminalSelectionRange;
+use ash_ui_theme::UiTheme;
 
 use crate::directory_picker::DIRECTORY_SEARCH_INPUT;
 use crate::directory_picker::DirectoryPicker;
@@ -63,15 +63,15 @@ use crate::PaneGroupLayout;
 use crate::PartVisibility;
 use crate::WorkbenchLayout;
 use crate::WorkbenchLayoutSpec;
-use zeta_editor::CodeEditorStyle;
-use zeta_settings::AppearanceSettingsSnapshot;
-use zeta_settings::GeneralSettingsSnapshot;
-use zeta_settings::KeybindingSettingsSnapshot;
-use zeta_settings::RemoteSettingsSnapshot;
-use zeta_settings::SettingsFeatureSnapshot;
-use zeta_settings::SettingsPaneStyle;
-use zeta_settings::SettingsPaneView;
-use zeta_settings::SettingsState;
+use ash_editor::CodeEditorStyle;
+use ash_settings::AppearanceSettingsSnapshot;
+use ash_settings::GeneralSettingsSnapshot;
+use ash_settings::KeybindingSettingsSnapshot;
+use ash_settings::RemoteSettingsSnapshot;
+use ash_settings::SettingsFeatureSnapshot;
+use ash_settings::SettingsPaneStyle;
+use ash_settings::SettingsPaneView;
+use ash_settings::SettingsState;
 use zui::ui::{
     AccessibilityRole, ComponentContext, CursorFeedback, ElementId, InteractionFrame,
     InteractionFrameCheckpoint, UiDispatch, UiFrame,
@@ -96,9 +96,9 @@ pub trait WorkbenchKeybindings {
     fn binding_for_command(&self, command: AppCommandId) -> Option<&KeySequence>;
 }
 
-impl<C> WorkbenchKeybindings for zeta_keybindings_host::Keybindings<C>
+impl<C> WorkbenchKeybindings for ash_keybindings_host::Keybindings<C>
 where
-    C: zeta_keybindings_host::KeybindingCatalog<Command = AppCommandId>,
+    C: ash_keybindings_host::KeybindingCatalog<Command = AppCommandId>,
 {
     fn pending_keybinding(&self) -> Option<(&KeySequence, usize)> {
         self.pending_keybinding()
@@ -319,7 +319,7 @@ pub struct PaneView<'a> {
 pub struct WorkbenchPresentationModel<'a> {
     pub app_name: &'a str,
     pub palette: UiTheme,
-    pub typography: zeta_ui_theme::UiTypography,
+    pub typography: ash_ui_theme::UiTypography,
     pub terminal: Option<&'a TerminalCore>,
     pub terminal_panes: &'a [PaneView<'a>],
     pub pane_group: Option<&'a PanePart>,
@@ -332,9 +332,9 @@ pub struct WorkbenchPresentationModel<'a> {
     pub file_editor_host: &'a FileEditorHost,
     pub file_editor_prompt: FileEditorPrompt,
     pub file_editor_search: &'a FileEditorSearchState,
-    pub file_editor_diagnostics: &'a [zeta_editor::CodeEditorDiagnostic],
-    pub language_hover: Option<&'a zeta_lsp_manager::LanguageHover>,
-    pub language_completions: Option<&'a zeta_lsp_manager::LanguageCompletions>,
+    pub file_editor_diagnostics: &'a [ash_editor::CodeEditorDiagnostic],
+    pub language_hover: Option<&'a ash_lsp_manager::LanguageHover>,
+    pub language_completions: Option<&'a ash_lsp_manager::LanguageCompletions>,
     pub completion_selection: usize,
     pub code_editor_style: &'a CodeEditorStyle,
     pub session_pane: &'a SessionPaneState,
@@ -360,7 +360,7 @@ pub struct WorkbenchPresentationModel<'a> {
     pub quick_access: &'a QuickAccess,
     pub settings: &'a SettingsState,
     pub keybinding_diagnostics: &'a [String],
-    pub theme_scheme: zeta_theme::ColorScheme,
+    pub theme_scheme: ash_theme::ColorScheme,
     pub theme_follows_system: bool,
     pub window_control_insets: WindowControlInsets,
     pub pointer_position: Option<zui::ui::Point>,
@@ -372,7 +372,7 @@ struct TabContainerView<'a> {
     sidebar_part: &'a SidebarPart,
     selected_id: ElementId,
     visible_action_bar_tab: Option<&'a TabInputKey>,
-    scroll: zeta_ui_components::ScrollState,
+    scroll: ash_ui_components::ScrollState,
     scrollbar_presentation: ScrollbarPresentation,
     caret_visibility: CaretVisibility,
     dispatch: &'a UiDispatch,
@@ -383,9 +383,9 @@ struct FileEditorPresentationView<'a> {
     host: &'a FileEditorHost,
     prompt: FileEditorPrompt,
     search: &'a FileEditorSearchState,
-    diagnostics: &'a [zeta_editor::CodeEditorDiagnostic],
-    language_hover: Option<&'a zeta_lsp_manager::LanguageHover>,
-    language_completions: Option<&'a zeta_lsp_manager::LanguageCompletions>,
+    diagnostics: &'a [ash_editor::CodeEditorDiagnostic],
+    language_hover: Option<&'a ash_lsp_manager::LanguageHover>,
+    language_completions: Option<&'a ash_lsp_manager::LanguageCompletions>,
     completion_selection: usize,
     style: &'a CodeEditorStyle,
     caret_visibility: CaretVisibility,
@@ -480,7 +480,7 @@ fn build_workbench_presentation_with_bindings(
             .session_pane
             .composer_interaction_view()
             .map_or(0.0, |view| {
-                zeta_session::interaction_preferred_height(view.items().len())
+                ash_session::interaction_preferred_height(view.items().len())
             }),
     ) else {
         draw_compact_scene(frame.scene_mut(), viewport, model.app_name, palette);
@@ -787,7 +787,7 @@ fn draw_workbench_overlays(
         viewport_bounds,
         model.remote_connection_picker,
         model.caret_visibility,
-        zeta_settings::RemoteUiStyle::from_theme(palette),
+        ash_settings::RemoteUiStyle::from_theme(palette),
         text_layout,
         model.dispatch,
         WINDOW,
@@ -803,7 +803,7 @@ fn draw_workbench_overlays(
         viewport_bounds,
         model.remote_connection_manager,
         model.caret_visibility,
-        zeta_settings::RemoteUiStyle::from_theme(palette),
+        ash_settings::RemoteUiStyle::from_theme(palette),
         text_layout,
         model.dispatch,
         WINDOW,
@@ -825,7 +825,7 @@ fn draw_workbench_overlays(
         viewport_bounds,
         model.remote_tunnel_manager,
         model.caret_visibility,
-        zeta_settings::RemoteUiStyle::from_theme(palette),
+        ash_settings::RemoteUiStyle::from_theme(palette),
         text_layout,
         model.dispatch,
         WINDOW,
@@ -879,7 +879,7 @@ fn draw_workbench_overlays(
             .iter()
             .map(|item| item.row())
             .collect::<Vec<_>>();
-        zeta_settings::draw_keyboard_shortcuts_overlay(
+        ash_settings::draw_keyboard_shortcuts_overlay(
             frame,
             viewport_bounds,
             model.settings.keyboard_shortcuts(),
@@ -897,7 +897,7 @@ fn draw_workbench_overlays(
     };
     if model
         .dispatch
-        .is_focused(zeta_settings::KEYBOARD_SHORTCUTS_SEARCH)
+        .is_focused(ash_settings::KEYBOARD_SHORTCUTS_SEARCH)
     {
         ime_cursor_area = shortcut_search_caret;
     }
@@ -925,11 +925,11 @@ pub fn terminal_grid_size_for_viewport(
         return GridSize::default();
     };
     let bounds = terminal_content_bounds(layout, active_screen);
-    zeta_terminal_runtime::grid_size(bounds)
+    ash_terminal_runtime::grid_size(bounds)
 }
 
 pub fn terminal_grid_size_for_bounds(bounds: Rect) -> GridSize {
-    zeta_terminal_runtime::grid_size(bounds)
+    ash_terminal_runtime::grid_size(bounds)
 }
 
 pub fn terminal_pane_bounds_for_viewport(
@@ -963,7 +963,7 @@ pub fn terminal_mouse_position_for_viewport(
     if !bounds.contains(point) {
         return None;
     }
-    zeta_terminal_runtime::mouse_position(bounds, point)
+    ash_terminal_runtime::mouse_position(bounds, point)
 }
 
 pub fn terminal_pane_mouse_position_for_viewport(
@@ -985,7 +985,7 @@ pub fn terminal_pane_mouse_position_for_viewport(
         .iter()
         .find(|leaf| leaf.bounds().contains(point))?;
     let bounds = leaf.bounds();
-    zeta_terminal_runtime::mouse_position(bounds, point).map(|position| (leaf.id(), position))
+    ash_terminal_runtime::mouse_position(bounds, point).map(|position| (leaf.id(), position))
 }
 
 fn draw_files_pane(
@@ -1005,14 +1005,14 @@ fn draw_files_pane(
         files,
         environment_context.upstream_distance,
         caret_visibility,
-        zeta_files::FilesToolbarStyle::from_theme(palette),
+        ash_files::FilesToolbarStyle::from_theme(palette),
         parent,
         text_layout,
         dispatch,
     );
     let search_caret = files_toolbar.search_caret_bounds();
     context.draw_component(&files_toolbar);
-    let files_style = zeta_files::FilesPaneStyle::from_theme(palette);
+    let files_style = ash_files::FilesPaneStyle::from_theme(palette);
     context.draw_component(&FilesPane::new(
         layout.content(),
         files,
@@ -1063,7 +1063,7 @@ fn draw_changes_pane(
         &EditorPane::new(
             bounds,
             scm.editor(),
-            zeta_scm::ScmPaneStyle::from_theme(palette),
+            ash_scm::ScmPaneStyle::from_theme(palette),
             parent,
         )
         .with_content_bounds(editor_bounds)
@@ -1075,7 +1075,7 @@ fn draw_changes_pane(
             bounds,
             files,
             environment_context,
-            zeta_scm::CHANGES_PANE,
+            ash_scm::CHANGES_PANE,
             caret_visibility,
             dispatch,
             text_layout,
@@ -1152,7 +1152,7 @@ fn draw_tab_container(
     view: TabContainerView<'_>,
     text_layout: &mut TextInputLayoutEngine,
     palette: UiTheme,
-    typography: &zeta_ui_theme::UiTypography,
+    typography: &ash_ui_theme::UiTypography,
 ) -> TabContainerDrawResult {
     let groups = sidebar_session_groups(view.sidebar_part, |input| {
         input.is_settings()
@@ -1378,7 +1378,7 @@ fn draw_main(
                                 parent: MAIN_SURFACE,
                             },
                             text_layout,
-                            zeta_session::SessionPaneStyle::from_theme(palette),
+                            ash_session::SessionPaneStyle::from_theme(palette),
                         );
                     }
                 }
@@ -1419,7 +1419,7 @@ fn draw_settings_dialog(
     viewport: Rect,
     model: &WorkbenchPresentationModel<'_>,
     text_layout: &mut TextInputLayoutEngine,
-) -> zeta_settings::SettingsPaneDrawResult {
+) -> ash_settings::SettingsPaneDrawResult {
     let palette = model.palette;
     let dialog = Dialog::new(
         viewport,
@@ -1438,7 +1438,7 @@ fn draw_settings_dialog(
     );
     let parent = dialog.root_id();
     let platform = model.keybindings.platform();
-    let keybinding_rows = zeta_settings::settings_keybinding_rows(platform, |command| {
+    let keybinding_rows = ash_settings::settings_keybinding_rows(platform, |command| {
         model.keybindings.binding_for_command(command)
     });
     let surface_label = match model.main_surface {
@@ -1447,11 +1447,11 @@ fn draw_settings_dialog(
         MainSurfaceKind::Terminal => "Terminal",
     };
     let theme_scheme = match model.theme_scheme {
-        zeta_theme::ColorScheme::Dark | zeta_theme::ColorScheme::HighContrastDark => "Dark",
-        zeta_theme::ColorScheme::Light | zeta_theme::ColorScheme::HighContrastLight => "Light",
+        ash_theme::ColorScheme::Dark | ash_theme::ColorScheme::HighContrastDark => "Dark",
+        ash_theme::ColorScheme::Light | ash_theme::ColorScheme::HighContrastLight => "Light",
     };
     dialog.draw_components(context, |context, bounds| {
-        zeta_settings::draw_settings_pane(
+        ash_settings::draw_settings_pane(
             context,
             bounds,
             TITLEBAR_HEIGHT,
@@ -1481,9 +1481,9 @@ fn draw_settings_dialog(
                 dispatch: model.dispatch,
             },
             SettingsPaneStyle::new(
-                zeta_settings::SettingsPageStyle::from_theme(palette, &model.typography),
-                zeta_settings::SettingsSectionStyle::from_theme(palette, &model.typography),
-                zeta_settings::RemoteUiStyle::from_theme(palette),
+                ash_settings::SettingsPageStyle::from_theme(palette, &model.typography),
+                ash_settings::SettingsSectionStyle::from_theme(palette, &model.typography),
+                ash_settings::RemoteUiStyle::from_theme(palette),
             ),
             text_layout,
         )
@@ -1496,7 +1496,7 @@ fn terminal_content_bounds(layout: WorkbenchSceneLayout, active_screen: ScreenBu
     } else {
         layout.output
     };
-    zeta_terminal_runtime::content_bounds(viewport)
+    ash_terminal_runtime::content_bounds(viewport)
 }
 
 fn terminal_cursor_area(
@@ -1513,7 +1513,7 @@ fn terminal_cursor_area_for_bounds(
     terminal: &TerminalCore,
     scroll_offset: usize,
 ) -> Option<Rect> {
-    zeta_terminal_runtime::cursor_area(bounds, terminal, scroll_offset)
+    ash_terminal_runtime::cursor_area(bounds, terminal, scroll_offset)
 }
 
 fn terminal_bounds_for_pane(
@@ -1575,10 +1575,10 @@ fn draw_terminal_in_bounds(
     active_screen: ScreenBuffer,
     palette: UiTheme,
 ) {
-    zeta_terminal_runtime::draw_terminal(
+    ash_terminal_runtime::draw_terminal(
         scene,
         bounds,
-        zeta_terminal_runtime::TerminalPaneView::new(view.core).with_view_state(
+        ash_terminal_runtime::TerminalPaneView::new(view.core).with_view_state(
             view.scroll_offset,
             view.scrollbar_presentation,
             view.selection,

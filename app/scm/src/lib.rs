@@ -1,7 +1,7 @@
 //! Source-control snapshots for the Changes Pane.
 
-use zeta_editor::DiffEditorDocument;
-use zeta_ui_theme::UiTheme;
+use ash_editor::DiffEditorDocument;
+use ash_ui_theme::UiTheme;
 use zui::ui::Color;
 
 mod branch_picker;
@@ -121,7 +121,7 @@ impl ScmState {
     pub fn replace_diffs(
         &mut self,
         diffs: impl IntoIterator<Item = ScmDiff>,
-    ) -> Vec<zeta_editor::MultiDiffEditorItemIdentity> {
+    ) -> Vec<ash_editor::MultiDiffEditorItemIdentity> {
         self.diffs = diffs.into_iter().collect();
         self.refresh_editor_scope()
     }
@@ -204,7 +204,7 @@ impl ScmState {
             .collect()
     }
 
-    fn refresh_editor_scope(&mut self) -> Vec<zeta_editor::MultiDiffEditorItemIdentity> {
+    fn refresh_editor_scope(&mut self) -> Vec<ash_editor::MultiDiffEditorItemIdentity> {
         let visible = self.scoped_diffs().into_iter().cloned().collect::<Vec<_>>();
         self.editor.replace_diffs(&visible)
     }

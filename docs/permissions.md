@@ -1,6 +1,6 @@
 # 权限系统
 
-> 文档所有权：本文件是 Zeta 权限系统产品语义、用户心智模型、跨 crate 执行路径和长期
+> 文档所有权：本文件是 Ash 权限系统产品语义、用户心智模型、跨 crate 执行路径和长期
 > 不变量的权威文档。
 >
 > 文档状态：当前契约 + 明确的当前限制 + 计划演进。
@@ -9,7 +9,7 @@
 
 ## 快速理解
 
-Zeta 使用分层权限系统来平衡功能和安全性：能在明确沙箱边界内完成的动作优先受限执行；需要越过
+Ash 使用分层权限系统来平衡功能和安全性：能在明确沙箱边界内完成的动作优先受限执行；需要越过
 边界的动作再结合用户意图、风险和已有授权决定是自动批准、询问用户还是阻止。
 
 | 工具类型 | 示例 | 需要批准 | 批准后的行为 |
@@ -76,7 +76,7 @@ durable 记录。
 | 系统结果 | 用户含义 | 谁拥有最终决定 |
 | --- | --- | --- |
 | `RunSandboxed` | 在明确的文件系统和网络限制中执行 | 确定性策略 |
-| `RunExecPolicyGranted` | 命中显式 `AllowUnsandboxed` 规则；authority 精确绑定 rule、exec-policy revision、动作与能力 | `zeta-execpolicy` 求值，`ActionPolicyEngine` 签发最终 grant |
+| `RunExecPolicyGranted` | 命中显式 `AllowUnsandboxed` 规则；authority 精确绑定 rule、exec-policy revision、动作与能力 | `ash-execpolicy` 求值，`ActionPolicyEngine` 签发最终 grant |
 | `RunAutoReviewed` | 不适用沙箱或需要额外能力，但上下文风险满足自动授权条件 | 策略引擎 `ActionPolicyEngine`；风险审查器只提供建议 |
 | `RunUnsandboxed` | 使用已有的精确用户授权执行 | 用户授权 + `ActionPolicyEngine` 精确匹配 |
 | `RunWithPermissionBypass` | 当前 Turn 选择跳过本来需要的交互，但仍保留精确绑定与审计 | 可信产品 policy adapter；只能替换 `AskUser` |
@@ -94,8 +94,8 @@ durable 记录。
 | --- | --- | --- |
 | 动作解析 | 把工具参数、工作目录、解析后的路径、环境和来源变成精确动作 | 不批准执行 |
 | 能力模型 | 描述动作需要的最小能力与作用范围 | 不判断用户意图 |
-| 确定性规则 | `zeta-execpolicy` 组合 Host / Organization / User / Directory layer 并返回纯 effect | 不签发 grant、不执行工具 |
-| 最终 action policy | `zeta-action-policy` 把 rule effect、exact grants、sandbox 与 reviewer 结果合成最终决定 | 不解析或持久化规则、不执行工具 |
+| 确定性规则 | `ash-execpolicy` 组合 Host / Organization / User / Directory layer 并返回纯 effect | 不签发 grant、不执行工具 |
+| 最终 action policy | `ash-action-policy` 把 rule effect、exact grants、sandbox 与 reviewer 结果合成最终决定 | 不解析或持久化规则、不执行工具 |
 | Auto Review | 根据标明信任来源的上下文给出风险建议 | 不能签发最终执行授权 |
 | 持久化批准与执行 | `ConfigStore` 保存精确用户规则；Core 保存一次性批准和副作用起点 | 不改变前面的安全判断 |
 
@@ -134,7 +134,7 @@ durable 记录。
 ```text
 Agent 提出工具调用
   → 主机解析精确动作、来源、能力集合和沙箱兼容性
-  → zeta-execpolicy：按 typed selector 求值 Host / Organization / User / Directory rules
+  → ash-execpolicy：按 typed selector 求值 Host / Organization / User / Directory rules
   → ActionPolicyEngine：映射 Deny / RequireSandbox / RequireApproval / AllowUnsandboxed
   → AllowUnsandboxed：签发绑定 rule、exec-policy revision、动作与能力的 RunExecPolicyGranted
   → 精确用户授权：匹配动作摘要、能力集合和策略版本
@@ -197,7 +197,7 @@ approval 的模糊复用。Directory rule 只允许收紧。任何规则变更�
 ### 受控内容来源不是长期执行批准
 
 Desktop 外部 Agent 配置导入计划允许用户把明确选择的 Codex `~/.agents/skills`、Claude
-`~/.claude/skills` 等目录注册为可撤销的只读内容来源。当前 `zeta-agent-import` 只实现已知
+`~/.claude/skills` 等目录注册为可撤销的只读内容来源。当前 `ash-agent-import` 只实现已知
 路径的 metadata-only 检查和 `AgentPathInspection`，尚未实现 Desktop 确认与 Config apply。未来
 apply 操作产生类型化配置和受控来源身份，不产生按工具、命令前缀或路径模式匹配的执行授权，
 因此不属于“是，不再询问”或“此项目始终允许”。
@@ -209,7 +209,7 @@ session/cache 的 `~/.claude.json` 也不会进入当前发现计划。Skill 中
 
 该导入入口仅由 Desktop 提供；TUI 可以消费 App Server 已发布的统一 Skill catalog，但不能创建
 或管理外部来源。完整产品边界见
-[`zeta-desktop-architecture.md`](zeta-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)
+[`ash-desktop-architecture.md`](ash-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)
 和 [`skills.md`](skills.md#151-外部-agent-skill-导入仅限-desktop)。
 
 ## 沙箱在权限系统中的位置
@@ -237,7 +237,7 @@ Windows 本地工具使用 `HostAclChanges::ScopedWithTraversal`：在范围内 
 本地 Shell 配置中出现网络目标、网络动作或 `network` capability selector 时启用受管网络；未配置时仍断网，
 `rg` 保持只读断网。代理在 DNS 和连接前调用最终 action policy，`Deny`、`RequireApproval`
 与显式允许规则都作用于真实目标。具体配置格式及平台支持见
-[`network-proxy`](../zeta-rs/network-proxy/README.md)。
+[`network-proxy`](../ash-rs/network-proxy/README.md)。
 
 运行中的网络审批绑定当前执行、请求序号、目标和策略版本，复用现有持久审批协议。
 批准只继续该请求，Shell 及文件系统限制继续有效；拒绝或取消关闭请求，不重跑已经开始的命令。
@@ -276,15 +276,15 @@ Windows 本地工具使用 `HostAclChanges::ScopedWithTraversal`：在范围内 
 | 组件 | 当前责任 | 明确不拥有 |
 | --- | --- | --- |
 | 主机与工具适配器 | 解析精确动作、来源、最小能力和沙箱兼容性 | 最终批准 |
-| `zeta-execpolicy` | typed selector、layer validation、effect precedence、semantic revision 与纯求值 | 最终 grant、Tool 执行、配置 I/O |
-| `zeta-action-policy` | effect 映射、exact grant、sandbox、风险门槛和最终类型化结果 | 规则解析/持久化、工具执行、UI |
-| `zeta-config` | User rule 的 typed TOML mutation/persistence；Directory restriction 的 strict-read intent | 规则求值、最终执行授权 |
-| `zeta-guardian-reviewer` | 生成受 schema 约束的风险审查结论 | 覆盖策略、签发授权 |
+| `ash-execpolicy` | typed selector、layer validation、effect precedence、semantic revision 与纯求值 | 最终 grant、Tool 执行、配置 I/O |
+| `ash-action-policy` | effect 映射、exact grant、sandbox、风险门槛和最终类型化结果 | 规则解析/持久化、工具执行、UI |
+| `ash-config` | User rule 的 typed TOML mutation/persistence；Directory restriction 的 strict-read intent | 规则求值、最终执行授权 |
+| `ash-guardian-reviewer` | 生成受 schema 约束的风险审查结论 | 覆盖策略、签发授权 |
 | Core 的 `ToolScheduler` | 持久化批准、一次性授权、执行生命周期和恢复语义 | 操作系统沙箱强制执行 |
-| `zeta-exec` 与工具执行器 | 消费明确执行授权并返回类型化结果 | 自行提权 |
-| `zeta-sandboxing` | 统一策略、目录验证与进程生命周期 | 批准、重试和持久化 |
+| `ash-exec` 与工具执行器 | 消费明确执行授权并返回类型化结果 | 自行提权 |
+| `ash-sandboxing` | 统一策略、目录验证与进程生命周期 | 批准、重试和持久化 |
 | `mxc-sandbox` | MXC 依赖、平台选择和强制执行 | 动作授权和审批 |
-| `zeta-network-proxy` | 拦截真实网络请求、检查连接地址、管理执行独立的监听与连接 | 配置持久化、最终批准、文件权限 |
+| `ash-network-proxy` | 拦截真实网络请求、检查连接地址、管理执行独立的监听与连接 | 配置持久化、最终批准、文件权限 |
 | App Server、CLI 与 Desktop | 暴露权限 CRUD、展示动作、作用范围、风险和用户选择 | 改写权威策略 |
 
 任何一层同时承担“描述动作、判断风险、签发权限、执行副作用”中的多项职责，都会削弱审计边界。
@@ -363,5 +363,5 @@ Windows 本地工具使用 `HostAclChanges::ScopedWithTraversal`：在范围内 
 - [ ] 新 UI 选项是否在协议和 Core 中有唯一、明确的权威语义；
 - [ ] 当前实现与计划设计是否仍清楚分离。
 
-确定性规则语言见 [`zeta-execpolicy` README](../zeta-rs/execpolicy/README.md)；最终决策顺序与 grant
-binding 见 [`zeta-action-policy` README](../zeta-rs/action-policy/README.md)。
+确定性规则语言见 [`ash-execpolicy` README](../ash-rs/execpolicy/README.md)；最终决策顺序与 grant
+binding 见 [`ash-action-policy` README](../ash-rs/action-policy/README.md)。

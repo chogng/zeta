@@ -3,17 +3,17 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use anyhow::anyhow;
-use zeta_app_server_client::AppServerSession;
-use zeta_app_server_client::StdioAppServerCommand;
-use zeta_app_server_daemon::APP_SERVER_PATH_ENV;
-use zeta_app_server_protocol::protocol::common::ClientCapabilities;
-use zeta_app_server_protocol::protocol::common::ClientInfo;
-use zeta_app_server_protocol::protocol::common::DirPermissionsHostCapability;
-use zeta_remote::RemoteDirPath;
-use zeta_remote::RemoteProfile;
-use zeta_remote::SshHost;
-use zeta_remote::SshTarget;
-use zeta_remote_connections::SshAppServerConnectionOptions;
+use ash_app_server_client::AppServerSession;
+use ash_app_server_client::StdioAppServerCommand;
+use ash_app_server_daemon::APP_SERVER_PATH_ENV;
+use ash_app_server_protocol::protocol::common::ClientCapabilities;
+use ash_app_server_protocol::protocol::common::ClientInfo;
+use ash_app_server_protocol::protocol::common::DirPermissionsHostCapability;
+use ash_remote::RemoteDirPath;
+use ash_remote::RemoteProfile;
+use ash_remote::SshHost;
+use ash_remote::SshTarget;
+use ash_remote_connections::SshAppServerConnectionOptions;
 
 /// Application-owned App Server host context shared by Agent, Language, and Terminal adapters.
 ///
@@ -121,11 +121,11 @@ impl AppServerHost {
                 let executable = std::env::current_exe()
                     .map_err(|error| anyhow!("could not resolve app executable: {error}"))?;
                 let daemon_executable = Some(
-                    zeta_app_server_daemon::backend_executable_path()
+                    ash_app_server_daemon::backend_executable_path()
                         .map_err(|error| anyhow!(error))?,
                 );
                 let command =
-                    local_app_server_command(executable, zeta_utils_home_dir::find_zeta_home()?, cwd, daemon_executable);
+                    local_app_server_command(executable, ash_utils_home_dir::find_ash_home()?, cwd, daemon_executable);
                 AppServerSession::start_stdio(command, client_info, local_client_capabilities())
                     .map_err(|error| anyhow!(error.to_string()))
             }
@@ -136,7 +136,7 @@ impl AppServerHost {
     }
 }
 
-impl zeta_session::SessionRuntimeTarget for AppServerHost {
+impl ash_session::SessionRuntimeTarget for AppServerHost {
     fn is_remote(&self) -> bool {
         AppServerHost::is_remote(self)
     }
@@ -148,18 +148,18 @@ impl zeta_session::SessionRuntimeTarget for AppServerHost {
     fn with_cwd(
         &self,
         cwd: &Path,
-    ) -> zeta_session::CommandResult<Box<dyn zeta_session::SessionRuntimeTarget>> {
+    ) -> ash_session::CommandResult<Box<dyn ash_session::SessionRuntimeTarget>> {
         self.with_cwd(cwd)
-            .map(|target| Box::new(target) as Box<dyn zeta_session::SessionRuntimeTarget>)
+            .map(|target| Box::new(target) as Box<dyn ash_session::SessionRuntimeTarget>)
             .map_err(|error| error.to_string())
     }
 
-    fn start(&self) -> zeta_session::CommandResult<zeta_app_server_client::AppServerSession> {
+    fn start(&self) -> ash_session::CommandResult<ash_app_server_client::AppServerSession> {
         AppServerHost::start(self).map_err(|error| error.to_string())
     }
 }
 
-impl zeta_editor_host::RemoteLanguageSessionTarget for AppServerHost {
+impl ash_editor_host::RemoteLanguageSessionTarget for AppServerHost {
     fn is_remote(&self) -> bool {
         AppServerHost::is_remote(self)
     }
@@ -178,8 +178,8 @@ pub(crate) fn local_app_server_command(
     let command = StdioAppServerCommand::new(executable)
         .with_argument("app-server-daemon")
         .with_argument("connect")
-        .with_environment_variable("ZETA_HOME", profile_root.into_os_string())
-        .with_environment_variable("ZETA_WORKSPACE_ROOT", dir_root.as_os_str().to_os_string());
+        .with_environment_variable("ASH_HOME", profile_root.into_os_string())
+        .with_environment_variable("ASH_WORKSPACE_ROOT", dir_root.as_os_str().to_os_string());
     match daemon_executable {
         Some(daemon_executable) => command
             .with_environment_variable(APP_SERVER_PATH_ENV, daemon_executable.into_os_string()),

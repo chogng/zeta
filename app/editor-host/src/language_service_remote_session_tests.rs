@@ -6,9 +6,9 @@ use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::time::Duration;
 
-use zeta_app_server_protocol::protocol::language::LanguageDocumentDto;
-use zeta_app_server_protocol::protocol::language::LanguageHoverParams;
-use zeta_app_server_protocol::protocol::language::LanguagePositionDto;
+use ash_app_server_protocol::protocol::language::LanguageDocumentDto;
+use ash_app_server_protocol::protocol::language::LanguageHoverParams;
+use ash_app_server_protocol::protocol::language::LanguagePositionDto;
 
 use super::MAX_RECONNECT_DELAY;
 use super::RECONNECT_WINDOW;

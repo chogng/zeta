@@ -8,221 +8,221 @@ Colors: 183 · Sizes: 29
 
 | Token | Owner | Dark | Light | CSS variable |
 | --- | --- | --- | --- | --- |
-| `foreground` | platform.theme | `#cccccc` | `#3b3b3b` | `--zeta-foreground` |
-| `description.foreground` | platform.theme | `#b8b8b8` | `#616161` | `--zeta-description-foreground` |
-| `muted.foreground` | platform.theme | `#8f8f8f` | `#767676` | `--zeta-muted-foreground` |
-| `accent.foreground` | platform.theme | `#4daafc` | `#005fb8` | `--zeta-accent-foreground` |
-| `accent.background` | platform.theme | `#328eb9` | `#328eb9` | `--zeta-accent-background` |
-| `error.foreground` | platform.theme | `#f48771` | `#a1260d` | `--zeta-error-foreground` |
-| `warning.foreground` | platform.theme | `#cca700` | `#895503` | `--zeta-warning-foreground` |
-| `success.foreground` | platform.theme | `#89d185` | `#107c10` | `--zeta-success-foreground` |
-| `focusBorder` | platform.theme | `#007fd4` | `#0078d4` | `--zeta-focus-border` |
-| `border` | platform.theme | `#2b2b2b` | `#e5e5e5` | `--zeta-border` |
-| `widget.border` | platform.theme | `#454545` | `#d4d4d4` | `--zeta-widget-border` |
-| `widget.shadow` | platform.theme | `rgba(0, 0, 0, 0.4)` | `rgba(0, 0, 0, 0.16)` | `--zeta-widget-shadow` |
-| `chat.tabBackground` | chat.presentation | `#eeeeee` | `#eeeeee` | `--zeta-chat-tab-background` |
-| `collaboration.selection0Background` | collaboration.presentation | `#3584e4` | `#3584e4` | `--zeta-collaboration-selection0-background` |
-| `collaboration.selection1Background` | collaboration.presentation | `#9141ac` | `#9141ac` | `--zeta-collaboration-selection1-background` |
-| `collaboration.selection2Background` | collaboration.presentation | `#26a269` | `#26a269` | `--zeta-collaboration-selection2-background` |
-| `collaboration.selection3Background` | collaboration.presentation | `#c64600` | `#c64600` | `--zeta-collaboration-selection3-background` |
-| `input.foreground` | platform.theme.components | `#cccccc` | `#3b3b3b` | `--zeta-input-foreground` |
-| `input.background` | platform.theme.components | `#313131` | `#ffffff` | `--zeta-input-background` |
-| `input.border` | platform.theme.components | `#3c3c3c` | `#cecece` | `--zeta-input-border` |
-| `input.placeholderForeground` | platform.theme.components | `#8f8f8f` | `#767676` | `--zeta-input-placeholder-foreground` |
-| `selection.foreground` | platform.theme.components | `#ffffff` | `#000000` | `--zeta-selection-foreground` |
-| `selection.background` | platform.theme.components | `#264f78` | `#add6ff` | `--zeta-selection-background` |
-| `hover.foreground` | platform.theme.components | `#f5f5f7` | `#f5f5f7` | `--zeta-hover-foreground` |
-| `hover.background` | platform.theme.components | `#2d2e33` | `#2d2e33` | `--zeta-hover-background` |
-| `hover.border` | platform.theme.components | `rgba(255, 255, 255, 0.09)` | `rgba(255, 255, 255, 0.09)` | `--zeta-hover-border` |
-| `hover.shadow` | platform.theme.components | `rgba(0, 0, 0, 0.19)` | `rgba(0, 0, 0, 0.19)` | `--zeta-hover-shadow` |
-| `list.hoverBackground` | platform.theme.components | `#2a2d2e` | `#e8e8e8` | `--zeta-list-hover-background` |
-| `list.activeSelectionForeground` | platform.theme.components | `#ffffff` | `#ffffff` | `--zeta-list-active-selection-foreground` |
-| `list.activeSelectionBackground` | platform.theme.components | `#04395e` | `#0060c0` | `--zeta-list-active-selection-background` |
-| `tree.indentGuidesStroke` | platform.theme.components | `#585858` | `#a9a9a9` | `--zeta-tree-indent-guides-stroke` |
-| `menu.foreground` | platform.theme.components | `#cccccc` | `#000000` | `--zeta-menu-foreground` |
-| `menu.selectionForeground` | platform.theme.components | `#cccccc` | `#3b3b3b` | `--zeta-menu-selection-foreground` |
-| `menu.selectionBackground` | platform.theme.components | `#2a2d2e` | `#e8e8e8` | `--zeta-menu-selection-background` |
-| `menu.background` | platform.theme.components | `#252526` | `#ffffff` | `--zeta-menu-background` |
-| `menu.hoverBackground` | platform.theme.components | `#45454b` | `#e2e2e4` | `--zeta-menu-hover-background` |
-| `button.foreground` | platform.theme.components | `#cccccc` | `#3b3b3b` | `--zeta-button-foreground` |
-| `button.border` | platform.theme.components | `#cccccc` | `#3b3b3b` | `--zeta-button-border` |
-| `button.background` | platform.theme.components | `#0e639c` | `#0078d4` | `--zeta-button-background` |
-| `button.hoverBackground` | platform.theme.components | `#2a2d2e` | `#e8e8e8` | `--zeta-button-hover-background` |
-| `button.activeBackground` | platform.theme.components | `#37373d` | `#dcdcdc` | `--zeta-button-active-background` |
-| `actionBar.background` | platform.theme.components | `#313136` | `#f5f5f6` | `--zeta-action-bar-background` |
-| `actionBar.toggledBackground` | platform.theme.components | `#37373d` | `#e4e6f2` | `--zeta-action-bar-toggled-background` |
-| `tabList.hoverBackground` | platform.theme.components | `#45454b` | `#e2e2e4` | `--zeta-tab-list-hover-background` |
-| `tabList.activeBackground` | platform.theme.components | `#04395e` | `#0060c0` | `--zeta-tab-list-active-background` |
-| `button.secondaryBackground` | platform.theme.components | `#3a3d41` | `#e5e5e5` | `--zeta-button-secondary-background` |
-| `button.primaryForeground` | platform.theme.components | `#ffffff` | `#ffffff` | `--zeta-button-primary-foreground` |
-| `button.primaryBackground` | platform.theme.components | `#0e639c` | `#0078d4` | `--zeta-button-primary-background` |
-| `button.primaryHoverBackground` | platform.theme.components | `#1177bb` | `#006cbe` | `--zeta-button-primary-hover-background` |
-| `toolbar.hoverBackground` | platform.theme.components | `rgba(90, 93, 94, 0.31)` | `rgba(90, 93, 94, 0.16)` | `--zeta-toolbar-hover-background` |
-| `keybindingLabel.foreground` | platform.theme.components | `#cccccc` | `#555555` | `--zeta-keybinding-label-foreground` |
-| `keybindingLabel.background` | platform.theme.components | `rgba(128, 128, 128, 0.17)` | `rgba(221, 221, 221, 0.4)` | `--zeta-keybinding-label-background` |
-| `keybindingLabel.border` | platform.theme.components | `rgba(128, 128, 128, 0.2)` | `rgba(204, 204, 204, 0.4)` | `--zeta-keybinding-label-border` |
-| `keybindingLabel.bottomBorder` | platform.theme.components | `#6b6b6b` | `#b0b0b0` | `--zeta-keybinding-label-bottom-border` |
-| `scrollbar.shadow` | platform.theme.components | `#000000` | `#dddddd` | `--zeta-scrollbar-shadow` |
-| `scrollbar.sliderBackground` | platform.theme.components | `rgba(121, 121, 121, 0.4)` | `rgba(100, 100, 100, 0.2)` | `--zeta-scrollbar-slider-background` |
-| `scrollbar.sliderHoverBackground` | platform.theme.components | `rgba(100, 100, 100, 0.7)` | `rgba(100, 100, 100, 0.35)` | `--zeta-scrollbar-slider-hover-background` |
-| `scrollbar.sliderActiveBackground` | platform.theme.components | `rgba(191, 191, 191, 0.4)` | `rgba(0, 0, 0, 0.2)` | `--zeta-scrollbar-slider-active-background` |
-| `dialog.background` | platform.theme.components | `#252526` | `#ffffff` | `--zeta-dialog-background` |
-| `dialog.border` | platform.theme.components | `#454545` | `#d4d4d4` | `--zeta-dialog-border` |
-| `dialog.backdropBackground` | platform.theme.components | `rgba(0, 0, 0, 0.45)` | `rgba(0, 0, 0, 0.35)` | `--zeta-dialog-backdrop-background` |
-| `dialog.shadow` | platform.theme.components | `rgba(0, 0, 0, 0.45)` | `rgba(0, 0, 0, 0.24)` | `--zeta-dialog-shadow` |
-| `quickInput.background` | platform.theme.components | `#252526` | `#f8f8f8` | `--zeta-quick-input-background` |
-| `quickInput.backdropBackground` | platform.theme.components | `rgba(0, 0, 0, 0.15)` | `rgba(0, 0, 0, 0.12)` | `--zeta-quick-input-backdrop-background` |
-| `textLink.activeForeground` | platform.theme.components | `#4e94ce` | `#006ab1` | `--zeta-text-link-active-foreground` |
-| `text.codeBlockBackground` | platform.theme.components | `#0f0f0f` | `#f2f2f2` | `--zeta-text-code-block-background` |
-| `search.matchBackground` | platform.theme.components | `rgba(249, 199, 79, 0.55)` | `rgba(249, 199, 79, 0.55)` | `--zeta-search-match-background` |
-| `sectionHeader.foreground` | workbench.shell | `#b8b8b8` | `#616161` | `--zeta-section-header-foreground` |
-| `workbench.background` | workbench.shell | `#1e1e1e` | `#ffffff` | `--zeta-workbench-background` |
-| `editor.background` | workbench.shell | `#1e1e1e` | `#ffffff` | `--zeta-editor-background` |
-| `editor.foreground` | workbench.shell | `#d4d4d4` | `#333333` | `--zeta-editor-foreground` |
-| `editor.tabBackground` | workbench.shell | `#eeeeee` | `#eeeeee` | `--zeta-editor-tab-background` |
-| `titleBar.background` | workbench.shell | `#ffffff` | `#ffffff` | `--zeta-title-bar-background` |
-| `titleBar.foreground` | workbench.shell | `#1f1f1f` | `#1f1f1f` | `--zeta-title-bar-foreground` |
-| `titleBar.actionForeground` | workbench.shell | `#424242` | `#424242` | `--zeta-title-bar-action-foreground` |
-| `titleBar.hoverBackground` | workbench.shell | `#e5e5e5` | `#e5e5e5` | `--zeta-title-bar-hover-background` |
-| `sideBar.background` | workbench.shell | `#f8f8f8` | `#f8f8f8` | `--zeta-side-bar-background` |
-| `auxiliaryBar.background` | workbench.shell | `#f8f8f8` | `#f8f8f8` | `--zeta-auxiliary-bar-background` |
-| `panel.background` | workbench.shell | `#f8f8f8` | `#f8f8f8` | `--zeta-panel-background` |
-| `compositeBar.foreground` | workbench.shell | `#ffffff` | `#1f1f1f` | `--zeta-composite-bar-foreground` |
-| `compositeBar.inactiveForeground` | workbench.shell | `#858585` | `#616161` | `--zeta-composite-bar-inactive-foreground` |
-| `statusBar.foreground` | workbench.shell | `#1f1f1f` | `#1f1f1f` | `--zeta-status-bar-foreground` |
-| `statusBar.background` | workbench.shell | `#ffffff` | `#ffffff` | `--zeta-status-bar-background` |
-| `statusBarItem.hoverForeground` | workbench.shell | `#1f1f1f` | `#1f1f1f` | `--zeta-status-bar-item-hover-foreground` |
-| `statusBarItem.hoverBackground` | workbench.shell | `rgba(90, 93, 94, 0.31)` | `rgba(90, 93, 94, 0.16)` | `--zeta-status-bar-item-hover-background` |
-| `statusBarItem.compactHoverBackground` | workbench.shell | `rgba(90, 93, 94, 0.31)` | `rgba(90, 93, 94, 0.16)` | `--zeta-status-bar-item-compact-hover-background` |
-| `statusBarItem.activeBackground` | workbench.shell | `#37373d` | `#dcdcdc` | `--zeta-status-bar-item-active-background` |
-| `statusBarItem.remoteForeground` | workbench.shell | `#ffffff` | `#ffffff` | `--zeta-status-bar-item-remote-foreground` |
-| `statusBarItem.remoteBackground` | workbench.shell | `#328eb9` | `#328eb9` | `--zeta-status-bar-item-remote-background` |
-| `statusBarItem.remoteHoverForeground` | workbench.shell | `#1f1f1f` | `#1f1f1f` | `--zeta-status-bar-item-remote-hover-foreground` |
-| `statusBarItem.remoteHoverBackground` | workbench.shell | `rgba(90, 93, 94, 0.31)` | `rgba(90, 93, 94, 0.16)` | `--zeta-status-bar-item-remote-hover-background` |
-| `sash.hoverBackground` | workbench.shell | `#007acc` | `#007acc` | `--zeta-sash-hover-background` |
-| `editor.token.commentForeground` | editor.presentation | `#6a9955` | `#008000` | `--zeta-editor-token-comment-foreground` |
-| `editor.token.keywordForeground` | editor.presentation | `#c586c0` | `#af00db` | `--zeta-editor-token-keyword-foreground` |
-| `editor.token.stringForeground` | editor.presentation | `#ce9178` | `#a31515` | `--zeta-editor-token-string-foreground` |
-| `editor.token.numberForeground` | editor.presentation | `#b5cea8` | `#098658` | `--zeta-editor-token-number-foreground` |
-| `editor.token.regexpForeground` | editor.presentation | `#d16969` | `#811f3f` | `--zeta-editor-token-regexp-foreground` |
-| `editor.token.typeForeground` | editor.presentation | `#4ec9b0` | `#267f99` | `--zeta-editor-token-type-foreground` |
-| `editor.token.functionForeground` | editor.presentation | `#dcdcaa` | `#795e26` | `--zeta-editor-token-function-foreground` |
-| `editor.token.variableForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--zeta-editor-token-variable-foreground` |
-| `editor.token.operatorForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--zeta-editor-token-operator-foreground` |
-| `editor.token.attributeForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--zeta-editor-token-attribute-foreground` |
-| `editor.token.constantForeground` | editor.presentation | `#b5cea8` | `#098658` | `--zeta-editor-token-constant-foreground` |
-| `editor.token.constructorForeground` | editor.presentation | `#4ec9b0` | `#267f99` | `--zeta-editor-token-constructor-foreground` |
-| `editor.token.embeddedForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--zeta-editor-token-embedded-foreground` |
-| `editor.token.labelForeground` | editor.presentation | `#c586c0` | `#af00db` | `--zeta-editor-token-label-foreground` |
-| `editor.token.moduleForeground` | editor.presentation | `#4ec9b0` | `#267f99` | `--zeta-editor-token-module-foreground` |
-| `editor.token.propertyForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--zeta-editor-token-property-foreground` |
-| `editor.token.punctuationForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--zeta-editor-token-punctuation-foreground` |
-| `editor.border` | editor.presentation | `#2b2b2b` | `#e5e5e5` | `--zeta-editor-border` |
-| `editor.widgetBackground` | editor.presentation | `#252526` | `#f3f3f3` | `--zeta-editor-widget-background` |
-| `editor.widgetBorder` | editor.presentation | `#454545` | `#d4d4d4` | `--zeta-editor-widget-border` |
-| `editor.widgetShadow` | editor.presentation | `rgba(0, 0, 0, 0.4)` | `rgba(0, 0, 0, 0.16)` | `--zeta-editor-widget-shadow` |
-| `editor.inputBackground` | editor.presentation | `#313131` | `#ffffff` | `--zeta-editor-input-background` |
-| `editor.listHoverBackground` | editor.presentation | `#2a2d2e` | `#e8e8e8` | `--zeta-editor-list-hover-background` |
-| `editor.descriptionForeground` | editor.presentation | `#b8b8b8` | `#616161` | `--zeta-editor-description-foreground` |
-| `editor.hoverForeground` | editor.presentation | `#f5f5f7` | `#f5f5f7` | `--zeta-editor-hover-foreground` |
-| `editor.hoverBackground` | editor.presentation | `#2d2e33` | `#2d2e33` | `--zeta-editor-hover-background` |
-| `editor.hoverBorder` | editor.presentation | `rgba(255, 255, 255, 0.09)` | `rgba(255, 255, 255, 0.09)` | `--zeta-editor-hover-border` |
-| `editor.inlayHintForeground` | editor.presentation | `#8f8f8f` | `#767676` | `--zeta-editor-inlay-hint-foreground` |
-| `editor.inlineCompletionForeground` | editor.presentation | `#8f8f8f` | `#767676` | `--zeta-editor-inline-completion-foreground` |
-| `editor.compositionBorder` | editor.presentation | `#a0a0a0` | `#a0a0a0` | `--zeta-editor-composition-border` |
-| `editor.foldBackground` | editor.presentation | `rgba(38, 79, 120, 0.3)` | `rgba(173, 214, 255, 0.3)` | `--zeta-editor-fold-background` |
-| `editor.foldPlaceholderForeground` | editor.presentation | `#808080` | `#808080` | `--zeta-editor-fold-placeholder-foreground` |
-| `editorGutter.foldingControlForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--zeta-editor-gutter-folding-control-foreground` |
-| `editorCursor.foreground` | editor.presentation | `#aeafad` | `#000000` | `--zeta-editor-cursor-foreground` |
-| `editorCursor.background` | editor.presentation | `#1e1e1e` | `#ffffff` | `--zeta-editor-cursor-background` |
-| `editorMultiCursor.primary.foreground` | editor.presentation | `#aeafad` | `#000000` | `--zeta-editor-multi-cursor-primary-foreground` |
-| `editorMultiCursor.primary.background` | editor.presentation | `#1e1e1e` | `#ffffff` | `--zeta-editor-multi-cursor-primary-background` |
-| `editorMultiCursor.secondary.foreground` | editor.presentation | `#aeafad` | `#000000` | `--zeta-editor-multi-cursor-secondary-foreground` |
-| `editorMultiCursor.secondary.background` | editor.presentation | `#1e1e1e` | `#ffffff` | `--zeta-editor-multi-cursor-secondary-background` |
-| `editorOverviewRuler.border` | editor.presentation | `rgba(127, 127, 127, 0.3)` | `rgba(127, 127, 127, 0.3)` | `--zeta-editor-overview-ruler-border` |
-| `editorOverviewRuler.background` | editor.presentation | `rgba(30, 30, 30, 0)` | `rgba(255, 255, 255, 0)` | `--zeta-editor-overview-ruler-background` |
-| `editor.lineHighlightBackground` | editor.presentation | `rgba(0, 0, 0, 0)` | `rgba(0, 0, 0, 0)` | `--zeta-editor-line-highlight-background` |
-| `editor.inactiveLineHighlightBackground` | editor.presentation | `rgba(0, 0, 0, 0)` | `rgba(0, 0, 0, 0)` | `--zeta-editor-inactive-line-highlight-background` |
-| `editor.lineHighlightBorder` | editor.presentation | `#282828` | `#eeeeee` | `--zeta-editor-line-highlight-border` |
-| `editorRuler.foreground` | editor.presentation | `#5a5a5a` | `#d3d3d3` | `--zeta-editor-ruler-foreground` |
-| `diffEditor.removedLineBackground` | editor.presentation | `#4b1818` | `#ffebe9` | `--zeta-diff-editor-removed-line-background` |
-| `diffEditor.insertedLineBackground` | editor.presentation | `#173d24` | `#dafbe1` | `--zeta-diff-editor-inserted-line-background` |
-| `diffEditor.removedTextBackground` | editor.presentation | `#7d2020` | `#ffc6c2` | `--zeta-diff-editor-removed-text-background` |
-| `diffEditor.insertedTextBackground` | editor.presentation | `#1f6f35` | `#a6ebb7` | `--zeta-diff-editor-inserted-text-background` |
-| `diffEditor.missingLineBackground` | editor.presentation | `#202020` | `#f8f8f9` | `--zeta-diff-editor-missing-line-background` |
-| `diffEditor.unchangedRegionBackground` | editor.presentation | `#1f2933` | `#f1f6fc` | `--zeta-diff-editor-unchanged-region-background` |
-| `diffEditor.unchangedRegionForeground` | editor.presentation | `#8f8f8f` | `#767676` | `--zeta-diff-editor-unchanged-region-foreground` |
-| `diffEditor.removedLineMarker` | editor.presentation | `#f48771` | `#a1260d` | `--zeta-diff-editor-removed-line-marker` |
-| `diffEditor.insertedLineMarker` | editor.presentation | `#89d185` | `#107c10` | `--zeta-diff-editor-inserted-line-marker` |
-| `editor.semanticToken.commentForeground` | editor.presentation | `#6a9955` | `#008000` | `--zeta-editor-semantic-token-comment-foreground` |
-| `editor.semanticToken.keywordForeground` | editor.presentation | `#c586c0` | `#af00db` | `--zeta-editor-semantic-token-keyword-foreground` |
-| `editor.semanticToken.stringForeground` | editor.presentation | `#ce9178` | `#a31515` | `--zeta-editor-semantic-token-string-foreground` |
-| `editor.semanticToken.numberForeground` | editor.presentation | `#b5cea8` | `#098658` | `--zeta-editor-semantic-token-number-foreground` |
-| `editor.semanticToken.regexpForeground` | editor.presentation | `#d16969` | `#811f3f` | `--zeta-editor-semantic-token-regexp-foreground` |
-| `editor.semanticToken.typeForeground` | editor.presentation | `#4ec9b0` | `#267f99` | `--zeta-editor-semantic-token-type-foreground` |
-| `editor.semanticToken.functionForeground` | editor.presentation | `#dcdcaa` | `#795e26` | `--zeta-editor-semantic-token-function-foreground` |
-| `editor.semanticToken.variableForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--zeta-editor-semantic-token-variable-foreground` |
-| `editor.semanticToken.operatorForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--zeta-editor-semantic-token-operator-foreground` |
-| `files.emptyExplorerOpenFolderBackground` | files.presentation | `#328eb9` | `#328eb9` | `--zeta-files-empty-explorer-open-folder-background` |
-| `files.emptyExplorerOpenFolderHoverBackground` | files.presentation | `#328eb9` | `#328eb9` | `--zeta-files-empty-explorer-open-folder-hover-background` |
-| `settings.itemBackground` | workbench.preferences | `#252526` | `#f3f3f3` | `--zeta-settings-item-background` |
-| `settings.itemSeparator` | workbench.preferences | `#383838` | `#e0e0e0` | `--zeta-settings-item-separator` |
-| `settings.headerForeground` | workbench.preferences | `#cccccc` | `#3b3b3b` | `--zeta-settings-header-foreground` |
-| `settings.headerBorder` | workbench.preferences | `#454545` | `#d4d4d4` | `--zeta-settings-header-border` |
-| `settings.modifiedItemIndicator` | workbench.preferences | `#0c7d9d` | `#2f7ead` | `--zeta-settings-modified-item-indicator` |
-| `settings.focusedRowBackground` | workbench.preferences | `rgba(42, 45, 46, 0.6)` | `rgba(232, 232, 232, 0.6)` | `--zeta-settings-focused-row-background` |
-| `settings.rowHoverBackground` | workbench.preferences | `rgba(42, 45, 46, 0.3)` | `rgba(232, 232, 232, 0.3)` | `--zeta-settings-row-hover-background` |
-| `terminal.background` | terminal.presentation | `#1e1e1e` | `#ffffff` | `--zeta-terminal-background` |
-| `terminal.foreground` | terminal.presentation | `#d4d4d4` | `#333333` | `--zeta-terminal-foreground` |
-| `terminal.cursorForeground` | terminal.presentation | `#cccccc` | `#3b3b3b` | `--zeta-terminal-cursor-foreground` |
-| `terminal.ansiBlack` | terminal.presentation | `#24292f` | `#24292f` | `--zeta-terminal-ansi-black` |
-| `terminal.ansiRed` | terminal.presentation | `#cf222e` | `#cf222e` | `--zeta-terminal-ansi-red` |
-| `terminal.ansiGreen` | terminal.presentation | `#116329` | `#116329` | `--zeta-terminal-ansi-green` |
-| `terminal.ansiYellow` | terminal.presentation | `#9a6700` | `#9a6700` | `--zeta-terminal-ansi-yellow` |
-| `terminal.ansiBlue` | terminal.presentation | `#0969da` | `#0969da` | `--zeta-terminal-ansi-blue` |
-| `terminal.ansiMagenta` | terminal.presentation | `#8250df` | `#8250df` | `--zeta-terminal-ansi-magenta` |
-| `terminal.ansiCyan` | terminal.presentation | `#1b7c83` | `#1b7c83` | `--zeta-terminal-ansi-cyan` |
-| `terminal.ansiWhite` | terminal.presentation | `#d4d4d4` | `#333333` | `--zeta-terminal-ansi-white` |
-| `terminal.ansiBrightBlack` | terminal.presentation | `#6e7781` | `#6e7781` | `--zeta-terminal-ansi-bright-black` |
-| `terminal.ansiBrightRed` | terminal.presentation | `#a40e26` | `#a40e26` | `--zeta-terminal-ansi-bright-red` |
-| `terminal.ansiBrightGreen` | terminal.presentation | `#1a7f37` | `#1a7f37` | `--zeta-terminal-ansi-bright-green` |
-| `terminal.ansiBrightYellow` | terminal.presentation | `#bf8700` | `#bf8700` | `--zeta-terminal-ansi-bright-yellow` |
-| `terminal.ansiBrightBlue` | terminal.presentation | `#218bff` | `#218bff` | `--zeta-terminal-ansi-bright-blue` |
-| `terminal.ansiBrightMagenta` | terminal.presentation | `#a475f9` | `#a475f9` | `--zeta-terminal-ansi-bright-magenta` |
-| `terminal.ansiBrightCyan` | terminal.presentation | `#3192aa` | `#3192aa` | `--zeta-terminal-ansi-bright-cyan` |
-| `terminal.ansiBrightWhite` | terminal.presentation | `#8c959f` | `#8c959f` | `--zeta-terminal-ansi-bright-white` |
+| `foreground` | platform.theme | `#cccccc` | `#3b3b3b` | `--ash-foreground` |
+| `description.foreground` | platform.theme | `#b8b8b8` | `#616161` | `--ash-description-foreground` |
+| `muted.foreground` | platform.theme | `#8f8f8f` | `#767676` | `--ash-muted-foreground` |
+| `accent.foreground` | platform.theme | `#4daafc` | `#005fb8` | `--ash-accent-foreground` |
+| `accent.background` | platform.theme | `#328eb9` | `#328eb9` | `--ash-accent-background` |
+| `error.foreground` | platform.theme | `#f48771` | `#a1260d` | `--ash-error-foreground` |
+| `warning.foreground` | platform.theme | `#cca700` | `#895503` | `--ash-warning-foreground` |
+| `success.foreground` | platform.theme | `#89d185` | `#107c10` | `--ash-success-foreground` |
+| `focusBorder` | platform.theme | `#007fd4` | `#0078d4` | `--ash-focus-border` |
+| `border` | platform.theme | `#2b2b2b` | `#e5e5e5` | `--ash-border` |
+| `widget.border` | platform.theme | `#454545` | `#d4d4d4` | `--ash-widget-border` |
+| `widget.shadow` | platform.theme | `rgba(0, 0, 0, 0.4)` | `rgba(0, 0, 0, 0.16)` | `--ash-widget-shadow` |
+| `chat.tabBackground` | chat.presentation | `#eeeeee` | `#eeeeee` | `--ash-chat-tab-background` |
+| `collaboration.selection0Background` | collaboration.presentation | `#3584e4` | `#3584e4` | `--ash-collaboration-selection0-background` |
+| `collaboration.selection1Background` | collaboration.presentation | `#9141ac` | `#9141ac` | `--ash-collaboration-selection1-background` |
+| `collaboration.selection2Background` | collaboration.presentation | `#26a269` | `#26a269` | `--ash-collaboration-selection2-background` |
+| `collaboration.selection3Background` | collaboration.presentation | `#c64600` | `#c64600` | `--ash-collaboration-selection3-background` |
+| `input.foreground` | platform.theme.components | `#cccccc` | `#3b3b3b` | `--ash-input-foreground` |
+| `input.background` | platform.theme.components | `#313131` | `#ffffff` | `--ash-input-background` |
+| `input.border` | platform.theme.components | `#3c3c3c` | `#cecece` | `--ash-input-border` |
+| `input.placeholderForeground` | platform.theme.components | `#8f8f8f` | `#767676` | `--ash-input-placeholder-foreground` |
+| `selection.foreground` | platform.theme.components | `#ffffff` | `#000000` | `--ash-selection-foreground` |
+| `selection.background` | platform.theme.components | `#264f78` | `#add6ff` | `--ash-selection-background` |
+| `hover.foreground` | platform.theme.components | `#f5f5f7` | `#f5f5f7` | `--ash-hover-foreground` |
+| `hover.background` | platform.theme.components | `#2d2e33` | `#2d2e33` | `--ash-hover-background` |
+| `hover.border` | platform.theme.components | `rgba(255, 255, 255, 0.09)` | `rgba(255, 255, 255, 0.09)` | `--ash-hover-border` |
+| `hover.shadow` | platform.theme.components | `rgba(0, 0, 0, 0.19)` | `rgba(0, 0, 0, 0.19)` | `--ash-hover-shadow` |
+| `list.hoverBackground` | platform.theme.components | `#2a2d2e` | `#e8e8e8` | `--ash-list-hover-background` |
+| `list.activeSelectionForeground` | platform.theme.components | `#ffffff` | `#ffffff` | `--ash-list-active-selection-foreground` |
+| `list.activeSelectionBackground` | platform.theme.components | `#04395e` | `#0060c0` | `--ash-list-active-selection-background` |
+| `tree.indentGuidesStroke` | platform.theme.components | `#585858` | `#a9a9a9` | `--ash-tree-indent-guides-stroke` |
+| `menu.foreground` | platform.theme.components | `#cccccc` | `#000000` | `--ash-menu-foreground` |
+| `menu.selectionForeground` | platform.theme.components | `#cccccc` | `#3b3b3b` | `--ash-menu-selection-foreground` |
+| `menu.selectionBackground` | platform.theme.components | `#2a2d2e` | `#e8e8e8` | `--ash-menu-selection-background` |
+| `menu.background` | platform.theme.components | `#252526` | `#ffffff` | `--ash-menu-background` |
+| `menu.hoverBackground` | platform.theme.components | `#45454b` | `#e2e2e4` | `--ash-menu-hover-background` |
+| `button.foreground` | platform.theme.components | `#cccccc` | `#3b3b3b` | `--ash-button-foreground` |
+| `button.border` | platform.theme.components | `#cccccc` | `#3b3b3b` | `--ash-button-border` |
+| `button.background` | platform.theme.components | `#0e639c` | `#0078d4` | `--ash-button-background` |
+| `button.hoverBackground` | platform.theme.components | `#2a2d2e` | `#e8e8e8` | `--ash-button-hover-background` |
+| `button.activeBackground` | platform.theme.components | `#37373d` | `#dcdcdc` | `--ash-button-active-background` |
+| `actionBar.background` | platform.theme.components | `#313136` | `#f5f5f6` | `--ash-action-bar-background` |
+| `actionBar.toggledBackground` | platform.theme.components | `#37373d` | `#e4e6f2` | `--ash-action-bar-toggled-background` |
+| `tabList.hoverBackground` | platform.theme.components | `#45454b` | `#e2e2e4` | `--ash-tab-list-hover-background` |
+| `tabList.activeBackground` | platform.theme.components | `#04395e` | `#0060c0` | `--ash-tab-list-active-background` |
+| `button.secondaryBackground` | platform.theme.components | `#3a3d41` | `#e5e5e5` | `--ash-button-secondary-background` |
+| `button.primaryForeground` | platform.theme.components | `#ffffff` | `#ffffff` | `--ash-button-primary-foreground` |
+| `button.primaryBackground` | platform.theme.components | `#0e639c` | `#0078d4` | `--ash-button-primary-background` |
+| `button.primaryHoverBackground` | platform.theme.components | `#1177bb` | `#006cbe` | `--ash-button-primary-hover-background` |
+| `toolbar.hoverBackground` | platform.theme.components | `rgba(90, 93, 94, 0.31)` | `rgba(90, 93, 94, 0.16)` | `--ash-toolbar-hover-background` |
+| `keybindingLabel.foreground` | platform.theme.components | `#cccccc` | `#555555` | `--ash-keybinding-label-foreground` |
+| `keybindingLabel.background` | platform.theme.components | `rgba(128, 128, 128, 0.17)` | `rgba(221, 221, 221, 0.4)` | `--ash-keybinding-label-background` |
+| `keybindingLabel.border` | platform.theme.components | `rgba(128, 128, 128, 0.2)` | `rgba(204, 204, 204, 0.4)` | `--ash-keybinding-label-border` |
+| `keybindingLabel.bottomBorder` | platform.theme.components | `#6b6b6b` | `#b0b0b0` | `--ash-keybinding-label-bottom-border` |
+| `scrollbar.shadow` | platform.theme.components | `#000000` | `#dddddd` | `--ash-scrollbar-shadow` |
+| `scrollbar.sliderBackground` | platform.theme.components | `rgba(121, 121, 121, 0.4)` | `rgba(100, 100, 100, 0.2)` | `--ash-scrollbar-slider-background` |
+| `scrollbar.sliderHoverBackground` | platform.theme.components | `rgba(100, 100, 100, 0.7)` | `rgba(100, 100, 100, 0.35)` | `--ash-scrollbar-slider-hover-background` |
+| `scrollbar.sliderActiveBackground` | platform.theme.components | `rgba(191, 191, 191, 0.4)` | `rgba(0, 0, 0, 0.2)` | `--ash-scrollbar-slider-active-background` |
+| `dialog.background` | platform.theme.components | `#252526` | `#ffffff` | `--ash-dialog-background` |
+| `dialog.border` | platform.theme.components | `#454545` | `#d4d4d4` | `--ash-dialog-border` |
+| `dialog.backdropBackground` | platform.theme.components | `rgba(0, 0, 0, 0.45)` | `rgba(0, 0, 0, 0.35)` | `--ash-dialog-backdrop-background` |
+| `dialog.shadow` | platform.theme.components | `rgba(0, 0, 0, 0.45)` | `rgba(0, 0, 0, 0.24)` | `--ash-dialog-shadow` |
+| `quickInput.background` | platform.theme.components | `#252526` | `#f8f8f8` | `--ash-quick-input-background` |
+| `quickInput.backdropBackground` | platform.theme.components | `rgba(0, 0, 0, 0.15)` | `rgba(0, 0, 0, 0.12)` | `--ash-quick-input-backdrop-background` |
+| `textLink.activeForeground` | platform.theme.components | `#4e94ce` | `#006ab1` | `--ash-text-link-active-foreground` |
+| `text.codeBlockBackground` | platform.theme.components | `#0f0f0f` | `#f2f2f2` | `--ash-text-code-block-background` |
+| `search.matchBackground` | platform.theme.components | `rgba(249, 199, 79, 0.55)` | `rgba(249, 199, 79, 0.55)` | `--ash-search-match-background` |
+| `sectionHeader.foreground` | workbench.shell | `#b8b8b8` | `#616161` | `--ash-section-header-foreground` |
+| `workbench.background` | workbench.shell | `#1e1e1e` | `#ffffff` | `--ash-workbench-background` |
+| `editor.background` | workbench.shell | `#1e1e1e` | `#ffffff` | `--ash-editor-background` |
+| `editor.foreground` | workbench.shell | `#d4d4d4` | `#333333` | `--ash-editor-foreground` |
+| `editor.tabBackground` | workbench.shell | `#eeeeee` | `#eeeeee` | `--ash-editor-tab-background` |
+| `titleBar.background` | workbench.shell | `#ffffff` | `#ffffff` | `--ash-title-bar-background` |
+| `titleBar.foreground` | workbench.shell | `#1f1f1f` | `#1f1f1f` | `--ash-title-bar-foreground` |
+| `titleBar.actionForeground` | workbench.shell | `#424242` | `#424242` | `--ash-title-bar-action-foreground` |
+| `titleBar.hoverBackground` | workbench.shell | `#e5e5e5` | `#e5e5e5` | `--ash-title-bar-hover-background` |
+| `sideBar.background` | workbench.shell | `#f8f8f8` | `#f8f8f8` | `--ash-side-bar-background` |
+| `auxiliaryBar.background` | workbench.shell | `#f8f8f8` | `#f8f8f8` | `--ash-auxiliary-bar-background` |
+| `panel.background` | workbench.shell | `#f8f8f8` | `#f8f8f8` | `--ash-panel-background` |
+| `compositeBar.foreground` | workbench.shell | `#ffffff` | `#1f1f1f` | `--ash-composite-bar-foreground` |
+| `compositeBar.inactiveForeground` | workbench.shell | `#858585` | `#616161` | `--ash-composite-bar-inactive-foreground` |
+| `statusBar.foreground` | workbench.shell | `#1f1f1f` | `#1f1f1f` | `--ash-status-bar-foreground` |
+| `statusBar.background` | workbench.shell | `#ffffff` | `#ffffff` | `--ash-status-bar-background` |
+| `statusBarItem.hoverForeground` | workbench.shell | `#1f1f1f` | `#1f1f1f` | `--ash-status-bar-item-hover-foreground` |
+| `statusBarItem.hoverBackground` | workbench.shell | `rgba(90, 93, 94, 0.31)` | `rgba(90, 93, 94, 0.16)` | `--ash-status-bar-item-hover-background` |
+| `statusBarItem.compactHoverBackground` | workbench.shell | `rgba(90, 93, 94, 0.31)` | `rgba(90, 93, 94, 0.16)` | `--ash-status-bar-item-compact-hover-background` |
+| `statusBarItem.activeBackground` | workbench.shell | `#37373d` | `#dcdcdc` | `--ash-status-bar-item-active-background` |
+| `statusBarItem.remoteForeground` | workbench.shell | `#ffffff` | `#ffffff` | `--ash-status-bar-item-remote-foreground` |
+| `statusBarItem.remoteBackground` | workbench.shell | `#328eb9` | `#328eb9` | `--ash-status-bar-item-remote-background` |
+| `statusBarItem.remoteHoverForeground` | workbench.shell | `#1f1f1f` | `#1f1f1f` | `--ash-status-bar-item-remote-hover-foreground` |
+| `statusBarItem.remoteHoverBackground` | workbench.shell | `rgba(90, 93, 94, 0.31)` | `rgba(90, 93, 94, 0.16)` | `--ash-status-bar-item-remote-hover-background` |
+| `sash.hoverBackground` | workbench.shell | `#007acc` | `#007acc` | `--ash-sash-hover-background` |
+| `editor.token.commentForeground` | editor.presentation | `#6a9955` | `#008000` | `--ash-editor-token-comment-foreground` |
+| `editor.token.keywordForeground` | editor.presentation | `#c586c0` | `#af00db` | `--ash-editor-token-keyword-foreground` |
+| `editor.token.stringForeground` | editor.presentation | `#ce9178` | `#a31515` | `--ash-editor-token-string-foreground` |
+| `editor.token.numberForeground` | editor.presentation | `#b5cea8` | `#098658` | `--ash-editor-token-number-foreground` |
+| `editor.token.regexpForeground` | editor.presentation | `#d16969` | `#811f3f` | `--ash-editor-token-regexp-foreground` |
+| `editor.token.typeForeground` | editor.presentation | `#4ec9b0` | `#267f99` | `--ash-editor-token-type-foreground` |
+| `editor.token.functionForeground` | editor.presentation | `#dcdcaa` | `#795e26` | `--ash-editor-token-function-foreground` |
+| `editor.token.variableForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--ash-editor-token-variable-foreground` |
+| `editor.token.operatorForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--ash-editor-token-operator-foreground` |
+| `editor.token.attributeForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--ash-editor-token-attribute-foreground` |
+| `editor.token.constantForeground` | editor.presentation | `#b5cea8` | `#098658` | `--ash-editor-token-constant-foreground` |
+| `editor.token.constructorForeground` | editor.presentation | `#4ec9b0` | `#267f99` | `--ash-editor-token-constructor-foreground` |
+| `editor.token.embeddedForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--ash-editor-token-embedded-foreground` |
+| `editor.token.labelForeground` | editor.presentation | `#c586c0` | `#af00db` | `--ash-editor-token-label-foreground` |
+| `editor.token.moduleForeground` | editor.presentation | `#4ec9b0` | `#267f99` | `--ash-editor-token-module-foreground` |
+| `editor.token.propertyForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--ash-editor-token-property-foreground` |
+| `editor.token.punctuationForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--ash-editor-token-punctuation-foreground` |
+| `editor.border` | editor.presentation | `#2b2b2b` | `#e5e5e5` | `--ash-editor-border` |
+| `editor.widgetBackground` | editor.presentation | `#252526` | `#f3f3f3` | `--ash-editor-widget-background` |
+| `editor.widgetBorder` | editor.presentation | `#454545` | `#d4d4d4` | `--ash-editor-widget-border` |
+| `editor.widgetShadow` | editor.presentation | `rgba(0, 0, 0, 0.4)` | `rgba(0, 0, 0, 0.16)` | `--ash-editor-widget-shadow` |
+| `editor.inputBackground` | editor.presentation | `#313131` | `#ffffff` | `--ash-editor-input-background` |
+| `editor.listHoverBackground` | editor.presentation | `#2a2d2e` | `#e8e8e8` | `--ash-editor-list-hover-background` |
+| `editor.descriptionForeground` | editor.presentation | `#b8b8b8` | `#616161` | `--ash-editor-description-foreground` |
+| `editor.hoverForeground` | editor.presentation | `#f5f5f7` | `#f5f5f7` | `--ash-editor-hover-foreground` |
+| `editor.hoverBackground` | editor.presentation | `#2d2e33` | `#2d2e33` | `--ash-editor-hover-background` |
+| `editor.hoverBorder` | editor.presentation | `rgba(255, 255, 255, 0.09)` | `rgba(255, 255, 255, 0.09)` | `--ash-editor-hover-border` |
+| `editor.inlayHintForeground` | editor.presentation | `#8f8f8f` | `#767676` | `--ash-editor-inlay-hint-foreground` |
+| `editor.inlineCompletionForeground` | editor.presentation | `#8f8f8f` | `#767676` | `--ash-editor-inline-completion-foreground` |
+| `editor.compositionBorder` | editor.presentation | `#a0a0a0` | `#a0a0a0` | `--ash-editor-composition-border` |
+| `editor.foldBackground` | editor.presentation | `rgba(38, 79, 120, 0.3)` | `rgba(173, 214, 255, 0.3)` | `--ash-editor-fold-background` |
+| `editor.foldPlaceholderForeground` | editor.presentation | `#808080` | `#808080` | `--ash-editor-fold-placeholder-foreground` |
+| `editorGutter.foldingControlForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--ash-editor-gutter-folding-control-foreground` |
+| `editorCursor.foreground` | editor.presentation | `#aeafad` | `#000000` | `--ash-editor-cursor-foreground` |
+| `editorCursor.background` | editor.presentation | `#1e1e1e` | `#ffffff` | `--ash-editor-cursor-background` |
+| `editorMultiCursor.primary.foreground` | editor.presentation | `#aeafad` | `#000000` | `--ash-editor-multi-cursor-primary-foreground` |
+| `editorMultiCursor.primary.background` | editor.presentation | `#1e1e1e` | `#ffffff` | `--ash-editor-multi-cursor-primary-background` |
+| `editorMultiCursor.secondary.foreground` | editor.presentation | `#aeafad` | `#000000` | `--ash-editor-multi-cursor-secondary-foreground` |
+| `editorMultiCursor.secondary.background` | editor.presentation | `#1e1e1e` | `#ffffff` | `--ash-editor-multi-cursor-secondary-background` |
+| `editorOverviewRuler.border` | editor.presentation | `rgba(127, 127, 127, 0.3)` | `rgba(127, 127, 127, 0.3)` | `--ash-editor-overview-ruler-border` |
+| `editorOverviewRuler.background` | editor.presentation | `rgba(30, 30, 30, 0)` | `rgba(255, 255, 255, 0)` | `--ash-editor-overview-ruler-background` |
+| `editor.lineHighlightBackground` | editor.presentation | `rgba(0, 0, 0, 0)` | `rgba(0, 0, 0, 0)` | `--ash-editor-line-highlight-background` |
+| `editor.inactiveLineHighlightBackground` | editor.presentation | `rgba(0, 0, 0, 0)` | `rgba(0, 0, 0, 0)` | `--ash-editor-inactive-line-highlight-background` |
+| `editor.lineHighlightBorder` | editor.presentation | `#282828` | `#eeeeee` | `--ash-editor-line-highlight-border` |
+| `editorRuler.foreground` | editor.presentation | `#5a5a5a` | `#d3d3d3` | `--ash-editor-ruler-foreground` |
+| `diffEditor.removedLineBackground` | editor.presentation | `#4b1818` | `#ffebe9` | `--ash-diff-editor-removed-line-background` |
+| `diffEditor.insertedLineBackground` | editor.presentation | `#173d24` | `#dafbe1` | `--ash-diff-editor-inserted-line-background` |
+| `diffEditor.removedTextBackground` | editor.presentation | `#7d2020` | `#ffc6c2` | `--ash-diff-editor-removed-text-background` |
+| `diffEditor.insertedTextBackground` | editor.presentation | `#1f6f35` | `#a6ebb7` | `--ash-diff-editor-inserted-text-background` |
+| `diffEditor.missingLineBackground` | editor.presentation | `#202020` | `#f8f8f9` | `--ash-diff-editor-missing-line-background` |
+| `diffEditor.unchangedRegionBackground` | editor.presentation | `#1f2933` | `#f1f6fc` | `--ash-diff-editor-unchanged-region-background` |
+| `diffEditor.unchangedRegionForeground` | editor.presentation | `#8f8f8f` | `#767676` | `--ash-diff-editor-unchanged-region-foreground` |
+| `diffEditor.removedLineMarker` | editor.presentation | `#f48771` | `#a1260d` | `--ash-diff-editor-removed-line-marker` |
+| `diffEditor.insertedLineMarker` | editor.presentation | `#89d185` | `#107c10` | `--ash-diff-editor-inserted-line-marker` |
+| `editor.semanticToken.commentForeground` | editor.presentation | `#6a9955` | `#008000` | `--ash-editor-semantic-token-comment-foreground` |
+| `editor.semanticToken.keywordForeground` | editor.presentation | `#c586c0` | `#af00db` | `--ash-editor-semantic-token-keyword-foreground` |
+| `editor.semanticToken.stringForeground` | editor.presentation | `#ce9178` | `#a31515` | `--ash-editor-semantic-token-string-foreground` |
+| `editor.semanticToken.numberForeground` | editor.presentation | `#b5cea8` | `#098658` | `--ash-editor-semantic-token-number-foreground` |
+| `editor.semanticToken.regexpForeground` | editor.presentation | `#d16969` | `#811f3f` | `--ash-editor-semantic-token-regexp-foreground` |
+| `editor.semanticToken.typeForeground` | editor.presentation | `#4ec9b0` | `#267f99` | `--ash-editor-semantic-token-type-foreground` |
+| `editor.semanticToken.functionForeground` | editor.presentation | `#dcdcaa` | `#795e26` | `--ash-editor-semantic-token-function-foreground` |
+| `editor.semanticToken.variableForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--ash-editor-semantic-token-variable-foreground` |
+| `editor.semanticToken.operatorForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--ash-editor-semantic-token-operator-foreground` |
+| `files.emptyExplorerOpenFolderBackground` | files.presentation | `#328eb9` | `#328eb9` | `--ash-files-empty-explorer-open-folder-background` |
+| `files.emptyExplorerOpenFolderHoverBackground` | files.presentation | `#328eb9` | `#328eb9` | `--ash-files-empty-explorer-open-folder-hover-background` |
+| `settings.itemBackground` | workbench.preferences | `#252526` | `#f3f3f3` | `--ash-settings-item-background` |
+| `settings.itemSeparator` | workbench.preferences | `#383838` | `#e0e0e0` | `--ash-settings-item-separator` |
+| `settings.headerForeground` | workbench.preferences | `#cccccc` | `#3b3b3b` | `--ash-settings-header-foreground` |
+| `settings.headerBorder` | workbench.preferences | `#454545` | `#d4d4d4` | `--ash-settings-header-border` |
+| `settings.modifiedItemIndicator` | workbench.preferences | `#0c7d9d` | `#2f7ead` | `--ash-settings-modified-item-indicator` |
+| `settings.focusedRowBackground` | workbench.preferences | `rgba(42, 45, 46, 0.6)` | `rgba(232, 232, 232, 0.6)` | `--ash-settings-focused-row-background` |
+| `settings.rowHoverBackground` | workbench.preferences | `rgba(42, 45, 46, 0.3)` | `rgba(232, 232, 232, 0.3)` | `--ash-settings-row-hover-background` |
+| `terminal.background` | terminal.presentation | `#1e1e1e` | `#ffffff` | `--ash-terminal-background` |
+| `terminal.foreground` | terminal.presentation | `#d4d4d4` | `#333333` | `--ash-terminal-foreground` |
+| `terminal.cursorForeground` | terminal.presentation | `#cccccc` | `#3b3b3b` | `--ash-terminal-cursor-foreground` |
+| `terminal.ansiBlack` | terminal.presentation | `#24292f` | `#24292f` | `--ash-terminal-ansi-black` |
+| `terminal.ansiRed` | terminal.presentation | `#cf222e` | `#cf222e` | `--ash-terminal-ansi-red` |
+| `terminal.ansiGreen` | terminal.presentation | `#116329` | `#116329` | `--ash-terminal-ansi-green` |
+| `terminal.ansiYellow` | terminal.presentation | `#9a6700` | `#9a6700` | `--ash-terminal-ansi-yellow` |
+| `terminal.ansiBlue` | terminal.presentation | `#0969da` | `#0969da` | `--ash-terminal-ansi-blue` |
+| `terminal.ansiMagenta` | terminal.presentation | `#8250df` | `#8250df` | `--ash-terminal-ansi-magenta` |
+| `terminal.ansiCyan` | terminal.presentation | `#1b7c83` | `#1b7c83` | `--ash-terminal-ansi-cyan` |
+| `terminal.ansiWhite` | terminal.presentation | `#d4d4d4` | `#333333` | `--ash-terminal-ansi-white` |
+| `terminal.ansiBrightBlack` | terminal.presentation | `#6e7781` | `#6e7781` | `--ash-terminal-ansi-bright-black` |
+| `terminal.ansiBrightRed` | terminal.presentation | `#a40e26` | `#a40e26` | `--ash-terminal-ansi-bright-red` |
+| `terminal.ansiBrightGreen` | terminal.presentation | `#1a7f37` | `#1a7f37` | `--ash-terminal-ansi-bright-green` |
+| `terminal.ansiBrightYellow` | terminal.presentation | `#bf8700` | `#bf8700` | `--ash-terminal-ansi-bright-yellow` |
+| `terminal.ansiBrightBlue` | terminal.presentation | `#218bff` | `#218bff` | `--ash-terminal-ansi-bright-blue` |
+| `terminal.ansiBrightMagenta` | terminal.presentation | `#a475f9` | `#a475f9` | `--ash-terminal-ansi-bright-magenta` |
+| `terminal.ansiBrightCyan` | terminal.presentation | `#3192aa` | `#3192aa` | `--ash-terminal-ansi-bright-cyan` |
+| `terminal.ansiBrightWhite` | terminal.presentation | `#8c959f` | `#8c959f` | `--ash-terminal-ansi-bright-white` |
 
 ## Sizes
 
 | Token | Owner | Value | CSS variable |
 | --- | --- | --- | --- |
-| `fontSize.heading1` | platform.ui | `26px` | `--zeta-font-size-heading1` |
-| `fontSize.heading2` | platform.ui | `18px` | `--zeta-font-size-heading2` |
-| `fontSize.heading3` | platform.ui | `13px` | `--zeta-font-size-heading3` |
-| `fontSize.body1` | platform.ui | `13px` | `--zeta-font-size-body1` |
-| `fontSize.body2` | platform.ui | `11px` | `--zeta-font-size-body2` |
-| `fontSize.label1` | platform.ui | `12px` | `--zeta-font-size-label1` |
-| `fontSize.label2` | platform.ui | `11px` | `--zeta-font-size-label2` |
-| `fontSize.label3` | platform.ui | `10px` | `--zeta-font-size-label3` |
-| `fontWeight.regular` | platform.ui | `400` | `--zeta-font-weight-regular` |
-| `fontWeight.medium` | platform.ui | `500` | `--zeta-font-weight-medium` |
-| `fontWeight.semiBold` | platform.ui | `600` | `--zeta-font-weight-semi-bold` |
-| `strokeThickness` | platform.ui | `1px` | `--zeta-stroke-thickness` |
-| `animation.durationFast` | platform.ui | `120ms` | `--zeta-animation-duration-fast` |
-| `animation.durationNormal` | platform.ui | `200ms` | `--zeta-animation-duration-normal` |
-| `animation.durationSlow` | platform.ui | `350ms` | `--zeta-animation-duration-slow` |
-| `tab.height` | platform.ui | `24px` | `--zeta-tab-height` |
-| `tabList.contentInset` | platform.ui | `4px` | `--zeta-tab-list-content-inset` |
-| `tabList.itemContentInset` | platform.ui | `6px` | `--zeta-tab-list-item-content-inset` |
-| `compositeBar.contentInset` | platform.ui | `4px` | `--zeta-composite-bar-content-inset` |
-| `pane.titleHeight` | platform.ui | `32px` | `--zeta-pane-title-height` |
-| `actionBar.gap` | platform.ui | `2px` | `--zeta-action-bar-gap` |
-| `toolbar.itemGap` | platform.ui | `2px` | `--zeta-toolbar-item-gap` |
-| `toolbar.actionSize` | platform.ui | `22px` | `--zeta-toolbar-action-size` |
-| `scrollbar.size` | platform.ui | `10px` | `--zeta-scrollbar-size` |
-| `tree.indent` | platform.ui | `14px` | `--zeta-tree-indent` |
-| `sash.dragAreaSize` | platform.ui | `4px` | `--zeta-sash-drag-area-size` |
-| `sash.hoverFeedbackSize` | platform.ui | `1px` | `--zeta-sash-hover-feedback-size` |
-| `modalEditor.width` | platform.ui | `960px` | `--zeta-modal-editor-width` |
-| `modalEditor.height` | platform.ui | `720px` | `--zeta-modal-editor-height` |
+| `fontSize.heading1` | platform.ui | `26px` | `--ash-font-size-heading1` |
+| `fontSize.heading2` | platform.ui | `18px` | `--ash-font-size-heading2` |
+| `fontSize.heading3` | platform.ui | `13px` | `--ash-font-size-heading3` |
+| `fontSize.body1` | platform.ui | `13px` | `--ash-font-size-body1` |
+| `fontSize.body2` | platform.ui | `11px` | `--ash-font-size-body2` |
+| `fontSize.label1` | platform.ui | `12px` | `--ash-font-size-label1` |
+| `fontSize.label2` | platform.ui | `11px` | `--ash-font-size-label2` |
+| `fontSize.label3` | platform.ui | `10px` | `--ash-font-size-label3` |
+| `fontWeight.regular` | platform.ui | `400` | `--ash-font-weight-regular` |
+| `fontWeight.medium` | platform.ui | `500` | `--ash-font-weight-medium` |
+| `fontWeight.semiBold` | platform.ui | `600` | `--ash-font-weight-semi-bold` |
+| `strokeThickness` | platform.ui | `1px` | `--ash-stroke-thickness` |
+| `animation.durationFast` | platform.ui | `120ms` | `--ash-animation-duration-fast` |
+| `animation.durationNormal` | platform.ui | `200ms` | `--ash-animation-duration-normal` |
+| `animation.durationSlow` | platform.ui | `350ms` | `--ash-animation-duration-slow` |
+| `tab.height` | platform.ui | `24px` | `--ash-tab-height` |
+| `tabList.contentInset` | platform.ui | `4px` | `--ash-tab-list-content-inset` |
+| `tabList.itemContentInset` | platform.ui | `6px` | `--ash-tab-list-item-content-inset` |
+| `compositeBar.contentInset` | platform.ui | `4px` | `--ash-composite-bar-content-inset` |
+| `pane.titleHeight` | platform.ui | `32px` | `--ash-pane-title-height` |
+| `actionBar.gap` | platform.ui | `2px` | `--ash-action-bar-gap` |
+| `toolbar.itemGap` | platform.ui | `2px` | `--ash-toolbar-item-gap` |
+| `toolbar.actionSize` | platform.ui | `22px` | `--ash-toolbar-action-size` |
+| `scrollbar.size` | platform.ui | `10px` | `--ash-scrollbar-size` |
+| `tree.indent` | platform.ui | `14px` | `--ash-tree-indent` |
+| `sash.dragAreaSize` | platform.ui | `4px` | `--ash-sash-drag-area-size` |
+| `sash.hoverFeedbackSize` | platform.ui | `1px` | `--ash-sash-hover-feedback-size` |
+| `modalEditor.width` | platform.ui | `960px` | `--ash-modal-editor-width` |
+| `modalEditor.height` | platform.ui | `720px` | `--ash-modal-editor-height` |
 

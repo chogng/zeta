@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "async-utils",
+    crate_name = "ash_async_utils",
+)

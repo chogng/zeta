@@ -1,0 +1,9 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "config",
+    crate_features = ["schema"],
+    crate_name = "ash_config",
+)
+
+exports_files(["schema.json"])

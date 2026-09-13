@@ -1,0 +1,39 @@
+.ash-sessions-button {
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid var(--ash-border);
+  border-radius: 6px;
+  color: var(--ash-button-foreground, var(--ash-foreground));
+  background: var(--ash-button-background, var(--ash-input-background));
+  box-shadow: 0 1px 1px color-mix(in srgb, var(--ash-widget-shadow) 30%, transparent);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: var(--ash-font-weight-semi-bold, 600);
+}
+
+.ash-sessions-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--ash-focus-border) 58%, var(--ash-border));
+  background: var(--ash-button-hover-background, var(--ash-list-hover-background));
+}
+
+.ash-sessions-button:focus-visible {
+  outline: 2px solid var(--ash-focus-border);
+  outline-offset: 2px;
+}
+
+.ash-sessions-button:disabled {
+  opacity: .42;
+  cursor: default;
+}
+
+.ash-sessions-primary-button {
+  border-color: var(--sessions-accent);
+  color: var(--ash-button-primary-foreground);
+  background: var(--sessions-accent);
+}
+
+.ash-sessions-primary-button:hover:not(:disabled) {
+  background: var(--ash-button-primary-hover-background, var(--sessions-accent-strong));
+}
+
+.ash-sessions-primary-button:active { transform: translateY(1px); }

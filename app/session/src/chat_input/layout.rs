@@ -1,7 +1,7 @@
 //! ChatInput layout owned by one Agent Session Pane.
 
-use zeta_ui_components::ScrollCommand;
-use zeta_ui_components::VirtualListLayout;
+use ash_ui_components::ScrollCommand;
+use ash_ui_components::VirtualListLayout;
 use zui::ui::{Rect, Size};
 
 const CONTENT_HORIZONTAL_INSET: f32 = 24.0;

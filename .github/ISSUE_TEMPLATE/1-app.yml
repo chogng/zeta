@@ -1,5 +1,5 @@
 name: 🖥️ App Bug
-description: Report an issue with the Zeta app
+description: Report an issue with the Ash app
 labels:
 - app
 body:
@@ -13,7 +13,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: What version of Zeta are you using? (From “About Zeta” dialog)?
+      label: What version of Ash are you using? (From “About Ash” dialog)?
     validations:
       required: true
   - type: input

@@ -2,7 +2,7 @@
 
 use super::{PaneGroup, PaneInputId};
 use crate::PaneInput;
-use zeta_protocol::{SessionId, ThreadId};
+use ash_protocol::{SessionId, ThreadId};
 
 fn session(id: &str) -> SessionId {
     SessionId::new(id).expect("test session ID is non-empty")

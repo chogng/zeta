@@ -108,17 +108,17 @@ impl AppCommandId {
     /// Returns the stable configuration and command-palette identifier.
     pub const fn id(self) -> &'static str {
         match self {
-            Self::StartMemoryDiagnostics => "zeta.memory.start",
-            Self::ReadMemoryDiagnostics => "zeta.memory.read",
-            Self::StopMemoryDiagnostics => "zeta.memory.stop",
-            Self::ExportMemoryDiagnostics => "zeta.memory.export",
+            Self::StartMemoryDiagnostics => "ash.memory.start",
+            Self::ReadMemoryDiagnostics => "ash.memory.read",
+            Self::StopMemoryDiagnostics => "ash.memory.stop",
+            Self::ExportMemoryDiagnostics => "ash.memory.export",
             Self::Copy => "editor.action.clipboardCopyAction",
             Self::Paste => "editor.action.clipboardPasteAction",
             Self::Save => "workbench.action.files.save",
             Self::ToggleTerminalSurface => "workbench.action.toggleTerminal",
             Self::OpenKeyboardShortcuts => "workbench.action.openKeyboardShortcuts",
             Self::ManageRemoteTunnels => "workbench.action.manageRemoteTunnels",
-            Self::ManageMemories => "zeta.memories.open",
+            Self::ManageMemories => "ash.memories.open",
             Self::ToggleTabContainer => "workbench.action.toggleTabContainer",
             Self::ToggleFilesPane => "workbench.action.toggleAuxiliaryBar",
             Self::AddSession => "workbench.action.newSession",
