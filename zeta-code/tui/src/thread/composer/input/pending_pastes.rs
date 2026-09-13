@@ -5,7 +5,7 @@ use super::editor::TextElementId;
 
 const LARGE_PASTE_CHAR_THRESHOLD: usize = 1000;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct PendingPaste {
     element_id: TextElementId,
     placeholder: String,
@@ -16,7 +16,7 @@ struct PendingPaste {
 ///
 /// Large payloads stay out of the visible text buffer while the user edits the draft. The
 /// placeholders are expanded only when the chat_input prepares a submission.
-#[derive(Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(super) struct PendingPastes {
     entries: Vec<PendingPaste>,
 }

@@ -14,16 +14,22 @@ fn connection_loss_returns_only_durable_identity_and_diagnostic() {
 
     let exit = continue_or_exit(
         ClientEvent::ConnectionClosed(ConnectionCloseReason::DriverStopped),
-        Some(crate::TuiRecoveryState::new(
-            session_id.clone(),
-            thread_id.clone(),
-        )),
+        || {
+            (
+                Some(crate::TuiRecoveryState::new(
+                    session_id.clone(),
+                    thread_id.clone(),
+                )),
+                crate::TuiRecoveryDrafts::default(),
+            )
+        },
     )
     .unwrap_err();
 
     let TuiExit::ConnectionLost {
         kind,
         recovery,
+        drafts,
         reason,
     } = exit
     else {
@@ -32,6 +38,7 @@ fn connection_loss_returns_only_durable_identity_and_diagnostic() {
     assert_eq!(kind, TuiConnectionLossKind::Transport);
     assert_eq!(recovery.as_ref().unwrap().session_id(), &session_id);
     assert_eq!(recovery.as_ref().unwrap().thread_id(), &thread_id);
+    assert_eq!(drafts, crate::TuiRecoveryDrafts::default());
     assert_eq!(reason, "App Server connection closed: DriverStopped");
 }
 
@@ -44,10 +51,15 @@ fn protocol_failure_remains_terminally_classified() {
         ClientEvent::ConnectionClosed(ConnectionCloseReason::ProtocolFailure(
             "malformed frame".into(),
         )),
-        Some(crate::TuiRecoveryState::new(
-            session_id.clone(),
-            thread_id.clone(),
-        )),
+        || {
+            (
+                Some(crate::TuiRecoveryState::new(
+                    session_id.clone(),
+                    thread_id.clone(),
+                )),
+                crate::TuiRecoveryDrafts::default(),
+            )
+        },
     )
     .unwrap_err();
 
@@ -64,7 +76,7 @@ fn protocol_failure_remains_terminally_classified() {
 fn home_connection_loss_has_no_invented_conversation_identity() {
     let exit = continue_or_exit(
         ClientEvent::ConnectionClosed(ConnectionCloseReason::DriverStopped),
-        None,
+        || (None, crate::TuiRecoveryDrafts::default()),
     )
     .unwrap_err();
     assert!(matches!(

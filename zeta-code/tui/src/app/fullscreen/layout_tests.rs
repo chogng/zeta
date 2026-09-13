@@ -132,6 +132,14 @@ fn session_layout_places_query_above_the_fixed_top_tip_row() {
 }
 
 #[test]
+fn short_session_keeps_the_entire_question_visible_before_transcript_space() {
+    let areas = session_areas(Rect::new(0, 0, 42, 15), 0, 0, 0, 6, 3, 1, 2, 0, 4);
+
+    assert_eq!(areas.request.height, 6);
+    assert_eq!(areas.transcript.height, 1);
+}
+
+#[test]
 fn status_indicator_layout_stays_bounded_on_short_terminals() {
     for height in 0..40 {
         let area = Rect::new(3, 5, 40, height);

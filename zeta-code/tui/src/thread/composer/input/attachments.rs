@@ -14,14 +14,14 @@ use super::editor::TextElementId;
 
 const MAX_LOCAL_IMAGE_BYTES: u64 = 16 * 1024 * 1024;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct AttachedImage {
     element_id: TextElementId,
     placeholder: String,
     item: super::state::ChatInputItem,
 }
 
-#[derive(Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(super) struct Attachments {
     images: Vec<AttachedImage>,
 }

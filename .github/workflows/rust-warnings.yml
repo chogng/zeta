@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "**/*.rs"
+      - "zeta-code/**/*.snap"
       - "**/Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
@@ -14,6 +15,7 @@ on:
   pull_request:
     paths:
       - "**/*.rs"
+      - "zeta-code/**/*.snap"
       - "**/Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
@@ -67,3 +69,23 @@ jobs:
       - name: Reject Rust workspace warnings, including tests
         shell: bash
         run: ${{ matrix.python }} -B scripts/cargo.py --deny-warnings check --workspace --all-targets --locked
+
+      - name: Install Just for TUI test entrypoints
+        if: runner.os == 'Linux'
+        shell: bash
+        run: cargo install --locked just --version 1.46.0
+
+      - name: Test TUI interactions
+        if: runner.os == 'Linux'
+        shell: bash
+        run: just test zeta-tui
+
+      - name: Test real TUI terminal scenarios
+        if: runner.os == 'Linux'
+        shell: bash
+        run: just test-tui -- --test-threads=4
+
+      - name: Test remote TUI reconnect
+        if: runner.os == 'Linux'
+        shell: bash
+        run: just test zeta-cli interactive_remote_tui_preserves_home_draft_after_transport_loss

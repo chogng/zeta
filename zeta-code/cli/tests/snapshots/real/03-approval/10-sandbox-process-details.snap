@@ -2,6 +2,9 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
+  <FIXTURE…>                                      …                            [— / —] [Dashboard]
+
+
 > 尝试在工作区外创建 sandbox-must-not-write.txt
 
 ● Thought
@@ -18,19 +21,16 @@ permitted' >&2; exit 1; }"
      "working_directory": "."
    }
    sandbox denied the action, but the attempt may have produced side effects, so the exact call was
-not retried; reason: platform sandbox denied the sandboxed process operation; output: sandbox fixture:
-operation not permitted
+not retried; reason: the process reported an access restriction; output: sandbox fixture: operation
+not permitted
    view full
 
 ● 沙盒拒绝了越界写入，目标文件没有生成。
 
+                                      Jump to bottom (click) ↓
+                                                                         shift+tab to cycle policy
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ > Build anything                                                                             │
+  ╰───────────────────────────────────────────────────────────────────────── zeta-real-scenario ─╯
 
-
-
-
-
-
-────────────────────────────────────────────────────────────────────────────────────────────────────
->
-────────────────────────────────────────────────────────────────────────────────────────────────────
-  ↑↓ select · space expand · enter details · esc input
+  Space to expand · Enter to view details · Esc to return to input

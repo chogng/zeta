@@ -32,7 +32,7 @@ pub(super) enum VimOutcome {
     Unhandled,
 }
 
-#[derive(Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(super) struct VimState {
     mode: VimMode,
     pending_operator: Option<VimOperator>,

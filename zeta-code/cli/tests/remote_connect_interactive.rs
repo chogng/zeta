@@ -21,13 +21,15 @@ use portable_pty::CommandBuilder;
 use portable_pty::ExitStatus;
 use portable_pty::PtySize;
 use portable_pty::native_pty_system;
+use zeta_terminal::GridSize;
+use zeta_terminal::TerminalCore;
 
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(30);
 const STATE_TIMEOUT: Duration = Duration::from_secs(30);
 const OUTPUT_LIMIT: usize = 256 * 1024;
 
 #[test]
-fn interactive_remote_tui_recovers_the_durable_session_after_transport_loss() {
+fn interactive_remote_tui_preserves_home_draft_after_transport_loss() {
     let root = test_root("interactive-reconnect");
     let dir = root.join("dir");
     let profile_root = root.join("profile");
@@ -54,13 +56,19 @@ fn interactive_remote_tui_recovers_the_durable_session_after_transport_loss() {
     let mut reader = pair.master.try_clone_reader().unwrap();
     let mut writer = pair.master.take_writer().unwrap();
     let output = Arc::new(Mutex::new(Vec::new()));
+    let screen = Arc::new(Mutex::new(TerminalCore::new(GridSize::new(32, 120))));
     let reader_output = Arc::clone(&output);
+    let reader_screen = Arc::clone(&screen);
     let reader_thread = thread::spawn(move || {
         let mut buffer = [0_u8; 8_192];
         loop {
             match reader.read(&mut buffer) {
                 Ok(0) => break,
                 Ok(read) => {
+                    reader_screen
+                        .lock()
+                        .unwrap()
+                        .process_output(&buffer[..read]);
                     let mut output = reader_output.lock().unwrap();
                     let remaining = OUTPUT_LIMIT.saturating_sub(output.len());
                     output.extend_from_slice(&buffer[..read.min(remaining)]);
@@ -92,16 +100,41 @@ fn interactive_remote_tui_recovers_the_durable_session_after_transport_loss() {
     drop(pair.slave);
 
     assert!(
+        wait_for_screen(&screen, "Resume session", STATE_TIMEOUT),
+        "first TUI generation did not draw its ready frame; output:\n{}",
+        captured_output(&output)
+    );
+    writer
+        .write_all(b"\x1b[200~draft preserved across reconnect\x1b[201~")
+        .unwrap();
+    writer.flush().unwrap();
+    assert!(
+        wait_for_screen(&screen, "draft preserved across reconnect", STATE_TIMEOUT),
+        "the first TUI did not accept the draft; output:\n{}",
+        captured_output(&output)
+    );
+
+    assert!(
         wait_for_file(&recovered_requests, STATE_TIMEOUT, |contents| {
-            contents.contains("\"method\":\"session/read\"")
-                && contents.contains("\"method\":\"session/thread/read\"")
+            contents.contains("\"method\":\"initialize\"")
+                && contents.contains("\"method\":\"git/status\"")
         }),
-        "second TUI generation did not read the durable Session and Thread; output:\n{}",
+        "second TUI generation did not initialize; output:\n{}",
         captured_output(&output)
     );
     assert!(
-        wait_for_output_occurrences(&output, b"Tips for getting started", 2, STATE_TIMEOUT,),
-        "second TUI generation did not draw its ready frame; output:\n{}",
+        wait_for_output_after(
+            &output,
+            b"Reconnecting to Remote App Server",
+            b"\x1b[?1049h",
+            STATE_TIMEOUT,
+        ),
+        "second TUI generation did not enter the terminal; output:\n{}",
+        captured_output(&output)
+    );
+    assert!(
+        wait_for_screen(&screen, "draft preserved across reconnect", STATE_TIMEOUT),
+        "the replacement TUI lost the unsent draft; output:\n{}",
         captured_output(&output)
     );
     writer.write_all(&[0x03]).unwrap();
@@ -241,21 +274,48 @@ fn captured_output(output: &Arc<Mutex<Vec<u8>>>) -> String {
     String::from_utf8_lossy(&output.lock().unwrap()).into_owned()
 }
 
-fn wait_for_output_occurrences(
+fn wait_for_screen(screen: &Arc<Mutex<TerminalCore>>, expected: &str, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let visible = screen
+            .lock()
+            .unwrap()
+            .grid()
+            .lines()
+            .iter()
+            .map(|line| line.text())
+            .collect::<Vec<_>>()
+            .join("\n");
+        if visible.contains(expected) {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        thread::sleep(Duration::from_millis(25));
+    }
+}
+
+fn wait_for_output_after(
     output: &Arc<Mutex<Vec<u8>>>,
-    pattern: &[u8],
-    expected: usize,
+    marker: &[u8],
+    expected: &[u8],
     timeout: Duration,
 ) -> bool {
     let deadline = Instant::now() + timeout;
     loop {
-        let occurrences = output
-            .lock()
-            .unwrap()
-            .windows(pattern.len())
-            .filter(|window| *window == pattern)
-            .count();
-        if occurrences >= expected {
+        let found = {
+            let output = output.lock().unwrap();
+            output
+                .windows(marker.len())
+                .position(|window| window == marker)
+                .is_some_and(|start| {
+                    output[start + marker.len()..]
+                        .windows(expected.len())
+                        .any(|window| window == expected)
+                })
+        };
+        if found {
             return true;
         }
         if Instant::now() >= deadline {

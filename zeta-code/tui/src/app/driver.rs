@@ -147,6 +147,10 @@ impl AppDriver {
         })
     }
 
+    pub(super) fn recovery_drafts(&self) -> crate::TuiRecoveryDrafts {
+        self.app.recovery_drafts()
+    }
+
     pub(super) fn handle_client_event(&mut self, event: client::ClientEvent) {
         if matches!(event, client::ClientEvent::QueueChanged) {
             self.queue_refresh_requested = true;

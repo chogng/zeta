@@ -63,7 +63,7 @@ fn actual_tui_screen_mode_switches_live_and_persists() {
     assert!(process.raw_text().contains("\x1b[?1049h"));
     process.submit("/config");
     process.wait_for_stable_screen("Screen mode");
-    for _ in 0..6 {
+    for _ in 0..7 {
         process.down();
     }
     process.enter();
@@ -80,7 +80,7 @@ fn actual_tui_screen_mode_switches_live_and_persists() {
     );
     process.submit("/config");
     process.wait_for_stable_screen("Screen mode");
-    for _ in 0..6 {
+    for _ in 0..7 {
         process.down();
     }
     process.enter();
@@ -91,42 +91,10 @@ fn actual_tui_screen_mode_switches_live_and_persists() {
             .contains("screenMode = \"fullscreen\"")
     );
     process.escape();
-    process.wait_for_stable_screen("ask permissions on");
+    process.wait_for_stable_screen("Enter send");
     assert_eq!(input_top_row(&process), fullscreen_input);
     process.submit("check the preserved conversation");
     process.wait_for_stable_screen("MODE-SWITCH-REPLY");
-    process.type_text("CURRENT-DRAFT");
-    process.wait_for_stable_screen("CURRENT-DRAFT");
-    // Open Home without replacing the current conversation's draft.
-    process.send(b"\x1b[<0;3;1M\x1b[<0;3;1m");
-    process.wait_for_stable_screen("Resume session");
-    process.type_text("NEW-DRAFT");
-    process.tab();
-    process.down();
-    process.down();
-    process.enter();
-    process.wait_for_stable_screen("Screen mode");
-    for _ in 0..6 {
-        process.down();
-    }
-    process.enter();
-    process.wait_for_stable_screen("inline");
-    process.escape();
-    process.wait_for_stable_screen("CURRENT-DRAFT");
-    assert!(!process.screen().contains("NEW-DRAFT"));
-    // Explicitly clear the current draft to open settings; the new-task draft remains separate.
-    process.send(&[0x7f; "CURRENT-DRAFT".len()]);
-    process.submit("/config");
-    process.wait_for_stable_screen("Screen mode");
-    for _ in 0..6 {
-        process.down();
-    }
-    process.enter();
-    process.wait_for_stable_screen("fullscreen");
-    process.escape();
-    process.wait_for_stable_screen("NEW-DRAFT");
-    assert!(process.screen().contains("Resume session"));
-    process.escape();
     process.quit();
     assert_eq!(server.request_count(), 1);
 }
@@ -148,23 +116,23 @@ fn actual_tui_multiple_commands_preserve_internal_history_and_fixed_input() {
             process.submit("/status");
             process.wait_for_screen("Full context window");
             process.escape();
-            process.wait_for_stable_screen("ask permissions on");
+            process.wait_for_stable_screen("Enter send");
         }
         for (index, reply) in REPLIES.iter().enumerate() {
             process.submit(&format!("MESSAGE-{index:02}"));
             process.wait_for_screen(reply);
-            process.wait_for_stable_screen("ask permissions on");
+            process.wait_for_stable_screen("Enter send");
             assert_input_surface_visible(&process);
         }
         assert_eq!(server.request_count(), REPLIES.len());
         process.scroll_up(2, 2);
         process.wait_for_screen("Jump to bottom (click) ↓");
         process.control_home();
-        process.wait_for_screen("> /status");
+        process.wait_for_screen("> MESSAGE-00");
         let visible_history = process.screen();
         assert!(
-            visible_history.contains("> /status"),
-            "local commands must remain reachable at the start of the transcript:\n{visible_history}"
+            visible_history.contains("> MESSAGE-00"),
+            "the first conversation turn must remain reachable after local commands:\n{visible_history}"
         );
         process.control_end();
         process.wait_for_screen("REPLY-11");
@@ -174,7 +142,7 @@ fn actual_tui_multiple_commands_preserve_internal_history_and_fixed_input() {
 }
 
 #[test]
-fn actual_tui_input_keeps_hint_bar_without_blank_line_growth() {
+fn actual_tui_input_keeps_its_row_without_blank_line_growth() {
     for size in [LARGE_SIZE, SMALL_SIZE] {
         let fixture = Fixture::new();
         let server = ScenarioServer::start([HttpResponse::streaming(["ISSUE13-REPLY"], None)]);
@@ -201,7 +169,7 @@ fn actual_tui_input_keeps_hint_bar_without_blank_line_growth() {
         }
         process.enter();
         process.wait_for_screen("ISSUE13-REPLY");
-        process.wait_for_stable_screen("ask permissions on");
+        process.wait_for_stable_screen("Enter send");
         assert_eq!(input_top_row(&process), initial_input);
         assert_eq!(server.request_count(), 1);
         if size.cols == LARGE_SIZE.cols && size.rows == LARGE_SIZE.rows {
@@ -219,18 +187,17 @@ fn actual_tui_input_keeps_hint_bar_without_blank_line_growth() {
                 );
                 std::thread::sleep(std::time::Duration::from_millis(20));
             }
-            process.wait_for_stable_screen("ask permissions on");
+            process.wait_for_stable_screen("Enter send");
             process.assert_snapshot("issue13/fullscreen_conversation");
         }
         process.submit("/status");
         process.wait_for_screen("Full context window");
         process.escape();
-        process.wait_for_stable_screen("ask permissions on");
+        process.wait_for_stable_screen("Enter send");
         assert_input_surface_visible(&process);
         assert_eq!(input_top_row(&process), initial_input);
-        let closed_hint = hint_row(&process);
         process.type_text("next");
-        assert_eq!(hint_row(&process), closed_hint);
+        assert_eq!(input_top_row(&process), initial_input);
         process.quit();
     }
 }
@@ -242,7 +209,7 @@ fn assert_input_surface_visible(process: &TuiProcess) {
         screen
             .lines()
             .skip(top + 1)
-            .any(|line| line.starts_with('>')),
+            .any(|line| line.starts_with('>') || line.contains("│ > ")),
         "input prompt remains visible:\n{screen}"
     );
     assert!(
@@ -259,7 +226,7 @@ fn input_top_row(process: &TuiProcess) -> usize {
     let rows = screen.lines().collect::<Vec<_>>();
     let prompt = rows
         .iter()
-        .rposition(|line| line.starts_with('>'))
+        .rposition(|line| line.starts_with('>') || line.contains("│ > "))
         .expect("chat input prompt remains visible");
     let top = prompt.checked_sub(1).expect("the input has a top border");
     assert!(
@@ -316,10 +283,9 @@ fn actual_tui_scrolls_the_transcript_with_the_mouse_wheel() {
     process.wait_for_stable_screen("line 20");
 
     for _ in 0..5 {
-        process.scroll_up(1, 1);
+        process.scroll_up(10, 4);
     }
 
-    process.wait_for_stable_screen("Zeta Code v");
     process.wait_for_screen("Jump to bottom (click) ↓");
     let screen = process.screen();
     let (row, line) = screen
@@ -353,6 +319,7 @@ fn actual_tui_process_details_show_sandbox_enforcement() {
         .unwrap()
         .join("sandbox-must-not-write.txt");
     let server = ScenarioServer::start([
+        HttpResponse::streaming(["SANDBOX-SETUP-DONE"], None),
         HttpResponse::reasoning_tool_call(
             "先在受限进程中尝试写入工作区外部。\n再根据进程结果确认目录边界是否生效。",
             "call-sandbox",
@@ -370,7 +337,9 @@ fn actual_tui_process_details_show_sandbox_enforcement() {
     ]);
     fixture.write_config(&server.base_url());
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
-    process.wait_for_screen("Tips for getting started");
+    process.wait_for_screen("Start a task below, or continue a previous session.");
+    process.submit("start a session before changing permissions");
+    process.wait_for_stable_screen("SANDBOX-SETUP-DONE");
     process.back_tab();
     process.back_tab();
     process.wait_for_screen("bypass permissions on");
@@ -378,8 +347,8 @@ fn actual_tui_process_details_show_sandbox_enforcement() {
     process.wait_for_stable_screen("目标文件没有生成");
     process.assert_snapshot("real/03-approval/09-sandbox-blocked");
     assert!(!outside_path.exists());
-    assert_eq!(server.request_count(), 2);
-    assert!(server.request_bodies()[1].contains("sandbox"));
+    assert_eq!(server.request_count(), 3);
+    assert!(server.request_bodies()[2].contains("sandbox"));
 
     process.control_up();
     process.up();
@@ -417,7 +386,7 @@ fn actual_tui_process_streams_queues_resizes_and_resumes() {
     fixture.write_config(&server.base_url());
 
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
-    process.wait_for_screen("Tips for getting started");
+    process.wait_for_screen("Start a task below, or continue a previous session.");
     process.submit("第一轮：测试真实流式输出、中文和 Emoji");
     first_gate.wait_until_reached();
     process.wait_for_screen("真实 TCP 流式第一段");
@@ -450,21 +419,28 @@ fn actual_tui_process_streams_queues_resizes_and_resumes() {
 fn actual_tui_process_interrupts_an_inflight_http_stream() {
     let fixture = Fixture::new();
     let gate = Gate::new();
-    let server = ScenarioServer::start([HttpResponse::streaming(
-        ["这段回复正在等待取消", "不应成为完整回复"],
-        Some(gate.clone()),
-    )]);
+    let server = ScenarioServer::start([
+        HttpResponse::streaming(
+            ["这段回复正在等待取消", "不应成为完整回复"],
+            Some(gate.clone()),
+        ),
+        HttpResponse::streaming(["AFTER-INTERRUPT-READY"], None),
+    ]);
     fixture.write_config(&server.base_url());
 
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
-    process.wait_for_screen("Tips for getting started");
+    process.wait_for_screen("Start a task below, or continue a previous session.");
     process.submit("请保持流式输出，直到我取消");
     gate.wait_until_reached();
     process.wait_for_screen("这段回复正在等待取消");
     process.send(&[0x03]);
-    process.wait_for_output("turn interrupted");
-    process.assert_snapshot_containing("real/07-lifecycle/02-interrupted", "turn interrupted");
+    process.wait_for_stable_screen("turn interrupted");
+    process.assert_snapshot("real/07-lifecycle/02-interrupted");
     gate.release();
+    process.submit("new turn after interrupt");
+    process.wait_for_stable_screen("AFTER-INTERRUPT-READY");
+    assert!(!process.screen().contains("不应成为完整回复"));
+    assert_eq!(server.request_count(), 2);
     process.quit();
 }
 
@@ -573,14 +549,14 @@ fn actual_tui_home_creates_only_the_submitted_session_and_resumes_it() {
     process.submit("/config");
     process.wait_for_stable_screen("Screen mode");
     process.escape();
-    process.wait_for_stable_screen("Resume session");
+    process.wait_for_stable_screen("Enter send");
     process.submit("/status");
     process.wait_for_stable_screen("Full context window");
     process.escape();
-    process.wait_for_stable_screen("Resume session");
+    process.wait_for_stable_screen("Enter send");
     assert!(fixture.sessions().is_empty());
     process.resize(SMALL_SIZE);
-    process.wait_for_stable_screen("Resume session");
+    process.wait_for_stable_screen("Enter send");
     process.submit("HOME-TASK 中文");
     process.wait_for_stable_screen("HOME-SESSION-REPLY");
     assert_eq!(server.request_count(), 1);

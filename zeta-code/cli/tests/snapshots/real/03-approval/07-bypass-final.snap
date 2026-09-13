@@ -2,6 +2,12 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
+  <FIXTURE…>                                      …                            [— / —] [Dashboard]
+
+> start a session before permission bypass
+
+● BYPASS-SETUP-DONE
+
 > 请直接创建 permission-bypassed.txt
 
 ● Ran write_file
@@ -22,15 +28,9 @@ expression: screen
 
 
 
+  ▶ bypass permissions on                                                shift+tab to cycle policy
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ >                                                                                            │
+  ╰───────────────────────────────────────────────────────────────────────── zeta-real-scenario ─╯
 
-
-
-
-
-
-                                                                         shift+tab to cycle policy
-────────────────────────────────────────────────────────────────────────────────────────────────────
->
-────────────────────────────────────────────────────────────────────────────────────────────────────
-  zeta-real-scenario                                                                      ← agents
-  ▶ bypass permissions on
+  Enter send  ·  shift+tab permissions  ·  /home

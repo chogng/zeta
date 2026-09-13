@@ -1,6 +1,7 @@
 use super::plan::PlanState;
 use crate::thread::composer::ChatInput;
 use crate::thread::composer::ChatInputCatalog;
+use crate::thread::composer::ChatInputDraft;
 use crate::thread::composer::ChatInputMode;
 use crate::thread::composer::SlashCommandCatalog;
 use crate::thread::queue::Queue;
@@ -50,6 +51,35 @@ pub(crate) struct ThreadPresentationStore {
 }
 
 impl ThreadPresentationStore {
+    pub(crate) fn recovery_drafts(&self) -> BTreeMap<ThreadId, ChatInputDraft> {
+        self.states
+            .iter()
+            .map(|(thread, state)| (thread.clone(), state.input.recovery_draft()))
+            .collect()
+    }
+
+    pub(crate) fn restore_recovery_drafts(&mut self, drafts: BTreeMap<ThreadId, ChatInputDraft>) {
+        for (thread, draft) in drafts {
+            let catalog = self.input_catalog.clone();
+            let state = self
+                .states
+                .entry(thread.clone())
+                .or_insert_with(|| ThreadPresentationState::with_input_catalog(catalog));
+            state.input.set_input_mode(self.input_mode);
+            if let Some(history) = &self.history {
+                state
+                    .input
+                    .connect_history(history.clone(), thread.to_string());
+            }
+            if let Some(error) = &self.history_error {
+                state.input.history_unavailable(error.clone());
+            }
+            state.input.restore_recovery_draft(draft);
+            self.touch(thread);
+        }
+        self.evict_inactive();
+    }
+
     pub(crate) fn active_id(&self) -> &ThreadId {
         &self.active
     }

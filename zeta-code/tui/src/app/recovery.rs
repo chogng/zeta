@@ -2,19 +2,24 @@ use zeta_app_server_client::ConnectionCloseReason;
 
 use crate::TuiConnectionLossKind;
 use crate::TuiExit;
+use crate::TuiRecoveryDrafts;
 use crate::TuiRecoveryState;
 use crate::client::ClientEvent;
 
 pub(super) fn continue_or_exit(
     event: ClientEvent,
-    recovery: Option<TuiRecoveryState>,
+    state: impl FnOnce() -> (Option<TuiRecoveryState>, TuiRecoveryDrafts),
 ) -> Result<ClientEvent, TuiExit> {
     match event {
-        ClientEvent::ConnectionClosed(reason) => Err(TuiExit::ConnectionLost {
-            kind: connection_loss_kind(&reason),
-            recovery,
-            reason: format!("App Server connection closed: {reason:?}"),
-        }),
+        ClientEvent::ConnectionClosed(reason) => {
+            let (recovery, drafts) = state();
+            Err(TuiExit::ConnectionLost {
+                kind: connection_loss_kind(&reason),
+                recovery,
+                drafts,
+                reason: format!("App Server connection closed: {reason:?}"),
+            })
+        }
         event => Ok(event),
     }
 }

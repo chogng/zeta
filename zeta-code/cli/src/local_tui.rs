@@ -47,6 +47,7 @@ fn run_entry(dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(
         Entry::New => None,
         Entry::Resume(recovery) => Some(recovery),
     };
+    let mut drafts = None;
     loop {
         let mut options = zeta_tui::TuiOptions::new("TUI conversation")
             .with_dir_root(&dir_root)
@@ -60,6 +61,9 @@ fn run_entry(dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(
         if let Some(state) = recovery.take() {
             options = options.with_recovery(state);
         }
+        if let Some(state) = drafts.take() {
+            options = options.with_drafts(state);
+        }
         match zeta_tui::run(session, options).map_err(|error| error.to_string())? {
             zeta_tui::TuiExit::UserRequested | zeta_tui::TuiExit::TerminationRequested => {
                 return Ok(());
@@ -67,6 +71,7 @@ fn run_entry(dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(
             zeta_tui::TuiExit::ConnectionLost {
                 kind: zeta_tui::TuiConnectionLossKind::Transport,
                 recovery: next_recovery,
+                drafts: next_drafts,
                 reason,
             } => {
                 eprintln!("Local App Server disconnected: {reason}");
@@ -78,10 +83,12 @@ fn run_entry(dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(
                     updater.replace_client(session.client());
                 }
                 recovery = next_recovery;
+                drafts = Some(next_drafts);
             }
             zeta_tui::TuiExit::ConnectionLost {
                 kind,
                 recovery,
+                drafts: _,
                 reason,
             } => {
                 return Err(reconnect::recovery_error(

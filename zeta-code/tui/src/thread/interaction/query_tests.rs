@@ -67,6 +67,43 @@ fn custom_answer_keeps_the_question_until_text_is_submitted() {
 }
 
 #[test]
+fn final_custom_answer_remains_renderable_and_retry_keeps_the_answer() {
+    let mut query = Query::new(vec![
+        question("first"),
+        QueryQuestion {
+            id: "last".into(),
+            header: "Last".into(),
+            prompt: "What next?".into(),
+            choices: vec![QueryChoice {
+                label: "Default".into(),
+                description: "Use the default".into(),
+            }],
+            custom_answer: QueryCustomAnswer::Allowed,
+        },
+    ])
+    .unwrap();
+    query.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    query.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    query.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    query.handle_paste("keep this answer".into());
+
+    let first = query.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(query.view().current, 1);
+    assert!(query.view().submitting);
+    assert_eq!(query.view().custom_answer, Some("keep this answer"));
+
+    query.submission_failed("offline".into());
+    assert_eq!(query.view().current, 1);
+    assert!(!query.view().submitting);
+    assert_eq!(query.view().error, Some("offline"));
+    assert_eq!(query.view().custom_answer, Some("keep this answer"));
+    assert_eq!(
+        query.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        first
+    );
+}
+
+#[test]
 fn paste_is_owned_by_the_custom_answer_editor() {
     let mut query = Query::new(vec![QueryQuestion {
         id: "custom".into(),

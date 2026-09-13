@@ -17,7 +17,7 @@ pub(super) enum TextAreaOutcome {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct TextElementId(u64);
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct TextElement {
     id: TextElementId,
     range: Range<usize>,
@@ -27,7 +27,7 @@ struct TextElement {
 ///
 /// Editing modes, motions, and operators stay beside this buffer. Chat-level submission stays in
 /// the parent chat_input; slash parsing stays in the shared core.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct TextArea {
     text: String,
     cursor: usize,

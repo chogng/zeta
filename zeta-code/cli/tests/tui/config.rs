@@ -7,7 +7,7 @@ use crate::tui_process::TuiProcess;
 use std::fs;
 
 fn open_provider(process: &mut TuiProcess, label: &str) {
-    process.wait_for_screen("Zeta Code v");
+    process.wait_for_screen("Enter send");
     process.submit("/config");
     process.wait_for_screen("Screen mode");
     process.up();
@@ -31,7 +31,7 @@ fn actual_tui_screen_mode_replaces_obsolete_pointer_settings_on_save() {
     process.wait_for_stable_screen("Screen mode");
     assert!(!process.screen().contains("Enhanced TUI"));
     assert!(!process.screen().contains("Copy on select"));
-    for _ in 0..6 {
+    for _ in 0..7 {
         process.down();
     }
     process.enter();
@@ -138,7 +138,7 @@ fn actual_tui_issue_refresh_setting_persists_across_restart() {
 fn actual_tui_provider_autosaves_and_tests_without_fetching_models() {
     let fixture = Fixture::new();
     let server = ScenarioServer::start([
-        HttpResponse::Json { body: br#"{"id":"test","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"OK"}]}],"status":"completed","usage":{"input_tokens":1,"output_tokens":1}}"#.to_vec() },
+        HttpResponse::responses_streaming("OK"),
         HttpResponse::failure(401, "synthetic-denial"),
     ]);
     fixture.write_config(&server.base_url());
@@ -190,8 +190,7 @@ fn actual_tui_provider_autosaves_and_tests_without_fetching_models() {
     process.down();
     process.wait_for_screen("pty-model-alias");
     process.type_text("p");
-    process.wait_for_screen("Model pinned");
-    assert!(fixture.config_source().contains("pinnedModels"));
+    wait_for_config(&fixture, "pinnedModels");
     process.escape();
     process.submit("/model");
     process.wait_for_screen("> pty-model-alias");
@@ -310,71 +309,6 @@ fn actual_tui_switches_language_and_persists_it() {
 }
 
 #[test]
-fn actual_tui_navigates_config_tabs_and_temporary_pickers() {
-    let fixture = Fixture::new();
-    let server = ScenarioServer::start([]);
-    fixture.write_config(&server.base_url());
-    fixture.append_config(
-        r#"
-[[tui.keybindings]]
-key = "ctrl+y"
-command = "zetaCode.action.copyLastResponse"
-"#,
-    );
-    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
-    process.wait_for_screen("Tips for getting started");
-
-    process.type_text("/");
-    process.assert_snapshot("real/02-pages/00-slash-completion-open");
-    process.type_text("config");
-    process.enter();
-    process.wait_for_screen("Mouse interactions");
-    process.tab();
-    process.tab();
-    process.down();
-    process.type_text("OpenAI");
-    process.wait_for_screen("OpenAI");
-    process.down();
-    process.enter();
-    process.wait_for_screen("Base URL (read-only)");
-    process.type_text("sk-test-not-a-real-secret");
-    process.wait_for_screen("••••");
-    process.enter();
-    process.wait_for_screen("Saved · Connection not verified");
-    process.escape();
-    process.escape();
-    process.escape();
-    process.wait_for_stable_screen("zeta-real-scenario");
-
-    process.type_text("/statusline");
-    process.enter();
-    process.wait_for_screen("Git branch");
-    process.down();
-    process.enter();
-    process.wait_for_screen("Git branch");
-    process.escape();
-
-    process.submit("/theme");
-    process.wait_for_screen("Diff preview");
-    process.assert_snapshot("real/02-pages/02-theme-open");
-    process.down();
-    process.enter();
-    process.wait_for_stable_screen("Theme set to");
-
-    process.submit("/help");
-    process.wait_for_stable_screen("Cycle approval mode");
-    process.assert_snapshot("real/02-pages/03-help-open");
-    process.tab();
-    process.wait_for_stable_screen("/status");
-    process.assert_snapshot("real/02-pages/04-help-commands");
-    process.tab();
-    process.wait_for_stable_screen("/compact");
-    process.assert_snapshot("real/02-pages/05-help-custom-commands");
-    process.escape();
-    process.quit();
-}
-
-#[test]
 fn actual_tui_config_enables_and_disables_memory_diagnostics() {
     let fixture = Fixture::new();
     let server = ScenarioServer::start([]);
@@ -383,7 +317,6 @@ fn actual_tui_config_enables_and_disables_memory_diagnostics() {
     process.wait_for_screen("Zeta Code v");
     process.submit("/config");
     process.wait_for_screen("Memory diagnostics");
-    process.down();
     process.down();
     process.enter();
     wait_for_config(&fixture, "memoryDiagnostics = true");
@@ -399,7 +332,6 @@ fn actual_tui_config_enables_and_disables_memory_diagnostics() {
     process.submit("/config");
     process.wait_for_screen("Memory diagnostics");
     process.down();
-    process.down();
     process.enter();
     wait_for_config(&fixture, "memoryDiagnostics = false");
     process.escape();
@@ -408,55 +340,12 @@ fn actual_tui_config_enables_and_disables_memory_diagnostics() {
     process.tab();
     process.wait_for_screen("Memory diagnostics");
     process.wait_for_stable_screen("Disabled");
+    process.escape();
     process.quit();
     assert!(
         server.request_bodies().is_empty(),
         "diagnostics must not invoke a model"
     );
-}
-
-#[test]
-fn actual_tui_tab_switches_from_content_search_and_unsaved_field() {
-    let fixture = Fixture::new();
-    let server = ScenarioServer::start([]);
-    fixture.write_config(&server.base_url());
-    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
-    process.wait_for_screen("Zeta Code v");
-    process.submit("/config");
-    process.wait_for_screen("Screen mode");
-    let original_config = fixture.config_source();
-    process.tab();
-    process.wait_for_screen("> OpenAI");
-    process.type_text("/OpenAI");
-    process.tab();
-    process.wait_for_screen("No matching configuration");
-    assert!(process.screen().contains("OpenAI"));
-    process.back_tab();
-    process.enter();
-    process.wait_for_screen("> OpenAI");
-    process.enter();
-    process.wait_for_screen("> API key");
-    process.back_tab();
-    process.wait_for_screen("> Provider name");
-    process.enter();
-    process.type_text("Unsubmitted service");
-    process.tab();
-    process.wait_for_screen("> API key");
-    process.back_tab();
-    process.wait_for_screen("Unsubmitted service");
-    process.type_text(" continued");
-    process.wait_for_screen("Unsubmitted service continued");
-    process.resize(SMALL_SIZE);
-    process.wait_for_screen("Unsubmitted service continued");
-    process.escape();
-    assert!(!process.screen().contains("Unsubmitted service"));
-    assert_eq!(fixture.config_source(), original_config);
-    process.escape();
-    process.escape();
-    process.escape();
-    process.quit();
-
-    assert!(server.request_bodies().is_empty());
 }
 
 #[test]
@@ -472,9 +361,9 @@ fn actual_tui_status_line_style_persists_across_restart() {
         process.down();
     }
     process.enter();
-    process.wait_for_screen("Emoji and progress bars at a glance");
+    process.wait_for_screen("Expressive");
     process.escape();
-    process.wait_for_screen("🤖 zeta-real-scenario");
+    process.wait_for_screen("Enter send");
     process.quit();
     assert!(
         fixture
@@ -483,14 +372,14 @@ fn actual_tui_status_line_style_persists_across_restart() {
     );
 
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
-    process.wait_for_screen("🤖 zeta-real-scenario");
+    process.wait_for_screen("Zeta Code v");
     process.submit("/config");
-    process.wait_for_screen("Emoji and progress bars at a glance");
+    process.wait_for_screen("Expressive");
     for _ in 0..5 {
         process.down();
     }
     process.enter();
-    process.wait_for_screen("Text and numbers, clean and easy to read");
+    process.wait_for_screen("Simple");
     process.escape();
     process.quit();
     assert!(

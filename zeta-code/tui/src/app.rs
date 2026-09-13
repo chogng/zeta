@@ -19,6 +19,9 @@ mod fullscreen;
 mod help;
 mod inline;
 #[cfg(test)]
+#[path = "app/interaction_flow_tests.rs"]
+mod interaction_flow_tests;
+#[cfg(test)]
 #[path = "app/mode_tests.rs"]
 mod mode_tests;
 mod recovery;

@@ -171,7 +171,11 @@ impl Query {
                         .custom_answer
                         .take()
                         .expect("the custom answer editor is active");
-                    self.advance(value)
+                    let outcome = self.advance(value.clone());
+                    if self.submitting {
+                        self.custom_answer = Some(value);
+                    }
+                    outcome
                 }
                 _ if bindings::CANCEL_ANSWER.matches(key) => {
                     self.custom_answer = None;
@@ -239,6 +243,9 @@ impl Query {
     }
 
     pub(crate) fn submission_failed(&mut self, error: String) {
+        if self.submitting {
+            self.answers.pop();
+        }
         self.submitting = false;
         self.error = Some(error);
     }
@@ -272,13 +279,13 @@ impl Query {
     fn advance(&mut self, value: String) -> QueryOutcome {
         let question_id = self.questions[self.current].id.clone();
         self.answers.push(QueryAnswer { question_id, value });
-        self.current += 1;
-        self.selected = 0;
         self.error = None;
-        if self.current == self.questions.len() {
+        if self.current + 1 == self.questions.len() {
             self.submitting = true;
             QueryOutcome::Completed(self.answers.clone())
         } else {
+            self.current += 1;
+            self.selected = 0;
             QueryOutcome::Consumed
         }
     }

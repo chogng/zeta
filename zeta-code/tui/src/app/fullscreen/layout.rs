@@ -182,7 +182,17 @@ pub(in crate::app) fn session_areas(
     let switcher_gap_rows =
         u16::from(switcher_rows > 0 && bottom_rows > 0).min(available_above_bottom);
     let available_above_gap = available_above_bottom.saturating_sub(switcher_gap_rows);
-    let transcript_rows = min_transcript_rows.min(available_above_gap);
+    let transcript_rows = if request_desired_rows > 0 {
+        min_transcript_rows.min(
+            available_above_gap.saturating_sub(
+                TOP_TIP_ROWS
+                    .saturating_add(composer_desired_rows)
+                    .saturating_add(request_desired_rows),
+            ),
+        )
+    } else {
+        min_transcript_rows.min(available_above_gap)
+    };
     let available_chrome = available_above_gap.saturating_sub(transcript_rows);
     let top_tip_rows = TOP_TIP_ROWS.min(available_chrome);
     let available_input = available_chrome.saturating_sub(top_tip_rows);

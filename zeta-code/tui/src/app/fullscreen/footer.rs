@@ -106,10 +106,17 @@ fn bottom_content(app: &App) -> BottomContent<'_> {
     if app.session_manager_view().is_some() {
         return BottomContent::Keys(app.session_manager_hint());
     }
-    if app.approval_view().is_some() {
-        return BottomContent::Keys(&bindings::APPROVAL_HINTS);
+    if let Some(approval) = app.approval_view() {
+        return if approval.submitting {
+            BottomContent::Muted("Waiting for the request result")
+        } else {
+            BottomContent::Keys(&bindings::APPROVAL_HINTS)
+        };
     }
     if let Some(query) = app.query_view() {
+        if query.submitting {
+            return BottomContent::Muted("Waiting for the request result");
+        }
         return BottomContent::Keys(if query.custom_answer.is_some() {
             &bindings::CUSTOM_ANSWER_HINTS
         } else {

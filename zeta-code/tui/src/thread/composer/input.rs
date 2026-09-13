@@ -22,6 +22,7 @@ pub(crate) use slash_commands::built_in_slash_command_definitions;
 #[cfg(test)]
 pub(crate) use slash_commands::default_slash_command_catalog;
 pub(crate) use state::ChatInput;
+pub(crate) use state::ChatInputDraft;
 pub(crate) use state::ChatInputItem;
 pub(crate) use state::ChatInputOutcome;
 pub(crate) use state::ChatInputQueueOutcome;

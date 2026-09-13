@@ -141,8 +141,8 @@ impl QueuedChatInput {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
-struct ChatInputDraft {
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ChatInputDraft {
     textarea: TextArea,
     vim: VimState,
     slash_command_element: Option<TextElementId>,
@@ -405,6 +405,23 @@ impl ChatInput {
             return Err(Box::new(queued));
         }
         let QueuedChatInput { draft, .. } = queued;
+        self.restore_recovery_draft(draft);
+        Ok(())
+    }
+
+    pub(crate) fn recovery_draft(&self) -> ChatInputDraft {
+        ChatInputDraft {
+            textarea: self.textarea.clone(),
+            vim: self.vim.clone(),
+            slash_command_element: self.slash_command_element,
+            skill_bindings: self.skill_bindings.clone(),
+            contexts: self.contexts.clone(),
+            pending_pastes: self.pending_pastes.clone(),
+            attachments: self.attachments.clone(),
+        }
+    }
+
+    pub(crate) fn restore_recovery_draft(&mut self, draft: ChatInputDraft) {
         self.clear();
         self.textarea = draft.textarea;
         self.vim = draft.vim;
@@ -414,7 +431,6 @@ impl ChatInput {
         self.pending_pastes = draft.pending_pastes;
         self.attachments = draft.attachments;
         self.sync_completion();
-        Ok(())
     }
 
     pub(crate) fn submission_contains_skill(&self) -> bool {

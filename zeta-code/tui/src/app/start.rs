@@ -49,6 +49,7 @@ pub(super) fn start(
         profile_root,
         app_server_process,
         recovery,
+        drafts,
         notices,
         ..
     } = options;
@@ -162,6 +163,9 @@ pub(super) fn start(
     });
     if show_home && terminal_settings.screen_mode() == crate::terminal::ScreenMode::Fullscreen {
         app.open_home();
+    }
+    if let Some(drafts) = drafts {
+        app.restore_recovery_drafts(drafts);
     }
     app.update(SkillEvent::DiagnosticsReceived(initial_skill_diagnostics));
     if let Ok(status) = client.git_status() {

@@ -391,10 +391,6 @@ impl TuiProcess {
         self.send_input(b"\x1b[B");
     }
 
-    pub fn left(&mut self) {
-        self.send_input(b"\x1b[D");
-    }
-
     pub fn right(&mut self) {
         self.send_input(b"\x1b[C");
     }
@@ -499,22 +495,6 @@ impl TuiProcess {
         }
     }
 
-    pub fn wait_for_output(&mut self, expected: &str) {
-        let deadline = Instant::now() + STATE_TIMEOUT;
-        loop {
-            if self.raw_text().contains(expected) {
-                return;
-            }
-            if let Some(status) = self.child.try_wait().unwrap() {
-                panic!("TUI exited before emitting {expected:?}: {status:?}");
-            }
-            if Instant::now() >= deadline {
-                panic!("TUI output did not contain {expected:?}");
-            }
-            thread::sleep(Duration::from_millis(20));
-        }
-    }
-
     pub fn wait_for_stable_screen(&mut self, expected: &str) {
         let deadline = Instant::now() + STATE_TIMEOUT;
         loop {
@@ -569,16 +549,6 @@ impl TuiProcess {
     pub fn assert_snapshot(&self, name: &str) {
         let screen = normalize_snapshot(self.screen(), &self.snapshot_paths);
         assert_named_snapshot(name, screen);
-    }
-
-    pub fn assert_snapshot_containing(&self, name: &str, expected: &str) {
-        let screen = self
-            .capture
-            .lock()
-            .unwrap()
-            .screen_containing(expected)
-            .unwrap_or_else(|| panic!("captured output never rendered {expected:?}"));
-        assert_named_snapshot(name, normalize_snapshot(screen, &self.snapshot_paths));
     }
 
     pub fn quit(&mut self) {
@@ -638,7 +608,9 @@ impl TuiProcess {
 }
 
 fn normalize_snapshot(mut screen: String, paths: &[String]) -> String {
-    for path in paths {
+    let mut full_paths = paths.iter().map(String::as_str).collect::<Vec<_>>();
+    full_paths.sort_unstable_by_key(|path| std::cmp::Reverse(path.len()));
+    for path in full_paths {
         screen = screen.replace(path, "<FIXTURE>");
     }
     let screen = screen
@@ -652,7 +624,7 @@ fn normalize_snapshot(mut screen: String, paths: &[String]) -> String {
 }
 
 fn normalize_truncated_fixture_path(line: &str, paths: &[String]) -> String {
-    const MINIMUM_PREFIX_BYTES: usize = 24;
+    const MINIMUM_PREFIX_BYTES: usize = 12;
 
     let mut matched = None;
     for path in paths {
@@ -778,6 +750,20 @@ fn snapshot_normalization_replaces_fixture_paths_and_generated_thread_ids() {
 }
 
 #[test]
+fn snapshot_normalization_prefers_the_longest_path_and_short_clipped_prefix() {
+    let private = "/private/var/folders/account/T/zeta-fixture";
+    let visible = "/private/var/fold";
+    let padding = " ".repeat(visible.chars().count() - "<FIXTURE…>".chars().count());
+    assert_eq!(
+        normalize_snapshot(
+            format!("{private}/workspace\n{visible}…"),
+            &["/var/folders/account/T/zeta-fixture".into(), private.into(),],
+        ),
+        format!("<FIXTURE>/workspace\n<FIXTURE…>{padding}…")
+    );
+}
+
+#[test]
 fn terminal_revision_advances_after_raw_capture_reaches_its_limit() {
     let mut capture = TerminalCapture::new(PtySize {
         rows: 1,
@@ -876,27 +862,6 @@ impl TerminalCapture {
 
     fn revision(&self) -> u64 {
         self.revision
-    }
-
-    fn screen_containing(&self, expected: &str) -> Option<String> {
-        let mut core = TerminalCore::new(GridSize::new(self.size.rows, self.size.cols));
-        let last = expected.as_bytes().last().copied()?;
-        for byte in &self.raw {
-            core.process_output(std::slice::from_ref(byte));
-            if *byte == last {
-                let screen = core
-                    .grid()
-                    .lines()
-                    .iter()
-                    .map(|line| line.text())
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                if screen.contains(expected) {
-                    return Some(screen);
-                }
-            }
-        }
-        None
     }
 }
 

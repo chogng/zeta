@@ -132,11 +132,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
             };
             let action = match runtime_event {
                 RuntimeEvent::Client(event) => {
-                    let event =
-                        match super::recovery::continue_or_exit(event, driver.recovery_state()) {
-                            Ok(event) => event,
-                            Err(exit) => return Ok(exit),
-                        };
+                    let event = match super::recovery::continue_or_exit(event, || {
+                        (driver.recovery_state(), driver.recovery_drafts())
+                    }) {
+                        Ok(event) => event,
+                        Err(exit) => return Ok(exit),
+                    };
                     driver.handle_client_event(event);
                     None
                 }

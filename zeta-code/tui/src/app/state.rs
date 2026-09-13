@@ -774,6 +774,25 @@ impl App {
         self.thread_presentations.connect_history(client);
     }
 
+    pub(crate) fn recovery_drafts(&self) -> crate::TuiRecoveryDrafts {
+        crate::TuiRecoveryDrafts {
+            new_session: Some(self.sessions.input.recovery_draft()),
+            threads: self.thread_presentations.recovery_drafts(),
+            home_visible: self.fullscreen_home_visible(),
+        }
+    }
+
+    pub(crate) fn restore_recovery_drafts(&mut self, drafts: crate::TuiRecoveryDrafts) {
+        if let Some(draft) = drafts.new_session {
+            self.sessions.input.restore_recovery_draft(draft);
+        }
+        self.thread_presentations
+            .restore_recovery_drafts(drafts.threads);
+        if drafts.home_visible {
+            self.open_home();
+        }
+    }
+
     pub(crate) fn input_history_unavailable(&mut self, error: String) {
         self.sessions.input.history_unavailable(error.clone());
         self.thread_presentations.history_unavailable(error);

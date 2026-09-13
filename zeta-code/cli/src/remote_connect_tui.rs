@@ -22,6 +22,7 @@ pub(super) fn run(
         RemoteConnectEntry::New => None,
         RemoteConnectEntry::Resume(recovery) => Some(recovery),
     };
+    let mut drafts = None;
     loop {
         let mut options =
             zeta_tui::TuiOptions::new(format!("Remote SSH: {}", profile.target().host().as_str()))
@@ -32,6 +33,9 @@ pub(super) fn run(
         if let Some(state) = recovery.take() {
             options = options.with_recovery(state);
         }
+        if let Some(state) = drafts.take() {
+            options = options.with_drafts(state);
+        }
         match zeta_tui::run(session, options).map_err(|error| error.to_string())? {
             zeta_tui::TuiExit::UserRequested | zeta_tui::TuiExit::TerminationRequested => {
                 return Ok(());
@@ -39,6 +43,7 @@ pub(super) fn run(
             zeta_tui::TuiExit::ConnectionLost {
                 kind: zeta_tui::TuiConnectionLossKind::Transport,
                 recovery: next_recovery,
+                drafts: next_drafts,
                 reason,
             } => {
                 eprintln!("Remote App Server disconnected: {reason}");
@@ -55,10 +60,12 @@ pub(super) fn run(
                     })?
                     .session;
                 recovery = next_recovery;
+                drafts = Some(next_drafts);
             }
             zeta_tui::TuiExit::ConnectionLost {
                 kind,
                 recovery,
+                drafts: _,
                 reason,
             } => {
                 return Err(reconnect::recovery_error(

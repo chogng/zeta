@@ -73,9 +73,6 @@ pub enum HttpResponse {
         events: Vec<Vec<u8>>,
         gate: Option<Gate>,
     },
-    Json {
-        body: Vec<u8>,
-    },
     Failure {
         status: u16,
         body: Vec<u8>,
@@ -83,13 +80,37 @@ pub enum HttpResponse {
 }
 
 impl HttpResponse {
-    pub fn streaming(parts: impl IntoIterator<Item = &'static str>, gate: Option<Gate>) -> Self {
+    pub fn responses_streaming(text: &str) -> Self {
+        let delta = serde_json::json!({
+            "type": "response.output_text.delta",
+            "delta": text,
+        });
+        let completed = serde_json::json!({
+            "type": "response.completed",
+            "response": {
+                "status": "completed",
+                "output": [{
+                    "type": "message",
+                    "content": [{"type": "output_text", "text": text}],
+                }],
+            },
+        });
+        Self::Streaming {
+            events: vec![
+                format!("event: response.output_text.delta\ndata: {delta}\n\n").into_bytes(),
+                format!("event: response.completed\ndata: {completed}\n\n").into_bytes(),
+            ],
+            gate: None,
+        }
+    }
+
+    pub fn streaming(parts: impl IntoIterator<Item = impl AsRef<str>>, gate: Option<Gate>) -> Self {
         let mut events = parts
             .into_iter()
             .map(|part| {
                 format!(
                     "data: {{\"choices\":[{{\"index\":0,\"delta\":{{\"content\":{}}},\"finish_reason\":null}}]}}\n\n",
-                    serde_json::to_string(part).unwrap()
+                    serde_json::to_string(part.as_ref()).unwrap()
                 )
                 .into_bytes()
             })
@@ -181,23 +202,6 @@ impl HttpResponse {
         }
     }
 
-    pub fn completion(text: impl Into<String>) -> Self {
-        let body = serde_json::json!({
-            "choices": [{
-                "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": text.into(),
-                },
-                "finish_reason": "stop",
-            }],
-            "usage": {"prompt_tokens": 11, "completion_tokens": 7},
-        })
-        .to_string()
-        .into_bytes();
-        Self::Json { body }
-    }
-
     fn write_to(self, stream: &mut TcpStream) {
         match self {
             Self::Streaming { events, gate } => {
@@ -217,16 +221,6 @@ impl HttpResponse {
                         gate.reach_and_wait();
                     }
                 }
-            }
-            Self::Json { body } => {
-                write!(
-                    stream,
-                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                    body.len()
-                )
-                .unwrap();
-                stream.write_all(&body).unwrap();
-                stream.flush().unwrap();
             }
             Self::Failure { status, body } => {
                 write!(

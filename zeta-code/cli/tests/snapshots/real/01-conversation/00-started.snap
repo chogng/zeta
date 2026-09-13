@@ -2,23 +2,21 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
+  <FIXTURE…>                                      …                            [— / —] [Dashboard]
 
-  ┌───────── Zeta Code v0.1.0 ───────────────────────────────────────────────────────────────────┐
-  │                                   │  Tips for getting started                                │
-  │            Welcome back!          │  Use @ to mention workspace files and / to discover      │
-  │                                   │  commands.                                               │
-  │               ╭─────╮             │  ──────────────────────────────────────────────────────  │
-  │               │  ζ  │             │  Try asking                                              │
-  │               ╰─┬─┬─╯             │  “Explain how this workspace is structured.”             │
-  │                                   │  “Implement the change and run the relevant tests.”      │
-  │         Ready when you are        │                                                          │
-  │<FIXTURE…>                                                                                    │
-  └──────────────────────────────────────────────────────────────────────────────────────────────┘
-
-
-
-
-
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
+  │                                                                                              │
+  │    ▄  ▄      Zeta Code v0.1.0                                                                │
+  │  ▗█▛██▜█▖                                                                                    │
+  │  ▝▜████▛▘    Start a task below, or continue a previous session.                             │
+  │    ▝  ▘                                                                                      │
+  │              Resume session                                                                  │
+  │              Dashboard                                                                       │
+  │              Settings                                                                        │
+  │              Help and shortcuts                                                              │
+  │              Quit                                                                            │
+  │                                                                                              │
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯
 
 
 
@@ -28,9 +26,11 @@ expression: screen
 
 
 
-                                                                                      ← for agents
-────────────────────────────────────────────────────────────────────────────────────────────────────
->
-────────────────────────────────────────────────────────────────────────────────────────────────────
-  zeta-real-scenario                                                                      ← agents
-  ⏸ ask permissions on
+
+
+  ⏸ ask permissions on                       Type a task to begin, or use Tab to choose an action.
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ >                                                                                            │
+  ╰───────────────────────────────────────────────────────────────────────── zeta-real-scenario ─╯
+
+  Enter send  ·  Tab actions  ·  / commands

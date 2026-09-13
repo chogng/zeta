@@ -114,7 +114,7 @@ fn actual_tui_issue_start_checks_role_dependencies_before_creating_a_session() {
     fs::write(fixture.workspace().join("tracked.txt"), "keep my changes\n").unwrap();
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_screen("Zeta Code v");
-    let original = fixture.only_thread();
+    assert!(fixture.sessions().is_empty());
     process.submit("/issue");
     process.wait_for_screen("Repair first issue");
     process.space();
@@ -123,7 +123,7 @@ fn actual_tui_issue_start_checks_role_dependencies_before_creating_a_session() {
     process.wait_for_screen("2 selected");
     process.type_text("d");
     process.wait_for_screen("Agent requires unavailable Skill 'github'");
-    assert_eq!(fixture.only_thread(), original);
+    assert!(fixture.sessions().is_empty());
     assert_eq!(
         fs::read_to_string(fixture.workspace().join("tracked.txt")).unwrap(),
         "keep my changes\n"
