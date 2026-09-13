@@ -2263,7 +2263,7 @@ fn manager_session_keys_archive_show_details_and_open_the_selected_session() {
 
     assert_eq!(
         app.session_manager_hint().text(),
-        "Enter to open · Space to preview · Ctrl+X to archive · i to details"
+        "Enter to open · Space to preview · Ctrl+X to archive · i to details · Esc to return"
     );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL)),
@@ -2282,7 +2282,7 @@ fn manager_session_keys_archive_show_details_and_open_the_selected_session() {
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert_eq!(
         app.session_manager_hint().text(),
-        "Enter to open · Space to preview · Ctrl+X to archive · i to details"
+        "Enter to open · Space to preview · Ctrl+X to archive · i to details · Esc to return"
     );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),

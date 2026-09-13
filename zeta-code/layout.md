@@ -8,7 +8,7 @@
 
 ```text
 ┌────────────────────────────────────────────────────────────┐
-│ 顶部工作区栏 header：≡ 分支 工作目录 [+]  上下文 Dashboard │
+│ 顶部工作区栏 header：分支 工作目录 [+]    上下文 Dashboard │
 ├────────────────────────────────────────────────────────────┤
 │ 消息区 transcript                                          │
 │ 用户消息、助手回复、工具执行记录                            │
@@ -40,7 +40,7 @@
 
 | 中文叫法 | 代码名称 | 看到的内容 / 边界 | 定位入口 |
 | --- | --- | --- | --- |
-| 顶部工作区栏 | `header` | 左边 `≡` 首页入口、分支、当前 Project 工作目录和 `[+]`；右边状态摘要、上下文用量与 `[Dashboard]`；正常高度下其后留一空行 | [header.rs](tui/src/app/fullscreen/header.rs) |
+| 顶部工作区栏 | `header` | 左边分支、当前 Project 工作目录和 `[+]`；右边状态摘要、上下文用量与 `[Dashboard]`；正常高度下其后留一空行 | [header.rs](tui/src/app/fullscreen/header.rs) |
 | 消息区 | `transcript` | 会话内容与滚动视口，占据上方剩余空间 | [conversation.rs](tui/src/app/fullscreen/conversation.rs)、[transcript/view.rs](tui/src/thread/transcript/view.rs) |
 | 目标区 | `goal` | 当前目标信息 | [goal.rs](tui/src/thread/goal.rs) |
 | 计划区 | `plan` | 当前计划及步骤 | [plan.rs](tui/src/thread/plan.rs) |

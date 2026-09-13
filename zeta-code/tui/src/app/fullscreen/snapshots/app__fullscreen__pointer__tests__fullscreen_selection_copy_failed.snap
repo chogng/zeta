@@ -2,7 +2,7 @@
 source: zeta-code/tui/src/app/fullscreen/pointer_tests.rs
 expression: text
 ---
-  ≡ .                                  [— / —] [Dashboard]  
+  .                                    [— / —] [Dashboard]  
                                                             
 ● clipboard unavailable                                     
                                                             

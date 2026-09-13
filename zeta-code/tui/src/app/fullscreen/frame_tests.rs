@@ -160,7 +160,7 @@ fn pull_request_command_submits_an_ordinary_agent_task() {
 #[test]
 fn conversation_chrome_keeps_home_and_input_visible_without_a_welcome_message() {
     let rendered = render(&App::new(), 80, 20);
-    assert!(rendered.lines().next().unwrap().contains("≡"));
+    assert!(rendered.lines().next().unwrap().contains("."));
     assert!(!rendered.contains("Zeta Code v"));
     assert!(rendered.contains("Automatic model"));
     assert!(
@@ -672,6 +672,11 @@ fn left_from_a_session_opens_the_manager() {
         app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE))
             .is_none()
     );
+    assert!(app.session_manager_view().is_some());
+    assert!(
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
+            .is_none()
+    );
     assert!(app.session_manager_view().is_none());
 }
 
@@ -712,7 +717,7 @@ fn manager_uses_the_page_body_for_grouped_three_column_status_rows() {
         .unwrap();
     assert!(!rendered.lines().any(|line| line.contains("done")));
 
-    assert!(rendered.lines().next().unwrap().contains("≡"));
+    assert!(rendered.lines().next().unwrap().contains("."));
     assert!(rendered.contains("Needs input"));
     assert!(rendered.contains("Working"));
     assert!(
@@ -725,7 +730,7 @@ fn manager_uses_the_page_body_for_grouped_three_column_status_rows() {
     assert!(working.starts_with("  ⠋ working"));
     assert_eq!(
         rendered.lines().last().unwrap().trim_end(),
-        "  Enter to return"
+        "  Esc to return"
     );
 }
 

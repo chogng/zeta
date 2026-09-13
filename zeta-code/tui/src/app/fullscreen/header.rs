@@ -13,7 +13,6 @@ const DASHBOARD: &str = "[Dashboard]";
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub(in crate::app) enum Target {
-    Home,
     Branch,
     Workspace,
     Context,
@@ -23,7 +22,6 @@ pub(in crate::app) enum Target {
 impl Target {
     pub(super) const fn label(self) -> &'static str {
         match self {
-            Self::Home => "Home",
             Self::Branch => "Switch branch",
             Self::Workspace => "Switch project folder",
             Self::Context => "Context usage",
@@ -53,7 +51,6 @@ impl State {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct HeaderLayout {
-    home: Rect,
     branch: Rect,
     workspace: Rect,
     status: Rect,
@@ -63,7 +60,6 @@ struct HeaderLayout {
 
 pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, context: RenderContext<'_>) {
     let areas = header_layout(area, app, context);
-    draw_action(frame, areas.home, "≡", app, Target::Home, true, context);
 
     if !areas.branch.is_empty()
         && let Some(branch) = app.status_line().branch_label()
@@ -177,7 +173,6 @@ fn action_surface(app: &App, target: Target, enabled: bool, context: RenderConte
 pub(super) fn target_at(app: &App, area: Rect, position: Position) -> Option<Target> {
     let areas = header_layout(area, app, app.render_context());
     [
-        (Target::Home, areas.home, true),
         (Target::Branch, areas.branch, branch_enabled(app)),
         (Target::Workspace, areas.workspace, workspace_enabled(app)),
         (Target::Context, areas.context, true),
@@ -189,7 +184,6 @@ pub(super) fn target_at(app: &App, area: Rect, position: Position) -> Option<Tar
 
 pub(super) fn keyboard_targets(app: &App) -> Vec<Target> {
     [
-        (Target::Home, true),
         (Target::Branch, branch_enabled(app)),
         (Target::Workspace, workspace_enabled(app)),
         (Target::Context, true),
@@ -212,7 +206,6 @@ fn header_layout(area: Rect, app: &App, context: RenderContext<'_>) -> HeaderLay
     if area.is_empty() {
         return HeaderLayout::default();
     }
-    let home = Rect::new(area.x, area.y, area.width.min(2), area.height.min(1));
     let dashboard_width = DASHBOARD.width() as u16;
     let show_dashboard = area.width >= 24;
     let dashboard = show_dashboard
@@ -237,7 +230,7 @@ fn header_layout(area: Rect, app: &App, context: RenderContext<'_>) -> HeaderLay
         crate::status::context_header_line(app.status_line(), true, context, Style::default());
     let context_slot_width = ratio.width().max(progress.width()) as u16;
     let show_context = show_dashboard
-        && right_before_dashboard.saturating_sub(home.right()) >= context_slot_width + 18;
+        && right_before_dashboard.saturating_sub(area.x) >= context_slot_width + 18;
     let context_width = if show_context
         && (app.fullscreen.header.selected() == Some(Target::Context)
             || app.fullscreen.pointer.hovered()
@@ -265,7 +258,7 @@ fn header_layout(area: Rect, app: &App, context: RenderContext<'_>) -> HeaderLay
         right_before_dashboard
     };
     let left_right = context_slot_left.saturating_sub(u16::from(show_context));
-    let available = left_right.saturating_sub(home.right());
+    let available = left_right.saturating_sub(area.x);
     let status_width = available.saturating_sub(20).min(24);
     let status = if status_width > 0 {
         Rect::new(
@@ -282,7 +275,7 @@ fn header_layout(area: Rect, app: &App, context: RenderContext<'_>) -> HeaderLay
     } else {
         status.x.saturating_sub(1)
     };
-    let workspace_start = home.right();
+    let workspace_start = area.x;
     let available_identity = workspace_right.saturating_sub(workspace_start);
     let content_budget = available_identity;
     let branch_text = app.status_line().branch_label().unwrap_or_default();
@@ -298,7 +291,6 @@ fn header_layout(area: Rect, app: &App, context: RenderContext<'_>) -> HeaderLay
     let path_width = (path_text.width() as u16).min(remaining_for_path);
     let workspace = Rect::new(path_start, area.y, path_width, 1);
     HeaderLayout {
-        home,
         branch,
         workspace,
         status,

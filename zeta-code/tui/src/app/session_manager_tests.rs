@@ -34,7 +34,7 @@ fn agents_manager_simulates_navigation_and_transient_details() {
     assert!(app.session_manager_focused());
     assert_eq!(
         app.session_manager_hint().text(),
-        "Enter to open · Space to preview · Ctrl+X to archive · i to details"
+        "Enter to open · Space to preview · Ctrl+X to archive · i to details · Esc to return"
     );
 
     assert_eq!(app.handle_key(key(KeyCode::Char('i'))), None);
@@ -77,8 +77,6 @@ fn agents_manager_simulates_navigation_and_transient_details() {
     crate::tui_assert_snapshot!("agents_manager_after_preview_closed", render(&app));
 
     assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
-    assert!(!app.session_manager_focused());
-    assert_eq!(app.handle_key(key(KeyCode::Right)), None);
     assert!(app.session_manager_view().is_none());
     assert_eq!(app.screen_navigation_tip(), Some("← Dashboard"));
 }
@@ -556,6 +554,18 @@ fn empty_input_opens_agents_on_the_left_and_issues_on_the_right() {
     app.handle_key(key(KeyCode::Left));
     assert!(app.session_manager_view().is_some());
     app.handle_key(key(KeyCode::Right));
+    assert!(app.session_manager_view().is_some());
+    app.handle_key(key(KeyCode::Esc));
+    assert!(app.session_manager_view().is_none());
+    super::fullscreen::navigation::activate_header_target(
+        &mut app,
+        super::fullscreen::header::Target::Dashboard,
+    );
+    assert!(app.session_manager_view().is_some());
+    super::fullscreen::navigation::activate_header_target(
+        &mut app,
+        super::fullscreen::header::Target::Dashboard,
+    );
     assert!(app.session_manager_view().is_none());
     let mut transcript = preview_result(0..1, false).transcript;
     if let zeta_app_server_protocol::protocol::transcript::ThreadTranscriptEntry::Item {

@@ -419,6 +419,14 @@ pub(super) fn activate_pointer_item(
                     app.fullscreen.pointer.clear();
                     None
                 }
+                crate::sessions::SessionManagerInputOutcome::ExitRequested => {
+                    if let Some(session_id) = app.sessions.active_session_id().cloned() {
+                        super::navigation::show_conversation(app, session_id);
+                    } else {
+                        app.open_home();
+                    }
+                    None
+                }
                 crate::sessions::SessionManagerInputOutcome::Consumed
                 | crate::sessions::SessionManagerInputOutcome::Unhandled => None,
             }

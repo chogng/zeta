@@ -259,6 +259,7 @@ pub(in crate::app) fn handle_screen_navigation_key(
 
                 Some(None)
             }
+            SessionManagerInputOutcome::ExitRequested => exit_manager(app),
         };
     }
     if app.inline.agent_thread_switcher.focused() {
@@ -297,10 +298,7 @@ pub(in crate::app) fn handle_screen_navigation_key(
             Some(target) => target,
             None => return Some(None),
         },
-        EmptyInputNavigation::NextScreen => match app.inline.sessions.next_screen(&app.sessions) {
-            Some(target) => target,
-            None => return Some(None),
-        },
+        EmptyInputNavigation::NextScreen => return exit_manager(app),
         EmptyInputNavigation::FocusManager => {
             app.inline.sessions.manager_mut().focus();
             return Some(None);
@@ -599,7 +597,6 @@ fn empty_input_navigation(
 ) -> Option<EmptyInputNavigation> {
     match key {
         KeyCode::Left => Some(EmptyInputNavigation::PreviousScreen),
-        KeyCode::Right => Some(EmptyInputNavigation::NextScreen),
         KeyCode::Esc if matches!(screen, Some(SessionScreen::Manager)) => {
             Some(EmptyInputNavigation::NextScreen)
         }
@@ -667,4 +664,41 @@ pub(in crate::app) fn show_manager(app: &mut App) {
 pub(in crate::app) fn open_issues(app: &mut App) -> Option<AppCommand> {
     close_transient_surfaces(app);
     app.inline.issues.open().map(Into::into)
+}
+
+pub(in crate::app) fn exit_manager(app: &mut App) -> Option<Option<AppCommand>> {
+    let target = app.inline.sessions.next_screen(&app.sessions);
+    match target {
+        Some(SessionScreen::Session(session_id)) => {
+            if app.sessions.active_session_id() == Some(&session_id) {
+                if let Some(thread_id) = app.sessions.restorable_thread(&session_id)
+                    && app.sessions.remembered_thread(&session_id) != Some(&thread_id)
+                {
+                    return Some(Some(
+                        SessionCommand::Resume {
+                            session_id: session_id.to_string(),
+                            preferred_thread_id: Some(thread_id),
+                        }
+                        .into(),
+                    ));
+                }
+                close_transient_surfaces(app);
+                app.inline.sessions.show_session(session_id);
+                Some(None)
+            } else {
+                Some(Some(
+                    SessionCommand::Resume {
+                        session_id: session_id.to_string(),
+                        preferred_thread_id: app.sessions.remembered_thread(&session_id).cloned(),
+                    }
+                    .into(),
+                ))
+            }
+        }
+        _ => {
+            close_transient_surfaces(app);
+            open_home(app);
+            Some(None)
+        }
+    }
 }

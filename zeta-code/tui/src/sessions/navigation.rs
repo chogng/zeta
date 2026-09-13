@@ -27,6 +27,7 @@ pub(crate) enum SessionManagerInputOutcome {
     Unhandled,
     Consumed,
     Command(Command),
+    ExitRequested,
     DetailsRequested,
 }
 
@@ -152,8 +153,7 @@ impl SessionNavigation {
             return Outcome::Consumed;
         }
         if bindings::RETURN_INPUT.matches(key) {
-            self.manager.blur();
-            return Outcome::Consumed;
+            return Outcome::ExitRequested;
         }
         Outcome::Unhandled
     }

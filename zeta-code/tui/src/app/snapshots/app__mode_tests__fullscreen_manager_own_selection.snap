@@ -2,7 +2,7 @@
 source: zeta-code/tui/src/app/mode_tests.rs
 expression: render(&app)
 ---
-  ≡ .                        [— / —] [Dashboard]  
+  .                          [— / —] [Dashboard]  
                                                   
   Idle (2)                                        
   ○ first session                                 
@@ -17,4 +17,4 @@ expression: render(&app)
   │ > Build anything                           │  
   ╰────────────────────────── Automatic model ─╯  
                                                   
-  Enter to open · Space to preview
+  Enter to open · Esc to return

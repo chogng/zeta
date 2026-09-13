@@ -29,9 +29,9 @@ fn archived_is_a_peer_heading_and_owns_archived_sessions_even_when_pinned() {
         assert_eq!(
             state.selection_hint().text(),
             if expanded {
-                "Enter to collapse · Esc to return to input"
+                "Enter to collapse · Esc to return"
             } else {
-                "Enter to expand · Esc to return to input"
+                "Enter to expand · Esc to return"
             }
         );
         terminal
@@ -239,7 +239,7 @@ fn every_group_heading_is_selectable_and_collapses_only_its_own_sessions() {
         assert_eq!(state.selected_group(), Some(group));
         assert_eq!(
             state.selection_hint().text(),
-            "Enter to expand · Esc to return to input"
+            "Enter to expand · Esc to return"
         );
         let collapsed = manager_rows(&sessions, &state.pinned, &state.collapsed)
             .iter()
@@ -260,7 +260,7 @@ fn every_group_heading_is_selectable_and_collapses_only_its_own_sessions() {
         state.toggle_selected_group();
         assert_eq!(
             state.selection_hint().text(),
-            "Enter to collapse · Esc to return to input"
+            "Enter to collapse · Esc to return"
         );
         assert_eq!(
             manager_rows(&sessions, &state.pinned, &state.collapsed)

@@ -234,16 +234,12 @@ fn handle_header_key(app: &mut App, key: KeyEvent) -> Option<Option<AppCommand>>
     }
 }
 
-pub(super) fn activate_header_target(
+pub(in crate::app) fn activate_header_target(
     app: &mut App,
     target: super::header::Target,
 ) -> Option<AppCommand> {
     use super::header::Target;
     match target {
-        Target::Home => {
-            app.open_home();
-            None
-        }
         Target::Branch => {
             app.open_command_panel(CommandPanel::loading("Switch branch", "Loading branches…"));
             Some(crate::git::Command::OpenPicker.into())
@@ -260,6 +256,12 @@ pub(super) fn activate_header_target(
             Some(crate::status::Command::OpenPanel.into())
         }
         Target::Dashboard => {
+            if matches!(
+                app.fullscreen.sessions.screen(),
+                Some(SessionScreen::Manager)
+            ) {
+                return exit_manager(app).flatten();
+            }
             show_manager(app);
             None
         }
@@ -369,6 +371,7 @@ pub(in crate::app) fn handle_screen_navigation_key(
             SessionManagerInputOutcome::Unhandled => None,
             SessionManagerInputOutcome::Consumed => Some(None),
             SessionManagerInputOutcome::Command(command) => Some(Some(command.into())),
+            SessionManagerInputOutcome::ExitRequested => exit_manager(app),
             SessionManagerInputOutcome::DetailsRequested => {
                 app.fullscreen.panels.overlay = None;
                 app.fullscreen.sessions.open_details(&app.sessions);
@@ -727,7 +730,6 @@ fn empty_input_navigation(
 ) -> Option<EmptyInputNavigation> {
     match key {
         KeyCode::Left => Some(EmptyInputNavigation::PreviousScreen),
-        KeyCode::Right => Some(EmptyInputNavigation::NextScreen),
         KeyCode::Esc if matches!(screen, Some(SessionScreen::Manager)) => {
             Some(EmptyInputNavigation::NextScreen)
         }
@@ -831,4 +833,45 @@ pub(in crate::app) fn open_issues(app: &mut App) -> Option<AppCommand> {
     close_transient_surfaces(app);
     app.fullscreen.page = super::Page::Conversation;
     app.fullscreen.issues.open().map(Into::into)
+}
+
+pub(in crate::app) fn exit_manager(app: &mut App) -> Option<Option<AppCommand>> {
+    let target = app.fullscreen.sessions.next_screen(&app.sessions);
+    match target {
+        Some(SessionScreen::Session(session_id)) => {
+            if app.sessions.active_session_id() == Some(&session_id) {
+                if let Some(thread_id) = app.sessions.restorable_thread(&session_id)
+                    && app.sessions.remembered_thread(&session_id) != Some(&thread_id)
+                {
+                    return Some(Some(
+                        SessionCommand::Resume {
+                            session_id: session_id.to_string(),
+                            preferred_thread_id: Some(thread_id),
+                        }
+                        .into(),
+                    ));
+                }
+                close_transient_surfaces(app);
+                app.fullscreen.sessions.show_session(session_id);
+                Some(None)
+            } else {
+                Some(Some(
+                    SessionCommand::Resume {
+                        session_id: session_id.to_string(),
+                        preferred_thread_id: app.sessions.remembered_thread(&session_id).cloned(),
+                    }
+                    .into(),
+                ))
+            }
+        }
+        _ => {
+            close_transient_surfaces(app);
+            if app.fullscreen_home_visible() || app.sessions.active_session_id().is_none() {
+                open_home(app);
+            } else {
+                app.show_conversation();
+            }
+            Some(None)
+        }
+    }
 }

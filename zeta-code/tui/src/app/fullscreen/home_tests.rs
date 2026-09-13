@@ -86,7 +86,7 @@ fn first_character_clears_welcome_and_keeps_the_workspace_header() {
     assert!(app.fullscreen_home_visible());
     assert!(!app.fullscreen_welcome_visible());
     let rendered = text(&render(&app, 80, 24));
-    assert!(rendered.lines().next().unwrap().contains("≡ ."));
+    assert!(rendered.lines().next().unwrap().contains("  ."));
     assert!(!rendered.contains("Zeta Code v"));
     assert!(!rendered.contains("Resume session"));
     assert!(rendered.contains("> x"));
@@ -122,7 +122,7 @@ fn home_slash_command_starts_a_new_session_from_the_initial_page() {
     assert!(app.fullscreen_home_visible());
     assert!(app.fullscreen_welcome_visible());
     let rendered = text(&render(&app, 80, 24));
-    assert!(rendered.lines().next().unwrap().contains("≡ ."));
+    assert!(rendered.lines().next().unwrap().contains("  ."));
     assert!(rendered.contains("Zeta Code v"));
     assert!(rendered.contains("Resume session"));
     crate::tui_assert_snapshot!("home_restored_by_slash_command", rendered);

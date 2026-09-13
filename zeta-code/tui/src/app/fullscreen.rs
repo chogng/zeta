@@ -3,7 +3,7 @@
 mod composer;
 mod conversation;
 mod footer;
-mod header;
+pub(super) mod header;
 mod home;
 mod layout;
 mod modal;

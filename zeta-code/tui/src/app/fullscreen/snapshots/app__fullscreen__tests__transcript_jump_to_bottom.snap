@@ -2,7 +2,7 @@
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
 expression: "render(&app, 50, 16)"
 ---
-  ≡ .                        [— / —] [Dashboard]  
+  .                          [— / —] [Dashboard]  
                                                   
 ● Model invocation failed 2                       
                                                   

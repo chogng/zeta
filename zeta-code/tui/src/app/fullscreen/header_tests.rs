@@ -37,12 +37,12 @@ fn header_keeps_workspace_visible_outside_the_transcript() {
         .iter()
         .map(|cell| cell.symbol())
         .collect::<String>();
-    assert!(row.starts_with("  ≡ /work/zeta"));
+    assert!(row.starts_with("  /work/zeta"));
     assert!(!row.contains("Zeta Code"));
 }
 
 #[test]
-fn header_places_branch_and_path_beside_the_menu_without_repeating_them_below() {
+fn header_places_branch_and_path_without_repeating_them_below() {
     let mut app = app_with_branch();
     let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
     terminal
@@ -59,27 +59,27 @@ fn header_places_branch_and_path_beside_the_menu_without_repeating_them_below() 
         text.lines()
             .next()
             .unwrap()
-            .starts_with("  ≡ main /work/zeta")
+            .starts_with("  main /work/zeta")
     );
     assert_eq!(text.matches("main").count(), 1);
     assert_eq!(text.matches("/work/zeta").count(), 1);
-    assert_eq!(buffer[(4, 0)].fg, app.render_context().foreground());
-    assert!(buffer[(4, 0)].modifier.contains(Modifier::BOLD));
-    assert_eq!(buffer[(9, 0)].fg, app.render_context().muted());
+    assert_eq!(buffer[(2, 0)].fg, app.render_context().foreground());
+    assert!(buffer[(2, 0)].modifier.contains(Modifier::BOLD));
+    assert_eq!(buffer[(7, 0)].fg, app.render_context().muted());
     crate::tui_assert_snapshot!("workspace_header_and_hintbar", text);
 
     let area = Rect::new(0, 0, 80, 20);
     let header = super::super::layout(&app, area).header;
     assert_eq!(
         super::target_at(&app, header, Position::new(2, 0)),
-        Some(super::Target::Home)
+        Some(super::Target::Branch)
     );
-    assert_ne!(
-        super::target_at(&app, header, Position::new(4, 0)),
-        Some(super::Target::Home)
+    assert_eq!(
+        super::target_at(&app, header, Position::new(7, 0)),
+        Some(super::Target::Workspace)
     );
     super::super::pointer::activate_pointer_item(&mut app, area, 2, 0);
-    assert!(app.fullscreen_home_visible());
+    assert!(app.command_panel().is_some());
 }
 
 #[test]
@@ -100,7 +100,6 @@ fn every_header_action_has_its_own_hit_target_and_activation() {
     let app = app_with_branch();
     let targets = positions(&app);
     for target in [
-        super::Target::Home,
         super::Target::Branch,
         super::Target::Workspace,
         super::Target::Context,
@@ -196,7 +195,6 @@ fn keyboard_focus_reaches_header_and_context_uses_the_existing_progress_bar() {
 fn header_hovers_never_paint_a_background_or_move_keyboard_selection() {
     let area = Rect::new(0, 0, 100, 20);
     for target in [
-        super::Target::Home,
         super::Target::Branch,
         super::Target::Workspace,
         super::Target::Context,

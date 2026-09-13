@@ -2,7 +2,7 @@
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
 expression: scrolled_to_start
 ---
-  ≡ /work/zeta                                             [— / —] [Dashboard]  
+  /work/zeta                                               [— / —] [Dashboard]  
                                                                                 
 ● Conversation started.                                                         
                                                                                 

@@ -599,6 +599,7 @@ pub(crate) const CANCEL: Keybinding = Keybinding::new(
 .primary();
 pub(crate) const CANCEL_ANSWER: Keybinding = Keybinding::new(ESC, "cancel");
 pub(crate) const RETURN_INPUT: Keybinding = Keybinding::new(ESC, "return to input");
+pub(crate) const ESC_RETURN: Keybinding = Keybinding::new(ESC, "return");
 pub(crate) const SEARCH: Keybinding = Keybinding::new(&[(NONE, KeyCode::Char('/'))], "search");
 pub(crate) const SEARCH_RETURN: Keybinding = Keybinding::new(
     &[
@@ -701,18 +702,19 @@ pub(crate) static TRANSCRIPT_HINTS: LazyLock<KeyHints> =
 pub(crate) static THREAD_HINTS: LazyLock<KeyHints> =
     LazyLock::new(|| hints(&[THREAD_SWITCH, RETURN_INPUT]));
 pub(crate) static CANCEL_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[CANCEL]));
-pub(crate) static RETURN_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[ENTER_LIST]));
-pub(crate) static INPUT_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[RETURN_INPUT]));
+pub(crate) static RETURN_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[ESC_RETURN]));
+pub(crate) static INPUT_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[ESC_RETURN]));
 pub(crate) static EXPAND_HINTS: LazyLock<KeyHints> =
-    LazyLock::new(|| hints(&[GROUP_EXPAND, RETURN_INPUT]));
+    LazyLock::new(|| hints(&[GROUP_EXPAND, ESC_RETURN]));
 pub(crate) static COLLAPSE_HINTS: LazyLock<KeyHints> =
-    LazyLock::new(|| hints(&[GROUP_COLLAPSE, RETURN_INPUT]));
+    LazyLock::new(|| hints(&[GROUP_COLLAPSE, ESC_RETURN]));
 pub(crate) static SESSION_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
     hints(&[
         SESSION_OPEN,
         SESSION_PREVIEW,
         SESSION_ARCHIVE,
         SESSION_DETAILS,
+        ESC_RETURN,
     ])
 });
 pub(crate) static ARCHIVED_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
@@ -721,6 +723,7 @@ pub(crate) static ARCHIVED_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
         SESSION_PREVIEW,
         SESSION_DELETE,
         SESSION_DETAILS,
+        ESC_RETURN,
     ])
 });
 pub(crate) static QUEUE_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {

@@ -2,7 +2,7 @@
 source: zeta-code/tui/src/app/fullscreen/home_tests.rs
 expression: "text(&render(&app, terminal.width, terminal.height))"
 ---
-  ≡ .                                                                                                                  [— / —] [Dashboard]  
+  .                                                                                                                    [— / —] [Dashboard]  
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
