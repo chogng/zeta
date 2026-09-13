@@ -8,6 +8,16 @@ use ash_protocol::Patch;
 use ash_protocol::ReasoningEffort;
 use ash_protocol::ToolMode;
 
+/// Profile-owned time information supplied to model requests.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TimeContextConfigDto {
+    pub mode: ash_protocol::TimeContextMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub time_zone: Option<String>,
+}
+
 /// Selects the implementation behind the Agent-only `grep` Tool.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -415,6 +425,7 @@ pub struct FrontendConfigDto(
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigReadResult {
+    pub time_context: TimeContextConfigDto,
     pub features: Vec<features::FeatureState>,
     pub issues: crate::protocol::issues::IssueConfigDto,
     #[ts(type = "number")]
@@ -549,6 +560,10 @@ pub enum ConfigCommandDispositionDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigUpdateParams {
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    #[schemars(with = "Option<TimeContextConfigDto>")]
+    #[ts(as = "Option<TimeContextConfigDto>", optional = nullable)]
+    pub time_context: Patch<TimeContextConfigDto>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     #[schemars(with = "Option<features::FeatureOverrides>")]
     #[ts(as = "Option<features::FeatureOverrides>", optional = nullable)]

@@ -15,6 +15,10 @@ mod multi_agent;
 mod session;
 mod skill;
 mod stream;
+mod time_context;
+pub use time_context::TimeContext;
+pub use time_context::TimeContextMode;
+pub use time_context::TimeZoneOrigin;
 mod thread;
 
 pub use history::HistoryPrefixRef;

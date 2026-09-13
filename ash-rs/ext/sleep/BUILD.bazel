@@ -1,0 +1,2 @@
+load("//:defs.bzl", "ash_rust_crate")
+ash_rust_crate(name = "sleep", crate_name = "ash_sleep")

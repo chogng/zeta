@@ -9,6 +9,7 @@ use ash_protocol::ThreadId;
 fn stored_event_round_trip_preserves_history_contract() {
     let thread_id = ThreadId::new("thread_1").unwrap();
     let event = StoredEvent {
+        time_context: None,
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
         event_id: EventId("event_1".into()),
         sequence: 1,

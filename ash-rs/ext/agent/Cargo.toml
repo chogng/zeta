@@ -14,7 +14,9 @@ agent-roles = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 action-policy = { package = "ash-action-policy", path = "../../action-policy" }
-async-utils = { package = "ash-async-utils", path = "../../async-utils" }
+async-utils = { package = "ash-async-utils", path = "../../async-utils", features = ["wait"] }
+futures = { workspace = true }
+pollster = { workspace = true }
 ash-core = { workspace = true }
 instructions = { package = "ash-instructions", path = "../../instructions" }
 models-manager = { package = "ash-models-manager", path = "../../models-manager" }

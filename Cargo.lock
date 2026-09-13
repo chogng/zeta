@@ -384,6 +384,2349 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-action-policy"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-execpolicy",
+ "ash-sandboxing",
+ "serde",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "ash-agent"
+version = "0.1.0"
+dependencies = [
+ "ash-action-policy",
+ "ash-agent-roles",
+ "ash-async-utils",
+ "ash-core",
+ "ash-instructions",
+ "ash-models-manager",
+ "ash-prompts",
+ "ash-protocol",
+ "ash-skills-extension",
+ "futures",
+ "pollster 1.0.1",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-agent-environment"
+version = "0.1.0"
+dependencies = [
+ "ash-protocol",
+ "ash-utils-absolute-path",
+ "chrono",
+ "chrono-tz",
+]
+
+[[package]]
+name = "ash-agent-graph-store"
+version = "0.1.0"
+dependencies = [
+ "ash-protocol",
+ "serde",
+]
+
+[[package]]
+name = "ash-agent-import"
+version = "0.1.0"
+dependencies = [
+ "ash-utils-path",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-agent-roles"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_yaml",
+ "sha2 0.10.9",
+ "tempfile",
+ "toml 0.9.12+spec-1.1.0",
+]
+
+[[package]]
+name = "ash-analytics"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "ts-rs",
+]
+
+[[package]]
+name = "ash-ansi-escape"
+version = "0.1.0"
+dependencies = [
+ "ansi-to-tui",
+ "ratatui",
+]
+
+[[package]]
+name = "ash-api"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-client",
+ "ash-http-client",
+ "ash-protocol",
+ "ash-websocket-client",
+ "base64 0.22.1",
+ "futures",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "url",
+]
+
+[[package]]
+name = "ash-app-server"
+version = "0.1.0"
+dependencies = [
+ "ash-action-policy",
+ "ash-agent",
+ "ash-agent-environment",
+ "ash-agent-roles",
+ "ash-analytics",
+ "ash-app-server-client",
+ "ash-app-server-daemon",
+ "ash-app-server-protocol",
+ "ash-app-server-transport",
+ "ash-apply-patch",
+ "ash-arg0",
+ "ash-async-utils",
+ "ash-attachments",
+ "ash-automation",
+ "ash-build-info",
+ "ash-chatgpt",
+ "ash-client",
+ "ash-cloud-codebase",
+ "ash-codebase",
+ "ash-codebase-store",
+ "ash-collaboration",
+ "ash-config",
+ "ash-connectors-extension",
+ "ash-content-search",
+ "ash-context-engine",
+ "ash-core",
+ "ash-core-plugins",
+ "ash-debug-adapter",
+ "ash-diagnostics",
+ "ash-diff",
+ "ash-editor-extension-host",
+ "ash-execpolicy",
+ "ash-extension-api",
+ "ash-extension-items",
+ "ash-extensions",
+ "ash-fast-regex-search",
+ "ash-features",
+ "ash-feedback",
+ "ash-file-access",
+ "ash-file-system",
+ "ash-file-watcher",
+ "ash-git",
+ "ash-git-attribution",
+ "ash-github",
+ "ash-goal",
+ "ash-guardian-v2",
+ "ash-history-notes",
+ "ash-hooks",
+ "ash-http-client",
+ "ash-image-generation",
+ "ash-install-context",
+ "ash-instructions",
+ "ash-kimi",
+ "ash-login",
+ "ash-lsp-manager",
+ "ash-lsp-server-provider",
+ "ash-mcp",
+ "ash-mcp-extension",
+ "ash-memories",
+ "ash-memories-extension",
+ "ash-memory-diagnostics",
+ "ash-model-provider",
+ "ash-model-provider-config",
+ "ash-models-manager",
+ "ash-mxc-sandbox",
+ "ash-network-proxy",
+ "ash-otel",
+ "ash-package-store",
+ "ash-plugin",
+ "ash-process-hardening",
+ "ash-projects",
+ "ash-prompts",
+ "ash-protocol",
+ "ash-queue",
+ "ash-rmcp-client",
+ "ash-rollout",
+ "ash-sandboxing",
+ "ash-secrets",
+ "ash-shell-command",
+ "ash-skills",
+ "ash-skills-extension",
+ "ash-slash-commands",
+ "ash-sleep",
+ "ash-state",
+ "ash-syntax",
+ "ash-thread-store",
+ "ash-thread-transcript",
+ "ash-tool-executor",
+ "ash-tools",
+ "ash-typst",
+ "ash-uds",
+ "ash-utils-home-dir",
+ "ash-utils-pty",
+ "ash-web-search-extension",
+ "ash-windows-sandbox",
+ "base64 0.22.1",
+ "dunce",
+ "futures",
+ "getrandom 0.2.17",
+ "git-turn-changes",
+ "iana-time-zone",
+ "ignore",
+ "image",
+ "log",
+ "pollster 1.0.1",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "tokio-tungstenite",
+ "url",
+ "worktree",
+ "zeroize",
+]
+
+[[package]]
+name = "ash-app-server-client"
+version = "0.1.0"
+dependencies = [
+ "ash-app-server",
+ "ash-app-server-protocol",
+ "ash-app-server-transport",
+ "ash-async-utils",
+ "ash-client",
+ "ash-core",
+ "ash-diagnostics",
+ "ash-feedback",
+ "ash-file-access",
+ "ash-memories",
+ "ash-memory-diagnostics",
+ "ash-protocol",
+ "ash-queue",
+ "ash-utils-pty",
+ "base64 0.22.1",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "zeroize",
+]
+
+[[package]]
+name = "ash-app-server-daemon"
+version = "0.1.0"
+dependencies = [
+ "ash-app-server-protocol",
+ "ash-app-server-transport",
+ "ash-build-info",
+ "ash-install-context",
+ "ash-package-store",
+ "ash-process-hardening",
+ "ash-uds",
+ "ash-utils-home-dir",
+ "dunce",
+ "libc",
+ "rustix 1.1.4",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "signal-hook",
+ "tempfile",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "ash-app-server-protocol"
+version = "0.1.0"
+dependencies = [
+ "ash-analytics",
+ "ash-build-info",
+ "ash-collaboration",
+ "ash-diagnostics",
+ "ash-environment",
+ "ash-extension-items",
+ "ash-features",
+ "ash-feedback",
+ "ash-file-access",
+ "ash-memories",
+ "ash-memory-diagnostics",
+ "ash-protocol",
+ "ash-queue",
+ "ash-thread-transcript",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "ts-rs",
+ "url",
+ "zeroize",
+]
+
+[[package]]
+name = "ash-app-server-transport"
+version = "0.1.0"
+dependencies = [
+ "ash-app-server-protocol",
+ "ash-uds",
+ "futures",
+ "rustix 1.1.4",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "tokio-tungstenite",
+]
+
+[[package]]
+name = "ash-apply-patch"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-file-access",
+ "ash-protocol",
+ "ash-tools",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ash-arg0"
+version = "0.1.0"
+dependencies = [
+ "ash-fast-regex-search",
+]
+
+[[package]]
+name = "ash-async-utils"
+version = "0.1.0"
+dependencies = [
+ "async-io",
+ "event-listener",
+ "pollster 1.0.1",
+]
+
+[[package]]
+name = "ash-attachments"
+version = "0.1.0"
+dependencies = [
+ "ash-http-client",
+ "ash-protocol",
+ "ash-utils-image",
+ "ash-utils-path",
+ "image",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.19",
+ "url",
+]
+
+[[package]]
+name = "ash-automation"
+version = "0.1.0"
+dependencies = [
+ "ash-protocol",
+ "chrono",
+ "chrono-tz",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "ash-build-info"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "ts-rs",
+]
+
+[[package]]
+name = "ash-bwrap"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
+]
+
+[[package]]
+name = "ash-chatgpt"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-client",
+ "ash-http-client",
+ "ash-keyring-store",
+ "ash-login",
+ "ash-secrets",
+ "base64 0.22.1",
+ "chrono",
+ "dirs",
+ "fs2",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "toml 0.9.12+spec-1.1.0",
+ "urlencoding",
+ "zeroize",
+]
+
+[[package]]
+name = "ash-cli"
+version = "0.1.0"
+dependencies = [
+ "ash-app-server",
+ "ash-app-server-client",
+ "ash-app-server-daemon",
+ "ash-app-server-protocol",
+ "ash-arg0",
+ "ash-build-info",
+ "ash-exec",
+ "ash-fast-regex-search",
+ "ash-file-access",
+ "ash-install-context",
+ "ash-process-hardening",
+ "ash-product-update",
+ "ash-protocol",
+ "ash-remote",
+ "ash-remote-connections",
+ "ash-terminal",
+ "ash-tui",
+ "ash-utils-home-dir",
+ "ed25519-dalek",
+ "flate2",
+ "fs2",
+ "insta",
+ "portable-pty",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "signal-hook",
+ "tar",
+ "tempfile",
+ "ureq",
+ "zip 4.6.1",
+]
+
+[[package]]
+name = "ash-client"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-http-client",
+]
+
+[[package]]
+name = "ash-cloud-codebase"
+version = "0.1.0"
+dependencies = [
+ "ash-codebase",
+ "ash-file-access",
+ "ash-state",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "ash-code-mode"
+version = "0.1.0"
+dependencies = [
+ "ash-code-mode-protocol",
+ "ash-code-mode-runtime",
+ "serde_json",
+]
+
+[[package]]
+name = "ash-code-mode-host"
+version = "0.1.0"
+dependencies = [
+ "ash-code-mode-protocol",
+ "ash-code-mode-runtime",
+ "ash-package-store",
+ "serde_json",
+]
+
+[[package]]
+name = "ash-code-mode-protocol"
+version = "0.1.0"
+dependencies = [
+ "ash-protocol",
+ "schemars",
+ "serde",
+ "serde_json",
+ "ts-rs",
+]
+
+[[package]]
+name = "ash-code-mode-runtime"
+version = "0.1.0"
+dependencies = [
+ "ash-code-mode-protocol",
+ "ash-protocol",
+ "deno_core_icudata",
+ "serde_json",
+ "v8",
+]
+
+[[package]]
+name = "ash-codebase"
+version = "0.1.0"
+dependencies = [
+ "ash-api",
+ "ash-async-utils",
+ "ash-file-access",
+ "ash-model-provider",
+ "ash-syntax",
+ "ignore",
+ "nucleo",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "ash-codebase-store"
+version = "0.1.0"
+dependencies = [
+ "ash-api",
+ "ash-codebase",
+ "ash-file-access",
+ "ash-model-provider",
+ "ash-state",
+ "ash-syntax",
+ "rusqlite",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-collaboration"
+version = "0.1.0"
+dependencies = [
+ "getrandom 0.2.17",
+ "rusqlite",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "ts-rs",
+]
+
+[[package]]
+name = "ash-collaboration-server"
+version = "0.1.0"
+dependencies = [
+ "ash-collaboration",
+ "ash-process-hardening",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-commands"
+version = "0.1.0"
+
+[[package]]
+name = "ash-config"
+version = "0.1.0"
+dependencies = [
+ "ash-agent-environment",
+ "ash-execpolicy",
+ "ash-features",
+ "ash-file-access",
+ "ash-model-provider-config",
+ "ash-plugin",
+ "ash-protocol",
+ "ash-state",
+ "rusqlite",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "toml 0.9.12+spec-1.1.0",
+]
+
+[[package]]
+name = "ash-config-schema"
+version = "0.1.0"
+dependencies = [
+ "ash-config",
+ "schemars",
+ "serde_json",
+]
+
+[[package]]
+name = "ash-connectors-extension"
+version = "0.1.0"
+dependencies = [
+ "ash-core-plugins",
+ "ash-file-system",
+ "ash-http-client",
+ "ash-plugin",
+ "ash-secrets",
+ "ash-state",
+ "ash-tools",
+ "base64 0.22.1",
+ "getrandom 0.2.17",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "url",
+ "zeroize",
+]
+
+[[package]]
+name = "ash-content-search"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-file-access",
+ "ash-shell-command",
+ "serde_json",
+]
+
+[[package]]
+name = "ash-context-engine"
+version = "0.1.0"
+
+[[package]]
+name = "ash-core"
+version = "0.1.0"
+dependencies = [
+ "ash-action-policy",
+ "ash-agent-environment",
+ "ash-agent-graph-store",
+ "ash-async-utils",
+ "ash-attachments",
+ "ash-code-mode",
+ "ash-code-mode-protocol",
+ "ash-context-engine",
+ "ash-execpolicy",
+ "ash-extension-api",
+ "ash-history",
+ "ash-model-accounting",
+ "ash-prompts",
+ "ash-protocol",
+ "ash-sandboxing",
+ "ash-thread-store",
+ "ash-utils-image",
+ "ash-utils-stream-parser",
+ "image",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "ash-core-plugins"
+version = "0.1.0"
+dependencies = [
+ "ash-file-identity",
+ "ash-plugin",
+ "ash-tools",
+ "ash-utils-path",
+ "base64 0.22.1",
+ "flate2",
+ "getrandom 0.2.17",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "tough",
+ "url",
+ "zip 4.6.1",
+]
+
+[[package]]
+name = "ash-debug-adapter"
+version = "0.1.0"
+dependencies = [
+ "ash-file-access",
+ "serde_json",
+ "thiserror 2.0.19",
+ "tokio",
+]
+
+[[package]]
+name = "ash-diagnostics"
+version = "0.1.0"
+dependencies = [
+ "ash-analytics",
+ "ash-build-info",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "ts-rs",
+]
+
+[[package]]
+name = "ash-diff"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.19",
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "ash-editor"
+version = "0.1.0"
+dependencies = [
+ "ash-diff",
+ "ash-editor-core",
+ "ash-syntax",
+ "ash-ui-components",
+ "ash-ui-theme",
+ "unicode-segmentation",
+ "unicode-width 0.2.0",
+ "zui",
+]
+
+[[package]]
+name = "ash-editor-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ash-editor-extension-host"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "ash-editor-host"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ash-app-server-client",
+ "ash-app-server-protocol",
+ "ash-editor",
+ "ash-install-context",
+ "ash-lsp-manager",
+ "ash-lsp-server-provider",
+ "ash-text-file",
+ "ash-ui-components",
+ "ash-ui-theme",
+ "serde_json",
+ "zui",
+]
+
+[[package]]
+name = "ash-environment"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "ts-rs",
+]
+
+[[package]]
+name = "ash-exec"
+version = "0.1.0"
+dependencies = [
+ "ash-app-server-client",
+ "ash-app-server-protocol",
+ "ash-async-utils",
+ "ash-protocol",
+ "schemars",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "ash-execpolicy"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "ash-extension-api"
+version = "0.1.0"
+dependencies = [
+ "ash-action-policy",
+ "ash-async-utils",
+ "ash-extension-items",
+ "ash-protocol",
+ "ash-tools",
+ "serde_json",
+]
+
+[[package]]
+name = "ash-extension-items"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "ts-rs",
+]
+
+[[package]]
+name = "ash-extensions"
+version = "0.1.0"
+dependencies = [
+ "ash-file-identity",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-fast-regex-search"
+version = "0.1.0"
+dependencies = [
+ "ash-file-access",
+ "ash-immutable-generation-store",
+ "ash-uds",
+ "globset",
+ "ignore",
+ "memmap2",
+ "regex",
+ "regex-syntax",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "ash-features"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "ts-rs",
+]
+
+[[package]]
+name = "ash-feedback"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-client",
+ "ash-diagnostics",
+ "ash-http-client",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "ts-rs",
+ "url",
+]
+
+[[package]]
+name = "ash-file-access"
+version = "0.1.0"
+dependencies = [
+ "ash-environment",
+ "ash-protocol",
+ "ash-utils-absolute-path",
+ "ash-utils-path",
+ "dunce",
+ "schemars",
+ "serde",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.19",
+ "ts-rs",
+]
+
+[[package]]
+name = "ash-file-identity"
+version = "0.1.0"
+dependencies = [
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "ash-file-search"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "ignore",
+ "nucleo",
+ "serde_json",
+]
+
+[[package]]
+name = "ash-file-system"
+version = "0.1.0"
+dependencies = [
+ "ash-file-access",
+ "sha2 0.10.9",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-file-system-tool"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-file-access",
+ "ash-file-system",
+ "ash-protocol",
+ "ash-tools",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ash-file-watcher"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "notify",
+ "pretty_assertions",
+ "tokio",
+]
+
+[[package]]
+name = "ash-files"
+version = "0.1.0"
+dependencies = [
+ "ash-file-search",
+ "ash-icons",
+ "ash-ui-components",
+ "ash-ui-theme",
+ "zui",
+]
+
+[[package]]
+name = "ash-git"
+version = "0.1.0"
+dependencies = [
+ "ash-diff",
+ "ash-install-context",
+ "ash-utils-pty",
+ "dunce",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "ash-git-attribution"
+version = "0.1.0"
+dependencies = [
+ "ash-extension-api",
+ "ash-protocol",
+]
+
+[[package]]
+name = "ash-github"
+version = "0.1.0"
+dependencies = [
+ "ash-protocol",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "ash-goal"
+version = "0.1.0"
+dependencies = [
+ "ash-action-policy",
+ "ash-async-utils",
+ "ash-core",
+ "ash-extension-api",
+ "ash-prompts",
+ "ash-protocol",
+ "ash-utils-template",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ash-guardian-reviewer"
+version = "0.1.0"
+dependencies = [
+ "ash-action-policy",
+ "ash-async-utils",
+ "ash-sandboxing",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ash-guardian-v2"
+version = "0.1.0"
+dependencies = [
+ "ash-action-policy",
+ "ash-async-utils",
+ "ash-config",
+ "ash-core",
+ "ash-extension-api",
+ "ash-guardian-reviewer",
+ "ash-model-provider",
+ "ash-model-provider-config",
+ "ash-protocol",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-history"
+version = "0.1.0"
+dependencies = [
+ "ash-protocol",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ash-history-notes"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-core",
+ "ash-extension-api",
+ "ash-protocol",
+ "ash-state",
+ "ash-tools",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-hooks"
+version = "0.1.0"
+dependencies = [
+ "ash-action-policy",
+ "ash-async-utils",
+ "ash-config",
+ "ash-core",
+ "ash-file-access",
+ "ash-install-context",
+ "ash-mxc-sandbox",
+ "ash-protocol",
+ "ash-sandboxing",
+ "ash-tool-executor",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ash-http-client"
+version = "0.1.0"
+dependencies = [
+ "rustls",
+ "rustls-native-certs 0.7.3",
+ "tokio",
+ "tokio-rustls",
+ "ureq",
+ "url",
+ "zeroize",
+]
+
+[[package]]
+name = "ash-icons"
+version = "0.1.0"
+dependencies = [
+ "zui",
+]
+
+[[package]]
+name = "ash-image-generation"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-client",
+ "ash-extension-api",
+ "ash-extension-items",
+ "ash-http-client",
+ "ash-protocol",
+ "ash-tools",
+ "base64 0.22.1",
+ "image",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "url",
+]
+
+[[package]]
+name = "ash-immutable-generation-store"
+version = "0.1.0"
+dependencies = [
+ "fs2",
+ "sha2 0.10.9",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-input-classifier"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ash-shell-completion",
+ "candle-core",
+ "candle-nn",
+ "candle-onnx",
+ "difflib",
+ "prost",
+ "rust-stemmers",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokenizers",
+]
+
+[[package]]
+name = "ash-install-context"
+version = "0.1.0"
+dependencies = [
+ "ash-utils-path",
+ "dunce",
+]
+
+[[package]]
+name = "ash-instructions"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_yaml",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-keybinding"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tinyjson",
+]
+
+[[package]]
+name = "ash-keybindings-host"
+version = "0.1.0"
+dependencies = [
+ "ash-keybinding",
+ "serde_json",
+ "zui",
+]
+
+[[package]]
+name = "ash-keyring-store"
+version = "0.1.0"
+dependencies = [
+ "ash-secrets",
+ "keyring",
+ "sha2 0.10.9",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-kimi"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-client",
+ "ash-http-client",
+ "ash-login",
+ "ash-secrets",
+ "getrandom 0.2.17",
+ "serde",
+ "serde_json",
+ "urlencoding",
+ "zeroize",
+]
+
+[[package]]
+name = "ash-login"
+version = "0.1.0"
+
+[[package]]
+name = "ash-lsp"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "lsp-types",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "tokio",
+]
+
+[[package]]
+name = "ash-lsp-manager"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-lsp",
+ "ash-lsp-server-provider",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "ash-lsp-server-provider"
+version = "0.1.0"
+dependencies = [
+ "ash-install-context",
+ "ash-lsp",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "ash-markdown"
+version = "0.1.0"
+dependencies = [
+ "ash-ui-components",
+ "image",
+ "pulldown-cmark",
+ "ratex-layout",
+ "ratex-parser",
+ "ratex-svg",
+ "ratex-types",
+ "resvg",
+ "sha2 0.10.9",
+ "syntect",
+ "thiserror 2.0.19",
+ "url",
+ "zui",
+]
+
+[[package]]
+name = "ash-mcp"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-config",
+ "ash-protocol",
+ "ash-rmcp-client",
+ "ash-tools",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.19",
+ "tokio",
+]
+
+[[package]]
+name = "ash-mcp-extension"
+version = "0.1.0"
+dependencies = [
+ "ash-action-policy",
+ "ash-async-utils",
+ "ash-config",
+ "ash-connectors-extension",
+ "ash-core",
+ "ash-core-plugins",
+ "ash-extension-api",
+ "ash-file-access",
+ "ash-file-system",
+ "ash-mcp",
+ "ash-plugin",
+ "ash-protocol",
+ "ash-rmcp-client",
+ "ash-secrets",
+ "ash-tools",
+ "base64 0.22.1",
+ "getrandom 0.2.17",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "url",
+ "zeroize",
+]
+
+[[package]]
+name = "ash-memories"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-file-access",
+ "ash-protocol",
+ "base64 0.22.1",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.19",
+ "ts-rs",
+]
+
+[[package]]
+name = "ash-memories-extension"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-extension-api",
+ "ash-memories",
+ "ash-protocol",
+ "ash-state",
+ "ash-tools",
+ "pollster 1.0.1",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-memory-diagnostics"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "thiserror 2.0.19",
+ "ts-rs",
+]
+
+[[package]]
+name = "ash-message-history"
+version = "0.1.0"
+
+[[package]]
+name = "ash-model-accounting"
+version = "0.1.0"
+dependencies = [
+ "ash-protocol",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "ash-model-provider"
+version = "0.1.0"
+dependencies = [
+ "ash-api",
+ "ash-async-utils",
+ "ash-chatgpt",
+ "ash-client",
+ "ash-context-engine",
+ "ash-http-client",
+ "ash-kimi",
+ "ash-model-provider-config",
+ "ash-model-tokenizer",
+ "ash-models-manager",
+ "ash-ollama",
+ "ash-protocol",
+ "ash-secrets",
+ "ash-websocket-client",
+ "base64 0.22.1",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "ash-model-provider-config"
+version = "0.1.0"
+dependencies = [
+ "ash-protocol",
+ "schemars",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
+name = "ash-model-tokenizer"
+version = "0.1.0"
+dependencies = [
+ "ash-http-client",
+ "ash-protocol",
+ "ash-utils-path",
+ "hf-chat-template",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokenizers",
+]
+
+[[package]]
+name = "ash-models-manager"
+version = "0.1.0"
+dependencies = [
+ "ash-model-provider-config",
+ "ash-prompts",
+ "ash-protocol",
+ "tokio",
+]
+
+[[package]]
+name = "ash-mxc-sandbox"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-file-access",
+ "ash-install-context",
+ "ash-network-proxy",
+ "ash-protocol",
+ "ash-sandboxing",
+ "ash-tool-executor",
+ "dunce",
+ "log",
+ "mxc-sdk",
+ "tempfile",
+ "tracelogging",
+]
+
+[[package]]
+name = "ash-network-proxy"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "bytes",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "ash-ollama"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-client",
+ "ash-http-client",
+ "semver",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
+name = "ash-otel"
+version = "0.1.0"
+dependencies = [
+ "ash-client",
+ "ash-diagnostics",
+ "ash-http-client",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ash-package-store"
+version = "0.1.0"
+dependencies = [
+ "fs2",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "ash-pdf"
+version = "0.1.0"
+dependencies = [
+ "pdfium-render",
+]
+
+[[package]]
+name = "ash-plugin"
+version = "0.1.0"
+dependencies = [
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-process-hardening"
+version = "0.1.0"
+dependencies = [
+ "ctor",
+ "libc",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "ash-product-update"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "ed25519-dalek",
+ "semver",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
+name = "ash-projects"
+version = "0.1.0"
+dependencies = [
+ "ash-environment",
+ "ash-file-access",
+ "ash-protocol",
+ "pretty_assertions",
+ "serde",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "ash-prompts"
+version = "0.1.0"
+dependencies = [
+ "ash-protocol",
+]
+
+[[package]]
+name = "ash-protocol"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "ts-rs",
+]
+
+[[package]]
+name = "ash-queue"
+version = "0.1.0"
+dependencies = [
+ "ash-extension-api",
+ "ash-extension-items",
+ "ash-protocol",
+ "rusqlite",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.19",
+ "ts-rs",
+]
+
+[[package]]
+name = "ash-remote"
+version = "0.1.0"
+
+[[package]]
+name = "ash-remote-connections"
+version = "0.1.0"
+dependencies = [
+ "ash-app-server",
+ "ash-app-server-client",
+ "ash-app-server-protocol",
+ "ash-build-info",
+ "ash-http-client",
+ "ash-install-context",
+ "ash-package-store",
+ "ash-process-hardening",
+ "ash-remote",
+ "ash-utils-home-dir",
+ "ash-utils-path",
+ "flate2",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tar",
+ "tempfile",
+ "url",
+]
+
+[[package]]
+name = "ash-remote-host"
+version = "0.1.0"
+dependencies = [
+ "ash-remote",
+ "ash-remote-connections",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-remote-server"
+version = "0.1.0"
+dependencies = [
+ "ash-app-server",
+ "ash-app-server-client",
+ "ash-app-server-protocol",
+ "ash-arg0",
+ "ash-build-info",
+ "ash-fast-regex-search",
+ "ash-file-access",
+ "ash-install-context",
+ "ash-package-store",
+ "ash-process-hardening",
+ "ash-utils-home-dir",
+ "base64 0.22.1",
+ "libc",
+ "rustix 1.1.4",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-rmcp-client"
+version = "0.1.0"
+dependencies = [
+ "rmcp",
+ "thiserror 2.0.19",
+ "tokio",
+]
+
+[[package]]
+name = "ash-rollout"
+version = "0.1.0"
+dependencies = [
+ "ash-attachments",
+ "ash-core",
+ "ash-protocol",
+ "ash-state",
+ "ash-thread-store",
+]
+
+[[package]]
+name = "ash-rollout-trace"
+version = "0.1.0"
+dependencies = [
+ "ash-core",
+ "ash-history",
+ "ash-protocol",
+ "ash-rollout",
+ "ash-state",
+ "ash-thread-store",
+ "serde",
+]
+
+[[package]]
+name = "ash-sandboxing"
+version = "0.1.0"
+dependencies = [
+ "ash-file-access",
+ "ash-utils-pty",
+ "globset",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-scm"
+version = "0.1.0"
+dependencies = [
+ "ash-app-server-protocol",
+ "ash-diff",
+ "ash-editor",
+ "ash-icons",
+ "ash-ui-components",
+ "ash-ui-theme",
+ "zui",
+]
+
+[[package]]
+name = "ash-secrets"
+version = "0.1.0"
+dependencies = [
+ "ash-utils-path",
+ "getrandom 0.2.17",
+ "sha2 0.10.9",
+ "tempfile",
+ "windows-sys 0.59.0",
+ "zeroize",
+]
+
+[[package]]
+name = "ash-session"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ash-app-server-client",
+ "ash-app-server-protocol",
+ "ash-editor",
+ "ash-icons",
+ "ash-input-classifier",
+ "ash-message-history",
+ "ash-protocol",
+ "ash-slash-commands",
+ "ash-state",
+ "ash-thread-transcript",
+ "ash-ui-components",
+ "ash-ui-theme",
+ "serde_json",
+ "tempfile",
+ "zui",
+]
+
+[[package]]
+name = "ash-settings"
+version = "0.1.0"
+dependencies = [
+ "ash-commands",
+ "ash-icons",
+ "ash-keybinding",
+ "ash-keybindings-host",
+ "ash-remote",
+ "ash-remote-connections",
+ "ash-remote-host",
+ "ash-ui-components",
+ "ash-ui-theme",
+ "zui",
+]
+
+[[package]]
+name = "ash-shell-command"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-file-access",
+ "ash-install-context",
+ "ash-mxc-sandbox",
+ "ash-network-proxy",
+ "ash-protocol",
+ "ash-sandboxing",
+ "ash-tool-executor",
+ "ash-tools",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ash-shell-completion"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-skills"
+version = "0.1.0"
+dependencies = [
+ "ash-file-identity",
+ "ash-protocol",
+ "serde",
+ "serde_yaml",
+ "sha2 0.10.9",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-skills-extension"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-config",
+ "ash-extension-api",
+ "ash-file-watcher",
+ "ash-protocol",
+ "ash-skills",
+ "ash-tools",
+ "pollster 1.0.1",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "ash-slash-commands"
+version = "0.1.0"
+dependencies = [
+ "ash-app-server-protocol",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ash-slash-launcher"
+version = "0.1.0"
+
+[[package]]
+name = "ash-sleep"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-extension-api",
+ "ash-extension-items",
+ "ash-protocol",
+ "ash-tools",
+ "pollster 1.0.1",
+ "serde_json",
+]
+
+[[package]]
+name = "ash-sprite"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "image",
+ "resvg",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-state"
+version = "0.1.0"
+dependencies = [
+ "ash-agent-graph-store",
+ "ash-async-utils",
+ "ash-core",
+ "ash-environment",
+ "ash-file-access",
+ "ash-github",
+ "ash-history",
+ "ash-memories",
+ "ash-message-history",
+ "ash-projects",
+ "ash-protocol",
+ "ash-thread-store",
+ "ash-utils-path",
+ "fs2",
+ "git-turn-changes",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-syntax"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.19",
+ "tree-sitter",
+ "tree-sitter-bash",
+ "tree-sitter-javascript",
+ "tree-sitter-json",
+ "tree-sitter-rust",
+ "tree-sitter-typescript",
+]
+
+[[package]]
+name = "ash-terminal"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "unicode-segmentation",
+ "unicode-width 0.2.0",
+ "vte",
+]
+
+[[package]]
+name = "ash-terminal-detection"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+]
+
+[[package]]
+name = "ash-terminal-runtime"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ash-app-server-client",
+ "ash-app-server-protocol",
+ "ash-protocol",
+ "ash-remote-connections",
+ "ash-terminal",
+ "ash-ui-components",
+ "ash-ui-theme",
+ "ash-utils-pty",
+ "base64 0.22.1",
+ "tokio",
+ "unicode-width 0.2.0",
+ "zui",
+]
+
+[[package]]
+name = "ash-text-file"
+version = "0.1.0"
+
+[[package]]
+name = "ash-theme"
+version = "0.1.0"
+dependencies = [
+ "ash-utils-home-dir",
+ "ash-utils-path",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "ash-thread-store"
+version = "0.1.0"
+dependencies = [
+ "ash-agent-graph-store",
+ "ash-history",
+ "ash-protocol",
+ "serde",
+]
+
+[[package]]
+name = "ash-thread-transcript"
+version = "0.1.0"
+dependencies = [
+ "ash-protocol",
+ "schemars",
+ "serde",
+ "ts-rs",
+]
+
+[[package]]
+name = "ash-tool-executor"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-file-access",
+ "ash-install-context",
+ "ash-mxc-sandbox",
+ "ash-network-proxy",
+ "ash-protocol",
+ "ash-sandboxing",
+ "ash-utils-pty",
+ "getrandom 0.2.17",
+ "pollster 1.0.1",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-tools"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-environment",
+ "ash-network-proxy",
+ "ash-protocol",
+ "ash-sandboxing",
+ "ash-utils-output-truncation",
+ "bm25",
+ "regex",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "ash-tui"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "ash-ansi-escape",
+ "ash-app-server",
+ "ash-app-server-client",
+ "ash-app-server-protocol",
+ "ash-client",
+ "ash-diff",
+ "ash-file-access",
+ "ash-file-search",
+ "ash-keybinding",
+ "ash-memories",
+ "ash-memory-diagnostics",
+ "ash-message-history",
+ "ash-product-update",
+ "ash-protocol",
+ "ash-queue",
+ "ash-slash-commands",
+ "ash-sprite",
+ "ash-state",
+ "ash-terminal-detection",
+ "ash-utils-elapsed",
+ "ash-utils-home-dir",
+ "ash-utils-image",
+ "ash-utils-path",
+ "base64 0.22.1",
+ "chrono",
+ "crossterm",
+ "dirs",
+ "image",
+ "insta",
+ "pulldown-cmark",
+ "ratatui",
+ "rustix 1.1.4",
+ "serde",
+ "serde_json",
+ "signal-hook",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
+ "syntect",
+ "tempfile",
+ "unicode-segmentation",
+ "unicode-width 0.2.0",
+ "url",
+ "windows-sys 0.59.0",
+ "zeroize",
+]
+
+[[package]]
+name = "ash-typst"
+version = "0.1.0"
+dependencies = [
+ "typst",
+ "typst-assets",
+ "typst-pdf",
+]
+
+[[package]]
+name = "ash-uds"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "tempfile",
+ "uds_windows",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "ash-ui-components"
+version = "0.1.0"
+dependencies = [
+ "ash-icons",
+ "zui",
+]
+
+[[package]]
+name = "ash-ui-theme"
+version = "0.1.0"
+dependencies = [
+ "ash-icons",
+ "ash-theme",
+ "ash-ui-components",
+ "zui",
+]
+
+[[package]]
+name = "ash-update-sign"
+version = "0.1.0"
+dependencies = [
+ "ash-process-hardening",
+ "ash-product-update",
+ "base64 0.22.1",
+ "ed25519-dalek",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "zeroize",
+]
+
+[[package]]
+name = "ash-user-verification"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "core-foundation 0.10.1",
+ "dirs",
+ "objc2 0.6.4",
+ "objc2-foundation 0.3.2",
+ "objc2-local-authentication",
+ "p256",
+ "pretty_assertions",
+ "security-framework 3.7.0",
+ "security-framework-sys",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tracing",
+]
+
+[[package]]
+name = "ash-utils-absolute-path"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "dunce",
+ "pretty_assertions",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "ts-rs",
+]
+
+[[package]]
+name = "ash-utils-cache"
+version = "0.1.0"
+dependencies = [
+ "lru 0.18.3",
+ "sha1",
+ "tokio",
+]
+
+[[package]]
+name = "ash-utils-elapsed"
+version = "0.1.0"
+
+[[package]]
+name = "ash-utils-home-dir"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "dunce",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-utils-image"
+version = "0.1.0"
+dependencies = [
+ "ash-utils-cache",
+ "base64 0.22.1",
+ "image",
+ "pretty_assertions",
+ "sha2 0.10.9",
+ "thiserror 2.0.19",
+ "tokio",
+]
+
+[[package]]
+name = "ash-utils-json-to-toml"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "serde_json",
+ "toml 0.9.12+spec-1.1.0",
+]
+
+[[package]]
+name = "ash-utils-output-truncation"
+version = "0.1.0"
+
+[[package]]
+name = "ash-utils-path"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+ "pretty_assertions",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-utils-path-uri"
+version = "0.1.0"
+dependencies = [
+ "ash-utils-absolute-path",
+ "base64 0.22.1",
+ "pretty_assertions",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.19",
+ "ts-rs",
+ "url",
+ "urlencoding",
+]
+
+[[package]]
+name = "ash-utils-pty"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "filedescriptor",
+ "lazy_static",
+ "libc",
+ "log",
+ "portable-pty",
+ "pretty_assertions",
+ "shared_library",
+ "tokio",
+ "winapi",
+]
+
+[[package]]
+name = "ash-utils-stream-parser"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+]
+
+[[package]]
+name = "ash-utils-template"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+]
+
+[[package]]
+name = "ash-v8-poc"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "v8",
+]
+
+[[package]]
+name = "ash-web-search-extension"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-client",
+ "ash-extension-api",
+ "ash-extension-items",
+ "ash-http-client",
+ "ash-protocol",
+ "ash-tools",
+ "pollster 1.0.1",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
+name = "ash-websocket-client"
+version = "0.1.0"
+dependencies = [
+ "ash-http-client",
+ "base64 0.22.1",
+ "futures",
+ "tokio",
+ "tokio-tungstenite",
+ "url",
+ "zeroize",
+]
+
+[[package]]
+name = "ash-windows-sandbox"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-file-access",
+ "ash-install-context",
+ "ash-network-proxy",
+ "ash-sandboxing",
+ "ash-tool-executor",
+ "ash-utils-pty",
+ "getrandom 0.2.17",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "socket2",
+ "tempfile",
+ "windows",
+ "windows-sys 0.61.2",
+ "winreg 0.55.0",
+ "wxc_common",
+]
+
+[[package]]
+name = "ash-workbench"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ash-app-server",
+ "ash-app-server-client",
+ "ash-app-server-daemon",
+ "ash-app-server-protocol",
+ "ash-arg0",
+ "ash-commands",
+ "ash-diff",
+ "ash-editor",
+ "ash-editor-host",
+ "ash-file-access",
+ "ash-file-search",
+ "ash-files",
+ "ash-icons",
+ "ash-input-classifier",
+ "ash-keybinding",
+ "ash-keybindings-host",
+ "ash-lsp-manager",
+ "ash-memories",
+ "ash-memory-diagnostics",
+ "ash-message-history",
+ "ash-protocol",
+ "ash-remote",
+ "ash-remote-connections",
+ "ash-remote-host",
+ "ash-scm",
+ "ash-session",
+ "ash-settings",
+ "ash-slash-commands",
+ "ash-state",
+ "ash-terminal",
+ "ash-terminal-runtime",
+ "ash-text-file",
+ "ash-theme",
+ "ash-ui-components",
+ "ash-ui-theme",
+ "ash-utils-home-dir",
+ "ash-utils-path",
+ "flate2",
+ "serde_json",
+ "sha2 0.10.9",
+ "signal-hook",
+ "tar",
+ "tempfile",
+ "unicode-width 0.2.0",
+ "zui",
+]
+
+[[package]]
 name = "ashpd"
 version = "0.13.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3101,6 +5444,9 @@ dependencies = [
 name = "git-turn-changes"
 version = "0.1.0"
 dependencies = [
+ "ash-file-watcher",
+ "ash-git",
+ "ash-protocol",
  "log",
  "pretty_assertions",
  "serde",
@@ -3109,9 +5455,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "tokio",
- "ash-file-watcher",
- "ash-git",
- "ash-protocol",
 ]
 
 [[package]]
@@ -10999,6 +13342,9 @@ name = "worktree"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "ash-file-access",
+ "ash-git",
+ "ash-protocol",
  "dunce",
  "fs2",
  "ignore",
@@ -11008,9 +13354,6 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "tokio",
- "ash-file-access",
- "ash-git",
- "ash-protocol",
 ]
 
 [[package]]
@@ -11480,2349 +13823,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ash-action-policy"
-version = "0.1.0"
-dependencies = [
- "serde",
- "sha2 0.10.9",
- "ash-async-utils",
- "ash-execpolicy",
- "ash-sandboxing",
-]
-
-[[package]]
-name = "ash-agent"
-version = "0.1.0"
-dependencies = [
- "futures",
- "pollster 1.0.1",
- "serde",
- "serde_json",
- "tempfile",
- "ash-action-policy",
- "ash-agent-roles",
- "ash-async-utils",
- "ash-core",
- "ash-instructions",
- "ash-models-manager",
- "ash-prompts",
- "ash-protocol",
- "ash-skills-extension",
-]
-
-[[package]]
-name = "ash-agent-environment"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "chrono-tz",
- "ash-protocol",
- "ash-utils-absolute-path",
-]
-
-[[package]]
-name = "ash-agent-graph-store"
-version = "0.1.0"
-dependencies = [
- "serde",
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-agent-import"
-version = "0.1.0"
-dependencies = [
- "tempfile",
- "ash-utils-path",
-]
-
-[[package]]
-name = "ash-agent-roles"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_yaml",
- "sha2 0.10.9",
- "tempfile",
- "toml 0.9.12+spec-1.1.0",
-]
-
-[[package]]
-name = "ash-analytics"
-version = "0.1.0"
-dependencies = [
- "schemars",
- "serde",
- "serde_json",
- "tempfile",
- "ts-rs",
-]
-
-[[package]]
-name = "ash-ansi-escape"
-version = "0.1.0"
-dependencies = [
- "ansi-to-tui",
- "ratatui",
-]
-
-[[package]]
-name = "ash-api"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "futures",
- "serde_json",
- "tokio",
- "tokio-tungstenite",
- "url",
- "ash-async-utils",
- "ash-client",
- "ash-http-client",
- "ash-protocol",
- "ash-websocket-client",
-]
-
-[[package]]
-name = "ash-app-server"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "dunce",
- "futures",
- "getrandom 0.2.17",
- "git-turn-changes",
- "iana-time-zone",
- "ignore",
- "image",
- "log",
- "pollster 1.0.1",
- "semver",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "tokio",
- "tokio-tungstenite",
- "url",
- "worktree",
- "zeroize",
- "ash-action-policy",
- "ash-agent",
- "ash-agent-environment",
- "ash-agent-roles",
- "ash-analytics",
- "ash-app-server-client",
- "ash-app-server-daemon",
- "ash-app-server-protocol",
- "ash-app-server-transport",
- "ash-apply-patch",
- "ash-arg0",
- "ash-async-utils",
- "ash-attachments",
- "ash-automation",
- "ash-build-info",
- "ash-chatgpt",
- "ash-client",
- "ash-cloud-codebase",
- "ash-codebase",
- "ash-codebase-store",
- "ash-collaboration",
- "ash-config",
- "ash-connectors-extension",
- "ash-content-search",
- "ash-context-engine",
- "ash-core",
- "ash-core-plugins",
- "ash-debug-adapter",
- "ash-diagnostics",
- "ash-diff",
- "ash-editor-extension-host",
- "ash-execpolicy",
- "ash-extension-api",
- "ash-extension-items",
- "ash-extensions",
- "ash-fast-regex-search",
- "ash-features",
- "ash-feedback",
- "ash-file-access",
- "ash-file-system",
- "ash-file-watcher",
- "ash-git",
- "ash-git-attribution",
- "ash-github",
- "ash-goal",
- "ash-guardian-v2",
- "ash-history-notes",
- "ash-hooks",
- "ash-http-client",
- "ash-image-generation",
- "ash-install-context",
- "ash-instructions",
- "ash-kimi",
- "ash-login",
- "ash-lsp-manager",
- "ash-lsp-server-provider",
- "ash-mcp",
- "ash-mcp-extension",
- "ash-memories",
- "ash-memories-extension",
- "ash-memory-diagnostics",
- "ash-model-provider",
- "ash-model-provider-config",
- "ash-models-manager",
- "ash-mxc-sandbox",
- "ash-network-proxy",
- "ash-otel",
- "ash-package-store",
- "ash-plugin",
- "ash-process-hardening",
- "ash-projects",
- "ash-prompts",
- "ash-protocol",
- "ash-queue",
- "ash-rmcp-client",
- "ash-rollout",
- "ash-sandboxing",
- "ash-secrets",
- "ash-shell-command",
- "ash-skills",
- "ash-skills-extension",
- "ash-slash-commands",
- "ash-sleep",
- "ash-state",
- "ash-syntax",
- "ash-thread-store",
- "ash-thread-transcript",
- "ash-tool-executor",
- "ash-tools",
- "ash-typst",
- "ash-uds",
- "ash-utils-home-dir",
- "ash-utils-pty",
- "ash-web-search-extension",
- "ash-windows-sandbox",
-]
-
-[[package]]
-name = "ash-app-server-client"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "serde",
- "serde_json",
- "tempfile",
- "zeroize",
- "ash-app-server",
- "ash-app-server-protocol",
- "ash-app-server-transport",
- "ash-async-utils",
- "ash-client",
- "ash-core",
- "ash-diagnostics",
- "ash-feedback",
- "ash-file-access",
- "ash-memories",
- "ash-memory-diagnostics",
- "ash-protocol",
- "ash-queue",
- "ash-utils-pty",
-]
-
-[[package]]
-name = "ash-app-server-daemon"
-version = "0.1.0"
-dependencies = [
- "dunce",
- "libc",
- "rustix 1.1.4",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "signal-hook",
- "tempfile",
- "windows-sys 0.59.0",
- "ash-app-server-protocol",
- "ash-app-server-transport",
- "ash-build-info",
- "ash-install-context",
- "ash-package-store",
- "ash-process-hardening",
- "ash-uds",
- "ash-utils-home-dir",
-]
-
-[[package]]
-name = "ash-app-server-protocol"
-version = "0.1.0"
-dependencies = [
- "schemars",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "ts-rs",
- "url",
- "zeroize",
- "ash-analytics",
- "ash-build-info",
- "ash-collaboration",
- "ash-diagnostics",
- "ash-environment",
- "ash-extension-items",
- "ash-features",
- "ash-feedback",
- "ash-file-access",
- "ash-memories",
- "ash-memory-diagnostics",
- "ash-protocol",
- "ash-queue",
- "ash-thread-transcript",
-]
-
-[[package]]
-name = "ash-app-server-transport"
-version = "0.1.0"
-dependencies = [
- "futures",
- "rustix 1.1.4",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "tokio",
- "tokio-tungstenite",
- "ash-app-server-protocol",
- "ash-uds",
-]
-
-[[package]]
-name = "ash-apply-patch"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "ash-async-utils",
- "ash-file-access",
- "ash-protocol",
- "ash-tools",
-]
-
-[[package]]
-name = "ash-arg0"
-version = "0.1.0"
-dependencies = [
- "ash-fast-regex-search",
-]
-
-[[package]]
-name = "ash-async-utils"
-version = "0.1.0"
-dependencies = [
- "async-io",
- "event-listener",
- "pollster 1.0.1",
-]
-
-[[package]]
-name = "ash-attachments"
-version = "0.1.0"
-dependencies = [
- "image",
- "sha2 0.10.9",
- "tempfile",
- "thiserror 2.0.19",
- "url",
- "ash-http-client",
- "ash-protocol",
- "ash-utils-image",
- "ash-utils-path",
-]
-
-[[package]]
-name = "ash-automation"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "chrono-tz",
- "rusqlite",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.19",
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-build-info"
-version = "0.1.0"
-dependencies = [
- "schemars",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "ts-rs",
-]
-
-[[package]]
-name = "ash-bwrap"
-version = "0.1.0"
-dependencies = [
- "cc",
- "libc",
- "pkg-config",
-]
-
-[[package]]
-name = "ash-chatgpt"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "chrono",
- "dirs",
- "fs2",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "toml 0.9.12+spec-1.1.0",
- "urlencoding",
- "zeroize",
- "ash-async-utils",
- "ash-client",
- "ash-http-client",
- "ash-keyring-store",
- "ash-login",
- "ash-secrets",
-]
-
-[[package]]
-name = "ash-cli"
-version = "0.1.0"
-dependencies = [
- "ed25519-dalek",
- "flate2",
- "fs2",
- "insta",
- "portable-pty",
- "semver",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "signal-hook",
- "tar",
- "tempfile",
- "ureq",
- "ash-app-server",
- "ash-app-server-client",
- "ash-app-server-daemon",
- "ash-app-server-protocol",
- "ash-arg0",
- "ash-build-info",
- "ash-exec",
- "ash-fast-regex-search",
- "ash-file-access",
- "ash-install-context",
- "ash-process-hardening",
- "ash-product-update",
- "ash-protocol",
- "ash-remote",
- "ash-remote-connections",
- "ash-terminal",
- "ash-tui",
- "ash-utils-home-dir",
- "zip 4.6.1",
-]
-
-[[package]]
-name = "ash-client"
-version = "0.1.0"
-dependencies = [
- "ash-async-utils",
- "ash-http-client",
-]
-
-[[package]]
-name = "ash-cloud-codebase"
-version = "0.1.0"
-dependencies = [
- "rusqlite",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.19",
- "ash-codebase",
- "ash-file-access",
- "ash-state",
-]
-
-[[package]]
-name = "ash-code-mode"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "ash-code-mode-protocol",
- "ash-code-mode-runtime",
-]
-
-[[package]]
-name = "ash-code-mode-host"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "ash-code-mode-protocol",
- "ash-code-mode-runtime",
- "ash-package-store",
-]
-
-[[package]]
-name = "ash-code-mode-protocol"
-version = "0.1.0"
-dependencies = [
- "schemars",
- "serde",
- "serde_json",
- "ts-rs",
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-code-mode-runtime"
-version = "0.1.0"
-dependencies = [
- "deno_core_icudata",
- "serde_json",
- "v8",
- "ash-code-mode-protocol",
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-codebase"
-version = "0.1.0"
-dependencies = [
- "ignore",
- "nucleo",
- "sha2 0.10.9",
- "tempfile",
- "thiserror 2.0.19",
- "ash-api",
- "ash-async-utils",
- "ash-file-access",
- "ash-model-provider",
- "ash-syntax",
-]
-
-[[package]]
-name = "ash-codebase-store"
-version = "0.1.0"
-dependencies = [
- "rusqlite",
- "tempfile",
- "ash-api",
- "ash-codebase",
- "ash-file-access",
- "ash-model-provider",
- "ash-state",
- "ash-syntax",
-]
-
-[[package]]
-name = "ash-collaboration"
-version = "0.1.0"
-dependencies = [
- "getrandom 0.2.17",
- "rusqlite",
- "schemars",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "ts-rs",
-]
-
-[[package]]
-name = "ash-collaboration-server"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "tempfile",
- "ash-collaboration",
- "ash-process-hardening",
-]
-
-[[package]]
-name = "ash-commands"
-version = "0.1.0"
-
-[[package]]
-name = "ash-config"
-version = "0.1.0"
-dependencies = [
- "rusqlite",
- "schemars",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "toml 0.9.12+spec-1.1.0",
- "ash-agent-environment",
- "ash-execpolicy",
- "ash-features",
- "ash-file-access",
- "ash-model-provider-config",
- "ash-plugin",
- "ash-protocol",
- "ash-state",
-]
-
-[[package]]
-name = "ash-config-schema"
-version = "0.1.0"
-dependencies = [
- "schemars",
- "serde_json",
- "ash-config",
-]
-
-[[package]]
-name = "ash-connectors-extension"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "getrandom 0.2.17",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "url",
- "zeroize",
- "ash-core-plugins",
- "ash-file-system",
- "ash-http-client",
- "ash-plugin",
- "ash-secrets",
- "ash-state",
- "ash-tools",
-]
-
-[[package]]
-name = "ash-content-search"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "ash-async-utils",
- "ash-file-access",
- "ash-shell-command",
-]
-
-[[package]]
-name = "ash-context-engine"
-version = "0.1.0"
-
-[[package]]
-name = "ash-core"
-version = "0.1.0"
-dependencies = [
- "image",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "ash-action-policy",
- "ash-agent-environment",
- "ash-agent-graph-store",
- "ash-async-utils",
- "ash-attachments",
- "ash-code-mode",
- "ash-code-mode-protocol",
- "ash-context-engine",
- "ash-execpolicy",
- "ash-extension-api",
- "ash-history",
- "ash-model-accounting",
- "ash-prompts",
- "ash-protocol",
- "ash-sandboxing",
- "ash-thread-store",
- "ash-utils-image",
- "ash-utils-stream-parser",
-]
-
-[[package]]
-name = "ash-core-plugins"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "flate2",
- "getrandom 0.2.17",
- "semver",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "tokio",
- "tough",
- "url",
- "ash-file-identity",
- "ash-plugin",
- "ash-tools",
- "ash-utils-path",
- "zip 4.6.1",
-]
-
-[[package]]
-name = "ash-debug-adapter"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "thiserror 2.0.19",
- "tokio",
- "ash-file-access",
-]
-
-[[package]]
-name = "ash-diagnostics"
-version = "0.1.0"
-dependencies = [
- "schemars",
- "serde",
- "serde_json",
- "tempfile",
- "ts-rs",
- "ash-analytics",
- "ash-build-info",
-]
-
-[[package]]
-name = "ash-diff"
-version = "0.1.0"
-dependencies = [
- "thiserror 2.0.19",
- "unicode-segmentation",
-]
-
-[[package]]
-name = "ash-editor"
-version = "0.1.0"
-dependencies = [
- "unicode-segmentation",
- "unicode-width 0.2.0",
- "ash-diff",
- "ash-editor-core",
- "ash-syntax",
- "ash-ui-components",
- "ash-ui-theme",
- "zui",
-]
-
-[[package]]
-name = "ash-editor-core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "ash-editor-extension-host"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror 2.0.19",
-]
-
-[[package]]
-name = "ash-editor-host"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde_json",
- "ash-app-server-client",
- "ash-app-server-protocol",
- "ash-editor",
- "ash-install-context",
- "ash-lsp-manager",
- "ash-lsp-server-provider",
- "ash-text-file",
- "ash-ui-components",
- "ash-ui-theme",
- "zui",
-]
-
-[[package]]
-name = "ash-environment"
-version = "0.1.0"
-dependencies = [
- "schemars",
- "serde",
- "ts-rs",
-]
-
-[[package]]
-name = "ash-exec"
-version = "0.1.0"
-dependencies = [
- "schemars",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
- "ash-app-server-client",
- "ash-app-server-protocol",
- "ash-async-utils",
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-execpolicy"
-version = "0.1.0"
-dependencies = [
- "schemars",
- "serde",
- "serde_json",
- "sha2 0.10.9",
-]
-
-[[package]]
-name = "ash-extension-api"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "ash-action-policy",
- "ash-async-utils",
- "ash-extension-items",
- "ash-protocol",
- "ash-tools",
-]
-
-[[package]]
-name = "ash-extension-items"
-version = "0.1.0"
-dependencies = [
- "schemars",
- "serde",
- "ts-rs",
-]
-
-[[package]]
-name = "ash-extensions"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "ash-file-identity",
-]
-
-[[package]]
-name = "ash-fast-regex-search"
-version = "0.1.0"
-dependencies = [
- "globset",
- "ignore",
- "memmap2",
- "regex",
- "regex-syntax",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "thiserror 2.0.19",
- "ash-file-access",
- "ash-immutable-generation-store",
- "ash-uds",
-]
-
-[[package]]
-name = "ash-features"
-version = "0.1.0"
-dependencies = [
- "schemars",
- "serde",
- "serde_json",
- "ts-rs",
-]
-
-[[package]]
-name = "ash-feedback"
-version = "0.1.0"
-dependencies = [
- "schemars",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "ts-rs",
- "url",
- "ash-async-utils",
- "ash-client",
- "ash-diagnostics",
- "ash-http-client",
-]
-
-[[package]]
-name = "ash-file-access"
-version = "0.1.0"
-dependencies = [
- "dunce",
- "schemars",
- "serde",
- "sha2 0.10.9",
- "tempfile",
- "thiserror 2.0.19",
- "ts-rs",
- "ash-environment",
- "ash-protocol",
- "ash-utils-absolute-path",
- "ash-utils-path",
-]
-
-[[package]]
-name = "ash-file-identity"
-version = "0.1.0"
-dependencies = [
- "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "ash-file-search"
-version = "0.1.0"
-dependencies = [
- "clap",
- "ignore",
- "nucleo",
- "serde_json",
-]
-
-[[package]]
-name = "ash-file-system"
-version = "0.1.0"
-dependencies = [
- "sha2 0.10.9",
- "tempfile",
- "ash-file-access",
-]
-
-[[package]]
-name = "ash-file-system-tool"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "ash-async-utils",
- "ash-file-access",
- "ash-file-system",
- "ash-protocol",
- "ash-tools",
-]
-
-[[package]]
-name = "ash-file-watcher"
-version = "0.1.0"
-dependencies = [
- "log",
- "notify",
- "pretty_assertions",
- "tokio",
-]
-
-[[package]]
-name = "ash-files"
-version = "0.1.0"
-dependencies = [
- "ash-file-search",
- "ash-icons",
- "ash-ui-components",
- "ash-ui-theme",
- "zui",
-]
-
-[[package]]
-name = "ash-git"
-version = "0.1.0"
-dependencies = [
- "dunce",
- "pretty_assertions",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "ash-diff",
- "ash-install-context",
- "ash-utils-pty",
-]
-
-[[package]]
-name = "ash-git-attribution"
-version = "0.1.0"
-dependencies = [
- "ash-extension-api",
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-github"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "url",
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-goal"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "ash-action-policy",
- "ash-async-utils",
- "ash-core",
- "ash-extension-api",
- "ash-prompts",
- "ash-protocol",
- "ash-utils-template",
-]
-
-[[package]]
-name = "ash-guardian-reviewer"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "ash-action-policy",
- "ash-async-utils",
- "ash-sandboxing",
-]
-
-[[package]]
-name = "ash-guardian-v2"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "tempfile",
- "ash-action-policy",
- "ash-async-utils",
- "ash-config",
- "ash-core",
- "ash-extension-api",
- "ash-guardian-reviewer",
- "ash-model-provider",
- "ash-model-provider-config",
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-history"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-history-notes"
-version = "0.1.0"
-dependencies = [
- "rusqlite",
- "serde",
- "serde_json",
- "tempfile",
- "ash-async-utils",
- "ash-core",
- "ash-extension-api",
- "ash-protocol",
- "ash-state",
- "ash-tools",
-]
-
-[[package]]
-name = "ash-hooks"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "ash-action-policy",
- "ash-async-utils",
- "ash-config",
- "ash-core",
- "ash-file-access",
- "ash-install-context",
- "ash-mxc-sandbox",
- "ash-protocol",
- "ash-sandboxing",
- "ash-tool-executor",
-]
-
-[[package]]
-name = "ash-http-client"
-version = "0.1.0"
-dependencies = [
- "rustls",
- "rustls-native-certs 0.7.3",
- "tokio",
- "tokio-rustls",
- "ureq",
- "url",
- "zeroize",
-]
-
-[[package]]
-name = "ash-icons"
-version = "0.1.0"
-dependencies = [
- "zui",
-]
-
-[[package]]
-name = "ash-image-generation"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "image",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "url",
- "ash-async-utils",
- "ash-client",
- "ash-extension-api",
- "ash-extension-items",
- "ash-http-client",
- "ash-protocol",
- "ash-tools",
-]
-
-[[package]]
-name = "ash-immutable-generation-store"
-version = "0.1.0"
-dependencies = [
- "fs2",
- "sha2 0.10.9",
- "tempfile",
-]
-
-[[package]]
-name = "ash-input-classifier"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "candle-core",
- "candle-nn",
- "candle-onnx",
- "difflib",
- "prost",
- "rust-stemmers",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "tokenizers",
- "ash-shell-completion",
-]
-
-[[package]]
-name = "ash-install-context"
-version = "0.1.0"
-dependencies = [
- "dunce",
- "ash-utils-path",
-]
-
-[[package]]
-name = "ash-instructions"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_yaml",
- "tempfile",
-]
-
-[[package]]
-name = "ash-keybinding"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "tinyjson",
-]
-
-[[package]]
-name = "ash-keybindings-host"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "ash-keybinding",
- "zui",
-]
-
-[[package]]
-name = "ash-keyring-store"
-version = "0.1.0"
-dependencies = [
- "keyring",
- "sha2 0.10.9",
- "tempfile",
- "ash-secrets",
-]
-
-[[package]]
-name = "ash-kimi"
-version = "0.1.0"
-dependencies = [
- "getrandom 0.2.17",
- "serde",
- "serde_json",
- "urlencoding",
- "zeroize",
- "ash-async-utils",
- "ash-client",
- "ash-http-client",
- "ash-login",
- "ash-secrets",
-]
-
-[[package]]
-name = "ash-login"
-version = "0.1.0"
-
-[[package]]
-name = "ash-lsp"
-version = "0.1.0"
-dependencies = [
- "lsp-types",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
- "tokio",
- "ash-async-utils",
-]
-
-[[package]]
-name = "ash-lsp-manager"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "url",
- "ash-async-utils",
- "ash-lsp",
- "ash-lsp-server-provider",
-]
-
-[[package]]
-name = "ash-lsp-server-provider"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "tempfile",
- "thiserror 2.0.19",
- "ash-install-context",
- "ash-lsp",
-]
-
-[[package]]
-name = "ash-markdown"
-version = "0.1.0"
-dependencies = [
- "image",
- "pulldown-cmark",
- "ratex-layout",
- "ratex-parser",
- "ratex-svg",
- "ratex-types",
- "resvg",
- "sha2 0.10.9",
- "syntect",
- "thiserror 2.0.19",
- "url",
- "ash-ui-components",
- "zui",
-]
-
-[[package]]
-name = "ash-mcp"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "sha2 0.10.9",
- "thiserror 2.0.19",
- "tokio",
- "ash-async-utils",
- "ash-config",
- "ash-protocol",
- "ash-rmcp-client",
- "ash-tools",
-]
-
-[[package]]
-name = "ash-mcp-extension"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "getrandom 0.2.17",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "tokio",
- "url",
- "zeroize",
- "ash-action-policy",
- "ash-async-utils",
- "ash-config",
- "ash-connectors-extension",
- "ash-core",
- "ash-core-plugins",
- "ash-extension-api",
- "ash-file-access",
- "ash-file-system",
- "ash-mcp",
- "ash-plugin",
- "ash-protocol",
- "ash-rmcp-client",
- "ash-secrets",
- "ash-tools",
-]
-
-[[package]]
-name = "ash-memories"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "schemars",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "thiserror 2.0.19",
- "ts-rs",
- "ash-async-utils",
- "ash-file-access",
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-memories-extension"
-version = "0.1.0"
-dependencies = [
- "pollster 1.0.1",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "ash-async-utils",
- "ash-extension-api",
- "ash-memories",
- "ash-protocol",
- "ash-state",
- "ash-tools",
-]
-
-[[package]]
-name = "ash-memory-diagnostics"
-version = "0.1.0"
-dependencies = [
- "schemars",
- "serde",
- "serde_json",
- "sysinfo",
- "thiserror 2.0.19",
- "ts-rs",
-]
-
-[[package]]
-name = "ash-message-history"
-version = "0.1.0"
-
-[[package]]
-name = "ash-model-accounting"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "thiserror 2.0.19",
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-model-provider"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "tokio",
- "url",
- "ash-api",
- "ash-async-utils",
- "ash-chatgpt",
- "ash-client",
- "ash-context-engine",
- "ash-http-client",
- "ash-kimi",
- "ash-model-provider-config",
- "ash-model-tokenizer",
- "ash-models-manager",
- "ash-ollama",
- "ash-protocol",
- "ash-secrets",
- "ash-websocket-client",
-]
-
-[[package]]
-name = "ash-model-provider-config"
-version = "0.1.0"
-dependencies = [
- "schemars",
- "serde",
- "serde_json",
- "url",
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-model-tokenizer"
-version = "0.1.0"
-dependencies = [
- "hf-chat-template",
- "serde",
- "serde_json",
- "tempfile",
- "tokenizers",
- "ash-http-client",
- "ash-protocol",
- "ash-utils-path",
-]
-
-[[package]]
-name = "ash-models-manager"
-version = "0.1.0"
-dependencies = [
- "tokio",
- "ash-model-provider-config",
- "ash-prompts",
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-mxc-sandbox"
-version = "0.1.0"
-dependencies = [
- "dunce",
- "log",
- "mxc-sdk",
- "tempfile",
- "tracelogging",
- "ash-async-utils",
- "ash-file-access",
- "ash-install-context",
- "ash-network-proxy",
- "ash-protocol",
- "ash-sandboxing",
- "ash-tool-executor",
-]
-
-[[package]]
-name = "ash-network-proxy"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "http-body-util",
- "hyper",
- "hyper-util",
- "tokio",
- "url",
- "ash-async-utils",
-]
-
-[[package]]
-name = "ash-ollama"
-version = "0.1.0"
-dependencies = [
- "semver",
- "serde",
- "serde_json",
- "url",
- "ash-async-utils",
- "ash-client",
- "ash-http-client",
-]
-
-[[package]]
-name = "ash-otel"
-version = "0.1.0"
-dependencies = [
- "opentelemetry",
- "opentelemetry_sdk",
- "serde",
- "serde_json",
- "ash-client",
- "ash-diagnostics",
- "ash-http-client",
-]
-
-[[package]]
-name = "ash-package-store"
-version = "0.1.0"
-dependencies = [
- "fs2",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "ash-pdf"
-version = "0.1.0"
-dependencies = [
- "pdfium-render",
-]
-
-[[package]]
-name = "ash-plugin"
-version = "0.1.0"
-dependencies = [
- "semver",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
-]
-
-[[package]]
-name = "ash-process-hardening"
-version = "0.1.0"
-dependencies = [
- "ctor",
- "libc",
- "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "ash-product-update"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "ed25519-dalek",
- "semver",
- "serde",
- "serde_json",
- "url",
-]
-
-[[package]]
-name = "ash-projects"
-version = "0.1.0"
-dependencies = [
- "pretty_assertions",
- "serde",
- "thiserror 2.0.19",
- "ash-environment",
- "ash-file-access",
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-prompts"
-version = "0.1.0"
-dependencies = [
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-protocol"
-version = "0.1.0"
-dependencies = [
- "schemars",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "ts-rs",
-]
-
-[[package]]
-name = "ash-queue"
-version = "0.1.0"
-dependencies = [
- "rusqlite",
- "schemars",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.19",
- "ts-rs",
- "ash-extension-api",
- "ash-extension-items",
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-remote"
-version = "0.1.0"
-
-[[package]]
-name = "ash-remote-connections"
-version = "0.1.0"
-dependencies = [
- "flate2",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tar",
- "tempfile",
- "url",
- "ash-app-server",
- "ash-app-server-client",
- "ash-app-server-protocol",
- "ash-build-info",
- "ash-http-client",
- "ash-install-context",
- "ash-package-store",
- "ash-process-hardening",
- "ash-remote",
- "ash-utils-home-dir",
- "ash-utils-path",
-]
-
-[[package]]
-name = "ash-remote-host"
-version = "0.1.0"
-dependencies = [
- "tempfile",
- "ash-remote",
- "ash-remote-connections",
-]
-
-[[package]]
-name = "ash-remote-server"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "libc",
- "rustix 1.1.4",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "ash-app-server",
- "ash-app-server-client",
- "ash-app-server-protocol",
- "ash-arg0",
- "ash-build-info",
- "ash-fast-regex-search",
- "ash-file-access",
- "ash-install-context",
- "ash-package-store",
- "ash-process-hardening",
- "ash-utils-home-dir",
-]
-
-[[package]]
-name = "ash-rmcp-client"
-version = "0.1.0"
-dependencies = [
- "rmcp",
- "thiserror 2.0.19",
- "tokio",
-]
-
-[[package]]
-name = "ash-rollout"
-version = "0.1.0"
-dependencies = [
- "ash-attachments",
- "ash-core",
- "ash-protocol",
- "ash-state",
- "ash-thread-store",
-]
-
-[[package]]
-name = "ash-rollout-trace"
-version = "0.1.0"
-dependencies = [
- "serde",
- "ash-core",
- "ash-history",
- "ash-protocol",
- "ash-rollout",
- "ash-state",
- "ash-thread-store",
-]
-
-[[package]]
-name = "ash-sandboxing"
-version = "0.1.0"
-dependencies = [
- "globset",
- "tempfile",
- "ash-file-access",
- "ash-utils-pty",
-]
-
-[[package]]
-name = "ash-scm"
-version = "0.1.0"
-dependencies = [
- "ash-app-server-protocol",
- "ash-diff",
- "ash-editor",
- "ash-icons",
- "ash-ui-components",
- "ash-ui-theme",
- "zui",
-]
-
-[[package]]
-name = "ash-secrets"
-version = "0.1.0"
-dependencies = [
- "getrandom 0.2.17",
- "sha2 0.10.9",
- "tempfile",
- "windows-sys 0.59.0",
- "zeroize",
- "ash-utils-path",
-]
-
-[[package]]
-name = "ash-session"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde_json",
- "tempfile",
- "ash-app-server-client",
- "ash-app-server-protocol",
- "ash-editor",
- "ash-icons",
- "ash-input-classifier",
- "ash-message-history",
- "ash-protocol",
- "ash-slash-commands",
- "ash-state",
- "ash-thread-transcript",
- "ash-ui-components",
- "ash-ui-theme",
- "zui",
-]
-
-[[package]]
-name = "ash-settings"
-version = "0.1.0"
-dependencies = [
- "ash-commands",
- "ash-icons",
- "ash-keybinding",
- "ash-keybindings-host",
- "ash-remote",
- "ash-remote-connections",
- "ash-remote-host",
- "ash-ui-components",
- "ash-ui-theme",
- "zui",
-]
-
-[[package]]
-name = "ash-shell-command"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "ash-async-utils",
- "ash-file-access",
- "ash-install-context",
- "ash-mxc-sandbox",
- "ash-network-proxy",
- "ash-protocol",
- "ash-sandboxing",
- "ash-tool-executor",
- "ash-tools",
-]
-
-[[package]]
-name = "ash-shell-completion"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "ash-skills"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_yaml",
- "sha2 0.10.9",
- "tempfile",
- "ash-file-identity",
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-skills-extension"
-version = "0.1.0"
-dependencies = [
- "pollster 1.0.1",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "ash-async-utils",
- "ash-config",
- "ash-extension-api",
- "ash-file-watcher",
- "ash-protocol",
- "ash-skills",
- "ash-tools",
-]
-
-[[package]]
-name = "ash-slash-commands"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "ash-app-server-protocol",
-]
-
-[[package]]
-name = "ash-slash-launcher"
-version = "0.1.0"
-
-[[package]]
-name = "ash-sleep"
-version = "0.1.0"
-dependencies = [
- "pollster 1.0.1",
- "serde_json",
- "ash-async-utils",
- "ash-extension-api",
- "ash-extension-items",
- "ash-protocol",
- "ash-tools",
-]
-
-[[package]]
-name = "ash-sprite"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "image",
- "resvg",
- "tempfile",
-]
-
-[[package]]
-name = "ash-state"
-version = "0.1.0"
-dependencies = [
- "fs2",
- "git-turn-changes",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "ash-agent-graph-store",
- "ash-async-utils",
- "ash-core",
- "ash-environment",
- "ash-file-access",
- "ash-github",
- "ash-history",
- "ash-memories",
- "ash-message-history",
- "ash-projects",
- "ash-protocol",
- "ash-thread-store",
- "ash-utils-path",
-]
-
-[[package]]
-name = "ash-syntax"
-version = "0.1.0"
-dependencies = [
- "thiserror 2.0.19",
- "tree-sitter",
- "tree-sitter-bash",
- "tree-sitter-javascript",
- "tree-sitter-json",
- "tree-sitter-rust",
- "tree-sitter-typescript",
-]
-
-[[package]]
-name = "ash-terminal"
-version = "0.1.0"
-dependencies = [
- "pretty_assertions",
- "unicode-segmentation",
- "unicode-width 0.2.0",
- "vte",
-]
-
-[[package]]
-name = "ash-terminal-detection"
-version = "0.1.0"
-dependencies = [
- "pretty_assertions",
-]
-
-[[package]]
-name = "ash-terminal-runtime"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "tokio",
- "unicode-width 0.2.0",
- "ash-app-server-client",
- "ash-app-server-protocol",
- "ash-protocol",
- "ash-remote-connections",
- "ash-terminal",
- "ash-ui-components",
- "ash-ui-theme",
- "ash-utils-pty",
- "zui",
-]
-
-[[package]]
-name = "ash-text-file"
-version = "0.1.0"
-
-[[package]]
-name = "ash-theme"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror 2.0.19",
- "ash-utils-home-dir",
- "ash-utils-path",
-]
-
-[[package]]
-name = "ash-thread-store"
-version = "0.1.0"
-dependencies = [
- "serde",
- "ash-agent-graph-store",
- "ash-history",
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-thread-transcript"
-version = "0.1.0"
-dependencies = [
- "schemars",
- "serde",
- "ts-rs",
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-tool-executor"
-version = "0.1.0"
-dependencies = [
- "getrandom 0.2.17",
- "pollster 1.0.1",
- "tempfile",
- "ash-async-utils",
- "ash-file-access",
- "ash-install-context",
- "ash-mxc-sandbox",
- "ash-network-proxy",
- "ash-protocol",
- "ash-sandboxing",
- "ash-utils-pty",
-]
-
-[[package]]
-name = "ash-tools"
-version = "0.1.0"
-dependencies = [
- "bm25",
- "regex",
- "serde_json",
- "sha2 0.10.9",
- "ash-async-utils",
- "ash-environment",
- "ash-network-proxy",
- "ash-protocol",
- "ash-sandboxing",
- "ash-utils-output-truncation",
-]
-
-[[package]]
-name = "ash-tui"
-version = "0.1.0"
-dependencies = [
- "arboard",
- "base64 0.22.1",
- "chrono",
- "crossterm",
- "dirs",
- "image",
- "insta",
- "pulldown-cmark",
- "ratatui",
- "rustix 1.1.4",
- "serde",
- "serde_json",
- "signal-hook",
- "strum 0.27.2",
- "strum_macros 0.27.2",
- "syntect",
- "tempfile",
- "unicode-segmentation",
- "unicode-width 0.2.0",
- "url",
- "windows-sys 0.59.0",
- "zeroize",
- "ash-ansi-escape",
- "ash-app-server",
- "ash-app-server-client",
- "ash-app-server-protocol",
- "ash-client",
- "ash-diff",
- "ash-file-access",
- "ash-file-search",
- "ash-keybinding",
- "ash-memories",
- "ash-memory-diagnostics",
- "ash-message-history",
- "ash-product-update",
- "ash-protocol",
- "ash-queue",
- "ash-slash-commands",
- "ash-sprite",
- "ash-state",
- "ash-terminal-detection",
- "ash-utils-elapsed",
- "ash-utils-home-dir",
- "ash-utils-image",
- "ash-utils-path",
-]
-
-[[package]]
-name = "ash-typst"
-version = "0.1.0"
-dependencies = [
- "typst",
- "typst-assets",
- "typst-pdf",
-]
-
-[[package]]
-name = "ash-uds"
-version = "0.1.0"
-dependencies = [
- "libc",
- "tempfile",
- "uds_windows",
- "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "ash-ui-components"
-version = "0.1.0"
-dependencies = [
- "ash-icons",
- "zui",
-]
-
-[[package]]
-name = "ash-ui-theme"
-version = "0.1.0"
-dependencies = [
- "ash-icons",
- "ash-theme",
- "ash-ui-components",
- "zui",
-]
-
-[[package]]
-name = "ash-update-sign"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "ed25519-dalek",
- "semver",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "zeroize",
- "ash-process-hardening",
- "ash-product-update",
-]
-
-[[package]]
-name = "ash-user-verification"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "core-foundation 0.10.1",
- "dirs",
- "objc2 0.6.4",
- "objc2-foundation 0.3.2",
- "objc2-local-authentication",
- "p256",
- "pretty_assertions",
- "security-framework 3.7.0",
- "security-framework-sys",
- "sha2 0.10.9",
- "tempfile",
- "thiserror 2.0.19",
- "tracing",
-]
-
-[[package]]
-name = "ash-utils-absolute-path"
-version = "0.1.0"
-dependencies = [
- "dirs",
- "dunce",
- "pretty_assertions",
- "schemars",
- "serde",
- "serde_json",
- "tempfile",
- "ts-rs",
-]
-
-[[package]]
-name = "ash-utils-cache"
-version = "0.1.0"
-dependencies = [
- "lru 0.18.3",
- "sha1",
- "tokio",
-]
-
-[[package]]
-name = "ash-utils-elapsed"
-version = "0.1.0"
-
-[[package]]
-name = "ash-utils-home-dir"
-version = "0.1.0"
-dependencies = [
- "dirs",
- "dunce",
- "tempfile",
-]
-
-[[package]]
-name = "ash-utils-image"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "image",
- "pretty_assertions",
- "sha2 0.10.9",
- "thiserror 2.0.19",
- "tokio",
- "ash-utils-cache",
-]
-
-[[package]]
-name = "ash-utils-json-to-toml"
-version = "0.1.0"
-dependencies = [
- "pretty_assertions",
- "serde_json",
- "toml 0.9.12+spec-1.1.0",
-]
-
-[[package]]
-name = "ash-utils-output-truncation"
-version = "0.1.0"
-
-[[package]]
-name = "ash-utils-path"
-version = "0.1.0"
-dependencies = [
- "dunce",
- "pretty_assertions",
- "tempfile",
-]
-
-[[package]]
-name = "ash-utils-path-uri"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "pretty_assertions",
- "schemars",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.19",
- "ts-rs",
- "url",
- "urlencoding",
- "ash-utils-absolute-path",
-]
-
-[[package]]
-name = "ash-utils-pty"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "filedescriptor",
- "lazy_static",
- "libc",
- "log",
- "portable-pty",
- "pretty_assertions",
- "shared_library",
- "tokio",
- "winapi",
-]
-
-[[package]]
-name = "ash-utils-stream-parser"
-version = "0.1.0"
-dependencies = [
- "pretty_assertions",
-]
-
-[[package]]
-name = "ash-utils-template"
-version = "0.1.0"
-dependencies = [
- "pretty_assertions",
-]
-
-[[package]]
-name = "ash-v8-poc"
-version = "0.1.0"
-dependencies = [
- "pretty_assertions",
- "v8",
-]
-
-[[package]]
-name = "ash-web-search-extension"
-version = "0.1.0"
-dependencies = [
- "pollster 1.0.1",
- "serde",
- "serde_json",
- "url",
- "ash-async-utils",
- "ash-client",
- "ash-extension-api",
- "ash-extension-items",
- "ash-http-client",
- "ash-protocol",
- "ash-tools",
-]
-
-[[package]]
-name = "ash-websocket-client"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "futures",
- "tokio",
- "tokio-tungstenite",
- "url",
- "zeroize",
- "ash-http-client",
-]
-
-[[package]]
-name = "ash-windows-sandbox"
-version = "0.1.0"
-dependencies = [
- "getrandom 0.2.17",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "socket2",
- "tempfile",
- "windows",
- "windows-sys 0.61.2",
- "winreg 0.55.0",
- "wxc_common",
- "ash-async-utils",
- "ash-file-access",
- "ash-install-context",
- "ash-network-proxy",
- "ash-sandboxing",
- "ash-tool-executor",
- "ash-utils-pty",
-]
-
-[[package]]
-name = "ash-workbench"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "flate2",
- "serde_json",
- "sha2 0.10.9",
- "signal-hook",
- "tar",
- "tempfile",
- "unicode-width 0.2.0",
- "ash-app-server",
- "ash-app-server-client",
- "ash-app-server-daemon",
- "ash-app-server-protocol",
- "ash-arg0",
- "ash-commands",
- "ash-diff",
- "ash-editor",
- "ash-editor-host",
- "ash-file-access",
- "ash-file-search",
- "ash-files",
- "ash-icons",
- "ash-input-classifier",
- "ash-keybinding",
- "ash-keybindings-host",
- "ash-lsp-manager",
- "ash-memories",
- "ash-memory-diagnostics",
- "ash-message-history",
- "ash-protocol",
- "ash-remote",
- "ash-remote-connections",
- "ash-remote-host",
- "ash-scm",
- "ash-session",
- "ash-settings",
- "ash-slash-commands",
- "ash-state",
- "ash-terminal",
- "ash-terminal-runtime",
- "ash-text-file",
- "ash-theme",
- "ash-ui-components",
- "ash-ui-theme",
- "ash-utils-home-dir",
- "ash-utils-path",
- "zui",
-]
-
-[[package]]
 name = "zip"
 version = "4.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13879,6 +13879,7 @@ dependencies = [
  "accesskit",
  "accesskit_winit",
  "arboard",
+ "ash-product-update",
  "ashpd",
  "block2 0.5.1",
  "bytemuck",
@@ -13922,7 +13923,6 @@ dependencies = [
  "winit",
  "x11rb",
  "zbus 5.19.0",
- "ash-product-update",
 ]
 
 [[package]]

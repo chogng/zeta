@@ -4,19 +4,19 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
-use zeta_action_policy::ActionDigest;
-use zeta_action_policy::ActionKind;
-use zeta_action_policy::ActionPolicyRevision;
-use zeta_action_policy::ActionProvenance;
-use zeta_action_policy::ActionReviewRequest;
-use zeta_action_policy::ActionSource;
-use zeta_action_policy::CapabilitySet;
-use zeta_action_policy::ExecutionDecision;
-use zeta_action_policy::GrantId;
-use zeta_action_policy::ResolvedAction;
-use zeta_action_policy::SandboxCompatibility;
-use zeta_async_utils::CancellationToken;
-use zeta_protocol::*;
+use ash_action_policy::ActionDigest;
+use ash_action_policy::ActionKind;
+use ash_action_policy::ActionPolicyRevision;
+use ash_action_policy::ActionProvenance;
+use ash_action_policy::ActionReviewRequest;
+use ash_action_policy::ActionSource;
+use ash_action_policy::CapabilitySet;
+use ash_action_policy::ExecutionDecision;
+use ash_action_policy::GrantId;
+use ash_action_policy::ResolvedAction;
+use ash_action_policy::SandboxCompatibility;
+use ash_async_utils::CancellationToken;
+use ash_protocol::*;
 
 const BEFORE: u64 = 1_789_282_790_000;
 const AFTER: u64 = 1_789_282_805_000;
@@ -30,7 +30,7 @@ impl TimeContextProvider for Clock {
 }
 
 fn time(at: u64, mode: TimeContextMode) -> TimeContext {
-    zeta_agent_environment::TimeSnapshot::capture(
+    ash_agent_environment::TimeSnapshot::capture(
         UnixMillis::new(at).unwrap(),
         "America/Los_Angeles".into(),
         TimeZoneOrigin::Configured,
@@ -50,7 +50,7 @@ fn start(threads: &ThreadController, thread: &ThreadId, command: &str, input: &s
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
                 kind: TurnKind::Coding,
-                instructions: zeta_prompts::AGENT_INSTRUCTIONS.freeze(),
+                instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 policy_revision: "time-tests".into(),
                 approval_mode: ApprovalMode::AskPermissions,
                 tool_mode: ToolMode::Direct,
@@ -280,7 +280,7 @@ fn time_context_refreshes_after_tools_and_keeps_input_reference_through_recovery
         .complete_turn_without_agent_message(&thread.thread_id, &compact.turn_id)
         .unwrap();
     let encoded = serde_json::to_vec(&store.events()).unwrap();
-    let decoded: Vec<zeta_history::StoredEvent> = serde_json::from_slice(&encoded).unwrap();
+    let decoded: Vec<ash_history::StoredEvent> = serde_json::from_slice(&encoded).unwrap();
     assert_eq!(decoded, store.events());
     let recovered = ThreadController::with_store(store);
     let recovered_snapshot = recovered.recover_thread(&thread.thread_id).unwrap();

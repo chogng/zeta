@@ -157,6 +157,7 @@ fn install(loaded_threads: &LoadedThreads, snapshot: ThreadSnapshot) {
 
 fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
     ThreadSnapshot {
+        user_time_contexts: Default::default(),
         history_sources: Default::default(),
         message_checkpoints: Default::default(),
         agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),

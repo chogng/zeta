@@ -529,6 +529,7 @@ fn completed_fast_response_records_the_reported_price() {
                 reasoning_tokens: None,
             }),
             None,
+            None,
             1_788_480_000_000,
             1_788_480_000_100,
         )

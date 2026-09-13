@@ -10,7 +10,7 @@
 - 共用取消、截止时间和事件等待机制；进程状态、Agent 完成条件和日历规则各自由原来的 owner 维护。
 - 后台宿主负责运行。关闭某个界面不意味着创建新的模型轮询器；需要跨重启保存的计划使用已有 automation。
 
-Zeta 原来的 `ext/clock` 只提供 `sleep`，没有读时间工具。原实现每 5 ms 阻塞检查取消；`wait_agent` 每 25 ms 查询状态，最多 30 秒就返回模型。当前由 `ext/sleep` 暴露计时等待，Agent 等待改为订阅事件，并支持一次明确的长等待。后台命令新增 completion wait，避免每条进度输出都结束工具调用。
+Ash 原来的 `ext/clock` 只提供 `sleep`，没有读时间工具。原实现每 5 ms 阻塞检查取消；`wait_agent` 每 25 ms 查询状态，最多 30 秒就返回模型。当前由 `ext/sleep` 暴露计时等待，Agent 等待改为订阅事件，并支持一次明确的长等待。后台命令新增 completion wait，避免每条进度输出都结束工具调用。
 
 ## “零 Token”的准确范围
 
@@ -65,7 +65,7 @@ mode = "date" # off / date / time；默认 date
 - `timeZone` 是明确的 IANA 标识，非法值拒绝写入；不把非法或不可用的时区替换成 UTC。
 - 配置时区标记为 `configured`；未配置时读取宿主时区并标记为 `host`。宿主可能是远端机器，不能声称它一定是用户所在地；需要用户时区时显式配置。
 - 默认 `date` 延续原来的日期环境能力并修复跨日不刷新问题。精确钟点需显式开启 `time`；这不是自然语言需求分类器。
-- 配置变更沿既有 Config revision/generation 生效于后续采样，不改变已保存输入的参照。`config/read` 与 `config/update` 的完整字段契约见 [App Server 配置接口](../../docs/zeta-app-server-api.md#时间上下文配置)。
+- 配置变更沿既有 Config revision/generation 生效于后续采样，不改变已保存输入的参照。`config/read` 与 `config/update` 的完整字段契约见 [App Server 配置接口](../../docs/ash-app-server-api.md#时间上下文配置)。
 
 ### 输入参照和当前快照
 
@@ -167,7 +167,7 @@ CI 监控需要已安装且已认证的命令或服务适配；选择确定的�
 
 比较基于本机 `../codex`，提交 `a592c38c16cdd7623dacc9168926ebccedfb67d3`。这是该源码版本的行为核对，不代表全部发行版本或线上配置。
 
-| 能力 | 该版本 Codex | 当前 Zeta |
+| 能力 | 该版本 Codex | 当前 Ash |
 | --- | --- | --- |
 | 模型读时间 | 可暴露 `clock.curr_time`；另有按请求边界及间隔注入的提醒 | 无读时间工具；按 off/date/time 策略提供请求快照 |
 | 用户相对日期参照 | 本对照未审计所有输入时间语义 | 每条文本输入保存时区与参照，恢复及历史分支保持原值 |
@@ -180,7 +180,7 @@ CI 监控需要已安装且已认证的命令或服务适配；选择确定的�
 
 核对入口：Codex 的 `core/src/session/time_reminder.rs`、`core/src/session/turn.rs`、`core/src/current_time.rs`、`core/src/tools/handlers/sleep.rs`、`core/src/tools/handlers/multi_agents_v2/wait.rs` 及 `core/src/unified_exec/process_manager.rs`，均位于 `codex-rs/` 下。
 
-不能声称 Codex 的 sleep “占用线程死等”，也不能声称只有 Zeta 能在等待期间不消耗 Token。Zeta 此次改进针对的是自己原有的固定间隔查询、短期限返回模型及命令进度返回行为。
+不能声称 Codex 的 sleep “占用线程死等”，也不能声称只有 Ash 能在等待期间不消耗 Token。Ash 此次改进针对的是自己原有的固定间隔查询、短期限返回模型及命令进度返回行为。
 
 ## 维护与验证
 
@@ -190,4 +190,4 @@ CI 监控需要已安装且已认证的命令或服务适配；选择确定的�
 - 验证覆盖计时到期、取消优先、注册与通知竞态、Future 挂起、命令中间输出、观察超时与进程存活、跨 Thread 身份拒绝、冻结 join 和完成事件。
 - App Server 测试通过生产 Turn 调用链与测试模型覆盖注册、执行和恢复：正常完成共调用模型入口 2 次，取消场景为 1 次；等待阶段没有新增调用。测试未请求真实模型或 GitHub，不能据此报告整项任务的实际 Token 用量。
 
-验证入口：`just test zeta-async-utils --features wait --lib`、`just test zeta-agent -p zeta-sleep -p zeta-tool-executor --lib`、`just test zeta-app-server runtime_wait_ --lib`，以及受影响 package 的 `just check` 与 `just rust-warnings`。具体执行结果以当次验证输出为准。
+验证入口：`just test ash-async-utils --features wait --lib`、`just test ash-agent -p ash-sleep -p ash-tool-executor --lib`、`just test ash-app-server runtime_wait_ --lib`，以及受影响 package 的 `just check` 与 `just rust-warnings`。具体执行结果以当次验证输出为准。

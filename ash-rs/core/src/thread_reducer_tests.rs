@@ -36,6 +36,7 @@ fn envelope(sequence: u64, event: ThreadEvent) -> StoredEvent {
         _ => None,
     };
     StoredEvent {
+        time_context: None,
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
         event_id: EventId(format!("event_{sequence}")),
         sequence,

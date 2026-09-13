@@ -50,7 +50,7 @@ use crate::resolve_agent_selection;
 pub const SPAWN_AGENT_TOOL_NAME: &str = "spawn_agent";
 pub const SEND_AGENT_MESSAGE_TOOL_NAME: &str = "send_agent_message";
 pub const WAIT_AGENT_TOOL_NAME: &str = "wait_agent";
-const MAX_WAIT: Duration = Duration::from_secs(30);
+const MAX_WAIT: Duration = Duration::from_secs(12 * 60 * 60);
 
 pub struct MultiAgentToolService {
     coordinator: Arc<MultiAgentCoordinator>,
@@ -192,12 +192,12 @@ impl MultiAgentToolService {
             WAIT_AGENT_TOOL_NAME => {
                 let arguments: WaitArguments = decode_arguments(&call.arguments)?;
                 let (delegations, policy) = wait_join_policy(&arguments)?;
-                let timeout = Duration::from_millis(
-                    arguments
-                        .timeout_ms
-                        .unwrap_or(30_000)
-                        .min(MAX_WAIT.as_millis() as u64),
-                );
+                let timeout = Duration::from_millis(arguments.timeout_ms.unwrap_or(43_200_000));
+                if timeout > MAX_WAIT {
+                    return Err(CoreError::InvalidInput(
+                        "timeout_ms must not exceed 43200000".into(),
+                    ));
+                }
                 self.wait_for_join(
                     identity.thread_id(),
                     AgentJoinId::new(format!("tool:{}", call.id))
@@ -255,16 +255,48 @@ impl MultiAgentToolService {
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let deadline = Instant::now() + timeout;
+        let joined = self.coordinator.join(JoinAgentsRequest {
+            join_id: join_id.clone(),
+            parent_thread_id: parent_thread_id.clone(),
+            policy: policy.clone(),
+            delegations,
+        })?;
+        let delegations = joined.join.delegations;
         loop {
             cancellation
                 .check()
                 .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
-            self.complete_terminal_children(parent_thread_id, delegations.as_deref())?;
+            // Subscribe before reading state so completion before the first poll is retained.
+            let mut changes = vec![Box::pin(self.threads.thread_changed(parent_thread_id)?)];
+            let mut attention = Vec::new();
+            for delegation in &delegations {
+                let child = child_thread_for(&self.threads, parent_thread_id, delegation)?;
+                changes.push(Box::pin(self.threads.thread_changed(&child)?));
+                let snapshot = self.threads.read_thread(&child)?;
+                for turn in &snapshot.turns {
+                    if let Some(interaction) = &turn.pending_interaction
+                        && matches!(
+                            interaction.request,
+                            protocol::AgentRequest::Approval { .. }
+                                | protocol::AgentRequest::UserInput { .. }
+                        )
+                    {
+                        attention.push(json!({
+                            "delegation_id": delegation,
+                            "child_thread_id": child,
+                            "turn_id": turn.turn_id,
+                            "request_id": interaction.request_id,
+                            "status": turn.status,
+                        }));
+                    }
+                }
+            }
+            self.complete_terminal_children(parent_thread_id, Some(&delegations))?;
             let joined = self.coordinator.join(JoinAgentsRequest {
                 join_id: join_id.clone(),
                 parent_thread_id: parent_thread_id.clone(),
                 policy: policy.clone(),
-                delegations: delegations.clone(),
+                delegations: Some(delegations.clone()),
             })?;
             if joined.join.status == AgentJoinStatus::Satisfied {
                 return success(json!({
@@ -274,6 +306,14 @@ impl MultiAgentToolService {
                     "results": joined.results
                 }));
             }
+            if !attention.is_empty() {
+                return success(json!({
+                    "join_id": joined.join.join_id,
+                    "status": joined.join.status,
+                    "reason": "needs_input",
+                    "attention": attention,
+                }));
+            }
             if Instant::now() >= deadline {
                 return success(json!({
                     "join_id": joined.join.join_id,
@@ -281,7 +321,12 @@ impl MultiAgentToolService {
                     "status": joined.join.status
                 }));
             }
-            std::thread::sleep(Duration::from_millis(25));
+            pollster::block_on(async_utils::wait_until(
+                futures::future::select_all(changes),
+                deadline,
+                cancellation,
+            ))
+            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         }
     }
 
@@ -745,7 +790,7 @@ fn send_definition() -> ToolDefinition {
 fn wait_definition() -> ToolDefinition {
     definition(
         WAIT_AGENT_TOOL_NAME,
-        "Creates a durable All/Any/Quorum join over one, several, or all current child Agents; waits up to 30 seconds and returns satisfied results or the durable waiting join.",
+        "Waits for an All/Any/Quorum condition over a frozen set of child Agents. Runtime events wake this call; no model polling is needed. Defaults to a 12-hour deadline. Expiry returns the durable waiting join and does not cancel children. Returns early with needs_input when a child needs approval or user input; surface that request instead of repeatedly waiting. Use a shorter timeout only when the task needs it.",
         json!({
             "type": "object",
             "properties": {
@@ -772,8 +817,8 @@ fn wait_definition() -> ToolDefinition {
                 "timeout_ms": {
                     "type": ["integer", "null"],
                     "minimum": 0,
-                    "maximum": 30000,
-                    "description": "Maximum wait in milliseconds. Defaults to 30000 and is capped at 30000."
+                    "maximum": 43200000,
+                    "description": "Maximum wait in milliseconds. null defaults to 43200000; 0 reads the current join immediately."
                 }
             },
             "required": ["delegation_id", "delegation_ids", "policy", "quorum", "timeout_ms"],

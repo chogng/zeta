@@ -8,6 +8,11 @@ import type { ModelRef } from './ModelRef.js';
 import type { ModelReferenceCostRecord } from './ModelReferenceCostRecord.js';
 import type { ModelUsage } from './ModelUsage.js';
 import type { ThreadId } from './ThreadId.js';
+import type { TimeContext } from './TimeContext.js';
 import type { TurnId } from './TurnId.js';
 
-export type ModelInvocationRecord = { invocationId: ModelInvocationId, threadId: ThreadId, turnId: TurnId, requestedModel?: ModelRef | null, resolvedModel?: ModelId | null, billing?: ModelBillingRecord | null, startedAtUnixMs: number, completedAtUnixMs: number, outcome: ModelInvocationOutcome, usage?: ModelUsage | null, inputEstimate?: ModelInputEstimate | null, referenceCost: ModelReferenceCostRecord, };
+export type ModelInvocationRecord = {
+/**
+ * Exact immutable time facts included in this request; absent when disabled.
+ */
+timeContext?: TimeContext | null, invocationId: ModelInvocationId, threadId: ThreadId, turnId: TurnId, requestedModel?: ModelRef | null, resolvedModel?: ModelId | null, billing?: ModelBillingRecord | null, startedAtUnixMs: number, completedAtUnixMs: number, outcome: ModelInvocationOutcome, usage?: ModelUsage | null, inputEstimate?: ModelInputEstimate | null, referenceCost: ModelReferenceCostRecord, };

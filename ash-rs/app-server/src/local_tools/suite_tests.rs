@@ -257,7 +257,7 @@ fn shell_session_tool_returns_early_then_drives_the_same_process() {
                 &tool_call(
                     "shell-session",
                     serde_json::json!({
-                        "action":"read",
+                        "action":"wait",
                         "session_id":command_id,
                         "stdout_cursor":stdout_cursor,
                         "stderr_cursor":stderr_cursor,

@@ -12,6 +12,9 @@ name = "ash_agent_environment"
 path = "src/lib.rs"
 
 [dependencies]
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+ash-protocol = { workspace = true }
 ash-utils-absolute-path = { workspace = true }
 
 [lints]

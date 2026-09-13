@@ -161,6 +161,7 @@ use crate::protocol::config::SkillSourceConfigDto;
 use crate::protocol::config::SkillSourceEnablementDto;
 use crate::protocol::config::SkillSourceRemoveParams;
 use crate::protocol::config::SkillSourceSetEnablementParams;
+use crate::protocol::config::TimeContextConfigDto;
 use crate::protocol::config::ToolSearchConfigDto;
 use crate::protocol::config::ToolSearchConfigureParams;
 use crate::protocol::config::ToolSearchEmbeddingStatusDto;
@@ -845,6 +846,9 @@ use ash_protocol::ThreadOrigin;
 use ash_protocol::ThreadSequenceRange;
 use ash_protocol::ThreadStatus;
 use ash_protocol::ThreadUpdate;
+use ash_protocol::TimeContext;
+use ash_protocol::TimeContextMode;
+use ash_protocol::TimeZoneOrigin;
 use ash_protocol::ToolCallBinding;
 use ash_protocol::ToolCallCaller;
 use ash_protocol::ToolExecutionAuthority;
@@ -2906,6 +2910,10 @@ typescript_bindings! {
     LanguageServerConfigDto,
     FrontendConfigDto,
     ConfigReadResult,
+    TimeContextConfigDto,
+    TimeContext,
+    TimeContextMode,
+    TimeZoneOrigin,
     ConfigChanged,
     ConfigCommandDispositionDto,
     ConfigCommandResult,

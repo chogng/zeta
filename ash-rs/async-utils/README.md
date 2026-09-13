@@ -4,8 +4,10 @@
 > 的 cancellation 演进见
 > [`docs/ash-agent-runtime-architecture.md`](../../docs/ash-agent-runtime-architecture.md)。
 
-`ash-async-utils` 提供 runtime-independent cooperative cancellation。它只依赖 `std`，不拥有 task
-spawn、deadline timer、signal handling 或 OS interruption。
+`ash-async-utils` 默认仅提供依赖 `std` 的 cooperative cancellation。可选 `wait` feature
+增加共享截止等待和通知，使用不要求调用方持有 Tokio runtime 的计时器；不拥有任务启动、
+业务状态、持久计划、系统信号或进程终止。设计原因与成本边界见
+[Agent 时间与等待](../docs/agent-wait.md)。
 
 ## 公共契约
 
@@ -19,6 +21,8 @@ spawn、deadline timer、signal handling 或 OS interruption。
 | `CancelOnDrop<R>` | scope-exit cancellation guard | `disarm` 后不 cancel |
 | `Cancelable<F, R>` | inner future 与 cancellation 的 race wrapper | cancellation 每次 poll 优先检查；获胜时 drop inner future |
 | `FutureCancellationExt` | 所有 Future 的 extension trait | 只在 drop-at-await 安全时使用 |
+| `wait_until`（`wait` feature） | 等待条件、单调截止时间与取消 | 取消、就绪条件、截止按此顺序检查 |
+| `Notify`（`wait` feature） | 业务 owner 的状态变化通知 | 先 listen 再读状态；通知不保存业务数据 |
 
 默认 reason 是 `CancellationReason::{Requested, Shutdown, DeadlineExceeded}`。需要 domain-specific
 reason 时使用 `CancellationSource::<R>::new_typed()`；`R` 不要求 `Clone`，signal 通过 `Arc` 传播。
@@ -91,13 +95,12 @@ await `cancelled()`。
 ## 测试与演进
 
 ```text
-cargo test -p ash-async-utils
+just test ash-async-utils --features wait --lib
 bazel test //ash-rs/async-utils:async-utils-unit-tests
 ```
 
 测试覆盖 non-`Unpin` future、prior cancellation precedence、drop cleanup、first-reason wins、
 concurrent child creation、waker replacement、deep iterative propagation 和 RAII guard。
 
-当前没有 runtime-specific select macro、deadline timer、task group/join set 或 forced abort。未来
-若增加 structured task ownership，应建立在现有 source/token capability split 上，而不是把 Tokio
-handle 或 executor type 放进本 crate。
+等待测试覆盖截止到期、取消优先、注册后首次 poll 前的通知，以及在没有 Tokio runtime 时由
+共享计时器唤醒。Future 释放时撤销计时和通知注册。纯取消消费者不启用 `wait` feature。

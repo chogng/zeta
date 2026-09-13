@@ -5,9 +5,9 @@ use chrono::Offset;
 use chrono::SecondsFormat;
 use chrono::Utc;
 use chrono_tz::Tz;
-use zeta_protocol::TimeContext;
-use zeta_protocol::TimeContextMode;
-use zeta_protocol::TimeZoneOrigin;
+use ash_protocol::TimeContext;
+use ash_protocol::TimeContextMode;
+use ash_protocol::TimeZoneOrigin;
 
 /// Validates an explicit IANA time zone; no local-zone substitution occurs on error.
 pub fn validate_time_zone(value: &str) -> Result<(), AgentEnvironmentError> {
@@ -25,7 +25,7 @@ pub struct TimeSnapshot {
 impl TimeSnapshot {
     /// Resolves the calendar offset once when sampling; the facts can then be persisted.
     pub fn capture(
-        sampled_at_unix_ms: zeta_protocol::UnixMillis,
+        sampled_at_unix_ms: ash_protocol::UnixMillis,
         time_zone: String,
         origin: TimeZoneOrigin,
         mode: TimeContextMode,

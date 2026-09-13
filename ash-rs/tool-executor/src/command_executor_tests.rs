@@ -20,6 +20,17 @@ fn managed_command_can_reach_only_its_authorized_proxy_destinations() {
 fn shared_proxy_execution_enforces_the_same_destination_and_file_policy() {
     struct SharedProxyBackend;
     impl SandboxBackend for SharedProxyBackend {
+        fn prepare_scoped(
+            &self,
+            command: &SandboxCommand,
+            policy: SandboxPolicy,
+            scope: &ash_sandboxing::SandboxScope,
+        ) -> Result<PreparedCommand, SandboxError> {
+            let ports = command.network_proxy().unwrap().ports();
+            assert_eq!(ports[0], ports[1]);
+            mxc_sandbox::MxcSandbox::new(ash_install_context::InstallContext::current())
+                .prepare_scoped(command, policy, scope)
+        }
         fn kind(&self) -> SandboxKind {
             SandboxKind::Restricted
         }
@@ -140,6 +151,14 @@ impl ApprovalPolicy for AllowAll {
 struct ReplacingBackend;
 
 impl SandboxBackend for ReplacingBackend {
+    fn prepare_scoped(
+        &self,
+        command: &SandboxCommand,
+        policy: SandboxPolicy,
+        scope: &ash_sandboxing::SandboxScope,
+    ) -> Result<PreparedCommand, SandboxError> {
+        self.prepare(command, policy, scope.command_dir())
+    }
     fn kind(&self) -> SandboxKind {
         SandboxKind::Unrestricted
     }
@@ -209,6 +228,14 @@ fn executor_uses_the_selected_backend_to_classify_the_actual_process_result() {
     }
     struct Selected;
     impl SandboxBackend for Selected {
+        fn prepare_scoped(
+            &self,
+            command: &SandboxCommand,
+            policy: SandboxPolicy,
+            scope: &ash_sandboxing::SandboxScope,
+        ) -> Result<PreparedCommand, SandboxError> {
+            self.prepare(command, policy, scope.command_dir())
+        }
         fn kind(&self) -> SandboxKind {
             SandboxKind::Restricted
         }
@@ -317,6 +344,14 @@ fn managed_network_rejects_an_unrestricted_backend_before_spawn() {
 }
 
 impl SandboxBackend for PassThroughBackend {
+    fn prepare_scoped(
+        &self,
+        command: &SandboxCommand,
+        policy: SandboxPolicy,
+        scope: &ash_sandboxing::SandboxScope,
+    ) -> Result<PreparedCommand, SandboxError> {
+        self.prepare(command, policy, scope.command_dir())
+    }
     fn kind(&self) -> SandboxKind {
         SandboxKind::Unrestricted
     }
@@ -388,8 +423,11 @@ fn command_session_keeps_one_process_for_later_input_and_output_reads() {
             None,
             None,
             owner.clone(),
-            Duration::from_millis(10),
-            None,
+            super::CommandSessionOptions {
+                execution_timeout: Duration::from_secs(5),
+                wait_budget: Duration::from_millis(10),
+                terminal: None,
+            },
         )
         .unwrap();
     let CommandSessionStart::Running(initial) = started else {
@@ -477,8 +515,11 @@ fn command_session_wait_budget_does_not_terminate_the_process() {
             None,
             None,
             owner.clone(),
-            Duration::ZERO,
-            None,
+            super::CommandSessionOptions {
+                execution_timeout: Duration::from_secs(5),
+                wait_budget: Duration::ZERO,
+                terminal: None,
+            },
         )
         .unwrap()
     else {
@@ -727,4 +768,105 @@ impl Drop for TestDir {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.path);
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn command_wait_ignores_output_and_preserves_process_on_expiry_and_cancellation() {
+    let dir = TestDir::new();
+    let executor = CommandExecutor::new(dir.root(), PassThroughBackend, AllowAll, test_limits());
+    let owner = CommandSessionOwner::new("connection", "thread", "local");
+    let process = CancellationSource::new();
+    let CommandSessionStart::Running(initial) = executor
+        .start_session_scoped_with_network(
+            CommandRequest {
+                program: "/bin/sh".into(),
+                arguments: vec![
+                    "-c".into(),
+                    "printf 'progress\\n'; read answer; printf 'done:%s\\n' \"$answer\"".into(),
+                ],
+                working_directory: ".".into(),
+                input: CommandInput::Open,
+            },
+            CommandExecutionAuthority::Unrestricted,
+            &process.token(),
+            None,
+            None,
+            owner.clone(),
+            super::CommandSessionOptions {
+                execution_timeout: Duration::from_secs(5),
+                wait_budget: Duration::ZERO,
+                terminal: None,
+            },
+        )
+        .unwrap()
+    else {
+        panic!("command should wait for input")
+    };
+    let id = &initial.session_id;
+    let cursor = CommandSessionCursor::default();
+    let observation = CancellationSource::new();
+    let token = observation.token();
+    let mut pending =
+        Box::pin(executor.wait_session(&owner, id, cursor, Duration::from_secs(5), &token));
+    use std::future::Future;
+    use std::task::Context;
+    use std::task::Waker;
+    assert!(
+        pending
+            .as_mut()
+            .poll(&mut Context::from_waker(Waker::noop()))
+            .is_pending()
+    );
+    observation.cancel();
+    assert!(matches!(
+        pollster::block_on(pending),
+        Err(ExecutionError::CancelledBeforeStart(_))
+    ));
+    let expired = pollster::block_on(executor.wait_session(
+        &owner,
+        id,
+        cursor,
+        Duration::from_millis(10),
+        &CancellationSource::new().token(),
+    ))
+    .unwrap();
+    assert_eq!(expired.status, CommandSessionStatus::Running);
+    let stranger = CommandSessionOwner::new("connection", "another-thread", "local");
+    assert!(
+        pollster::block_on(executor.wait_session(
+            &stranger,
+            id,
+            cursor,
+            Duration::ZERO,
+            &process.token()
+        ))
+        .is_err()
+    );
+    executor
+        .write_session(&owner, id, b"accepted\n".to_vec())
+        .unwrap();
+    let completed = pollster::block_on(executor.wait_session(
+        &owner,
+        id,
+        cursor,
+        Duration::from_secs(5),
+        &process.token(),
+    ))
+    .unwrap();
+    assert_eq!(
+        completed.status,
+        CommandSessionStatus::Exited(super::ProcessExitStatus::Code(0))
+    );
+    assert!(completed.stdout.text.contains("progress"));
+    assert!(completed.stdout.text.contains("done:accepted"));
+    let repeated = pollster::block_on(executor.wait_session(
+        &owner,
+        id,
+        cursor,
+        Duration::ZERO,
+        &process.token(),
+    ))
+    .unwrap();
+    assert_eq!(repeated, completed);
 }

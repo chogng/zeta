@@ -115,6 +115,7 @@ impl ThreadController {
         thread_id: &ThreadId,
         turn_id: &TurnId,
     ) -> Result<ContextOverflowRecoveryPreparation, CoreError> {
+        let include_time = self.sample_time_context()?.is_some();
         self.with_loaded_thread(thread_id, |loaded| {
             let turn = loaded
                 .snapshot
@@ -138,13 +139,16 @@ impl ThreadController {
                 Some(model) => FrozenModelSelection::Selected(model.clone()),
                 None => FrozenModelSelection::ConfiguredDefault,
             };
-            let input = ContextInput::new(
+            let mut input = ContextInput::new(
                 &loaded.snapshot,
                 turn_id.clone(),
                 Vec::new(),
                 Vec::new(),
                 ContextBudget::provider_managed(),
             );
+            if include_time {
+                input = input.with_time_references(&loaded.snapshot.user_time_contexts)?;
+            }
             let plan = match loaded.context.prepare_overflow_recovery(&input) {
                 Ok(plan) => plan,
                 Err(crate::context::ContextPreparationError::NoCompactionCandidate) => {
@@ -162,6 +166,7 @@ impl ThreadController {
         turn_id: &TurnId,
         budget: ContextBudget,
     ) -> Result<ManualContextCompactionPreparation, CoreError> {
+        let include_time = self.sample_time_context()?.is_some();
         self.with_loaded_thread(thread_id, |loaded| {
             let turn = loaded
                 .snapshot
@@ -204,13 +209,16 @@ impl ThreadController {
                 Some(model) => FrozenModelSelection::Selected(model.clone()),
                 None => FrozenModelSelection::ConfiguredDefault,
             };
-            let input = ContextInput::new(
+            let mut input = ContextInput::new(
                 &loaded.snapshot,
                 turn_id.clone(),
                 Vec::new(),
                 Vec::new(),
                 budget,
             );
+            if include_time {
+                input = input.with_time_references(&loaded.snapshot.user_time_contexts)?;
+            }
             match loaded
                 .context
                 .prepare_manual_compaction(&input, retention_prompt.as_deref())
@@ -337,6 +345,9 @@ impl ThreadController {
             );
             if let Some(environment) = request.harness_context.environment() {
                 input = input.with_rendered_environment(environment.render());
+            }
+            if let Some(time) = request.harness_context.time_context() {
+                input = input.with_time_context(time, &loaded.snapshot.user_time_contexts)?;
             }
             input = input.with_evidence(request.evidence);
             match loaded

@@ -1159,7 +1159,7 @@ impl AppServer {
             ash_extension_api::ExtensionRegistryBuilder::from_registry(&self.agent_extensions);
         let items = Arc::new(ash_extension_api::ExtensionItemStore::new(builder.state()));
         builder.item_contributor("results", items.clone());
-        clock::install(&mut builder, items.clone());
+        sleep::install(&mut builder, items.clone());
         history_notes::install(&mut builder, &self.threads, notes.clone());
         git_attribution::install(&mut builder, attribution);
         if let Some(backend) = image_backend {

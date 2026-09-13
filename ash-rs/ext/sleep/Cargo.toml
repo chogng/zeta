@@ -1,5 +1,5 @@
 [package]
-name = "ash-clock"
+name = "ash-sleep"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -10,7 +10,7 @@ doctest = false
 
 [dependencies]
 serde_json = { workspace = true }
-async-utils = { package = "ash-async-utils", path = "../../async-utils" }
+async-utils = { package = "ash-async-utils", path = "../../async-utils", features = ["wait"] }
 extension-api = { package = "ash-extension-api", path = "../extension-api" }
 tools = { package = "ash-tools", path = "../../tools" }
 extension-items = { workspace = true }

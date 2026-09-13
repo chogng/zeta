@@ -6,29 +6,29 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
-use zeta_async_utils::CancellationSource;
-use zeta_async_utils::CancellationToken;
-use zeta_core::CoreError;
-use zeta_core::InMemoryThreadStore;
-use zeta_core::ModelSelection;
-use zeta_core::ModelService;
-use zeta_core::SequenceExpectation;
-use zeta_core::StartThreadRequest;
-use zeta_core::StartTurnRequest;
-use zeta_core::ThreadController;
-use zeta_core::TurnExecutor;
-use zeta_extension_api::ExtensionItemStore;
-use zeta_extension_api::ExtensionRegistryBuilder;
-use zeta_extension_api::ExtensionState;
-use zeta_protocol::CommandId;
-use zeta_protocol::ModelRequest;
-use zeta_protocol::ModelResponse;
-use zeta_protocol::ResponseItem;
-use zeta_protocol::StopReason;
-use zeta_protocol::ToolCall;
-use zeta_protocol::ToolCallId;
-use zeta_protocol::ToolName;
-use zeta_protocol::TurnStatus;
+use ash_async_utils::CancellationSource;
+use ash_async_utils::CancellationToken;
+use ash_core::CoreError;
+use ash_core::InMemoryThreadStore;
+use ash_core::ModelSelection;
+use ash_core::ModelService;
+use ash_core::SequenceExpectation;
+use ash_core::StartThreadRequest;
+use ash_core::StartTurnRequest;
+use ash_core::ThreadController;
+use ash_core::TurnExecutor;
+use ash_extension_api::ExtensionItemStore;
+use ash_extension_api::ExtensionRegistryBuilder;
+use ash_extension_api::ExtensionState;
+use ash_protocol::CommandId;
+use ash_protocol::ModelRequest;
+use ash_protocol::ModelResponse;
+use ash_protocol::ResponseItem;
+use ash_protocol::StopReason;
+use ash_protocol::ToolCall;
+use ash_protocol::ToolCallId;
+use ash_protocol::ToolName;
+use ash_protocol::TurnStatus;
 
 #[test]
 fn runtime_wait_resumes_model_once_and_cancelled_wait_never_resumes_it() {
@@ -45,7 +45,7 @@ fn runtime_wait_resumes_model_once_and_cancelled_wait_never_resumes_it() {
         threads.install_extensions(registry).unwrap();
         let parent = threads
             .start_thread(
-                &zeta_core::NoThreadWorktreeBinder,
+                &ash_core::NoThreadWorktreeBinder,
                 StartThreadRequest {
                     agent_id: None,
                     agent: None,
@@ -61,14 +61,14 @@ fn runtime_wait_resumes_model_once_and_cancelled_wait_never_resumes_it() {
                     command_id: CommandId::new("turn").unwrap(),
                     expected_sequence: SequenceExpectation::Any,
                     model: None,
-                    kind: zeta_protocol::TurnKind::Coding,
-                    instructions: zeta_prompts::AGENT_INSTRUCTIONS.freeze(),
+                    kind: ash_protocol::TurnKind::Coding,
+                    instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                     policy_revision: port.policy.revision(),
-                    approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                    tool_mode: zeta_protocol::ToolMode::Direct,
+                    approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                    tool_mode: ash_protocol::ToolMode::Direct,
                     tool_profile: None,
                     activated_skills: Vec::new(),
-                    input: vec![zeta_protocol::UserInput::Text {
+                    input: vec![ash_protocol::UserInput::Text {
                         text: "wait then continue".into(),
                     }],
                 },
@@ -96,7 +96,7 @@ fn runtime_wait_resumes_model_once_and_cancelled_wait_never_resumes_it() {
                 assert_eq!(model.calls.load(Ordering::SeqCst), 2);
                 assert!(snapshot.items.iter().any(|item| matches!(
                     item,
-                    zeta_protocol::ThreadItem::ToolResult {
+                    ash_protocol::ThreadItem::ToolResult {
                         is_error: false,
                         ..
                     }
@@ -108,7 +108,7 @@ fn runtime_wait_resumes_model_once_and_cancelled_wait_never_resumes_it() {
                 threads
                     .interrupt_turn(
                         &parent.thread_id,
-                        zeta_core::InterruptTurnRequest {
+                        ash_core::InterruptTurnRequest {
                             command_id: CommandId::new("cancel").unwrap(),
                             expected_sequence: SequenceExpectation::Any,
                             turn_id: turn.turn_id.clone(),
@@ -127,7 +127,7 @@ fn runtime_wait_resumes_model_once_and_cancelled_wait_never_resumes_it() {
                 "wait Turn did not reach expected state: {:?}",
                 snapshot.turns[0].status
             );
-            pollster::block_on(zeta_async_utils::wait_until(changed, deadline, &token)).unwrap();
+            pollster::block_on(ash_async_utils::wait_until(changed, deadline, &token)).unwrap();
         }
     }
 }

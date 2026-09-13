@@ -5,6 +5,7 @@ use ash_utils_absolute_path::AbsolutePathBuf;
 #[derive(Clone, Debug, Eq, PartialEq)]
 /// Rejects invalid host facts before they enter a model-visible environment snapshot.
 pub enum AgentEnvironmentError {
+    InvalidTime { message: String },
     EmptyPath { field: &'static str },
     PathMustBeAbsolute { field: &'static str, value: String },
     EmptyValue { field: &'static str },
@@ -13,6 +14,7 @@ pub enum AgentEnvironmentError {
 impl fmt::Display for AgentEnvironmentError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidTime { message } => formatter.write_str(message),
             Self::EmptyPath { field } => write!(formatter, "{field} must not be empty"),
             Self::PathMustBeAbsolute { field, value } => {
                 write!(formatter, "{field} must be an absolute path: {value}")

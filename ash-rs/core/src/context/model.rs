@@ -248,6 +248,38 @@ impl ContextInput {
         self
     }
 
+    pub(crate) fn with_time_context(
+        mut self,
+        current: &ash_protocol::TimeContext,
+        references: &BTreeMap<ItemId, ash_protocol::TimeContext>,
+    ) -> Result<Self, crate::CoreError> {
+        let current = ash_agent_environment::TimeSnapshot::new(current.clone())
+            .map_err(|error| crate::CoreError::Context(error.to_string()))?;
+        if !self.environment.is_empty() {
+            self.environment.push('\n');
+        }
+        self.environment.push_str(&current.render());
+        self.with_time_references(references)
+    }
+
+    pub(crate) fn with_time_references(
+        mut self,
+        references: &BTreeMap<ItemId, ash_protocol::TimeContext>,
+    ) -> Result<Self, crate::CoreError> {
+        for item in &mut self.items {
+            if let ThreadItem::UserMessage { item_id, text, .. } = item {
+                let reference = match references.get(item_id) {
+                    Some(time) => ash_agent_environment::TimeSnapshot::new(time.clone())
+                        .map_err(|error| crate::CoreError::Context(error.to_string()))?
+                        .render_reference(),
+                    None => "<user_time unavailable=\"true\" />".into(),
+                };
+                *text = format!("{reference}\n{text}");
+            }
+        }
+        Ok(self)
+    }
+
     pub(crate) const fn source_thread_sequence(&self) -> u64 {
         self.source_thread_sequence
     }

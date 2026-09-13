@@ -9,6 +9,9 @@ mod dirs;
 #[path = "render/environment_context.rs"]
 mod environment_context;
 mod error;
+mod time_context;
+pub use time_context::TimeSnapshot;
+pub use time_context::validate_time_zone;
 #[path = "model/snapshot.rs"]
 mod snapshot;
 

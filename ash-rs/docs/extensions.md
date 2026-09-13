@@ -15,7 +15,7 @@ Agent 能力由 `ext/` 中的 crate 拥有；Core 提交 Thread/Turn 事实并�
 | `ext/history-notes` | 当前 Thread 的历史检索与读取，以及可跨重启保存的任务笔记 |
 | `ext/image-generation` | 图片生成与编辑、服务调用、Thread 内图片引用和原子文件发布 |
 | `ext/git-attribution` | 按宿主策略贡献 Git 提交署名和 PR 说明；不授权提交、推送或创建 PR |
-| `ext/clock` | 可取消的等待，每次最多 60 秒 |
+| `ext/sleep` | 模型侧计时等待，复用运行时的截止与取消机制 |
 | `ext/items` | 文本、搜索来源、图片路径和等待结果的结构化数据与边界校验 |
 | `ext/connectors` | 外部账号连接、认证、目录与声明加载；通过所属执行环境的文件接口读取声明 |
 | `ext/mcp` | MCP 会话、工具、生命周期，以及 Marketplace Connector/MCP 的绑定与调用租约 |
@@ -30,10 +30,13 @@ Agent 能力由 `ext/` 中的 crate 拥有；Core 提交 Thread/Turn 事实并�
 - 临时状态按 Session、Thread、Turn 隔离；Turn 结束、Thread 归档和 Session 删除会清理对应范围。
 - `extension/items/list` 保留 `title`、`body`、`status`，通过 `content.type` 区分 `text`、`webSearch`、`image`、`sleep`。最近结果最多保留 64 项，不替代 Thread 的持久历史。
 
+时间、等待的工具参数、成本边界及 Codex 对照统一维护在 [Agent 时间与等待](agent-wait.md)。
+
 ## 已收回的实现
 
 | 旧路径 | 当前归属 |
 | --- | --- |
+| `ext/clock` | `ext/sleep` 的 `sleep` 工具；后台命令和子任务使用各自的完成条件 |
 | `ash-rs/connectors` | `ext/connectors` |
 | `ash-rs/queue` | `ext/queue`，包括原 App Server `QueueExtension` |
 | `ash-rs/auto-review` | `ext/guardian-reviewer` |

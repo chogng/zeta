@@ -9,6 +9,8 @@ mod measurement_policy;
 mod model;
 mod plan;
 mod planner;
+pub(crate) mod time;
+pub use time::TimeContextProvider;
 
 pub(crate) use assembler::ContextAssembler;
 pub(crate) use calibration::CONTEXT_CALIBRATION_REVISION;

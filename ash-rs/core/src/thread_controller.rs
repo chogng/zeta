@@ -443,6 +443,7 @@ impl Default for ExtensionRegistries {
 
 /// Coordinates durable mutations for each loaded Thread.
 pub struct ThreadController {
+    time_context: RwLock<Arc<dyn crate::TimeContextProvider>>,
     checkpoint_sources: RwLock<BTreeMap<ThreadId, Weak<dyn crate::MessageCheckpointSource>>>,
     store: Arc<dyn ThreadStore>,
     writer_lease: Option<Arc<dyn WriterLease<ThreadId>>>,
@@ -456,6 +457,42 @@ pub struct ThreadController {
 }
 
 impl ThreadController {
+    /// Installs the profile's clock/policy owner before accepting user input.
+    pub fn install_time_context_provider(
+        &self,
+        provider: Arc<dyn crate::TimeContextProvider>,
+    ) -> Result<(), CoreError> {
+        *self
+            .time_context
+            .write()
+            .map_err(|_| CoreError::Context("time context lock poisoned".into()))? = provider;
+        Ok(())
+    }
+
+    pub(crate) fn sample_time_context(
+        &self,
+    ) -> Result<Option<ash_protocol::TimeContext>, CoreError> {
+        let provider = self
+            .time_context
+            .read()
+            .map_err(|_| CoreError::Context("time context lock poisoned".into()))?
+            .clone();
+        let context = provider.snapshot()?;
+        if let Some(context) = &context {
+            ash_agent_environment::TimeSnapshot::new(context.clone())
+                .map_err(|error| CoreError::Context(error.to_string()))?;
+        }
+        Ok(context)
+    }
+    /// Subscribes before the caller checks durable state. Wakeups only request a recheck;
+    /// the journal remains authoritative, including after restart.
+    pub fn thread_changed(
+        &self,
+        thread_id: &ThreadId,
+    ) -> Result<impl std::future::Future<Output = ()> + Send + use<>, CoreError> {
+        Ok(self.loaded_threads.slot(thread_id)?.activity.listen())
+    }
+
     /// Binds file capture to the owner of this Thread's managed working directory.
     pub fn install_message_checkpoint_source(
         &self,
@@ -494,6 +531,7 @@ impl ThreadController {
         Self {
             store,
             checkpoint_sources: RwLock::new(BTreeMap::new()),
+            time_context: RwLock::new(Arc::new(crate::context::time::NoTimeContext)),
             writer_lease: None,
             execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
             live_interactions: live_interaction::LiveInteractionWaiters::default(),
@@ -528,6 +566,7 @@ impl ThreadController {
         Self {
             store,
             checkpoint_sources: RwLock::new(BTreeMap::new()),
+            time_context: RwLock::new(Arc::new(crate::context::time::NoTimeContext)),
             writer_lease: Some(writer_lease),
             execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
             live_interactions: live_interaction::LiveInteractionWaiters::default(),
@@ -2358,6 +2397,19 @@ impl ThreadController {
             )));
         }
         let expected_sequence = snapshot.as_ref().map_or(0, |snapshot| snapshot.sequence);
+        let input_time = if events.iter().any(|event| {
+            matches!(
+                event,
+                ThreadEvent::ItemCompleted {
+                    item: ThreadItem::UserMessage { .. },
+                    ..
+                }
+            )
+        }) {
+            self.sample_time_context()?
+        } else {
+            None
+        };
         let mut reader = crate::history::HistoryReader::new(self.store.as_ref(), &history_prefixes);
         let mut projection = snapshot;
         let mut envelopes = Vec::with_capacity(events.len());
@@ -2404,6 +2456,17 @@ impl ThreadController {
                 *workspace_checkpoint = Some(captures[0].workspace().clone());
             }
             let envelope = StoredEvent {
+                time_context: if matches!(
+                    &event,
+                    ThreadEvent::ItemCompleted {
+                        item: ThreadItem::UserMessage { .. },
+                        ..
+                    }
+                ) {
+                    input_time.clone()
+                } else {
+                    None
+                },
                 schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
                 event_id: EventId(event_id),
                 sequence: expected_sequence + index as u64 + 1,
@@ -2455,6 +2518,10 @@ impl ThreadController {
             .clone();
         drop(registries);
         let result = self.store.append_batch(batch).map_err(CoreError::from)?;
+        self.loaded_threads
+            .slot(&batch.thread_id)?
+            .activity
+            .notify();
         for capture in &batch.captures {
             capture.commit();
         }

@@ -349,6 +349,7 @@ fn update_preferences(
         command_id: CommandId::new(command_id).unwrap(),
         expected_revision: ConfigRevision::new(revision),
         command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+            time_context: ash_protocol::Patch::Missing,
             features: Default::default(),
             preferred_model,
             preferred_reasoning_effort: Patch::Missing,
@@ -633,6 +634,7 @@ fn frontend_section_patch_is_durable_and_null_clears_the_section() {
             command_id: CommandId::new("configure-gui").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
                 gui: Patch::Value(configured.clone()),
                 ..PreferencesUpdate::default()
@@ -646,6 +648,7 @@ fn frontend_section_patch_is_durable_and_null_clears_the_section() {
             command_id: CommandId::new("reset-gui").unwrap(),
             expected_revision: ConfigRevision::new(1),
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
                 gui: Patch::Null,
                 ..PreferencesUpdate::default()
@@ -686,6 +689,7 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
             command_id: CommandId::new("select-code-mode-only").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
                 preferred_model: Patch::Missing,
                 preferred_reasoning_effort: Patch::Missing,
@@ -723,6 +727,7 @@ fn tui_section_is_persisted_in_the_tui_table() {
             command_id: CommandId::new("select-tui-theme").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
                 tui: Patch::Value(BTreeMap::from([(
                     "theme".into(),
@@ -753,6 +758,7 @@ fn tui_section_values_are_not_interpreted_by_the_backend() {
             command_id: CommandId::new("select-frontend-owned-theme").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
                 tui: Patch::Value(BTreeMap::from([(
                     "theme".into(),
@@ -1220,6 +1226,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             command_id: CommandId::new("select-missing-review-provider").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
                 preferred_model: Patch::Missing,
                 preferred_reasoning_effort: Patch::Missing,
@@ -1242,6 +1249,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             command_id: CommandId::new("select-review-model").unwrap(),
             expected_revision: configured.revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
                 preferred_model: Patch::Missing,
                 preferred_reasoning_effort: Patch::Missing,
@@ -2126,6 +2134,69 @@ fn issue_refresh_settings_validate_persist_and_reject_stale_writes() {
         );
     }
     assert!(persisted_config_document(&path).contains("autoRefreshMinutes = 60"));
+    drop(store);
+    remove_config_files(&path);
+}
+
+#[test]
+fn time_context_policy_validates_persists_and_resets_without_changing_model_preferences() {
+    let path = config_path("time-context");
+    let store = ConfigStore::open(&path).unwrap();
+    assert_eq!(
+        store.read_snapshot().unwrap().values.time_context,
+        TimeContextConfig::default()
+    );
+    let policy = TimeContextConfig {
+        mode: ash_protocol::TimeContextMode::Time,
+        time_zone: Some("Asia/Tokyo".into()),
+    };
+    let update = |value| {
+        UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+            time_context: value,
+            ..PreferencesUpdate::default()
+        })
+    };
+    let saved = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("time-save").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: update(Patch::Value(policy.clone())),
+        })
+        .unwrap();
+    let snapshot = store.read_snapshot().unwrap();
+    assert_eq!(snapshot.values.time_context, policy);
+    let invalid = TimeContextConfig {
+        mode: ash_protocol::TimeContextMode::Date,
+        time_zone: Some("Mars/Base".into()),
+    };
+    assert!(
+        store
+            .apply(ConfigCommandRequest {
+                command_id: CommandId::new("invalid-time").unwrap(),
+                expected_revision: saved.revision,
+                command: update(Patch::Value(invalid))
+            })
+            .is_err()
+    );
+    assert_eq!(store.read_snapshot().unwrap().revision, saved.revision);
+    drop(store);
+    let store = ConfigStore::open(&path).unwrap();
+    assert_eq!(store.read_snapshot().unwrap().values.time_context, policy);
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("time-reset").unwrap(),
+            expected_revision: saved.revision,
+            command: update(Patch::Null),
+        })
+        .unwrap();
+    assert_eq!(
+        store.read_snapshot().unwrap().values.time_context,
+        TimeContextConfig::default()
+    );
+    assert_eq!(
+        store.read_snapshot().unwrap().values.preferred_model,
+        snapshot.values.preferred_model
+    );
     drop(store);
     remove_config_files(&path);
 }

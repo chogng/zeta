@@ -95,6 +95,7 @@ fn append_created_thread(
             thread_id: thread_id.clone(),
             expected_sequence: 0,
             events: vec![StoredEvent {
+                time_context: None,
                 schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
                 event_id: EventId(format!("thread-event-{ordinal}")),
                 sequence: 1,
@@ -200,6 +201,7 @@ fn sqlite_thread_store_recovers_typed_events() {
     let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
     let thread_event = StoredEvent {
+        time_context: None,
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
         event_id: EventId("thread-event-1".into()),
         sequence: 1,
@@ -283,6 +285,7 @@ fn sqlite_thread_catalog_rejects_index_metadata_mismatch() {
             thread_id: thread_id.clone(),
             expected_sequence: 0,
             events: vec![StoredEvent {
+                time_context: None,
                 schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
                 event_id: EventId("thread-event-1".into()),
                 sequence: 1,
@@ -323,6 +326,7 @@ fn sqlite_thread_append_is_atomic_and_sequence_checked() {
     let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
     let event = StoredEvent {
+        time_context: None,
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
         event_id: EventId("event-1".into()),
         sequence: 1,
@@ -376,6 +380,7 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
     let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
     let mut event = StoredEvent {
+        time_context: None,
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
         event_id: EventId("event-1".into()),
         sequence: 1,

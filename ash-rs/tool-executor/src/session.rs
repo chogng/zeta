@@ -19,7 +19,6 @@ use std::fmt;
 use std::io::Read;
 use std::io::Write;
 use std::sync::Arc;
-use std::sync::Condvar;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicU8;
 use std::sync::atomic::Ordering;
@@ -28,6 +27,9 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 use ash_async_utils::CancellationToken;
+use ash_async_utils::Notify;
+use ash_async_utils::WaitOutcome;
+use ash_async_utils::wait_until;
 use ash_sandboxing::SandboxBackend;
 use ash_utils_pty::TerminalSize;
 
@@ -120,6 +122,13 @@ pub enum CommandSessionStart {
     Running(CommandSessionUpdate),
 }
 
+/// Independent bounds for command lifetime and the initial output observation.
+pub struct CommandSessionOptions {
+    pub execution_timeout: Duration,
+    pub wait_budget: Duration,
+    pub terminal: Option<TerminalSize>,
+}
+
 #[derive(Default)]
 pub(super) struct CommandSessions {
     records: Mutex<HashMap<CommandSessionId, Arc<SessionRecord>>>,
@@ -140,7 +149,7 @@ struct SessionRecord {
     input: Arc<Mutex<Option<mpsc::SyncSender<InputRequest>>>>,
     process: Arc<Mutex<ash_sandboxing::ProcessHandle>>,
     control: Arc<AtomicU8>,
-    data: Arc<(Mutex<SessionData>, Condvar)>,
+    data: Arc<(Mutex<SessionData>, Notify)>,
 }
 
 struct SessionData {
@@ -227,9 +236,15 @@ impl<P: super::ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
         scope: Option<&SandboxScope>,
         network_policy: Option<&network_proxy::NetworkPolicyHandle>,
         owner: CommandSessionOwner,
-        wait_budget: Duration,
-        terminal: Option<TerminalSize>,
+        options: CommandSessionOptions,
     ) -> Result<CommandSessionStart, ExecutionError> {
+        if options.execution_timeout < Duration::from_millis(1)
+            || options.execution_timeout > Duration::from_secs(12 * 60 * 60)
+        {
+            return Err(session_error(
+                "command session timeout must be between 1 millisecond and 12 hours",
+            ));
+        }
         request.input = CommandInput::Open;
         let started = self.start_scoped_with_network(
             request,
@@ -237,7 +252,7 @@ impl<P: super::ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             cancellation,
             scope,
             network_policy,
-            terminal.map_or(
+            options.terminal.map_or(
                 ash_sandboxing::ProcessIo::Pipes,
                 ash_sandboxing::ProcessIo::Pty,
             ),
@@ -254,7 +269,7 @@ impl<P: super::ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             owner,
             started,
             cancellation.clone(),
-            self.limits.timeout,
+            options.execution_timeout,
             self.limits.max_output_bytes,
         )?;
         {
@@ -271,7 +286,7 @@ impl<P: super::ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             records.insert(id.clone(), Arc::clone(&record));
         }
         let (update, final_state) =
-            record.read(&id, CommandSessionCursor::default(), wait_budget)?;
+            record.read(&id, CommandSessionCursor::default(), options.wait_budget)?;
         match final_state {
             Some(SessionFinal::Outcome(outcome)) => {
                 self.remove_record(&id);
@@ -312,6 +327,49 @@ impl<P: super::ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
         record
             .read(id, cursor, wait_budget)
             .map(|(update, _)| update)
+    }
+
+    /// Waits for process completion without returning for intermediate output.
+    /// Cancellation/expiry ends this observation, not the owner-bound process.
+    pub async fn wait_session(
+        &self,
+        owner: &CommandSessionOwner,
+        id: &CommandSessionId,
+        cursor: CommandSessionCursor,
+        wait_budget: Duration,
+        cancellation: &CancellationToken,
+    ) -> Result<CommandSessionUpdate, ExecutionError> {
+        let record = self.record(owner, id)?;
+        let deadline = Instant::now() + wait_budget;
+        // Validate cursors even when the command remains running for the whole wait.
+        record.read(id, cursor, Duration::ZERO)?;
+        let completed = async {
+            loop {
+                let changed = record.data.1.listen();
+                let complete = record
+                    .data
+                    .0
+                    .lock()
+                    .map_err(|_| session_error("command session output is unavailable"))?
+                    .final_state
+                    .is_some();
+                if complete {
+                    return record
+                        .read(id, cursor, Duration::ZERO)
+                        .map(|(update, _)| update);
+                }
+                changed.await;
+            }
+        };
+        match wait_until(completed, deadline, cancellation).await {
+            Ok(WaitOutcome::Ready(result)) => result,
+            Ok(WaitOutcome::TimedOut) => record
+                .read(id, cursor, Duration::ZERO)
+                .map(|(update, _)| update),
+            Err(signal) => Err(ExecutionError::CancelledBeforeStart(
+                signal.reason().to_string(),
+            )),
+        }
     }
 
     pub fn write_session(
@@ -460,7 +518,7 @@ fn start_record(
             stderr: StreamBuffer::new(output_capacity),
             final_state: None,
         }),
-        Condvar::new(),
+        Notify::default(),
     ));
     let (input_tx, input_rx) = mpsc::sync_channel(16);
     let input = Arc::new(Mutex::new(Some(input_tx)));
@@ -519,7 +577,7 @@ fn start_record(
         let (lock, changed) = &*data;
         if let Ok(mut state) = lock.lock() {
             state.final_state = Some(final_state);
-            changed.notify_all();
+            changed.notify();
         }
     });
     Ok(record)
@@ -527,7 +585,7 @@ fn start_record(
 
 fn finish_outcome(
     process: &Arc<Mutex<ash_sandboxing::ProcessHandle>>,
-    data: &Arc<(Mutex<SessionData>, Condvar)>,
+    data: &Arc<(Mutex<SessionData>, Notify)>,
     authority: CommandExecutionAuthority,
     status: SandboxProcessExitStatus,
 ) -> SessionFinal {
@@ -586,20 +644,28 @@ impl SessionRecord {
         cursor: CommandSessionCursor,
         wait_budget: Duration,
     ) -> Result<(CommandSessionUpdate, Option<SessionFinal>), ExecutionError> {
-        let (lock, changed) = &*self.data;
-        let mut state = lock
+        let cancellation = ash_async_utils::CancellationSource::new();
+        let deadline = Instant::now() + wait_budget;
+        loop {
+            let changed = self.data.1.listen();
+            let state = self
+                .data
+                .0
+                .lock()
+                .map_err(|_| session_error("command session output is unavailable"))?;
+            let ready = state.final_state.is_some()
+                || state.stdout.end() != cursor.stdout
+                || state.stderr.end() != cursor.stderr;
+            drop(state);
+            if ready || Instant::now() >= deadline {
+                break;
+            }
+            let _ = pollster::block_on(wait_until(changed, deadline, &cancellation.token()));
+        }
+        let (lock, _) = &*self.data;
+        let state = lock
             .lock()
             .map_err(|_| session_error("command session output is unavailable"))?;
-        if state.final_state.is_none()
-            && state.stdout.end() == cursor.stdout
-            && state.stderr.end() == cursor.stderr
-            && !wait_budget.is_zero()
-        {
-            state = changed
-                .wait_timeout(state, wait_budget)
-                .map_err(|_| session_error("command session wait is unavailable"))?
-                .0;
-        }
         let final_state = state.final_state.clone();
         let status = match &final_state {
             None => CommandSessionStatus::Running,
@@ -632,7 +698,7 @@ impl SessionRecord {
     fn terminate(&self) {
         self.control.store(CONTROL_TERMINATE, Ordering::Release);
         close_process(&self.process);
-        self.data.1.notify_all();
+        self.data.1.notify();
     }
 }
 
@@ -657,7 +723,7 @@ enum OutputStream {
 
 fn spawn_output_reader(
     mut reader: Box<dyn Read + Send>,
-    data: Arc<(Mutex<SessionData>, Condvar)>,
+    data: Arc<(Mutex<SessionData>, Notify)>,
     stream: OutputStream,
 ) -> thread::JoinHandle<()> {
     thread::spawn(move || {
@@ -677,7 +743,7 @@ fn spawn_output_reader(
                 OutputStream::Stdout => state.stdout.append(&chunk[..count]),
                 OutputStream::Stderr => state.stderr.append(&chunk[..count]),
             }
-            changed.notify_all();
+            changed.notify();
         }
     })
 }

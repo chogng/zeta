@@ -14,7 +14,8 @@ path = "src/lib.rs"
 getrandom = { workspace = true }
 network-proxy = { workspace = true, features = ["server"] }
 tempfile = { workspace = true }
-ash-async-utils = { workspace = true }
+ash-async-utils = { workspace = true, features = ["wait"] }
+pollster = { workspace = true }
 ash-protocol = { workspace = true }
 ash-sandboxing = { workspace = true }
 ash-file-access = { workspace = true }

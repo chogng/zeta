@@ -1,5 +1,5 @@
 use super::*;
-use zeta_protocol::UnixMillis;
+use ash_protocol::UnixMillis;
 
 fn snapshot(at: &str, zone: &str, mode: TimeContextMode) -> TimeSnapshot {
     let millis = DateTime::parse_from_rfc3339(at).unwrap().timestamp_millis() as u64;

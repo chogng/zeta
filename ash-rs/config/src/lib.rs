@@ -73,3 +73,5 @@ mod tests;
 
 /// Version emitted in the canonical on-disk TOML document.
 pub const CONFIG_FILE_SCHEMA_VERSION: i64 = document_migration::CURRENT_FILE_SCHEMA_VERSION;
+mod time_context;
+pub use time_context::TimeContextConfig;

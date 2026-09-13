@@ -198,6 +198,10 @@ pub enum ModelInvocationOutcome {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelInvocationRecord {
+    /// Exact immutable time facts included in this request; absent when disabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub time_context: Option<crate::TimeContext>,
     pub invocation_id: ModelInvocationId,
     pub thread_id: ThreadId,
     pub turn_id: TurnId,

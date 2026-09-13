@@ -1,13 +1,13 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
-use zeta_config::ConfigStore;
-use zeta_core::CoreError;
-use zeta_core::TimeContextProvider;
-use zeta_protocol::TimeContext;
-use zeta_protocol::TimeContextMode;
-use zeta_protocol::TimeZoneOrigin;
-use zeta_protocol::UnixMillis;
+use ash_config::ConfigStore;
+use ash_core::CoreError;
+use ash_core::TimeContextProvider;
+use ash_protocol::TimeContext;
+use ash_protocol::TimeContextMode;
+use ash_protocol::TimeZoneOrigin;
+use ash_protocol::UnixMillis;
 
 /// Profile-scoped clock policy, shared by input acceptance and model request preparation.
 pub(crate) struct ConfigTimeContext {
@@ -46,7 +46,7 @@ impl TimeContextProvider for ConfigTimeContext {
             .as_millis();
         let sampled = u64::try_from(sampled)
             .map_err(|_| CoreError::Context("clock timestamp is out of range".into()))?;
-        let snapshot = zeta_agent_environment::TimeSnapshot::capture(
+        let snapshot = ash_agent_environment::TimeSnapshot::capture(
             UnixMillis::new(sampled).map_err(|error| CoreError::Context(error.into()))?,
             time_zone,
             origin,

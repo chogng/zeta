@@ -18,7 +18,7 @@ agent-graph-store = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-ash-async-utils = { workspace = true }
+ash-async-utils = { workspace = true, features = ["wait"] }
 ash-attachments = { workspace = true }
 ash-context-engine = { workspace = true }
 ash-code-mode = { workspace = true, optional = true }

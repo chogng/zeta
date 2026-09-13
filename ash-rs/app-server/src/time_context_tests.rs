@@ -1,11 +1,11 @@
 use super::*;
-use zeta_config::ConfigCommandRequest;
-use zeta_config::ConfigRevision;
-use zeta_config::PreferencesUpdate;
-use zeta_config::TimeContextConfig;
-use zeta_config::UserConfigCommand;
-use zeta_protocol::CommandId;
-use zeta_protocol::Patch;
+use ash_config::ConfigCommandRequest;
+use ash_config::ConfigRevision;
+use ash_config::PreferencesUpdate;
+use ash_config::TimeContextConfig;
+use ash_config::UserConfigCommand;
+use ash_protocol::CommandId;
+use ash_protocol::Patch;
 
 #[test]
 fn time_context_profile_policy_changes_are_seen_without_replacing_the_provider() {
@@ -41,7 +41,7 @@ fn time_context_profile_policy_changes_are_seen_without_replacing_the_provider()
             assert_eq!(snapshot.mode, mode);
             assert_eq!(snapshot.time_zone, "Asia/Tokyo");
             assert_eq!(snapshot.origin, TimeZoneOrigin::Configured);
-            let rendered = zeta_agent_environment::TimeSnapshot::new(snapshot)
+            let rendered = ash_agent_environment::TimeSnapshot::new(snapshot)
                 .unwrap()
                 .render();
             assert!(rendered.contains(if mode == TimeContextMode::Date {

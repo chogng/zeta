@@ -2,7 +2,7 @@
 
 > 本文保留时间上下文实现之前的核对与基准结果。当前已接入的策略与生命周期见 [Agent 时间与等待](../agent-wait.md)；下文“尚未实现”描述的是测量当时的状态。
 
-在这组 sol 小样本对照中，直接使用时间上下文比先调用读时间工具少一次模型往返，模型阶段的配对耗时差中位数为 **1.974 秒**。这支持在确有时间语义需求时减少独立读时调用；不能承诺所有任务固定快 1～3 秒。当前 Zeta 尚未实现按需注入最新时间快照，本文不改变生产行为。
+在这组 sol 小样本对照中，直接使用时间上下文比先调用读时间工具少一次模型往返，模型阶段的配对耗时差中位数为 **1.974 秒**。这支持在确有时间语义需求时减少独立读时调用；不能承诺所有任务固定快 1～3 秒。当前 Ash 尚未实现按需注入最新时间快照，本文不改变生产行为。
 
 ## 已确认的实现事实
 
@@ -13,7 +13,7 @@
 | 是否已有时区字段 | HostEnvironment 没有时区字段 | [HostEnvironment](../../agent-environment/src/model/snapshot.rs) |
 | 本次等待改造是否已经包含动态时间注入 | 没有；等待由运行时处理，未新增逐请求精确时间戳 | [Agent 时间与等待](../agent-wait.md) |
 | 时间片段能否放在可复用前缀之后 | Core 已有请求尾部环境位置和显式前缀边界；本地基准验证了此前缀不变 | [ContextAssembler](../../core/src/context/assembler.rs)、[基准](../../core/src/context/benchmarks.rs) |
-| 能否直接用 Zeta 当前模型测在线延迟 | 检查时默认模型与供应商配置为空；用户改为明确选择 Codex sol 子 Agent | 不复制本机用户配置或凭据到报告 |
+| 能否直接用 Ash 当前模型测在线延迟 | 检查时默认模型与供应商配置为空；用户改为明确选择 Codex sol 子 Agent | 不复制本机用户配置或凭据到报告 |
 
 ### 三种时间不能混用
 
@@ -42,13 +42,13 @@
 - [可复现计数脚本](../../model-tokenizer/benchmarks/time_context.py)
 
 ```sh
-uv run --script zeta-rs/model-tokenizer/benchmarks/time_context.py \
-  --output zeta-rs/docs/benchmarks/time-context-tokens-2026-09-13.json
+uv run --script ash-rs/model-tokenizer/benchmarks/time_context.py \
+  --output ash-rs/docs/benchmarks/time-context-tokens-2026-09-13.json
 ```
 
 ## sol 在线对照
 
-用户明确选择 sol 子 Agent 后，通过当前 Codex 账号完成测试，未使用本地 Zeta 模型配置，也未读取或导出账号凭据。
+用户明确选择 sol 子 Agent 后，通过当前 Codex 账号完成测试，未使用本地 Ash 模型配置，也未读取或导出账号凭据。
 
 | 条件 | 实际设置 |
 | --- | --- |
@@ -127,12 +127,12 @@ B 多出一次约 3.3 万输入 Token 的模型请求，但大部分命中缓存
 [全部试运行与正式样本、事件时间和 usage](time-context-sol-2026-09-13.json) 保留子任务来源摘要；[提取脚本](../../core/benchmarks/codex_time.py) 只读取父任务明确登记的这组测试子任务。
 
 ```sh
-uv run --python 3.12 python zeta-rs/core/benchmarks/codex_time.py \
+uv run --python 3.12 python ash-rs/core/benchmarks/codex_time.py \
   --parent-log /absolute/path/to/parent-rollout.jsonl \
-  --output zeta-rs/docs/benchmarks/time-context-sol-2026-09-13.json
+  --output ash-rs/docs/benchmarks/time-context-sol-2026-09-13.json
 ```
 
-## Zeta 本地请求组装基准
+## Ash 本地请求组装基准
 
 调用真实 `ContextInput`、`ContextPlanner`、`ContextAssembler` 和 JSON 序列化。对照为固定环境片段，实验组在其尾部追加时间戳与时区。该入口是基准 fixture，**没有把时间注入功能接入生产请求**。
 
@@ -151,7 +151,7 @@ uv run --python 3.12 python zeta-rs/core/benchmarks/codex_time.py \
 - [全部 4000 个原始计时样本](time-context-assembly-2026-09-13.json)；分位数使用排序后 `floor(p × n)` 的零基索引。
 
 ```sh
-just test zeta-core time_context_benchmark --lib -- --ignored --nocapture --test-threads=1
+just test ash-core time_context_benchmark --lib -- --ignored --nocapture --test-threads=1
 ```
 
 ## 工程决定与未完成项

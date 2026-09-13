@@ -12,3 +12,13 @@ path = "src/lib.rs"
 
 [lints]
 workspace = true
+
+[features]
+wait = ["dep:async-io", "dep:event-listener"]
+
+[dependencies]
+async-io = { workspace = true, optional = true }
+event-listener = { workspace = true, optional = true }
+
+[dev-dependencies]
+pollster = { workspace = true }

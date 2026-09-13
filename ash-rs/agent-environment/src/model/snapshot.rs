@@ -13,7 +13,6 @@ pub struct HostEnvironment {
     platform: String,
     os_version: String,
     shell: String,
-    current_date: String,
 }
 
 impl HostEnvironment {
@@ -23,19 +22,16 @@ impl HostEnvironment {
         platform: String,
         os_version: String,
         shell: String,
-        current_date: String,
     ) -> Result<Self, AgentEnvironmentError> {
         let cwd = absolute_path("cwd", cwd)?;
         validate_text("platform", &platform)?;
         validate_text("os version", &os_version)?;
         validate_text("shell", &shell)?;
-        validate_text("current date", &current_date)?;
         Ok(Self {
             cwd,
             platform,
             os_version,
             shell,
-            current_date,
         })
     }
 
@@ -57,11 +53,6 @@ impl HostEnvironment {
     /// Returns the captured user shell.
     pub fn shell(&self) -> &str {
         &self.shell
-    }
-
-    /// Returns the captured calendar date.
-    pub fn current_date(&self) -> &str {
-        &self.current_date
     }
 }
 

@@ -15,7 +15,8 @@ name = "ash_app_server"
 path = "src/lib.rs"
 
 [dependencies]
-clock = { workspace = true }
+iana-time-zone = { workspace = true }
+sleep = { workspace = true }
 git-attribution = { workspace = true }
 image-generation = { workspace = true }
 history-notes = { workspace = true }

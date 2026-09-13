@@ -1,5 +1,5 @@
 use crate::CoreError;
-use zeta_protocol::TimeContext;
+use ash_protocol::TimeContext;
 
 /// Supplies immutable time facts from the host's current profile policy.
 /// Implementations must return no context for off and report sampling/zone errors explicitly.

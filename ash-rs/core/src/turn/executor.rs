@@ -798,6 +798,11 @@ impl TurnExecutor {
                     &turn.activated_skills,
                 ))
                 .map_err(|error| ExecutionFailure::model(CoreError::Context(error.to_string())))?;
+            let harness_context = harness_context.as_ref().clone().with_time_context(
+                self.threads
+                    .sample_time_context()
+                    .map_err(ExecutionFailure::model)?,
+            );
             let invocation = match self
                 .threads
                 .prepare_model_invocation(
@@ -913,6 +918,7 @@ impl TurnExecutor {
                                 billing_scope,
                                 response.usage.clone(),
                                 input_estimate.clone(),
+                                harness_context.time_context().cloned(),
                                 started_at_unix_ms,
                                 current_unix_ms().map_err(ExecutionFailure::model)?,
                             )
@@ -1211,6 +1217,7 @@ impl TurnExecutor {
                     billing_scope,
                     usage,
                     input_estimate.clone(),
+                    None,
                     started_at_unix_ms,
                     current_unix_ms()?,
                 );

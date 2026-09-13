@@ -12,7 +12,8 @@ use ts_rs::TS;
 
 pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 4;
 pub const APP_SERVER_PROTOCOL_REVISION: u32 = 1;
-pub const APP_SERVER_CAPABILITY_VERSION: u32 = 4;
+// Version 5 includes profile time-context policy and immutable input/model time facts.
+pub const APP_SERVER_CAPABILITY_VERSION: u32 = 5;
 
 pub const REQUIRED_SESSION_CAPABILITIES: &[CapabilityRequirement] = &[
     CapabilityRequirement::exact("sessions", APP_SERVER_CAPABILITY_VERSION),

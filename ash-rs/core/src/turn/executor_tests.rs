@@ -2952,7 +2952,6 @@ fn test_harness_context(content: &str, environment_marker: &str) -> HarnessConte
             "test".into(),
             environment_marker.into(),
             "/bin/sh".into(),
-            "2026-08-27".into(),
         )
         .unwrap(),
         RepositoryEnvironment::NotDetected,

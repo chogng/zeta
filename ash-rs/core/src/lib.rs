@@ -199,3 +199,8 @@ pub use capabilities::UnsupportedBrowserCapability;
 
 mod approval_mode;
 pub use approval_mode::ApprovalModeActionPolicyService;
+pub use context::TimeContextProvider;
+
+#[cfg(test)]
+#[path = "time_context_tests.rs"]
+mod time_context_tests;
