@@ -12,7 +12,6 @@ fn render_is_deterministic_and_escapes_host_values_and_paths() {
             "darwin".into(),
             "Darwin <version>".into(),
             "/bin/zsh".into(),
-            "2026-08-27".into(),
         )
         .unwrap(),
         RepositoryEnvironment::git(
@@ -46,7 +45,6 @@ fn missing_repository_is_rendered_explicitly() {
             "linux".into(),
             "Linux".into(),
             "/bin/bash".into(),
-            "2026-08-27".into(),
         )
         .unwrap(),
         RepositoryEnvironment::NotDetected,

@@ -34,6 +34,22 @@
             }
           ]
         },
+        "preferredReasoningEffort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasoningEffort"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timeContext": {
+          "$ref": "#/$defs/TimeContextConfig",
+          "default": {
+            "mode": "date"
+          }
+        },
         "toolMode": {
           "$ref": "#/$defs/ToolMode",
           "default": "direct"
@@ -1037,6 +1053,18 @@
     "ProviderId": {
       "type": "string"
     },
+    "ReasoningEffort": {
+      "enum": [
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "extraHigh",
+        "max"
+      ],
+      "type": "string"
+    },
     "ScopeMatcher": {
       "description": "Explicit capability-scope matching semantics.",
       "oneOf": [
@@ -1139,6 +1167,32 @@
       },
       "type": "object"
     },
+    "TimeContextConfig": {
+      "additionalProperties": false,
+      "description": "Profile-owned policy for model time information; timers are independent of this setting.",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/TimeContextMode",
+          "default": "date"
+        },
+        "timeZone": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "TimeContextMode": {
+      "description": "Explicit model-context policy; it does not control timers or execution deadlines.",
+      "enum": [
+        "off",
+        "date",
+        "time"
+      ],
+      "type": "string"
+    },
     "ToolMode": {
       "description": "Selects how a model may use the ordinary Tool catalog for one Turn.\n\n`Direct` is the compatibility default. `CodeMode` keeps the ordinary direct surface and adds\nthe Code Mode entry points. `CodeModeOnly` exposes only those entry points while the projected\nordinary tools remain callable from JavaScript.",
       "enum": [
@@ -1211,6 +1265,9 @@
           "type": "automatic"
         },
         "grepBackend": "ripgrep",
+        "timeContext": {
+          "mode": "date"
+        },
         "toolMode": "direct"
       }
     },

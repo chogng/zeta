@@ -460,7 +460,6 @@ fn test_environment(additional_root: PathBuf) -> AgentEnvironmentSnapshot {
             "test".into(),
             "test-os".into(),
             "/bin/sh".into(),
-            "2026-08-27".into(),
         )
         .unwrap(),
         RepositoryEnvironment::NotDetected,
@@ -470,6 +469,7 @@ fn test_environment(additional_root: PathBuf) -> AgentEnvironmentSnapshot {
 
 fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
     ThreadSnapshot {
+        user_time_contexts: Default::default(),
         history_sources: Default::default(),
         message_checkpoints: Default::default(),
         agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),

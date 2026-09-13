@@ -14,6 +14,7 @@ path = "src/lib.rs"
 schema = ["dep:schemars", "zeta-execpolicy/schema"]
 
 [dependencies]
+zeta-agent-environment = { workspace = true }
 schemars = { workspace = true, optional = true }
 features = { workspace = true }
 rusqlite = { workspace = true }

@@ -65,6 +65,7 @@ mod approval;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ThreadSnapshot {
+    pub(crate) user_time_contexts: BTreeMap<ItemId, zeta_protocol::TimeContext>,
     pub(crate) history_sources: BTreeMap<ThreadId, zeta_protocol::HistoryPrefixRef>,
     pub(crate) message_checkpoints: BTreeMap<ItemId, zeta_protocol::MessageCheckpoint>,
     pub agent_id: zeta_protocol::AgentId,
@@ -383,6 +384,23 @@ pub(crate) fn reduce_thread_event_with_prefix(
             envelope.schema_version
         )));
     }
+    if let Some(time) = &envelope.time_context {
+        if envelope.schema_version < 18
+            || !matches!(
+                &envelope.event,
+                ThreadEvent::ItemCompleted {
+                    item: ThreadItem::UserMessage { .. },
+                    ..
+                }
+            )
+        {
+            return Err(CoreError::Journal(
+                "input time context must belong to a current-schema user message".into(),
+            ));
+        }
+        zeta_agent_environment::TimeSnapshot::new(time.clone())
+            .map_err(|error| CoreError::Journal(error.to_string()))?;
+    }
 
     let Some(mut snapshot) = snapshot else {
         if envelope.sequence != 1 {
@@ -410,6 +428,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 let mut event_digests = BTreeMap::new();
                 event_digests.insert(envelope.sequence, event_digest(&envelope.event)?);
                 Ok(ThreadSnapshot {
+                    user_time_contexts: Default::default(),
                     history_sources: BTreeMap::new(),
                     message_checkpoints: BTreeMap::new(),
                     agent_id: zeta_history::created_thread_agent_id(envelope)
@@ -517,6 +536,12 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     .insert(item.item_id().clone(), envelope.sequence);
             }
             snapshot.context_checkpoints = source.context_checkpoints.clone();
+            snapshot.user_time_contexts = source
+                .user_time_contexts
+                .iter()
+                .filter(|(id, _)| snapshot.items.iter().any(|item| item.item_id() == *id))
+                .map(|(id, time)| (id.clone(), time.clone()))
+                .collect();
             snapshot.message_checkpoints = source.message_checkpoints.clone();
             for point in snapshot
                 .message_checkpoints
@@ -689,6 +714,10 @@ pub(crate) fn reduce_thread_event_with_prefix(
             record,
         } => {
             require_no_command(envelope)?;
+            if let Some(time) = &record.time_context {
+                zeta_agent_environment::TimeSnapshot::new(time.clone())
+                    .map_err(|error| CoreError::Journal(error.to_string()))?;
+            }
             if &record.thread_id != thread_id || &record.turn_id != turn_id {
                 return Err(CoreError::Journal(
                     "model invocation identity does not match its Thread event".into(),
@@ -1134,6 +1163,11 @@ pub(crate) fn reduce_thread_event_with_prefix(
             checkpoint_after_sequence,
             ..
         } => {
+            if let Some(time) = &envelope.time_context {
+                snapshot
+                    .user_time_contexts
+                    .insert(item.item_id().clone(), time.clone());
+            }
             if let Some(workspace) = workspace_checkpoint {
                 snapshot.message_checkpoints.insert(
                     item.item_id().clone(),

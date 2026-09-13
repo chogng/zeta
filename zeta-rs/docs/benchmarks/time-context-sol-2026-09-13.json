@@ -1,0 +1,563 @@
+{
+  "model": "gpt-5.6-sol",
+  "scope": "Codex child task traces, not direct standalone API TTFT",
+  "pilot_pairs": [
+    1,
+    2
+  ],
+  "script_sha256": "4ca8956fc61bfffa66a740010bc0e1657acadc15c73e2255ce2ab2fe9f5f8292",
+  "rows": [
+    {
+      "name": "/root/time_context_a1",
+      "pair": 1,
+      "variant": "context_a",
+      "pilot": true,
+      "source_sha256": "539e6483ee9edadfccbb5e567a6c46512e07130f90a4d0e5a62d563c835b4b43",
+      "started_at": "2026-09-13T03:36:49.155Z",
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "context_at": "2026-09-13T03:36:52.896Z",
+      "final_at": "2026-09-13T03:36:54.345Z",
+      "completed_at": "2026-09-13T03:36:54.579Z",
+      "tool_calls": 0,
+      "calls": [],
+      "outputs": [],
+      "usage": {
+        "input_tokens": 32908,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 17,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 32925
+      },
+      "usage_updates": 1,
+      "task_ms": 5424.0,
+      "model_pipeline_ms": 1449.0,
+      "valid_shape": true
+    },
+    {
+      "name": "/root/time_tool_b1",
+      "pair": 1,
+      "variant": "tool_b",
+      "pilot": true,
+      "source_sha256": "dc66918c703aaf09c2a573ec48248f096366fdda2e3c1b5083728d1fdbfc2b02",
+      "started_at": "2026-09-13T03:36:57.211Z",
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "context_at": "2026-09-13T03:36:59.811Z",
+      "final_at": "2026-09-13T03:37:03.151Z",
+      "completed_at": "2026-09-13T03:37:03.156Z",
+      "tool_calls": 1,
+      "calls": [
+        {
+          "name": "exec",
+          "at": "2026-09-13T03:37:01.761Z",
+          "call_id": "call_PesCorfgw6Fh3wBZSyqwTzLb"
+        }
+      ],
+      "outputs": [
+        {
+          "at": "2026-09-13T03:37:01.773Z",
+          "call_id": "call_PesCorfgw6Fh3wBZSyqwTzLb"
+        }
+      ],
+      "usage": {
+        "input_tokens": 65860,
+        "cached_input_tokens": 65024,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 43,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 65903
+      },
+      "usage_updates": 2,
+      "task_ms": 5945.0,
+      "model_pipeline_ms": 3340.0,
+      "tool_wall_ms": 12.0,
+      "after_tool_ms": 1378.0,
+      "valid_shape": true
+    },
+    {
+      "name": "/root/time_context_a2",
+      "pair": 2,
+      "variant": "context_a",
+      "pilot": true,
+      "source_sha256": "b599f8fe5a81a8c5d6c2e6138206ceb0d12cddffa753425b1b64633acf0e393b",
+      "started_at": "2026-09-13T03:40:51.235Z",
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "context_at": "2026-09-13T03:40:53.815Z",
+      "final_at": "2026-09-13T03:40:55.299Z",
+      "completed_at": "2026-09-13T03:40:55.528Z",
+      "tool_calls": 0,
+      "calls": [],
+      "outputs": [],
+      "usage": {
+        "input_tokens": 32908,
+        "cached_input_tokens": 32512,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 17,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 32925
+      },
+      "usage_updates": 1,
+      "task_ms": 4293.0,
+      "model_pipeline_ms": 1484.0,
+      "valid_shape": true
+    },
+    {
+      "name": "/root/time_tool_b2",
+      "pair": 2,
+      "variant": "tool_b",
+      "pilot": true,
+      "source_sha256": "23efbd796bd12587080c2223cd846b1141d6f117394c098ee3c574231542cc6b",
+      "started_at": "2026-09-13T03:40:41.499Z",
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "context_at": "2026-09-13T03:40:44.585Z",
+      "final_at": "2026-09-13T03:40:48.430Z",
+      "completed_at": "2026-09-13T03:40:48.556Z",
+      "tool_calls": 1,
+      "calls": [
+        {
+          "name": "exec",
+          "at": "2026-09-13T03:40:46.646Z",
+          "call_id": "call_Pe1fJ5286e7fqjOhoQZ3hvtt"
+        }
+      ],
+      "outputs": [
+        {
+          "at": "2026-09-13T03:40:46.903Z",
+          "call_id": "call_Pe1fJ5286e7fqjOhoQZ3hvtt"
+        }
+      ],
+      "usage": {
+        "input_tokens": 65860,
+        "cached_input_tokens": 32512,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 43,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 65903
+      },
+      "usage_updates": 2,
+      "task_ms": 7057.0,
+      "model_pipeline_ms": 3845.0,
+      "tool_wall_ms": 257.0,
+      "after_tool_ms": 1527.0,
+      "valid_shape": true
+    },
+    {
+      "name": "/root/time_context_a3",
+      "pair": 3,
+      "variant": "context_a",
+      "pilot": false,
+      "source_sha256": "81840b88930f5dce75ff51beb5cc05c7d980f79ec495aeed3ac669dc6a358df2",
+      "started_at": "2026-09-13T03:42:47.738Z",
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "context_at": "2026-09-13T03:42:50.680Z",
+      "final_at": "2026-09-13T03:42:52.400Z",
+      "completed_at": "2026-09-13T03:42:52.600Z",
+      "tool_calls": 0,
+      "calls": [],
+      "outputs": [],
+      "usage": {
+        "input_tokens": 32908,
+        "cached_input_tokens": 32512,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 17,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 32925
+      },
+      "usage_updates": 1,
+      "task_ms": 4862.0,
+      "model_pipeline_ms": 1720.0,
+      "valid_shape": true
+    },
+    {
+      "name": "/root/time_tool_b3",
+      "pair": 3,
+      "variant": "tool_b",
+      "pilot": false,
+      "source_sha256": "9e2e7d35e50d04a431dea765ceab40f23b4fedfb91dc0a795633de193b44e918",
+      "started_at": "2026-09-13T03:42:58.691Z",
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "context_at": "2026-09-13T03:43:01.729Z",
+      "final_at": "2026-09-13T03:43:04.822Z",
+      "completed_at": "2026-09-13T03:43:04.908Z",
+      "tool_calls": 1,
+      "calls": [
+        {
+          "name": "exec",
+          "at": "2026-09-13T03:43:03.398Z",
+          "call_id": "call_z6fu0lQT6QP6ZCGl8Fob36Tf"
+        }
+      ],
+      "outputs": [
+        {
+          "at": "2026-09-13T03:43:03.581Z",
+          "call_id": "call_z6fu0lQT6QP6ZCGl8Fob36Tf"
+        }
+      ],
+      "usage": {
+        "input_tokens": 65860,
+        "cached_input_tokens": 65024,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 43,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 65903
+      },
+      "usage_updates": 2,
+      "task_ms": 6217.0,
+      "model_pipeline_ms": 3093.0,
+      "tool_wall_ms": 183.0,
+      "after_tool_ms": 1241.0,
+      "valid_shape": true
+    },
+    {
+      "name": "/root/time_context_a4",
+      "pair": 4,
+      "variant": "context_a",
+      "pilot": false,
+      "source_sha256": "b5535f9b3395d6f45a5bdc1feae99c1f7b0dafb87eef96bc55415502bcb84c08",
+      "started_at": "2026-09-13T03:44:35.562Z",
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "context_at": "2026-09-13T03:44:38.633Z",
+      "final_at": "2026-09-13T03:44:40.305Z",
+      "completed_at": "2026-09-13T03:44:40.451Z",
+      "tool_calls": 0,
+      "calls": [],
+      "outputs": [],
+      "usage": {
+        "input_tokens": 32908,
+        "cached_input_tokens": 32512,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 17,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 32925
+      },
+      "usage_updates": 1,
+      "task_ms": 4889.0,
+      "model_pipeline_ms": 1672.0,
+      "valid_shape": true
+    },
+    {
+      "name": "/root/time_tool_b4",
+      "pair": 4,
+      "variant": "tool_b",
+      "pilot": false,
+      "source_sha256": "d58ec40297dfc6a50aabc9131eed621e5ffea864b5dcaaee636303ace1d7f7a0",
+      "started_at": "2026-09-13T03:44:13.005Z",
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "context_at": "2026-09-13T03:44:15.927Z",
+      "final_at": "2026-09-13T03:44:19.256Z",
+      "completed_at": "2026-09-13T03:44:19.261Z",
+      "tool_calls": 1,
+      "calls": [
+        {
+          "name": "exec",
+          "at": "2026-09-13T03:44:17.689Z",
+          "call_id": "call_Mxcw620oyAOUPRPtmVfBLJmL"
+        }
+      ],
+      "outputs": [
+        {
+          "at": "2026-09-13T03:44:17.824Z",
+          "call_id": "call_Mxcw620oyAOUPRPtmVfBLJmL"
+        }
+      ],
+      "usage": {
+        "input_tokens": 65860,
+        "cached_input_tokens": 65024,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 43,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 65903
+      },
+      "usage_updates": 2,
+      "task_ms": 6256.0,
+      "model_pipeline_ms": 3329.0,
+      "tool_wall_ms": 135.0,
+      "after_tool_ms": 1432.0,
+      "valid_shape": true
+    },
+    {
+      "name": "/root/time_context_a5",
+      "pair": 5,
+      "variant": "context_a",
+      "pilot": false,
+      "source_sha256": "e9e5039be6d074cf54c21d77e78b08727705a4924bfb18d0896928e14aefa051",
+      "started_at": "2026-09-13T03:47:03.502Z",
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "context_at": "2026-09-13T03:47:06.603Z",
+      "final_at": "2026-09-13T03:47:07.973Z",
+      "completed_at": "2026-09-13T03:47:08.341Z",
+      "tool_calls": 0,
+      "calls": [],
+      "outputs": [],
+      "usage": {
+        "input_tokens": 32908,
+        "cached_input_tokens": 32512,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 17,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 32925
+      },
+      "usage_updates": 1,
+      "task_ms": 4839.0,
+      "model_pipeline_ms": 1370.0,
+      "valid_shape": true
+    },
+    {
+      "name": "/root/time_tool_b5",
+      "pair": 5,
+      "variant": "tool_b",
+      "pilot": false,
+      "source_sha256": "7844b5579a6c29231223dd7e981aa4eb6ff8eab2f171d8d42438999dfddc8bd6",
+      "started_at": "2026-09-13T03:47:14.820Z",
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "context_at": "2026-09-13T03:47:17.598Z",
+      "final_at": "2026-09-13T03:47:21.324Z",
+      "completed_at": "2026-09-13T03:47:21.510Z",
+      "tool_calls": 1,
+      "calls": [
+        {
+          "name": "exec",
+          "at": "2026-09-13T03:47:19.254Z",
+          "call_id": "call_0eohTqAFPhRAow6PBQjjroyD"
+        }
+      ],
+      "outputs": [
+        {
+          "at": "2026-09-13T03:47:19.848Z",
+          "call_id": "call_0eohTqAFPhRAow6PBQjjroyD"
+        }
+      ],
+      "usage": {
+        "input_tokens": 65860,
+        "cached_input_tokens": 65024,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 43,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 65903
+      },
+      "usage_updates": 2,
+      "task_ms": 6690.0,
+      "model_pipeline_ms": 3726.0,
+      "tool_wall_ms": 594.0,
+      "after_tool_ms": 1476.0,
+      "valid_shape": true
+    },
+    {
+      "name": "/root/time_context_a6",
+      "pair": 6,
+      "variant": "context_a",
+      "pilot": false,
+      "source_sha256": "f53af45ac0f1f22b23a62adca0ded11bf56dbe5355702096cfbc46e6d2b0ebd6",
+      "started_at": "2026-09-13T03:48:53.728Z",
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "context_at": "2026-09-13T03:48:56.615Z",
+      "final_at": "2026-09-13T03:48:58.114Z",
+      "completed_at": "2026-09-13T03:48:58.536Z",
+      "tool_calls": 0,
+      "calls": [],
+      "outputs": [],
+      "usage": {
+        "input_tokens": 32908,
+        "cached_input_tokens": 32512,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 17,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 32925
+      },
+      "usage_updates": 1,
+      "task_ms": 4808.0,
+      "model_pipeline_ms": 1499.0,
+      "valid_shape": true
+    },
+    {
+      "name": "/root/time_tool_b6",
+      "pair": 6,
+      "variant": "tool_b",
+      "pilot": false,
+      "source_sha256": "fa0dd4ed64130bf267cf756c1c5b013b1388aed38bf9835abaf8e87ff21e36de",
+      "started_at": "2026-09-13T03:48:31.493Z",
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "context_at": "2026-09-13T03:48:34.748Z",
+      "final_at": "2026-09-13T03:48:38.538Z",
+      "completed_at": "2026-09-13T03:48:39.078Z",
+      "tool_calls": 1,
+      "calls": [
+        {
+          "name": "exec",
+          "at": "2026-09-13T03:48:36.610Z",
+          "call_id": "call_C1uNgpiR5xrbLIUcYEZmC6M9"
+        }
+      ],
+      "outputs": [
+        {
+          "at": "2026-09-13T03:48:36.733Z",
+          "call_id": "call_C1uNgpiR5xrbLIUcYEZmC6M9"
+        }
+      ],
+      "usage": {
+        "input_tokens": 65860,
+        "cached_input_tokens": 65024,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 43,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 65903
+      },
+      "usage_updates": 2,
+      "task_ms": 7585.0,
+      "model_pipeline_ms": 3790.0,
+      "tool_wall_ms": 123.0,
+      "after_tool_ms": 1805.0,
+      "valid_shape": true
+    },
+    {
+      "name": "/root/time_context_a7",
+      "pair": 7,
+      "variant": "context_a",
+      "pilot": false,
+      "source_sha256": "14e8d23b3b6a5553a4fae438d7fe119939a4e5c25cfff71118e1cb8da4ec4e76",
+      "started_at": "2026-09-13T03:50:20.458Z",
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "context_at": "2026-09-13T03:50:23.902Z",
+      "final_at": "2026-09-13T03:50:26.083Z",
+      "completed_at": "2026-09-13T03:50:26.801Z",
+      "tool_calls": 0,
+      "calls": [],
+      "outputs": [],
+      "usage": {
+        "input_tokens": 32908,
+        "cached_input_tokens": 32512,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 17,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 32925
+      },
+      "usage_updates": 1,
+      "task_ms": 6343.0,
+      "model_pipeline_ms": 2181.0,
+      "valid_shape": true
+    },
+    {
+      "name": "/root/time_tool_b7",
+      "pair": 7,
+      "variant": "tool_b",
+      "pilot": false,
+      "source_sha256": "b28cdd99ed98e16b93d6c37a6e476396ba1c17beb9d323a12d590955b4e6467b",
+      "started_at": "2026-09-13T03:50:29.831Z",
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "context_at": "2026-09-13T03:50:32.577Z",
+      "final_at": "2026-09-13T03:50:35.703Z",
+      "completed_at": "2026-09-13T03:50:35.708Z",
+      "tool_calls": 1,
+      "calls": [
+        {
+          "name": "exec",
+          "at": "2026-09-13T03:50:34.280Z",
+          "call_id": "call_BqEoSPBTSRoMdPZQRipLg1A5"
+        }
+      ],
+      "outputs": [
+        {
+          "at": "2026-09-13T03:50:34.383Z",
+          "call_id": "call_BqEoSPBTSRoMdPZQRipLg1A5"
+        }
+      ],
+      "usage": {
+        "input_tokens": 65860,
+        "cached_input_tokens": 65024,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 43,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 65903
+      },
+      "usage_updates": 2,
+      "task_ms": 5877.0,
+      "model_pipeline_ms": 3126.0,
+      "tool_wall_ms": 103.0,
+      "after_tool_ms": 1320.0,
+      "valid_shape": true
+    },
+    {
+      "name": "/root/time_context_a8",
+      "pair": 8,
+      "variant": "context_a",
+      "pilot": false,
+      "source_sha256": "ed37da01773cd3e8c2b8d007b9be08bdac2a1246caca647ca466754efc564d9d",
+      "started_at": "2026-09-13T03:52:30.431Z",
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "context_at": "2026-09-13T03:52:33.199Z",
+      "final_at": "2026-09-13T03:52:34.623Z",
+      "completed_at": "2026-09-13T03:52:34.940Z",
+      "tool_calls": 0,
+      "calls": [],
+      "outputs": [],
+      "usage": {
+        "input_tokens": 32908,
+        "cached_input_tokens": 32512,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 17,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 32925
+      },
+      "usage_updates": 1,
+      "task_ms": 4509.0,
+      "model_pipeline_ms": 1424.0,
+      "valid_shape": true
+    },
+    {
+      "name": "/root/time_tool_b8",
+      "pair": 8,
+      "variant": "tool_b",
+      "pilot": false,
+      "source_sha256": "ceac893e2462a0ed4571f4c3ee3c7f9e26be06969871d73df758f7d50ffec281",
+      "started_at": "2026-09-13T03:52:09.826Z",
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "context_at": "2026-09-13T03:52:12.325Z",
+      "final_at": "2026-09-13T03:52:17.225Z",
+      "completed_at": "2026-09-13T03:52:17.280Z",
+      "tool_calls": 1,
+      "calls": [
+        {
+          "name": "exec",
+          "at": "2026-09-13T03:52:15.726Z",
+          "call_id": "call_wHtzD94rSc028h5F7qSO8wgI"
+        }
+      ],
+      "outputs": [
+        {
+          "at": "2026-09-13T03:52:15.950Z",
+          "call_id": "call_wHtzD94rSc028h5F7qSO8wgI"
+        }
+      ],
+      "usage": {
+        "input_tokens": 65860,
+        "cached_input_tokens": 65024,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 43,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 65903
+      },
+      "usage_updates": 2,
+      "task_ms": 7454.0,
+      "model_pipeline_ms": 4900.0,
+      "tool_wall_ms": 224.0,
+      "after_tool_ms": 1275.0,
+      "valid_shape": true
+    }
+  ]
+}

@@ -1103,3 +1103,27 @@ TUI 选择 Issue 后调用通用 `session/create`，指定内置 `issue`；随�
 Issue Workflow、plan、assignment、task、专属 PR 发布接口及对应存储已退出生产调用链；这些旧 method 返回 MethodNotFound。配置文件 schemaVersion 1 升级到 2 时移除 issues.repositories、recommendMerge 和 analysisModel，保留浏览刷新偏好；SQLite 配置文档版本为 10。已有用户数据库中的旧 Issue 表不会在后台被自动删除。
 
 指令组合和外部参考见 [Agent 指令系统](../zeta-rs/docs/agent-instructions.md)，模型和权限选择不能由 Issue 页面另建一套规则。
+
+## 时间上下文配置
+
+此契约使用 capability version 5；客户端与后端必须匹配，旧版不能静默忽略时间策略。
+
+`config/read.timeContext` 返回 profile 的模型时间策略；`config/update.timeContext` 接受完整策略对象，沿用 `commandId` 与 `expectedRevision` 的原子提交、重放和冲突规则。缺失该更新字段保持原策略，`null` 恢复默认 `{ "mode": "date" }`。
+
+```json
+{
+  "timeContext": {
+    "mode": "time",
+    "timeZone": "Asia/Shanghai"
+  }
+}
+```
+
+- `mode`：`off`、`date` 或 `time`，更新对象中必填；分别表示不注入、日期、秒级时刻。
+- `timeZone`：可省略的 IANA 时区；省略或 `null` 使用宿主时区。非法名称拒绝，不能替换成别的时区。
+- 此配置属于 backend Agent 行为，保存在 `[agent.timeContext]`；不是 `[gui]`、`[tui]` 或目录配置。
+- 后续采样读取新配置，已持久化的输入参照不随配置变化。
+- `ModelInvocationRecord.timeContext` 可选记录完成的模型调用所用快照：`sampledAtUnixMs`、`utcOffsetSeconds`、`timeZone`、`origin`（`host` / `configured`）和 `mode`。关闭时间上下文时缺省。
+- Unix 毫秒受既有 `UnixMillis` 范围约束，日期与时区类型不进入传输契约。
+
+输入参照、跨日、重试、恢复与 Token 边界统一维护在 [Agent 时间与等待](../zeta-rs/docs/agent-wait.md)。

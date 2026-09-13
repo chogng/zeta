@@ -176,6 +176,12 @@ impl AppServer {
                 command_id: params.command_id,
                 expected_revision: ConfigRevision::new(params.expected_revision),
                 command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                    time_context: params.time_context.map(|config| {
+                        zeta_config::TimeContextConfig {
+                            mode: config.mode,
+                            time_zone: config.time_zone,
+                        }
+                    }),
                     features: params.features,
                     preferred_model: model_ref_update_from_dto(params.preferred_model)?,
                     preferred_reasoning_effort: params.preferred_reasoning_effort,
@@ -207,6 +213,7 @@ impl AppServer {
                 command_id: params.command_id,
                 expected_revision: ConfigRevision::new(params.expected_revision),
                 command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                    time_context: zeta_protocol::Patch::Missing,
                     features: Default::default(),
                     preferred_model: Patch::Missing,
                     preferred_reasoning_effort: Patch::Missing,
@@ -617,6 +624,10 @@ fn config_read_result(
         embedding_status: tool_search_status_dto(tool_search_status),
     };
     ConfigReadResult {
+        time_context: zeta_app_server_protocol::protocol::config::TimeContextConfigDto {
+            mode: snapshot.values.time_context.mode,
+            time_zone: snapshot.values.time_context.time_zone.clone(),
+        },
         features: features::resolve(&snapshot.values.features),
         issues: zeta_app_server_protocol::protocol::issues::IssueConfigDto {
             auto_refresh_minutes: snapshot.values.issues.auto_refresh_minutes,

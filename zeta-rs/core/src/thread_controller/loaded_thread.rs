@@ -23,6 +23,7 @@ pub(super) struct LoadedThreadState {
 
 pub(super) struct ThreadSlot {
     pub(super) loaded: Mutex<Option<LoadedThreadState>>,
+    pub(super) activity: zeta_async_utils::Notify,
     mutation_gate: MutationGate,
 }
 
@@ -80,6 +81,7 @@ impl LoadedThreads {
             .or_insert_with(|| {
                 Arc::new(ThreadSlot {
                     loaded: Mutex::new(None),
+                    activity: zeta_async_utils::Notify::default(),
                     mutation_gate: MutationGate::default(),
                 })
             })

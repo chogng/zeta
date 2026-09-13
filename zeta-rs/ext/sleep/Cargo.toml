@@ -1,5 +1,5 @@
 [package]
-name = "zeta-clock"
+name = "zeta-sleep"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -10,7 +10,7 @@ doctest = false
 
 [dependencies]
 serde_json = { workspace = true }
-async-utils = { package = "zeta-async-utils", path = "../../async-utils" }
+async-utils = { package = "zeta-async-utils", path = "../../async-utils", features = ["wait"] }
 extension-api = { package = "zeta-extension-api", path = "../extension-api" }
 tools = { package = "zeta-tools", path = "../../tools" }
 extension-items = { workspace = true }

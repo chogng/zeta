@@ -783,6 +783,11 @@ impl LocalProfileRuntime {
             ConfigStore::open_with_paths(database_path.clone(), profile_root.join("config.toml"))
                 .map_err(|error| OpenAppServerError(error.0))?,
         );
+        threads
+            .install_time_context_provider(Arc::new(crate::time_context::ConfigTimeContext::new(
+                config.clone(),
+            )))
+            .map_err(open_error)?;
         let secrets: Arc<dyn SecretStore> = Arc::new(
             FileSecretStore::open(profile_root.join("secrets"))
                 .map_err(|error| OpenAppServerError(error.to_string()))?,
@@ -1029,6 +1034,13 @@ pub fn open_local_app_server_with_codebase_providers(
             (database_path, threads, config)
         }
     };
+    if profile_runtime.is_none() {
+        threads
+            .install_time_context_provider(Arc::new(crate::time_context::ConfigTimeContext::new(
+                config.clone(),
+            )))
+            .map_err(open_error)?;
+    }
     let user_config = config
         .read_snapshot()
         .map_err(|error| OpenAppServerError(error.0))?;

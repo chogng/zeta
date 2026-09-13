@@ -4,6 +4,7 @@ mod session;
 
 pub use session::CommandSessionCursor;
 pub use session::CommandSessionId;
+pub use session::CommandSessionOptions;
 pub use session::CommandSessionOutput;
 pub use session::CommandSessionOwner;
 pub use session::CommandSessionStart;

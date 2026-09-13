@@ -106,8 +106,8 @@ impl ExtensionItemContent {
                 }
             }
             Self::Sleep { duration_ms } => {
-                if *duration_ms > 60_000 {
-                    return Err("sleep exceeds 60 seconds");
+                if *duration_ms > 43_200_000 {
+                    return Err("wait exceeds 12 hours");
                 }
             }
         }

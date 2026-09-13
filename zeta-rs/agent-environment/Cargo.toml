@@ -12,6 +12,9 @@ name = "zeta_agent_environment"
 path = "src/lib.rs"
 
 [dependencies]
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+zeta-protocol = { workspace = true }
 zeta-utils-absolute-path = { workspace = true }
 
 [lints]

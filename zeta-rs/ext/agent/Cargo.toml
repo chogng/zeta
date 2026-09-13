@@ -14,7 +14,9 @@ agent-roles = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 action-policy = { package = "zeta-action-policy", path = "../../action-policy" }
-async-utils = { package = "zeta-async-utils", path = "../../async-utils" }
+async-utils = { package = "zeta-async-utils", path = "../../async-utils", features = ["wait"] }
+futures = { workspace = true }
+pollster = { workspace = true }
 zeta-core = { workspace = true }
 instructions = { package = "zeta-instructions", path = "../../instructions" }
 models-manager = { package = "zeta-models-manager", path = "../../models-manager" }

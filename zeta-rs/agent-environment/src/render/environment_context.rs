@@ -30,7 +30,6 @@ impl AgentEnvironmentSnapshot {
         push_element(&mut rendered, "platform", self.host().platform(), 2);
         push_element(&mut rendered, "os_version", self.host().os_version(), 2);
         push_element(&mut rendered, "shell", self.host().shell(), 2);
-        push_element(&mut rendered, "current_date", self.host().current_date(), 2);
         push_element(&mut rendered, "git_branch", branch.unwrap_or("(none)"), 2);
         push_element(
             &mut rendered,

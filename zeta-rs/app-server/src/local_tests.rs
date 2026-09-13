@@ -1365,6 +1365,7 @@ fn configured_model_context_enables_core_managed_compaction() {
             command_id: CommandId::new("select-context-model").unwrap(),
             expected_revision: configured.revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                time_context: zeta_protocol::Patch::Missing,
                 features: Default::default(),
                 preferred_model: Patch::Value(ModelRef::new(provider.clone(), model.clone())),
                 ..Default::default()
@@ -1431,6 +1432,7 @@ fn config_backed_model_service_resolves_reasoning_effort() {
             command_id: CommandId::new("select-model-with-effort").unwrap(),
             expected_revision: configured.revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                time_context: zeta_protocol::Patch::Missing,
                 preferred_model: Patch::Value(ModelRef::new(provider.clone(), model.clone())),
                 preferred_reasoning_effort: Patch::Value(ReasoningEffort::High),
                 ..Default::default()
@@ -1524,6 +1526,7 @@ fn select_model(
             command_id: CommandId::new(command_id).unwrap(),
             expected_revision: revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                time_context: zeta_protocol::Patch::Missing,
                 features: Default::default(),
                 preferred_model: Patch::Value(model_ref(model)),
                 preferred_reasoning_effort: Patch::Missing,

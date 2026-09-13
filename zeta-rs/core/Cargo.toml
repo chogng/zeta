@@ -18,7 +18,7 @@ agent-graph-store = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-zeta-async-utils = { workspace = true }
+zeta-async-utils = { workspace = true, features = ["wait"] }
 zeta-attachments = { workspace = true }
 zeta-context-engine = { workspace = true }
 zeta-code-mode = { workspace = true, optional = true }

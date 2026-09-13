@@ -105,7 +105,12 @@ const GLOB_DESCRIPTION: &str = r#"Finds files by glob pattern, sorted by most re
 const SHELL_SESSION_DESCRIPTION: &str = r#"Starts or controls one long-running command session.
 
 - start creates the command once and may return while it is still running.
+- timeout_ms bounds command lifetime (default 30 seconds, maximum 12 hours); choose it
+  explicitly for a long build or monitor. wait_ms only bounds this call's observation.
 - read uses independent stdout/stderr cursors and never terminates on wait expiry.
+- wait observes completion, suppressing intermediate output and model polling. wait_ms defaults
+  to 12 hours for wait; expiry only ends the wait. Use read when progress is needed.
+- For CI, start an authorized monitoring command once, then wait on that same session.
 - write sends input to the same process; close_input sends EOF.
 - interrupt requests a foreground interrupt; terminate kills the process tree.
 - A session belongs to the current Session, Thread, and Environment."#;
@@ -128,7 +133,7 @@ const WRITE_SCHEMA: &str = r#"{"type":"object","properties":{"path":{"type":"str
 const EDIT_SCHEMA: &str = r#"{"type":"object","properties":{"path":{"type":"string","description":"Absolute path of the file to modify."},"old_string":{"type":"string","description":"Exact text to replace. Must be unique in the file unless replace_all is true."},"new_string":{"type":"string","description":"Replacement text. Must differ from old_string."},"replace_all":{"type":["boolean","null"],"description":"Replace every occurrence. Defaults to false."}},"required":["path","old_string","new_string","replace_all"],"additionalProperties":false}"#;
 const GREP_SCHEMA: &str = r#"{"type":"object","properties":{"pattern":{"type":"string","description":"Regular expression to search for."},"path":{"type":["string","null"],"description":"File or directory to search. Defaults to the selected directory."},"glob":{"type":["string","null"],"description":"Restrict to files matching this glob, e.g. \"*.rs\"."},"case_insensitive":{"type":["boolean","null"],"description":"Case-insensitive search. Defaults to false."}},"required":["pattern","path","glob","case_insensitive"],"additionalProperties":false}"#;
 const GLOB_SCHEMA: &str = r#"{"type":"object","properties":{"pattern":{"type":"string","description":"Glob pattern to match file paths against."},"path":{"type":["string","null"],"description":"Directory to search in. Defaults to the selected directory."}},"required":["pattern","path"],"additionalProperties":false}"#;
-const SHELL_SESSION_SCHEMA: &str = r#"{"type":"object","properties":{"action":{"type":"string","enum":["start","read","write","close_input","interrupt","resize","terminate"]},"session_id":{"type":["string","null"]},"program":{"type":["string","null"]},"arguments":{"type":["array","null"],"items":{"type":"string"}},"working_directory":{"type":["string","null"]},"input":{"type":["string","null"]},"stdout_cursor":{"type":["integer","null"],"minimum":0},"stderr_cursor":{"type":["integer","null"],"minimum":0},"wait_ms":{"type":["integer","null"],"minimum":0,"maximum":30000},"terminal_rows":{"type":["integer","null"],"minimum":1,"maximum":1000},"terminal_cols":{"type":["integer","null"],"minimum":1,"maximum":1000}},"required":["action","session_id","program","arguments","working_directory","input","stdout_cursor","stderr_cursor","wait_ms","terminal_rows","terminal_cols"],"additionalProperties":false}"#;
+const SHELL_SESSION_SCHEMA: &str = r#"{"type":"object","properties":{"action":{"type":"string","enum":["start","read","wait","write","close_input","interrupt","resize","terminate"]},"session_id":{"type":["string","null"]},"program":{"type":["string","null"]},"arguments":{"type":["array","null"],"items":{"type":"string"}},"working_directory":{"type":["string","null"]},"input":{"type":["string","null"]},"stdout_cursor":{"type":["integer","null"],"minimum":0},"stderr_cursor":{"type":["integer","null"],"minimum":0},"timeout_ms":{"type":["integer","null"],"minimum":1,"maximum":43200000},"wait_ms":{"type":["integer","null"],"minimum":0,"maximum":43200000},"terminal_rows":{"type":["integer","null"],"minimum":1,"maximum":1000},"terminal_cols":{"type":["integer","null"],"minimum":1,"maximum":1000}},"required":["action","session_id","program","arguments","working_directory","input","stdout_cursor","stderr_cursor","timeout_ms","wait_ms","terminal_rows","terminal_cols"],"additionalProperties":false}"#;
 const MAX_READ_FILE_BYTES: u64 = 10 * 1024 * 1024;
 const MAX_WRITE_FILE_BYTES: usize = 10 * 1024 * 1024;
 const SEARCH_TIMEOUT: Duration = Duration::from_secs(30);
@@ -746,6 +751,13 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 let working_directory =
                     required_nullable_string(&call.arguments, "working_directory")?;
                 let wait = duration_arg(&call.arguments, "wait_ms")?;
+                let execution_timeout_ms =
+                    nullable_u64(&call.arguments, "timeout_ms")?.unwrap_or(30_000);
+                if !(1..=43_200_000).contains(&execution_timeout_ms) {
+                    return Err(CoreError::InvalidInput(
+                        "timeout_ms must be between 1 and 43200000".into(),
+                    ));
+                }
                 let resolved = self
                     .resolve(
                         &working_directory,
@@ -776,8 +788,11 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                             .then_some(&scope),
                         network_policy,
                         owner,
-                        wait,
-                        terminal_size(&call.arguments)?,
+                        zeta_shell_command::CommandSessionOptions {
+                            execution_timeout: Duration::from_millis(execution_timeout_ms),
+                            wait_budget: wait,
+                            terminal: terminal_size(&call.arguments)?,
+                        },
                     )
                     .map_err(|error| CoreError::Execution(super::execution_error(error)))?;
                 match started {
@@ -804,6 +819,32 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                         duration_arg(&call.arguments, "wait_ms")?,
                     )
                     .map_err(|error| CoreError::Execution(super::execution_error(error)))?;
+                Ok(ToolExecutionOutput::Success(session_update_json(&update)?))
+            }
+            "wait" => {
+                let id = command_session_id(&call.arguments)?;
+                let wait_ms = nullable_u64(&call.arguments, "wait_ms")?.unwrap_or(43_200_000);
+                if wait_ms > 43_200_000 {
+                    return Err(CoreError::InvalidInput(
+                        "wait_ms must not exceed 43200000".into(),
+                    ));
+                }
+                let update = pollster::block_on(self.shell.shell.wait_session(
+                    &owner,
+                    &id,
+                    CommandSessionCursor {
+                        stdout: nullable_u64(&call.arguments, "stdout_cursor")?.unwrap_or(0),
+                        stderr: nullable_u64(&call.arguments, "stderr_cursor")?.unwrap_or(0),
+                    },
+                    Duration::from_millis(wait_ms),
+                    cancellation,
+                ))
+                .map_err(|error| match error {
+                    zeta_shell_command::ExecutionError::CancelledBeforeStart(reason) => {
+                        CoreError::Cancelled(reason)
+                    }
+                    error => CoreError::Execution(super::execution_error(error)),
+                })?;
                 Ok(ToolExecutionOutput::Success(session_update_json(&update)?))
             }
             "write" => {

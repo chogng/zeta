@@ -172,3 +172,96 @@ fn instruction_benchmark_composition() {
         }
     }
 }
+
+#[test]
+#[ignore = "offline time-context assembly benchmark; no model or network calls"]
+fn time_context_benchmark() {
+    const SAMPLES: usize = 1000;
+    const WARMUP: usize = 100;
+    let environment = "<environment_context>\ncurrent_date: 2026-09-12\n</environment_context>";
+    let time = "<time_context>\nnow: 2026-09-12T19:29:47-07:00\ntimezone: America/Los_Angeles\n</time_context>";
+    for tool_count in [16, 128] {
+        let tools = (0..tool_count).map(|index| ToolDefinition {
+            name: ToolName::new(format!("tool_{index}")).unwrap(),
+            description: "A benchmark tool.".into(),
+            parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"],"additionalProperties":false}),
+            strict: true,
+        }).collect::<Vec<_>>();
+        let fixture = Fixture::new(tools, None, zeta_prompts::AGENT_INSTRUCTIONS.freeze());
+        let snapshot = fixture.controller.read_thread(&fixture.thread).unwrap();
+        let instructions = vec![InstructionFragment::new(
+            InstructionSource::new("benchmark", "stable-instructions", "v1"),
+            InstructionLayer::System,
+            InstructionRetention::Required,
+            zeta_prompts::AGENT_INSTRUCTIONS.freeze().body(),
+        )];
+        let build = |with_time| {
+            let environment = if with_time {
+                format!("{environment}\n{time}")
+            } else {
+                environment.to_owned()
+            };
+            let input = ContextInput::new(
+                &snapshot,
+                fixture.turn.clone(),
+                instructions.clone(),
+                fixture.tools.clone(),
+                ContextBudget::provider_managed(),
+            )
+            .with_rendered_environment(environment);
+            let ContextPreparation::Ready(plan) = ContextPlanner::prepare(&input).unwrap() else {
+                panic!("context should fit")
+            };
+            let request = ContextAssembler::assemble(&plan).unwrap();
+            let bytes = serde_json::to_vec(&request).unwrap();
+            (request, bytes)
+        };
+        let (base, base_bytes) = build(false);
+        let (injected, injected_bytes) = build(true);
+        let prefix_end = base.prompt_cache_prefix_end.unwrap() as usize;
+        assert_eq!(
+            base.prompt_cache_prefix_end,
+            injected.prompt_cache_prefix_end
+        );
+        assert_eq!(base.instructions, injected.instructions);
+        assert_eq!(base.tools, injected.tools);
+        assert_eq!(base.input[..=prefix_end], injected.input[..=prefix_end]);
+        assert_ne!(base.input.last(), injected.input.last());
+        for _ in 0..WARMUP {
+            black_box(build(false));
+            black_box(build(true));
+        }
+        let mut samples = [Vec::with_capacity(SAMPLES), Vec::with_capacity(SAMPLES)];
+        for sample in 0..SAMPLES {
+            for variant in [sample % 2, 1 - sample % 2] {
+                let started = Instant::now();
+                let result = black_box(build(variant == 1));
+                samples[variant].push(started.elapsed().as_nanos() as u64);
+                black_box(result);
+            }
+        }
+        for (variant, raw) in samples.into_iter().enumerate() {
+            let mut sorted = raw.clone();
+            sorted.sort_unstable();
+            println!(
+                "{}",
+                serde_json::json!({
+                    "benchmark": "time_context_assembly", "variant": if variant == 0 {"baseline"} else {"time_suffix"},
+                    "tool_count": tool_count, "samples": SAMPLES, "warmup": WARMUP,
+                    "samples_ns": raw, "p50_ns": sorted[SAMPLES / 2], "p95_ns": sorted[SAMPLES * 95 / 100],
+                    "request_bytes": if variant == 0 {base_bytes.len()} else {injected_bytes.len()},
+                    "scope": "ContextInput creation + ContextPlanner + ContextAssembler + serde_json serialization; no host time sampling or model inference",
+                    "preserves_reusable_prefix": true, "debug_assertions": cfg!(debug_assertions), "network": false
+                })
+            );
+        }
+        assert_eq!(
+            fixture
+                .controller
+                .read_thread(&fixture.thread)
+                .unwrap()
+                .sequence,
+            snapshot.sequence
+        );
+    }
+}

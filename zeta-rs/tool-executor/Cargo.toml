@@ -14,7 +14,8 @@ path = "src/lib.rs"
 getrandom = { workspace = true }
 network-proxy = { workspace = true, features = ["server"] }
 tempfile = { workspace = true }
-zeta-async-utils = { workspace = true }
+zeta-async-utils = { workspace = true, features = ["wait"] }
+pollster = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-sandboxing = { workspace = true }
 zeta-file-access = { workspace = true }

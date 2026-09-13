@@ -59,6 +59,7 @@ mod theme;
 mod thread;
 mod widgets;
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -152,6 +153,7 @@ pub struct TuiOptions {
     connection: TuiConnectionKind,
     app_server_process: AppServerProcess,
     recovery: Option<TuiRecoveryState>,
+    drafts: Option<TuiRecoveryDrafts>,
     notices: Option<TuiNotices>,
 }
 
@@ -212,6 +214,7 @@ impl TuiOptions {
             connection: TuiConnectionKind::Local,
             app_server_process: AppServerProcess::IncludedInTui,
             recovery: None,
+            drafts: None,
             notices: None,
         }
     }
@@ -262,6 +265,12 @@ impl TuiOptions {
         self
     }
 
+    /// Restores unsent editor drafts after a transport reconnect.
+    pub fn with_drafts(mut self, drafts: TuiRecoveryDrafts) -> Self {
+        self.drafts = Some(drafts);
+        self
+    }
+
     /// Delivers short local-host notices into the normal TUI notice row.
     pub fn with_notices(mut self, notices: TuiNotices) -> Self {
         self.notices = Some(notices);
@@ -288,6 +297,25 @@ impl TuiOptions {
 pub struct TuiRecoveryState {
     session_id: SessionId,
     thread_id: ThreadId,
+}
+
+/// Unsent editor state returned to the CLI host when the transport disconnects.
+#[derive(Clone, Default, Eq, PartialEq)]
+pub struct TuiRecoveryDrafts {
+    pub(crate) new_session: Option<crate::thread::composer::ChatInputDraft>,
+    pub(crate) threads: BTreeMap<ThreadId, crate::thread::composer::ChatInputDraft>,
+    pub(crate) home_visible: bool,
+}
+
+impl fmt::Debug for TuiRecoveryDrafts {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TuiRecoveryDrafts")
+            .field("new_session", &self.new_session.is_some())
+            .field("threads", &self.threads.len())
+            .field("home_visible", &self.home_visible)
+            .finish()
+    }
 }
 
 /// Classifies why an initialized TUI connection reached its terminal boundary.
@@ -339,6 +367,7 @@ pub enum TuiExit {
     ConnectionLost {
         kind: TuiConnectionLossKind,
         recovery: Option<TuiRecoveryState>,
+        drafts: TuiRecoveryDrafts,
         reason: String,
     },
 }

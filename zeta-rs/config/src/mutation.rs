@@ -304,6 +304,11 @@ fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpda
         Patch::Null => document.agent.grep_backend = crate::AgentGrepBackend::Ripgrep,
         Patch::Value(backend) => document.agent.grep_backend = *backend,
     }
+    match &update.time_context {
+        Patch::Missing => {}
+        Patch::Null => document.agent.time_context = crate::TimeContextConfig::default(),
+        Patch::Value(config) => document.agent.time_context = config.clone(),
+    }
     match &update.gui {
         Patch::Missing => {}
         Patch::Null => document.gui.clear(),

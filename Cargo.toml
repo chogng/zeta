@@ -1,7 +1,7 @@
 [workspace]
 exclude = ["zeta-rs/vendor/mxc"]
 members = [
-    "zeta-rs/ext/clock",
+    "zeta-rs/ext/sleep",
     "zeta-rs/ext/git-attribution",
     "zeta-rs/ext/image-generation",
     "zeta-rs/ext/history-notes",
@@ -174,7 +174,7 @@ members = [
     "app/zui",
 ]
 default-members = [
-    "zeta-rs/ext/clock",
+    "zeta-rs/ext/sleep",
     "zeta-rs/ext/git-attribution",
     "zeta-rs/ext/image-generation",
     "zeta-rs/ext/history-notes",
@@ -190,7 +190,9 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
-clock = { package = "zeta-clock", path = "zeta-rs/ext/clock" }
+async-io = "2.6.0"
+event-listener = "5.4.2"
+sleep = { package = "zeta-sleep", path = "zeta-rs/ext/sleep" }
 git-attribution = { package = "zeta-git-attribution", path = "zeta-rs/ext/git-attribution" }
 image-generation = { package = "zeta-image-generation", path = "zeta-rs/ext/image-generation" }
 history-notes = { package = "zeta-history-notes", path = "zeta-rs/ext/history-notes" }
@@ -228,6 +230,7 @@ bm25 = "2.3.2"
 bytemuck = { version = "1", features = ["derive"] }
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 chrono-tz = "0.10.4"
+iana-time-zone = "0.1.64"
 zeta-automation = { path = "zeta-rs/automation" }
 candle-core = "0.9.2"
 candle-nn = "0.9.2"

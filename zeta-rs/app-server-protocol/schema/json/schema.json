@@ -12016,6 +12016,9 @@
           },
           "type": "object"
         },
+        "timeContext": {
+          "$ref": "#/$defs/TimeContextConfigDto"
+        },
         "toolMode": {
           "$ref": "#/$defs/ToolMode"
         },
@@ -12027,6 +12030,7 @@
         }
       },
       "required": [
+        "timeContext",
         "features",
         "issues",
         "revision",
@@ -12132,6 +12136,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/ReasoningEffort"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timeContext": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeContextConfigDto"
             },
             {
               "type": "null"
@@ -24179,6 +24193,17 @@
         "threadId": {
           "$ref": "#/$defs/ThreadId"
         },
+        "timeContext": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeContext"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Exact immutable time facts included in this request; absent when disabled."
+        },
         "turnId": {
           "$ref": "#/$defs/TurnId"
         },
@@ -32136,6 +32161,77 @@
         "repositoryId"
       ],
       "type": "object"
+    },
+    "TimeContext": {
+      "additionalProperties": false,
+      "description": "Immutable clock facts used for an input reference or one prepared model request.",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/TimeContextMode"
+        },
+        "origin": {
+          "$ref": "#/$defs/TimeZoneOrigin"
+        },
+        "sampledAtUnixMs": {
+          "$ref": "#/$defs/UnixMillis"
+        },
+        "timeZone": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "utcOffsetSeconds": {
+          "description": "Offset resolved when sampled; historical rendering does not use a newer tzdb's rules.",
+          "format": "int32",
+          "maximum": 86399,
+          "minimum": -86399,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sampledAtUnixMs",
+        "utcOffsetSeconds",
+        "timeZone",
+        "origin",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "TimeContextConfigDto": {
+      "additionalProperties": false,
+      "description": "Profile-owned time information supplied to model requests.",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/TimeContextMode"
+        },
+        "timeZone": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
+    "TimeContextMode": {
+      "description": "Explicit model-context policy; it does not control timers or execution deadlines.",
+      "enum": [
+        "off",
+        "date",
+        "time"
+      ],
+      "type": "string"
+    },
+    "TimeZoneOrigin": {
+      "description": "Identifies whose calendar is being reported, without assuming the host is the user.",
+      "enum": [
+        "host",
+        "configured"
+      ],
+      "type": "string"
     },
     "ToolCallBinding": {
       "description": "Durable binding between one Tool Call and the exact definition/source generation it selected.\n\nRuntime keys are intentionally absent. Recovery must compare this value with an available\nimmutable source snapshot and fail closed when the exact binding can no longer be restored.",

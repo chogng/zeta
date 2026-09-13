@@ -41,6 +41,7 @@ impl ThreadController {
         billing_scope: ModelBillingScope,
         usage: Option<ModelUsage>,
         input_estimate: Option<ModelInputEstimate>,
+        time_context: Option<zeta_protocol::TimeContext>,
         started_at_unix_ms: u64,
         completed_at_unix_ms: u64,
     ) -> Result<u64, CoreError> {
@@ -63,6 +64,7 @@ impl ThreadController {
         let invocation_id = ModelInvocationId::new(self.next_identifier("model-invocation"))
             .expect("generated model invocation ID is non-empty");
         let record = ModelInvocationRecord {
+            time_context,
             invocation_id,
             thread_id: thread_id.clone(),
             turn_id: turn_id.clone(),
@@ -103,6 +105,7 @@ impl ThreadController {
             None,
             ModelBillingScope::Unavailable,
             usage,
+            None,
             None,
             0,
             0,

@@ -23,3 +23,7 @@ just test zeta-config
 - Config 保存用户覆盖；`zeta-features` 统一解释默认值、阶段和来源。`config/read` 返回 resolved Feature 列表，`config/update.features` 整体替换覆盖，`null` 清空覆盖。
 - `schema.json` 从配置类型生成，包含当前文件 `schemaVersion`、严格字段名和嵌套结构。执行 `just generate-config-schema` 更新，`just test zeta-config-schema` 检查同步。
 - Schema 生成依赖仅在 Cargo 的 `schema` feature 启用；跨字段约束仍由运行时校验。
+
+## Agent 时间策略
+
+`[agent.timeContext]` 保存 `mode = "off" | "date" | "time"` 与可选的 IANA `timeZone`，默认 `date` 且使用宿主时区。策略仅属于 profile；目录不能替用户选择时区。完整行为与参照冻结规则见 [Agent 时间与等待](../docs/agent-wait.md)。

@@ -100,3 +100,18 @@ fn an_old_backend_cannot_silently_ignore_a_requested_root_role() {
         Err(ProtocolCompatibilityError::MajorVersion { .. })
     ));
 }
+
+#[test]
+fn an_older_turn_contract_cannot_silently_ignore_time_context_policy() {
+    let mut initialized = initialization();
+    initialized.capabilities.contracts.insert(
+        "turns".into(),
+        CapabilityContract {
+            version: APP_SERVER_CAPABILITY_VERSION - 1,
+        },
+    );
+    assert!(matches!(
+        ensure_protocol_compatible(&initialized, REQUIRED_SESSION_CAPABILITIES),
+        Err(ProtocolCompatibilityError::CapabilityVersion { name: "turns", .. })
+    ));
+}

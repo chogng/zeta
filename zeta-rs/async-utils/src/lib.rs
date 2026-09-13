@@ -9,6 +9,15 @@
 mod future;
 mod source;
 mod tree;
+#[cfg(feature = "wait")]
+mod wait;
+
+#[cfg(feature = "wait")]
+pub use wait::Notify;
+#[cfg(feature = "wait")]
+pub use wait::WaitOutcome;
+#[cfg(feature = "wait")]
+pub use wait::wait_until;
 
 pub use future::{Cancelable, FutureCancellationExt};
 pub use source::{

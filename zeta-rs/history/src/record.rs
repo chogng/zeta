@@ -6,8 +6,8 @@ use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadId;
 
 /// Schema version written for newly persisted Thread history records.
-/// Version 17 adds retained history prefixes and message-level workspace checkpoints.
-pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 17;
+/// Version 18 adds immutable input-time references and model time-context audit facts.
+pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 18;
 
 /// Resolves the identity at the history-version boundary. Legacy branches each receive one
 /// deterministic identity; current records must carry their explicitly allocated identity.
@@ -100,6 +100,9 @@ pub struct ThreadCommandReceipt {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StoredEvent {
+    /// Present for user-message facts captured with an enabled time-context policy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time_context: Option<zeta_protocol::TimeContext>,
     pub schema_version: u32,
     pub event_id: EventId,
     pub sequence: u64,

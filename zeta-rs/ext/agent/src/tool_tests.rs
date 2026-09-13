@@ -233,7 +233,7 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
         .wait_for_join(
             &parent.thread_id,
             AgentJoinId::new("timeout-join").unwrap(),
-            Some(vec![spawned.delegation_id]),
+            Some(vec![spawned.delegation_id.clone()]),
             AgentJoinPolicy::All,
             Duration::ZERO,
             &CancellationSource::new().token(),
@@ -251,6 +251,103 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
         parent.agent_joins.values().next().unwrap().status,
         AgentJoinStatus::Waiting
     );
+
+    let request_id = protocol::RequestId::new("child-question").unwrap();
+    threads
+        .request_turn_interaction(
+            &spawned.child_thread_id,
+            &spawned.child_turn_id,
+            zeta_core::RequestTurnInteraction {
+                request_id: request_id.clone(),
+                item_id: None,
+                deadline: None,
+                request: protocol::AgentRequest::UserInput {
+                    request: protocol::RequestUserInput {
+                        questions: vec![protocol::UserInputQuestion {
+                            id: "answer".into(),
+                            header: "Choice".into(),
+                            question: "Which target?".into(),
+                            options: Vec::new(),
+                            allow_free_form: true,
+                        }],
+                    },
+                },
+            },
+        )
+        .unwrap();
+    let ToolExecutionOutput::Success(attention) = service
+        .wait_for_join(
+            &parent.thread_id,
+            AgentJoinId::new("timeout-join").unwrap(),
+            Some(vec![spawned.delegation_id.clone()]),
+            AgentJoinPolicy::All,
+            Duration::from_secs(5),
+            &CancellationSource::new().token(),
+        )
+        .unwrap()
+    else {
+        panic!("child input should return attention")
+    };
+    let attention: Value = serde_json::from_str(&attention).unwrap();
+    assert_eq!(attention["reason"], "needs_input");
+    assert_eq!(attention["attention"][0]["request_id"], "child-question");
+    threads
+        .resolve_turn_interaction(
+            &spawned.child_thread_id,
+            zeta_core::ResolveTurnInteractionRequest {
+                command_id: CommandId::new("answer-child").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                turn_id: spawned.child_turn_id.clone(),
+                request_id,
+                response: protocol::AgentResponse::UserInput {
+                    response: protocol::RequestUserInputResponse {
+                        answers: std::collections::BTreeMap::from([(
+                            "answer".into(),
+                            protocol::UserInputAnswer {
+                                value: "the selected target".into(),
+                            },
+                        )]),
+                    },
+                },
+            },
+        )
+        .unwrap();
+
+    // Resume the same durable join. The worker must remain inside one wait until a
+    // committed child completion arrives, regardless of intermediate child output.
+    std::thread::scope(|scope| {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let service = &service;
+        let parent = &parent;
+        let spawned = &spawned;
+        scope.spawn(move || {
+            let result = service.wait_for_join(
+                &parent.thread_id,
+                AgentJoinId::new("timeout-join").unwrap(),
+                Some(vec![spawned.delegation_id.clone()]),
+                AgentJoinPolicy::All,
+                Duration::from_secs(5),
+                &CancellationSource::new().token(),
+            );
+            tx.send(result).unwrap();
+        });
+        assert!(rx.recv_timeout(Duration::from_millis(20)).is_err());
+        threads
+            .complete_turn(
+                &spawned.child_thread_id,
+                &spawned.child_turn_id,
+                "child finished".into(),
+            )
+            .unwrap();
+        let ToolExecutionOutput::Success(result) =
+            rx.recv_timeout(Duration::from_secs(2)).unwrap().unwrap()
+        else {
+            panic!("join should return completed results")
+        };
+        let result: Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(result["status"], "satisfied");
+        assert_eq!(result["results"].as_array().unwrap().len(), 1);
+    });
 }
 
 fn service() -> MultiAgentToolService {

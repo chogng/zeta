@@ -57,9 +57,6 @@ impl AgentEnvironmentSource {
                 .ok()
                 .filter(|value| !value.trim().is_empty())
                 .unwrap_or_else(|| "unknown".into()),
-            command_output(dir_root, "date", &["+%Y-%m-%d"])
-                .filter(|value| !value.is_empty())
-                .unwrap_or_else(|| "unknown".into()),
         )?;
         Ok(Self { host, repository })
     }

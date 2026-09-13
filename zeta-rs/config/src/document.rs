@@ -111,6 +111,8 @@ pub enum AgentGrepBackend {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AgentConfig {
+    #[serde(default)]
+    pub time_context: crate::TimeContextConfig,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preferred_model: Option<ModelRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -171,6 +173,7 @@ pub struct UserConfigDocument {
 
 impl UserConfigDocument {
     pub(crate) fn validate(&self) -> Result<(), ConfigError> {
+        self.agent.time_context.validate()?;
         ProviderConfigRegistry::new()
             .with_configs(self.providers.values())
             .map_err(provider_config_error)?;
@@ -267,6 +270,7 @@ impl UserConfigDocument {
 /// type without exposing file or authority implementation details to runtime consumers.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ResolvedConfig {
+    pub time_context: crate::TimeContextConfig,
     pub features: features::FeatureOverrides,
     pub issues: crate::IssueConfig,
     pub preferred_model: Option<ModelRef>,
@@ -354,6 +358,7 @@ fn provider_config_error(error: ProviderConfigError) -> ConfigError {
 impl From<&UserConfigDocument> for ResolvedConfig {
     fn from(document: &UserConfigDocument) -> Self {
         Self {
+            time_context: document.agent.time_context.clone(),
             features: document.features.clone(),
             issues: document.issues.clone(),
             preferred_model: document.agent.preferred_model.clone(),

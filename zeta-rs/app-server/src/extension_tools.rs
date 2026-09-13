@@ -372,3 +372,7 @@ impl std::error::Error for ExtensionToolCompositionError {}
 #[cfg(test)]
 #[path = "extension_tools_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "wait_tests.rs"]
+mod wait_tests;

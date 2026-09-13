@@ -9,6 +9,7 @@ use zeta_protocol::TurnId;
 /// Immutable host context captured for one model invocation.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct HarnessContext {
+    time_context: Option<zeta_protocol::TimeContext>,
     instructions: HarnessInstructions,
     environment: Option<AgentEnvironmentSnapshot>,
 }
@@ -17,6 +18,7 @@ impl HarnessContext {
     /// Starts a host-context snapshot with immutable instruction facts.
     pub fn new(instructions: HarnessInstructions) -> Self {
         Self {
+            time_context: None,
             instructions,
             environment: None,
         }
@@ -26,6 +28,16 @@ impl HarnessContext {
     pub fn with_environment(mut self, environment: AgentEnvironmentSnapshot) -> Self {
         self.environment = Some(environment);
         self
+    }
+
+    /// Freezes the exact time snapshot for this request, independent of connection facts.
+    pub fn with_time_context(mut self, context: Option<zeta_protocol::TimeContext>) -> Self {
+        self.time_context = context;
+        self
+    }
+
+    pub fn time_context(&self) -> Option<&zeta_protocol::TimeContext> {
+        self.time_context.as_ref()
     }
 
     /// Returns the immutable system and directory instructions.
