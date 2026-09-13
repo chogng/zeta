@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "json-to-toml",
+    crate_name = "ash_utils_json_to_toml",
+)
