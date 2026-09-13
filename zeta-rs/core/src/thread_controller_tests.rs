@@ -2316,7 +2316,7 @@ fn extension_lifecycle_observes_commits_without_replaying_reads() {
     let controller = ThreadController::with_store(store.clone());
     let log = Arc::new(LifecycleLog::default());
     let mut builder = zeta_extension_api::ExtensionRegistryBuilder::new();
-    builder.lifecycle_observer(log.clone());
+    builder.lifecycle_observer("test", log.clone());
     controller
         .install_extensions(Arc::new(builder.build()))
         .unwrap();

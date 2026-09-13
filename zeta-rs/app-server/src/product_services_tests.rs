@@ -232,3 +232,25 @@ fn marketplace_publisher_policy_rejects_explicitly_empty_duplicate_or_invalid_li
         assert!(LocalProductServicesConfig::load(&path, root.path().join("profile")).is_err());
     }
 }
+
+#[test]
+fn product_services_binds_image_endpoint_and_git_policy_to_the_product_authority() {
+    let root = TempDir::new().unwrap();
+    let path = root.path().join("product.json");
+    let mut document = serde_json::json!({"schemaVersion":2,"imageGeneration":{"serviceName":"images","endpoint":"https://images.example.test/generate","credentialReference":"images-key"},"gitAttribution":{"coAuthor":"Agent <agent@example.test>","pullRequestNotice":"Assisted by Agent"}});
+    fs::write(&path, document.to_string()).unwrap();
+    let first = LocalProductServicesConfig::load(&path, root.path()).unwrap();
+    assert_eq!(
+        first.image_generation.as_ref().unwrap().service_name,
+        "images"
+    );
+    document["imageGeneration"]["endpoint"] =
+        serde_json::json!("https://other.example.test/generate");
+    fs::write(&path, document.to_string()).unwrap();
+    let second = LocalProductServicesConfig::load(&path, root.path()).unwrap();
+    assert_ne!(first.authority_identity(), second.authority_identity());
+    document["imageGeneration"]["endpoint"] =
+        serde_json::json!("https://user:secret@example.test/generate");
+    fs::write(&path, document.to_string()).unwrap();
+    assert!(LocalProductServicesConfig::load(&path, root.path()).is_err());
+}

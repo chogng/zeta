@@ -816,3 +816,278 @@ fn memories_code_mode_calls_share_identity_policy_and_durable_results() {
         thread
     );
 }
+
+struct CapabilityModel {
+    requests: std::sync::Mutex<Vec<zeta_protocol::ModelRequest>>,
+}
+impl zeta_core::ModelService for CapabilityModel {
+    fn invoke(
+        &self,
+        _: zeta_core::ModelSelection<'_>,
+        request: &zeta_protocol::ModelRequest,
+        _: &zeta_async_utils::CancellationToken,
+    ) -> Result<zeta_protocol::ModelResponse, zeta_core::CoreError> {
+        let mut requests = self.requests.lock().unwrap();
+        let step = requests.len();
+        requests.push(request.clone());
+        let operation = match step {
+            0 => Some((
+                "notes_write",
+                json!({"path":"progress","body":"verified durable finding","expected_revision":0}),
+            )),
+            1 => Some(("notes_read", json!({"path":"progress","offset":0}))),
+            2 => Some((
+                "history_search",
+                json!({"query":"verified durable finding"}),
+            )),
+            3 => Some(("sleep", json!({"duration_ms":0}))),
+            4 => {
+                let serialized = serde_json::to_string(request).unwrap();
+                let suffix = serialized
+                    .split_once("attachment:")
+                    .expect("attached images have a model-visible reference")
+                    .1;
+                let id = suffix
+                    .split(|c: char| c.is_whitespace() || matches!(c, '"' | '\\' | '<' | ','))
+                    .next()
+                    .unwrap();
+                Some((
+                    "imagegen",
+                    json!({"prompt":"one pixel","reference_images":[format!("attachment:{id}")]}),
+                ))
+            }
+            5 => {
+                let path = request
+                    .input
+                    .iter()
+                    .rev()
+                    .find_map(|item| match item {
+                        zeta_protocol::InputItem::ToolResult(result)
+                            if result.name.as_str() == "imagegen" =>
+                        {
+                            result.content.iter().find_map(|part| match part {
+                                zeta_protocol::ContentPart::Text(text) => {
+                                    serde_json::from_str::<serde_json::Value>(text)
+                                        .ok()
+                                        .and_then(|value| {
+                                            value["saved_path"].as_str().map(str::to_owned)
+                                        })
+                                }
+                                _ => None,
+                            })
+                        }
+                        _ => None,
+                    })
+                    .expect("generation returns its artifact path");
+                Some((
+                    "imagegen",
+                    json!({"prompt":"edit that pixel","reference_images":[path]}),
+                ))
+            }
+            _ => None,
+        };
+        let stop_reason = if operation.is_some() {
+            zeta_protocol::StopReason::ToolUse
+        } else {
+            zeta_protocol::StopReason::Completed
+        };
+        let output = operation
+            .map(|(name, arguments)| {
+                zeta_protocol::ResponseItem::ToolCall(zeta_protocol::ToolCall {
+                    id: zeta_protocol::ToolCallId::new(format!("capability-{step}")).unwrap(),
+                    name: zeta_protocol::ToolName::new(name).unwrap(),
+                    arguments,
+                })
+            })
+            .unwrap_or_else(|| zeta_protocol::ResponseItem::Text("done".into()));
+        Ok(zeta_protocol::ModelResponse {
+            output: vec![output],
+            usage: None,
+            billing: None,
+            stop_reason,
+        })
+    }
+}
+struct ImageService {
+    requests: std::sync::Mutex<Vec<image_generation::ImageGenerationRequest>>,
+}
+impl image_generation::ImageGenerationBackend for ImageService {
+    fn service_name(&self) -> &str {
+        "test images"
+    }
+    fn network_scopes(&self) -> Vec<String> {
+        vec!["images.example.test".into()]
+    }
+    fn credential_reference(&self) -> Option<String> {
+        Some("test-image-credential".into())
+    }
+    fn generate(
+        &self,
+        request: &image_generation::ImageGenerationRequest,
+        _: &zeta_async_utils::CancellationToken,
+    ) -> Result<image_generation::GeneratedImage, String> {
+        use base64::Engine;
+        self.requests.lock().unwrap().push(request.clone());
+        let image = image::RgbaImage::from_pixel(1, 1, image::Rgba([10, 20, 30, 255]));
+        let mut bytes = std::io::Cursor::new(Vec::new());
+        image.write_to(&mut bytes, image::ImageFormat::Png).unwrap();
+        Ok(image_generation::GeneratedImage {
+            mime_type: "image/png".into(),
+            base64: base64::engine::general_purpose::STANDARD.encode(bytes.into_inner()),
+            revised_prompt: request.prompt.clone(),
+        })
+    }
+}
+#[test]
+fn agent_capabilities_execute_through_rpc_and_image_approval_before_publishing_results() {
+    let root = tempfile::tempdir().unwrap();
+    let database = root.path().join("state.sqlite3");
+    let notes = Arc::new(history_notes::NotesStore::open(&database).unwrap());
+    let model = Arc::new(CapabilityModel {
+        requests: Default::default(),
+    });
+    let images = Arc::new(ImageService {
+        requests: Default::default(),
+    });
+    let server = super::server_with_model(model.clone())
+        .with_agent_capabilities(
+            notes.clone(),
+            Some(images.clone()),
+            &root.path().join("images"),
+            Arc::new(git_attribution::GitAttributionPolicy::Enabled {
+                co_author: "Agent <agent@example.test>".into(),
+                pull_request_notice: "Assisted by Agent".into(),
+            }),
+        )
+        .unwrap()
+        .with_local_projects(&database)
+        .unwrap()
+        .with_local_memories(&database)
+        .unwrap();
+    let mut host = server.product_host_connection();
+    super::initialize_with_capabilities(
+        &server,
+        &mut host,
+        json!({"agentInteractions":{"version":1,"kinds":["approval"]}}),
+    );
+    let session =
+        create_session(&server, &mut host, 2, "session")["result"]["session"]["sessionId"]
+            .as_str()
+            .unwrap()
+            .to_string();
+    let thread =
+        create_thread(&server, &mut host, 3, "thread", &session, 0)["result"]["value"]["threadId"]
+            .as_str()
+            .unwrap()
+            .to_string();
+    let subscribed = call(
+        &server,
+        &mut host,
+        json!({"jsonrpc":"2.0","id":19,"method":"session/thread/subscribe","params":{"sessionId":session,"threadId":thread,"afterSequence":0}}),
+    );
+    assert!(subscribed.get("error").is_none(), "{subscribed}");
+    let id = zeta_protocol::ThreadId::new(&thread).unwrap();
+    let sequence = server.threads().read_thread(&id).unwrap().sequence;
+    use base64::Engine;
+    let pixel = image::RgbaImage::from_pixel(1, 1, image::Rgba([10, 20, 30, 255]));
+    let mut upload = std::io::Cursor::new(Vec::new());
+    pixel
+        .write_to(&mut upload, image::ImageFormat::Png)
+        .unwrap();
+    let image_url = format!(
+        "data:image/png;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(upload.into_inner())
+    );
+    let started = call(
+        &server,
+        &mut host,
+        json!({"jsonrpc":"2.0","id":20,"method":"session/request","params":{"commandId":"capabilities","sessionId":session,"request":{"type":"startTurn","threadId":thread,"expectedSequence":sequence,"input":[{"type":"text","text":"Record a finding and generate then edit an image."},{"type":"image","url":image_url}],"toolMode":"direct"}}}),
+    );
+    assert!(started.get("error").is_none(), "{started}");
+    for attempt in 0..2 {
+        super::wait_for_latest_turn(
+            &server,
+            &thread,
+            zeta_protocol::TurnStatus::WaitingForApproval,
+        );
+        server.drain_notifications(&mut host);
+        assert_eq!(images.requests.lock().unwrap().len(), attempt);
+        let snapshot = server.threads().read_thread(&id).unwrap();
+        let turn = snapshot.turns.last().unwrap();
+        let interaction = turn.pending_interaction.as_ref().unwrap();
+        let serialized = serde_json::to_string(&interaction.request).unwrap();
+        assert!(serialized.contains("images.example.test"));
+        assert!(serialized.contains("test-image-credential"));
+        let response = call(
+            &server,
+            &mut host,
+            json!({"jsonrpc":"2.0","id":30+attempt,"method":"session/request","params":{"commandId":format!("approve-image-{attempt}"),"sessionId":session,"request":{"type":"resolveInteraction","threadId":thread,"turnId":turn.turn_id,"expectedSequence":snapshot.sequence,"requestId":interaction.request_id,"response":{"type":"approval","response":{"decision":"approveOnce"}}}}}),
+        );
+        assert!(response.get("error").is_none(), "{response}");
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while images.requests.lock().unwrap().len() <= attempt {
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+    super::wait_for_latest_turn(&server, &thread, zeta_protocol::TurnStatus::Completed);
+    let snapshot = server.threads().read_thread(&id).unwrap();
+    let results = snapshot
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            zeta_protocol::ThreadItem::ToolResult { is_error, text, .. } => Some((is_error, text)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(results.len(), 6);
+    assert!(results.iter().all(|(error, _)| !**error), "{results:?}");
+    assert!(results[1].1.contains("verified durable finding"));
+    assert!(results[2].1.contains("item_id"));
+    assert!(
+        serde_json::to_string(&model.requests.lock().unwrap()[0])
+            .unwrap()
+            .contains("Co-authored-by: Agent")
+    );
+    let image_requests = images.requests.lock().unwrap();
+    assert!(image_requests[0].reference_images[0].starts_with("data:image/png;base64,"));
+    assert!(image_requests[1].reference_images[0].starts_with("data:image/png;base64,"));
+    let items = call(
+        &server,
+        &mut host,
+        json!({"jsonrpc":"2.0","id":50,"method":"extension/items/list","params":{"sessionId":session,"threadId":thread}}),
+    );
+    assert_eq!(
+        items["result"]["items"].as_array().unwrap().len(),
+        3,
+        "{items}"
+    );
+    let serialized = items.to_string();
+    assert!(serialized.contains("\"type\":\"image\""));
+    assert!(serialized.contains("\"type\":\"sleep\""));
+    let references = crate::image_references::ThreadImageReferences::new(server.threads());
+    let reference = image_generation::ImageReferenceSource::list(
+        &references,
+        &zeta_protocol::SessionId::new(&session).unwrap(),
+        &id,
+    )
+    .unwrap()
+    .remove(0);
+    assert!(
+        image_generation::ImageReferenceSource::read(
+            &references,
+            &zeta_protocol::SessionId::new("other-session").unwrap(),
+            &id,
+            &reference
+        )
+        .is_err()
+    );
+    let reopened = history_notes::NotesStore::open(&database).unwrap();
+    assert_eq!(
+        reopened
+            .list(&zeta_protocol::SessionId::new(session).unwrap(), &id)
+            .unwrap()[0]
+            .body,
+        "verified durable finding"
+    );
+}

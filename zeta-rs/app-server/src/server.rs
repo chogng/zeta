@@ -7,8 +7,7 @@ use crate::model_catalog::ModelCatalog;
 use crate::model_catalog::unavailable_model_catalog;
 use crate::resource_store::ResourceError;
 use crate::resource_store::ResourceStore;
-use crate::review::ApprovalModeActionPolicyService;
-use crate::review::ProviderReviewModel;
+use guardian_v2::ProviderReviewModel;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -40,6 +39,7 @@ use zeta_async_utils::CancellationToken;
 use zeta_config::ConfigStore;
 use zeta_core::ActionPolicyService;
 use zeta_core::AgentTreeLimits;
+use zeta_core::ApprovalModeActionPolicyService;
 use zeta_core::CancelTurnInteractionRequest;
 use zeta_core::CoreError;
 use zeta_core::ModelService;
@@ -63,6 +63,8 @@ use zeta_typst::TypstCompiler;
 
 mod account_operations;
 mod agent_environment_source;
+#[cfg(test)]
+mod agent_runtime_tests;
 mod agent_selection;
 mod attachment_operations;
 mod automation_execution;
@@ -96,7 +98,6 @@ mod git_turn_changes_message;
 mod git_turn_changes_observer;
 mod git_turn_changes_operations;
 mod git_turn_changes_runtime;
-pub(crate) mod goal_tool;
 mod interaction_runtime;
 mod issue_operations;
 mod issue_runtime;
@@ -120,7 +121,6 @@ mod memories_context;
 mod memories_operations;
 mod memory_operations;
 mod message_checkpoints;
-pub(crate) mod multi_agent_tools;
 pub(crate) mod notification_queue;
 mod operations;
 mod plugin_extension_sources;
@@ -231,6 +231,7 @@ pub struct AppServer {
     pub(super) typst: TypstCompiler,
     pub(super) slash_commands: SlashCommandCatalog,
     agent_extensions: Arc<ExtensionRegistry>,
+    notes: Option<Arc<history_notes::NotesStore>>,
     pub(super) skills: Option<Arc<SkillRuntime>>,
     _skill_watcher: Option<SkillWatcher>,
     _config_watcher: Option<config_runtime::ConfigWatcher>,
@@ -434,6 +435,10 @@ impl ConnectionNotifications {
 }
 
 impl AppServer {
+    pub(crate) fn agent_extension_registry(&self) -> Arc<ExtensionRegistry> {
+        self.agent_extensions.clone()
+    }
+
     /// Returns the number of live PTYs, including terminals waiting for a reconnect lease.
     ///
     /// Long-lived process hosts use this signal to avoid stopping while a detached terminal can
@@ -455,7 +460,9 @@ impl AppServer {
         model: Arc<dyn ModelService>,
         updates: Arc<UpdateBroker>,
     ) -> Self {
-        let agent_extensions = Arc::new(ExtensionRegistry::default());
+        let mut builder = zeta_extension_api::ExtensionRegistryBuilder::new();
+        goal::install(&mut builder, &threads);
+        let agent_extensions = Arc::new(builder.build());
         threads
             .install_extensions(Arc::clone(&agent_extensions))
             .expect("a new Thread controller accepts its initial extension registry");
@@ -554,6 +561,7 @@ impl AppServer {
             typst: TypstCompiler::new(),
             slash_commands: SlashCommandCatalog::default(),
             agent_extensions,
+            notes: None,
             skills: None,
             _skill_watcher: None,
             _config_watcher: None,
@@ -923,10 +931,13 @@ impl AppServer {
     pub fn with_config_store(mut self, config: Arc<ConfigStore>) -> Self {
         let mut builder =
             zeta_extension_api::ExtensionRegistryBuilder::from_registry(&self.agent_extensions);
-        builder.lifecycle_observer(Arc::new(runtime_extensions::UsageObserver {
-            analytics: self.analytics.clone(),
-            config: config.clone(),
-        }));
+        builder.lifecycle_observer(
+            "analytics",
+            Arc::new(runtime_extensions::UsageObserver {
+                analytics: self.analytics.clone(),
+                config: config.clone(),
+            }),
+        );
         self.agent_extensions = Arc::new(builder.build());
         self.threads
             .install_extensions(self.agent_extensions.clone())
@@ -1135,6 +1146,51 @@ impl AppServer {
     ) -> Self {
         self.approval_review_model = review_model;
         self
+    }
+
+    pub fn with_agent_capabilities(
+        mut self,
+        notes: Arc<history_notes::NotesStore>,
+        image_backend: Option<Arc<dyn image_generation::ImageGenerationBackend>>,
+        artifact_root: &std::path::Path,
+        attribution: Arc<dyn git_attribution::GitAttributionPolicySource>,
+    ) -> Result<Self, String> {
+        let mut builder =
+            zeta_extension_api::ExtensionRegistryBuilder::from_registry(&self.agent_extensions);
+        let items = Arc::new(zeta_extension_api::ExtensionItemStore::new(builder.state()));
+        builder.item_contributor("results", items.clone());
+        clock::install(&mut builder, items.clone());
+        history_notes::install(&mut builder, &self.threads, notes.clone());
+        git_attribution::install(&mut builder, attribution);
+        if let Some(backend) = image_backend {
+            image_generation::install(
+                &mut builder,
+                backend,
+                artifact_root,
+                items,
+                Arc::new(crate::image_references::ThreadImageReferences::new(
+                    &self.threads,
+                )),
+            )?;
+        }
+        let registry = Arc::new(builder.build());
+        let port = crate::extension_tools::compose_extension_tools(&registry)
+            .map_err(|e| e.to_string())?;
+        self.threads
+            .install_extensions(registry.clone())
+            .map_err(|e| e.to_string())?;
+        let executor = self
+            .env_runtime_mut()
+            .turn_executor
+            .clone()
+            .with_extensions(registry.clone());
+        self.turn_backend.install_executor(executor.clone());
+        self.env_runtime_mut().turn_executor = executor;
+        self.agent_extensions = registry;
+        self.notes = Some(notes);
+        self.restart_extension_config_watcher();
+        self.with_extension_tool_port(port)
+            .map_err(|e| e.to_string())
     }
 
     pub fn with_slash_command_catalog(mut self, slash_commands: SlashCommandCatalog) -> Self {
@@ -1370,7 +1426,10 @@ impl AppServer {
     ) -> Self {
         let policy = Arc::new(ApprovalModeActionPolicyService::new(
             policy,
-            self.approval_review_model.clone(),
+            self.approval_review_model
+                .clone()
+                .map(guardian_v2::reviewer)
+                .unwrap_or(zeta_extension_api::ApprovalReviewer::Unavailable),
         ));
         let mut executor = self
             .env_runtime_mut()
@@ -1441,23 +1500,12 @@ impl AppServer {
 
     /// Reconciles durable Agent spawn/delivery sagas and starts newly materialized child Turns.
     pub fn resume_recovered_agent_coordinations(&self) -> Result<usize, CoreError> {
-        let backend = Arc::clone(&self.turn_backend);
-        let mut resumed = 0;
-        for session_id in self.loaded_session_ids()? {
-            for spawned in self.multi_agent.recover_session(&session_id)? {
-                let child = self.threads.read_thread(&spawned.child_thread_id)?;
-                let should_start = child.turns.iter().any(|turn| {
-                    turn.turn_id == spawned.child_turn_id
-                        && turn.status == zeta_protocol::TurnStatus::Running
-                        && !child.has_resumable_tool_continuation(&turn.turn_id)
-                });
-                if should_start {
-                    backend.start(&spawned.child_thread_id, &spawned.child_turn_id)?;
-                    resumed += 1;
-                }
-            }
-        }
-        Ok(resumed)
+        agent::recover(
+            &self.multi_agent,
+            &self.threads,
+            self.turn_backend.as_ref(),
+            &self.loaded_session_ids()?,
+        )
     }
 
     /// Re-enqueues durable running Tool continuations after host services are installed.
@@ -1467,11 +1515,11 @@ impl AppServer {
             .resume_recovered_tool_continuations_in_sessions(&session_ids)
     }
 
-    /// Starts durable idle Goal continuations after the local runtime has been restored.
-    pub fn resume_recovered_goal_continuations(&self) -> Result<usize, CoreError> {
+    /// Restarts extension-owned work after the local runtime has been restored.
+    pub fn resume_recovered_extension_turns(&self) -> Result<usize, CoreError> {
         let session_ids = self.loaded_session_ids()?;
         self.turn_executor_snapshot()
-            .resume_recovered_goal_continuations_in_sessions(&session_ids)
+            .resume_recovered_extension_turns_in_sessions(&session_ids)
     }
 
     fn session_ids(&self) -> Result<BTreeSet<zeta_protocol::SessionId>, CoreError> {

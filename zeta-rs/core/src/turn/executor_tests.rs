@@ -12,7 +12,6 @@ use crate::ModelService;
 use crate::ModelStreamSink;
 use crate::SequenceExpectation;
 use crate::StartContextCompactionRequest;
-use crate::StartGoalTurnRequest;
 use crate::StartTurnRequest;
 use crate::SteerTurnRequest;
 use crate::ThreadUpdateSink;
@@ -138,8 +137,7 @@ fn populates_configured_reasoning_on_model_request() {
         summary: false,
     };
     let model = Arc::new(
-        ScriptedModel::new([Ok(text_response("answer"))])
-            .with_reasoning(reasoning.clone()),
+        ScriptedModel::new([Ok(text_response("answer"))]).with_reasoning(reasoning.clone()),
     );
     let executor = TurnExecutor::without_tools(threads, model.clone());
 
@@ -944,157 +942,6 @@ fn final_answer_may_complete_when_goal_usage_reaches_the_budget() {
 }
 
 #[test]
-fn active_goal_starts_a_hidden_follow_up_until_the_budget_stops_it() {
-    let (threads, thread_id, turn_id) = started_turn();
-    threads
-        .create_goal(&thread_id, "finish the requested task".into(), Some(15))
-        .unwrap();
-    let model = Arc::new(ScriptedModel::new([
-        Ok(ModelResponse {
-            output: vec![ResponseItem::Text("first answer".into())],
-            usage: Some(ModelUsage {
-                input_tokens: Some(1),
-                output_tokens: Some(0),
-                cached_input_tokens: Some(0),
-                cache_write_input_tokens: Some(0),
-                reasoning_tokens: None,
-            }),
-            billing: None,
-            stop_reason: StopReason::Completed,
-        }),
-        Ok(ModelResponse {
-            output: vec![ResponseItem::Text("final answer".into())],
-            usage: Some(ModelUsage {
-                input_tokens: Some(14),
-                output_tokens: Some(0),
-                cached_input_tokens: Some(0),
-                cache_write_input_tokens: Some(0),
-                reasoning_tokens: None,
-            }),
-            billing: None,
-            stop_reason: StopReason::Completed,
-        }),
-    ]));
-
-    let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
-    executor
-        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
-        .unwrap();
-
-    let deadline = Instant::now() + Duration::from_secs(1);
-    loop {
-        let snapshot = threads.read_thread(&thread_id).unwrap();
-        if snapshot.turns.len() == 2 && snapshot.turns[1].status == TurnStatus::Completed {
-            assert_eq!(model.requests().len(), 2);
-            assert_eq!(
-                snapshot
-                    .items
-                    .iter()
-                    .filter(|item| matches!(item, ThreadItem::UserMessage { .. }))
-                    .count(),
-                1
-            );
-            let goal = snapshot.goal.unwrap();
-            assert_eq!(goal.tokens_used, 15);
-            assert_eq!(goal.status, zeta_protocol::ThreadGoalStatus::BudgetLimited);
-            break;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "active Goal did not finish its hidden follow-up Turn: statuses={:?}, requests={}, goal={:?}",
-            snapshot
-                .turns
-                .iter()
-                .map(|turn| turn.status)
-                .collect::<Vec<_>>(),
-            model.requests().len(),
-            snapshot.goal
-        );
-        thread::sleep(Duration::from_millis(1));
-    }
-}
-
-#[test]
-fn review_turn_ignores_active_goal_instructions_and_does_not_continue_it() {
-    let (threads, thread_id, turn_id) = started_review_turn();
-    threads
-        .create_goal(&thread_id, "goal text must not enter review".into(), None)
-        .unwrap();
-    let model = Arc::new(ScriptedModel::new([Ok(text_response("review complete"))]));
-
-    TurnExecutor::without_tools(threads.clone(), model.clone())
-        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
-        .unwrap();
-
-    let snapshot = threads.read_thread(&thread_id).unwrap();
-    assert_eq!(snapshot.turns.len(), 1);
-    assert_eq!(snapshot.goal.unwrap().tokens_used, 0);
-    assert_eq!(model.requests().len(), 1);
-    assert!(!request_contains(
-        &model.requests()[0],
-        "goal text must not enter review"
-    ));
-}
-
-#[test]
-fn recovered_active_goal_resumes_a_running_hidden_turn() {
-    let (threads, thread_id, first_turn_id) = started_turn();
-    threads
-        .complete_turn(&thread_id, &first_turn_id, "first answer".into())
-        .unwrap();
-    threads
-        .create_goal(&thread_id, "finish the requested task".into(), Some(1))
-        .unwrap();
-    let hidden_turn = threads
-        .start_goal_turn(
-            &thread_id,
-            StartGoalTurnRequest {
-                instructions: crate::test_turn_instructions(),
-                command_id: CommandId::new("recovered-goal-continuation").unwrap(),
-                model: None,
-                policy_revision: "test-policy-v1".into(),
-                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                tool_mode: zeta_protocol::ToolMode::Direct,
-                tool_profile: None,
-            },
-        )
-        .unwrap()
-        .expect("active Goal should create a continuation")
-        .turn_id;
-    let model = Arc::new(ScriptedModel::new([Ok(ModelResponse {
-        output: vec![ResponseItem::Text("recovered answer".into())],
-        usage: Some(ModelUsage {
-            input_tokens: Some(1),
-            output_tokens: Some(0),
-            cached_input_tokens: Some(0),
-            cache_write_input_tokens: Some(0),
-            reasoning_tokens: None,
-        }),
-        billing: None,
-        stop_reason: StopReason::Completed,
-    })]));
-    let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
-    let session_ids = [SessionId::new("session").unwrap()]
-        .into_iter()
-        .collect::<BTreeSet<_>>();
-
-    assert_eq!(
-        executor
-            .resume_recovered_goal_continuations_in_sessions(&session_ids)
-            .unwrap(),
-        1
-    );
-    wait_for_turn_status(&threads, &thread_id, &hidden_turn, TurnStatus::Completed);
-    let snapshot = threads.read_thread(&thread_id).unwrap();
-    assert_eq!(model.requests().len(), 1);
-    assert_eq!(snapshot.turns.len(), 2);
-    assert_eq!(
-        snapshot.goal.unwrap().status,
-        zeta_protocol::ThreadGoalStatus::BudgetLimited
-    );
-}
-
-#[test]
 fn successful_tool_search_result_loads_deferred_definition_for_next_model_step() {
     let (threads, thread_id, turn_id) = started_turn();
     let model = Arc::new(ScriptedModel::new([
@@ -1388,6 +1235,12 @@ fn executes_a_durable_tool_loop_before_the_next_model_invocation() {
         }),
         Ok(text_response("sunny")),
     ]));
+    let log = Arc::new(ToolLifecycleLog::default());
+    let mut builder = zeta_extension_api::ExtensionRegistryBuilder::new();
+    builder.tool_lifecycle_contributor("test", log.clone());
+    threads
+        .install_extensions(Arc::new(builder.build()))
+        .unwrap();
     let tools = Arc::new(WeatherTool);
     let executor = TurnExecutor::new(
         threads.clone(),
@@ -1407,6 +1260,11 @@ fn executes_a_durable_tool_loop_before_the_next_model_invocation() {
     assert!(snapshot.items.iter().any(
         |item| matches!(item, ThreadItem::ToolResult { tool_call_id, text, .. } if tool_call_id == &call.id && text == "sunny")
     ));
+    let events = log.0.lock().unwrap();
+    assert_eq!(
+        events.as_slice(),
+        ["started:call_1", "completed:call_1:false"]
+    );
     let requests = model.requests();
     assert_eq!(requests.len(), 2);
     assert!(matches!(
@@ -3686,45 +3544,6 @@ fn started_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
     started_turn_with_tool_mode(zeta_protocol::ToolMode::Direct)
 }
 
-fn started_review_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
-    let threads = Arc::new(ThreadController::with_store(Arc::new(
-        InMemoryThreadStore::default(),
-    )));
-    let thread_id = ThreadId::new("review-thread").unwrap();
-    threads
-        .create_thread(CreateThreadRequest {
-            agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
-            origin: Default::default(),
-            agent: None,
-            session_id: SessionId::new("review-session").unwrap(),
-            thread_id: thread_id.clone(),
-            title: "review".into(),
-        })
-        .unwrap();
-    let turn_id = threads
-        .start_turn(
-            &thread_id,
-            StartTurnRequest {
-                kind: zeta_protocol::TurnKind::Review,
-                instructions: crate::test_turn_instructions(),
-                command_id: CommandId::new("start-review").unwrap(),
-                expected_sequence: SequenceExpectation::Any,
-                model: None,
-                policy_revision: "test-policy-v1".into(),
-                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                tool_mode: zeta_protocol::ToolMode::Direct,
-                tool_profile: None,
-                activated_skills: Vec::new(),
-                input: vec![UserInput::Text {
-                    text: "review current changes".into(),
-                }],
-            },
-        )
-        .unwrap()
-        .turn_id;
-    (threads, thread_id, turn_id)
-}
-
 fn started_turn_with_tool_mode(
     tool_mode: zeta_protocol::ToolMode,
 ) -> (Arc<ThreadController>, ThreadId, TurnId) {
@@ -3961,5 +3780,25 @@ fn context_cancellation_and_failure_never_invoke_the_model_with_partial_evidence
                 zeta_protocol::TurnStatus::Failed
             }
         );
+    }
+}
+
+#[derive(Default)]
+struct ToolLifecycleLog(Mutex<Vec<String>>);
+impl zeta_extension_api::ToolLifecycleContributor for ToolLifecycleLog {
+    fn tool_changed(
+        &self,
+        _: zeta_extension_api::ThreadContext<'_>,
+        _: &TurnId,
+        event: &zeta_extension_api::ToolLifecycle,
+    ) {
+        self.0.lock().unwrap().push(match event {
+            zeta_extension_api::ToolLifecycle::Started { call_id, .. } => {
+                format!("started:{call_id}")
+            }
+            zeta_extension_api::ToolLifecycle::Completed { call_id, is_error } => {
+                format!("completed:{call_id}:{is_error}")
+            }
+        });
     }
 }

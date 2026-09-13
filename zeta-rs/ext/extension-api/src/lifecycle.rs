@@ -42,3 +42,62 @@ pub trait IdleContributor: Send + Sync {
 pub trait ItemContributor: Send + Sync {
     fn contribute(&self, context: ThreadContext<'_>) -> Result<Vec<ExtensionItem>, ExtensionError>;
 }
+
+/// A durable extension-owned Turn ready for the host executor.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExtensionTurn {
+    pub thread_id: ThreadId,
+    pub turn_id: TurnId,
+}
+
+/// Plans extension-owned follow-up work outside the Thread commit lock.
+/// Implementations use the Thread owner's atomic admission API and stable command identities;
+/// they never execute a model themselves. Recovery must remain safe to repeat.
+pub trait ContinuationContributor: Send + Sync {
+    fn next_turn(
+        &self,
+        thread: &ThreadId,
+        completed: &TurnId,
+    ) -> Result<Option<ExtensionTurn>, ExtensionError>;
+    fn recover(
+        &self,
+        sessions: &std::collections::BTreeSet<SessionId>,
+    ) -> Result<Vec<ExtensionTurn>, ExtensionError>;
+}
+
+/// Reviews an exact prepared action; only ActionPolicy may turn an assessment into authority.
+pub trait ApprovalReviewContributor: Send + Sync {
+    fn review(
+        &self,
+        request: &zeta_action_policy::ActionReviewRequest,
+        cancellation: &async_utils::CancellationToken,
+    ) -> Result<zeta_action_policy::ClassifierAssessment, ExtensionError>;
+}
+
+/// Facts emitted only after the matching Tool lifecycle event has committed.
+#[derive(Clone, Debug)]
+pub enum ToolLifecycle {
+    Started {
+        call_id: zeta_protocol::ToolCallId,
+        action_digest: String,
+        policy_revision: String,
+    },
+    Completed {
+        call_id: zeta_protocol::ToolCallId,
+        is_error: bool,
+    },
+}
+/// Observes committed Tool outcomes without executing or authorizing another action.
+pub trait ToolLifecycleContributor: Send + Sync {
+    fn tool_changed(&self, context: ThreadContext<'_>, turn: &TurnId, event: &ToolLifecycle);
+}
+/// Observes MCP catalog lifecycle; callbacks may invalidate extension-owned caches.
+pub trait McpLifecycleContributor: Send + Sync {
+    fn catalog_changed(&self, event: &McpLifecycle);
+}
+#[derive(Clone, Debug)]
+pub enum McpLifecycle {
+    Started { generation: u64 },
+    ToolsChanged,
+    Stopped { generation: u64 },
+}

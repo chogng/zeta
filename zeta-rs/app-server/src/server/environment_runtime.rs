@@ -8,8 +8,6 @@ use super::dir_contributions::DirContributions;
 use super::fs_watcher::FileSystemWatcher;
 use super::git_runtime::GitRuntime;
 use super::git_runtime::GitWatcher;
-use super::goal_tool::GoalToolService;
-use super::multi_agent_tools::MultiAgentToolService;
 use super::semantic_index_job::AppServerSemanticIndexMetrics;
 use super::semantic_index_job::SemanticIndexJobController;
 use super::symbol_index_runtime::SymbolIndexRuntime;
@@ -23,13 +21,14 @@ use crate::local_tools::AgentGrepService;
 use crate::local_tools::LocalToolConfig;
 use crate::local_tools::append_local_tool;
 use crate::local_tools::compose_local_tools_with_config;
-use crate::review::ApprovalModeActionPolicyService;
 use crate::tool_composition::ReloadableToolPorts;
 use crate::tool_composition::ToolPort;
 use crate::tool_composition::ToolSearchOptions;
 use crate::tool_composition::combine_tool_ports_at_generation_with_search;
 use crate::tool_search_models::ToolSearchEmbeddingStatus;
 use crate::tool_search_models::resolve_tool_search;
+use agent::MultiAgentToolService;
+use goal::GoalToolService;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
@@ -49,6 +48,7 @@ use zeta_config::DirConfigScope;
 use zeta_config::DirConfigStore;
 use zeta_config::ToolSearchConfig;
 use zeta_content_search::ContentSearchService;
+use zeta_core::ApprovalModeActionPolicyService;
 use zeta_core::InterruptTurnRequest;
 use zeta_core::MultiAgentCoordinator;
 use zeta_core::SequenceExpectation;
@@ -1118,7 +1118,10 @@ impl AppServer {
         )?;
         let policy = Arc::new(ApprovalModeActionPolicyService::new(
             tools.reloadable.policy(),
-            self.approval_review_model.clone(),
+            self.approval_review_model
+                .clone()
+                .map(guardian_v2::reviewer)
+                .unwrap_or(zeta_extension_api::ApprovalReviewer::Unavailable),
         ));
         let hooks = Arc::new(DeclarativeHookRuntime::new(
             hook_config,
@@ -2694,20 +2697,20 @@ fn append_multi_agent_tools(
     );
     let local = append_local_tool(
         local,
-        Arc::new(
-            GoalToolService::new(Arc::clone(threads))
-                .with_action_policy_revision(action_policy_revision.clone()),
-        ),
+        Arc::new(GoalToolService::new(
+            Arc::clone(threads),
+            action_policy_revision.clone(),
+        )),
     );
     let mut multi_agent = MultiAgentToolService::new(
         Arc::clone(coordinator),
         Arc::clone(threads),
         Arc::clone(turn_backend),
+        action_policy_revision,
     )
-    .with_action_policy_revision(action_policy_revision)
     .with_model_instructions(Arc::clone(model_instructions));
     if let Some(customizations) = customizations {
-        multi_agent = multi_agent.with_dir_contributions(Arc::clone(customizations));
+        multi_agent = multi_agent.with_dir_contributions(customizations.clone());
     }
     Ok(append_local_tool(local, Arc::new(multi_agent)))
 }

@@ -59,11 +59,8 @@ impl WebSearchBackend for FakeBackend {
 fn install_contributes_capability_tool_and_executes_backend() {
     let mut builder = ExtensionRegistryBuilder::new();
     install(&mut builder, Arc::new(FakeBackend));
-    let contribution = builder
-        .build()
-        .contribute_capability_tools()
-        .unwrap()
-        .remove(0);
+    let registry = builder.build();
+    let contribution = registry.contribute_capability_tools().unwrap().remove(0);
     let executor = contribution.executor().clone();
     let definition = executor.definition();
     let binding = ToolBinding::new(
@@ -90,10 +87,25 @@ fn install_contributes_capability_tool_and_executes_backend() {
             EnvId::new("host-extension").unwrap(),
             cancellation.token(),
             ToolRuntimeAuthority::Unrestricted,
-        ),
+        )
+        .with_session_id(zeta_protocol::SessionId::new("session").unwrap())
+        .with_thread_id(zeta_protocol::ThreadId::new("thread").unwrap()),
     );
 
     let outcome = pollster::block_on(executor.execute(invocation));
+    let items = zeta_extension_api::ExtensionItemStore::new(registry.state().clone());
+    let items = zeta_extension_api::ItemContributor::contribute(
+        &items,
+        zeta_extension_api::ThreadContext {
+            session_id: &zeta_protocol::SessionId::new("session").unwrap(),
+            thread_id: &zeta_protocol::ThreadId::new("thread").unwrap(),
+            sequence: 1,
+        },
+    )
+    .unwrap();
+    assert!(
+        matches!(&items[0].content,extension_items::ExtensionItemContent::WebSearch{sources,..} if sources[0].url=="https://example.com/result")
+    );
 
     assert!(matches!(
         outcome,

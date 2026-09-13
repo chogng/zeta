@@ -681,7 +681,9 @@ use diagnostics::DiagnosticSnapshot;
 use diagnostics::Observation;
 use diagnostics::Outcome;
 use extension_items::ExtensionItem;
+use extension_items::ExtensionItemContent;
 use extension_items::ExtensionItemStatus;
+use extension_items::SearchSource;
 use features::Feature;
 use features::FeatureSource;
 use features::FeatureStage;
@@ -3251,6 +3253,8 @@ typescript_bindings! {
     ExtensionItemsResult,
     ExtensionItem,
     ExtensionItemStatus,
+    ExtensionItemContent,
+    SearchSource,
     QueueEditParams,
     QueueEditAction,
     QueueMove,

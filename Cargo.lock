@@ -11491,6 +11491,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-agent"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "zeta-action-policy",
+ "zeta-agent-roles",
+ "zeta-async-utils",
+ "zeta-core",
+ "zeta-instructions",
+ "zeta-models-manager",
+ "zeta-prompts",
+ "zeta-protocol",
+ "zeta-skills-extension",
+]
+
+[[package]]
 name = "zeta-agent-environment"
 version = "0.1.0"
 dependencies = [
@@ -11584,6 +11602,7 @@ dependencies = [
  "worktree",
  "zeroize",
  "zeta-action-policy",
+ "zeta-agent",
  "zeta-agent-environment",
  "zeta-agent-roles",
  "zeta-analytics",
@@ -11595,11 +11614,11 @@ dependencies = [
  "zeta-arg0",
  "zeta-async-utils",
  "zeta-attachments",
- "zeta-auto-review",
  "zeta-automation",
  "zeta-build-info",
  "zeta-chatgpt",
  "zeta-client",
+ "zeta-clock",
  "zeta-cloud-codebase",
  "zeta-codebase",
  "zeta-codebase-store",
@@ -11625,9 +11644,14 @@ dependencies = [
  "zeta-file-system",
  "zeta-file-watcher",
  "zeta-git",
+ "zeta-git-attribution",
  "zeta-github",
+ "zeta-goal",
+ "zeta-guardian-v2",
+ "zeta-history-notes",
  "zeta-hooks",
  "zeta-http-client",
+ "zeta-image-generation",
  "zeta-install-context",
  "zeta-instructions",
  "zeta-kimi",
@@ -11803,17 +11827,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-auto-review"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "zeta-action-policy",
- "zeta-async-utils",
- "zeta-sandboxing",
-]
-
-[[package]]
 name = "zeta-automation"
 version = "0.1.0"
 dependencies = [
@@ -11914,6 +11927,19 @@ version = "0.1.0"
 dependencies = [
  "zeta-async-utils",
  "zeta-http-client",
+]
+
+[[package]]
+name = "zeta-clock"
+version = "0.1.0"
+dependencies = [
+ "pollster 1.0.1",
+ "serde_json",
+ "zeta-async-utils",
+ "zeta-extension-api",
+ "zeta-extension-items",
+ "zeta-protocol",
+ "zeta-tools",
 ]
 
 [[package]]
@@ -12072,6 +12098,7 @@ dependencies = [
  "url",
  "zeroize",
  "zeta-core-plugins",
+ "zeta-file-system",
  "zeta-http-client",
  "zeta-plugin",
  "zeta-secrets",
@@ -12119,7 +12146,6 @@ dependencies = [
  "zeta-thread-store",
  "zeta-utils-image",
  "zeta-utils-stream-parser",
- "zeta-utils-template",
 ]
 
 [[package]]
@@ -12262,6 +12288,7 @@ name = "zeta-extension-api"
 version = "0.1.0"
 dependencies = [
  "serde_json",
+ "zeta-action-policy",
  "zeta-async-utils",
  "zeta-extension-items",
  "zeta-protocol",
@@ -12427,6 +12454,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-git-attribution"
+version = "0.1.0"
+dependencies = [
+ "zeta-extension-api",
+ "zeta-protocol",
+]
+
+[[package]]
 name = "zeta-github"
 version = "0.1.0"
 dependencies = [
@@ -12439,12 +12474,71 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-goal"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zeta-action-policy",
+ "zeta-async-utils",
+ "zeta-core",
+ "zeta-extension-api",
+ "zeta-prompts",
+ "zeta-protocol",
+ "zeta-utils-template",
+]
+
+[[package]]
+name = "zeta-guardian-reviewer"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zeta-action-policy",
+ "zeta-async-utils",
+ "zeta-sandboxing",
+]
+
+[[package]]
+name = "zeta-guardian-v2"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "zeta-action-policy",
+ "zeta-async-utils",
+ "zeta-config",
+ "zeta-core",
+ "zeta-extension-api",
+ "zeta-guardian-reviewer",
+ "zeta-model-provider",
+ "zeta-model-provider-config",
+ "zeta-protocol",
+]
+
+[[package]]
 name = "zeta-history"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
  "zeta-protocol",
+]
+
+[[package]]
+name = "zeta-history-notes"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "zeta-async-utils",
+ "zeta-core",
+ "zeta-extension-api",
+ "zeta-protocol",
+ "zeta-state",
+ "zeta-tools",
 ]
 
 [[package]]
@@ -12483,6 +12577,26 @@ name = "zeta-icons"
 version = "0.1.0"
 dependencies = [
  "zui",
+]
+
+[[package]]
+name = "zeta-image-generation"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "image",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "url",
+ "zeta-async-utils",
+ "zeta-client",
+ "zeta-extension-api",
+ "zeta-extension-items",
+ "zeta-http-client",
+ "zeta-protocol",
+ "zeta-tools",
 ]
 
 [[package]]
@@ -12666,6 +12780,9 @@ dependencies = [
  "zeta-connectors-extension",
  "zeta-core",
  "zeta-core-plugins",
+ "zeta-extension-api",
+ "zeta-file-access",
+ "zeta-file-system",
  "zeta-mcp",
  "zeta-plugin",
  "zeta-protocol",
@@ -12945,6 +13062,8 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "ts-rs",
+ "zeta-extension-api",
+ "zeta-extension-items",
  "zeta-protocol",
 ]
 
@@ -13596,6 +13715,7 @@ dependencies = [
  "zeta-async-utils",
  "zeta-client",
  "zeta-extension-api",
+ "zeta-extension-items",
  "zeta-http-client",
  "zeta-protocol",
  "zeta-tools",

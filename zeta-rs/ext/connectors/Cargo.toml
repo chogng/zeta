@@ -11,6 +11,7 @@ name = "zeta_connectors_extension"
 path = "src/lib.rs"
 
 [dependencies]
+file-system = { package = "zeta-file-system", path = "../../file-system" }
 base64 = { workspace = true }
 getrandom = { workspace = true }
 rusqlite = { workspace = true }

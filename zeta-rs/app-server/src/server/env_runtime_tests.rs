@@ -121,9 +121,9 @@ fn env_runtime_replaces_authority_without_replacing_connection_owned_services() 
         .into_iter()
         .map(|definition| definition.name.to_string())
         .collect::<std::collections::BTreeSet<_>>();
-    assert!(tool_names.contains(crate::server::multi_agent_tools::SPAWN_AGENT_TOOL_NAME));
-    assert!(tool_names.contains(crate::server::multi_agent_tools::SEND_AGENT_MESSAGE_TOOL_NAME));
-    assert!(tool_names.contains(crate::server::multi_agent_tools::WAIT_AGENT_TOOL_NAME));
+    assert!(tool_names.contains(agent::SPAWN_AGENT_TOOL_NAME));
+    assert!(tool_names.contains(agent::SEND_AGENT_MESSAGE_TOOL_NAME));
+    assert!(tool_names.contains(agent::WAIT_AGENT_TOOL_NAME));
     assert!(!tool_names.contains("browser_open"));
     host.tools.replace_host_available(true).unwrap();
     assert!(

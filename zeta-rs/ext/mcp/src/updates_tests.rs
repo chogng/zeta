@@ -21,6 +21,10 @@ use super::with_active_tool_interactions;
 #[test]
 fn tool_list_changes_publish_reconcile_hints_but_other_events_do_not() {
     let updates = McpCatalogUpdates::default();
+    let lifecycle = Arc::new(CatalogLifecycle::default());
+    let mut builder = extension_api::ExtensionRegistryBuilder::new();
+    builder.mcp_lifecycle_contributor("test", lifecycle.clone());
+    updates.bind_extensions(Arc::new(builder.build()));
     let subscription = updates.subscribe();
     let host = updates.client_host();
 
@@ -31,6 +35,7 @@ fn tool_list_changes_publish_reconcile_hints_but_other_events_do_not() {
     subscription
         .recv_timeout(Duration::from_secs(1))
         .expect("tool list change must request reconciliation");
+    assert_eq!(*lifecycle.0.lock().unwrap(), 1);
 }
 
 struct TestInteractions {
@@ -122,4 +127,14 @@ fn concurrent_mcp_calls_keep_elicitation_bound_to_their_own_tool_context() {
         assert_eq!(left.requests.lock().unwrap().len(), 1);
         assert_eq!(right.requests.lock().unwrap().len(), 1);
     });
+}
+
+#[derive(Default)]
+struct CatalogLifecycle(Mutex<usize>);
+impl extension_api::McpLifecycleContributor for CatalogLifecycle {
+    fn catalog_changed(&self, event: &extension_api::McpLifecycle) {
+        if matches!(event, extension_api::McpLifecycle::ToolsChanged) {
+            *self.0.lock().unwrap() += 1;
+        }
+    }
 }

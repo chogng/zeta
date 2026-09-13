@@ -34,7 +34,6 @@ zeta-sandboxing = { workspace = true }
 zeta-thread-store = { workspace = true }
 zeta-utils-image = { workspace = true }
 zeta-utils-stream-parser = { workspace = true }
-zeta-utils-template = { workspace = true }
 
 [dev-dependencies]
 image = { workspace = true, features = ["png"] }

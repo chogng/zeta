@@ -94,3 +94,7 @@ mod authority_tests;
 #[cfg(test)]
 #[path = "auth_tests.rs"]
 mod auth_tests;
+
+mod declaration;
+pub use declaration::ConnectorDeclaration;
+pub use declaration::load_connector_declaration;

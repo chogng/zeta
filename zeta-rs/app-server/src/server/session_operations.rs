@@ -269,6 +269,16 @@ impl AppServer {
             })?;
             self.updates.publish_queue_changed();
         }
+        if let Some(notes) = &self.notes {
+            notes
+                .delete_session(&session_id)
+                .map_err(|error| core_error(zeta_core::CoreError::Execution(error)))?;
+        }
+        self.agent_extensions
+            .state()
+            .remove(&zeta_extension_api::ExtensionScope::Session(
+                session_id.clone(),
+            ));
         self.threads
             .delete_session_threads(&session_id)
             .map_err(core_error)?;

@@ -279,7 +279,7 @@ Windows 本地工具使用 `HostAclChanges::ScopedWithTraversal`：在范围内 
 | `zeta-execpolicy` | typed selector、layer validation、effect precedence、semantic revision 与纯求值 | 最终 grant、Tool 执行、配置 I/O |
 | `zeta-action-policy` | effect 映射、exact grant、sandbox、风险门槛和最终类型化结果 | 规则解析/持久化、工具执行、UI |
 | `zeta-config` | User rule 的 typed TOML mutation/persistence；Directory restriction 的 strict-read intent | 规则求值、最终执行授权 |
-| `zeta-auto-review` | 生成受 schema 约束的风险审查结论 | 覆盖策略、签发授权 |
+| `zeta-guardian-reviewer` | 生成受 schema 约束的风险审查结论 | 覆盖策略、签发授权 |
 | Core 的 `ToolScheduler` | 持久化批准、一次性授权、执行生命周期和恢复语义 | 操作系统沙箱强制执行 |
 | `zeta-exec` 与工具执行器 | 消费明确执行授权并返回类型化结果 | 自行提权 |
 | `zeta-sandboxing` | 统一策略、目录验证与进程生命周期 | 批准、重试和持久化 |

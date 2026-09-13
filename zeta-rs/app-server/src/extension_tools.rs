@@ -252,6 +252,26 @@ fn extension_capabilities(
         RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ManagedStateWrite {
             resource,
         }) => CapabilitySet::new([Capability::new(CapabilityKind::FileWrite, resource)]),
+        RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ExternalWrite {
+            service,
+            network_scopes,
+            credential_reference,
+            artifact_root,
+        }) => CapabilitySet::new(
+            network_scopes
+                .iter()
+                .map(|scope| Capability::new(CapabilityKind::Network, scope))
+                .chain(
+                    credential_reference
+                        .iter()
+                        .map(|key| Capability::new(CapabilityKind::CredentialUse, key)),
+                )
+                .chain([
+                    Capability::new(CapabilityKind::ExternalMutation, service),
+                    Capability::new(CapabilityKind::FileWrite, artifact_root),
+                    Capability::new(CapabilityKind::FileRead, artifact_root),
+                ]),
+        ),
         RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ExternalRead {
             network_scopes,
             credential_reference,
@@ -278,6 +298,9 @@ fn extension_action_kind(authority: &RegisteredExtensionAuthority) -> ActionKind
         RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ExternalRead {
             ..
         }) => ActionKind::NetworkRequest,
+        RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ExternalWrite {
+            ..
+        }) => ActionKind::ExternalServiceMutation,
     }
 }
 
@@ -293,6 +316,10 @@ fn extension_summary(name: &ToolName, authority: &RegisteredExtensionAuthority) 
             service,
             ..
         }) => format!("query {service} through extension tool '{name}'"),
+        RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ExternalWrite {
+            service,
+            ..
+        }) => format!("invoke {service} through extension tool '{name}'"),
     }
 }
 
@@ -307,6 +334,14 @@ fn extension_sandbox_reason(authority: &RegisteredExtensionAuthority) -> String 
 fn authority_digest_value(authority: &RegisteredExtensionAuthority) -> serde_json::Value {
     match authority {
         RegisteredExtensionAuthority::ReadOnlyLocal => json!({"type": "read_only_local"}),
+        RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ExternalWrite {
+            service,
+            network_scopes,
+            credential_reference,
+            artifact_root,
+        }) => {
+            json!({"type":"external_write","service":service,"network_scopes":network_scopes,"credential_reference":credential_reference,"artifact_root":artifact_root})
+        }
         RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ManagedStateWrite {
             resource,
         }) => json!({"type": "managed_state_write", "resource": resource}),

@@ -40,9 +40,14 @@ impl std::error::Error for ExtensionError {}
 
 #[derive(Default)]
 pub struct ExtensionRegistryBuilder {
-    lifecycle: Vec<Arc<dyn LifecycleObserver>>,
-    idle: Vec<Arc<dyn IdleContributor>>,
-    items: Vec<Arc<dyn ItemContributor>>,
+    reviewer: Option<Arc<dyn crate::ApprovalReviewContributor>>,
+    tool_lifecycle: Vec<(&'static str, Arc<dyn crate::ToolLifecycleContributor>)>,
+    mcp_lifecycle: Vec<(&'static str, Arc<dyn crate::McpLifecycleContributor>)>,
+    state: Arc<crate::ExtensionState>,
+    continuations: Vec<(&'static str, Arc<dyn crate::ContinuationContributor>)>,
+    lifecycle: Vec<(&'static str, Arc<dyn LifecycleObserver>)>,
+    idle: Vec<(&'static str, Arc<dyn IdleContributor>)>,
+    items: Vec<(&'static str, Arc<dyn ItemContributor>)>,
     capability_tools: Vec<(&'static str, Arc<dyn CapabilityToolContributor>)>,
     read_only_tools: Vec<(&'static str, Arc<dyn ReadOnlyToolContributor>)>,
     context: Vec<(&'static str, Arc<dyn ContextContributor>)>,
@@ -51,8 +56,41 @@ pub struct ExtensionRegistryBuilder {
 }
 
 impl ExtensionRegistryBuilder {
+    pub fn approval_reviewer(
+        &mut self,
+        reviewer: Arc<dyn crate::ApprovalReviewContributor>,
+    ) -> &mut Self {
+        self.reviewer = Some(reviewer);
+        self
+    }
+    pub fn tool_lifecycle_contributor(
+        &mut self,
+        name: &'static str,
+        contributor: Arc<dyn crate::ToolLifecycleContributor>,
+    ) -> &mut Self {
+        register(&mut self.tool_lifecycle, name, contributor);
+        self
+    }
+    pub fn mcp_lifecycle_contributor(
+        &mut self,
+        name: &'static str,
+        contributor: Arc<dyn crate::McpLifecycleContributor>,
+    ) -> &mut Self {
+        register(&mut self.mcp_lifecycle, name, contributor);
+        self
+    }
+
+    pub fn state(&self) -> Arc<crate::ExtensionState> {
+        self.state.clone()
+    }
+
     pub fn from_registry(registry: &ExtensionRegistry) -> Self {
         Self {
+            reviewer: registry.reviewer.clone(),
+            tool_lifecycle: registry.tool_lifecycle.clone(),
+            mcp_lifecycle: registry.mcp_lifecycle.clone(),
+            state: registry.state.clone(),
+            continuations: registry.continuations.clone(),
             lifecycle: registry.lifecycle.clone(),
             idle: registry.idle.clone(),
             items: registry.items.clone(),
@@ -63,16 +101,37 @@ impl ExtensionRegistryBuilder {
             turn_input: registry.turn_input.clone(),
         }
     }
-    pub fn lifecycle_observer(&mut self, observer: Arc<dyn LifecycleObserver>) -> &mut Self {
-        self.lifecycle.push(observer);
+    pub fn lifecycle_observer(
+        &mut self,
+        name: &'static str,
+        contributor: Arc<dyn LifecycleObserver>,
+    ) -> &mut Self {
+        register(&mut self.lifecycle, name, contributor);
         self
     }
-    pub fn idle_contributor(&mut self, contributor: Arc<dyn IdleContributor>) -> &mut Self {
-        self.idle.push(contributor);
+    pub fn idle_contributor(
+        &mut self,
+        name: &'static str,
+        contributor: Arc<dyn IdleContributor>,
+    ) -> &mut Self {
+        register(&mut self.idle, name, contributor);
         self
     }
-    pub fn item_contributor(&mut self, contributor: Arc<dyn ItemContributor>) -> &mut Self {
-        self.items.push(contributor);
+    pub fn item_contributor(
+        &mut self,
+        name: &'static str,
+        contributor: Arc<dyn ItemContributor>,
+    ) -> &mut Self {
+        register(&mut self.items, name, contributor);
+        self
+    }
+
+    pub fn continuation_contributor(
+        &mut self,
+        name: &'static str,
+        contributor: Arc<dyn crate::ContinuationContributor>,
+    ) -> &mut Self {
+        register(&mut self.continuations, name, contributor);
         self
     }
 
@@ -145,6 +204,11 @@ impl ExtensionRegistryBuilder {
 
     pub fn build(self) -> ExtensionRegistry {
         ExtensionRegistry {
+            reviewer: self.reviewer,
+            tool_lifecycle: self.tool_lifecycle,
+            mcp_lifecycle: self.mcp_lifecycle,
+            state: self.state,
+            continuations: self.continuations,
             lifecycle: self.lifecycle,
             idle: self.idle,
             items: self.items,
@@ -159,9 +223,14 @@ impl ExtensionRegistryBuilder {
 
 #[derive(Default)]
 pub struct ExtensionRegistry {
-    lifecycle: Vec<Arc<dyn LifecycleObserver>>,
-    idle: Vec<Arc<dyn IdleContributor>>,
-    items: Vec<Arc<dyn ItemContributor>>,
+    reviewer: Option<Arc<dyn crate::ApprovalReviewContributor>>,
+    tool_lifecycle: Vec<(&'static str, Arc<dyn crate::ToolLifecycleContributor>)>,
+    mcp_lifecycle: Vec<(&'static str, Arc<dyn crate::McpLifecycleContributor>)>,
+    state: Arc<crate::ExtensionState>,
+    continuations: Vec<(&'static str, Arc<dyn crate::ContinuationContributor>)>,
+    lifecycle: Vec<(&'static str, Arc<dyn LifecycleObserver>)>,
+    idle: Vec<(&'static str, Arc<dyn IdleContributor>)>,
+    items: Vec<(&'static str, Arc<dyn ItemContributor>)>,
     capability_tools: Vec<(&'static str, Arc<dyn CapabilityToolContributor>)>,
     read_only_tools: Vec<(&'static str, Arc<dyn ReadOnlyToolContributor>)>,
     context: Vec<(&'static str, Arc<dyn ContextContributor>)>,
@@ -170,6 +239,73 @@ pub struct ExtensionRegistry {
 }
 
 impl ExtensionRegistry {
+    pub fn review(
+        &self,
+        request: &zeta_action_policy::ActionReviewRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<zeta_action_policy::ClassifierAssessment, ExtensionError> {
+        cancellation
+            .check()
+            .map_err(|error| ExtensionError::new(error.reason().to_string()))?;
+        let assessment = self
+            .reviewer
+            .as_ref()
+            .ok_or_else(|| ExtensionError::new("no approval reviewer installed"))?
+            .review(request, cancellation)?;
+        cancellation
+            .check()
+            .map_err(|error| ExtensionError::new(error.reason().to_string()))?;
+        Ok(assessment)
+    }
+    pub fn tool_changed(
+        &self,
+        context: ThreadContext<'_>,
+        turn: &zeta_protocol::TurnId,
+        event: &crate::ToolLifecycle,
+    ) {
+        for (_, contributor) in &self.tool_lifecycle {
+            contributor.tool_changed(context, turn, event);
+        }
+    }
+    pub fn mcp_changed(&self, event: &crate::McpLifecycle) {
+        for (_, contributor) in &self.mcp_lifecycle {
+            contributor.catalog_changed(event);
+        }
+    }
+
+    pub fn state(&self) -> &Arc<crate::ExtensionState> {
+        &self.state
+    }
+
+    pub fn next_turn(
+        &self,
+        thread: &zeta_protocol::ThreadId,
+        completed: &zeta_protocol::TurnId,
+    ) -> Result<Option<crate::ExtensionTurn>, ExtensionError> {
+        for (_, contributor) in &self.continuations {
+            if let Some(turn) = contributor.next_turn(thread, completed)? {
+                return Ok(Some(turn));
+            }
+        }
+        Ok(None)
+    }
+
+    pub fn recover_turns(
+        &self,
+        sessions: &BTreeSet<zeta_protocol::SessionId>,
+    ) -> Result<Vec<crate::ExtensionTurn>, ExtensionError> {
+        let mut turns = Vec::new();
+        let mut seen = BTreeSet::new();
+        for (_, contributor) in &self.continuations {
+            for turn in contributor.recover(sessions)? {
+                if seen.insert((turn.thread_id.clone(), turn.turn_id.clone())) {
+                    turns.push(turn);
+                }
+            }
+        }
+        Ok(turns)
+    }
+
     pub fn collect_context(
         &self,
         request: &ContextSourceRequest<'_>,
@@ -189,7 +325,24 @@ impl ExtensionRegistry {
     }
 
     pub fn thread_changed(&self, context: ThreadContext<'_>, event: &ThreadLifecycle) {
-        for observer in &self.lifecycle {
+        match event {
+            ThreadLifecycle::Archived => self.state.remove(&crate::ExtensionScope::Thread(
+                context.session_id.clone(),
+                context.thread_id.clone(),
+            )),
+            ThreadLifecycle::TurnCompleted(turn)
+            | ThreadLifecycle::TurnFailed(turn)
+            | ThreadLifecycle::TurnInterrupted(turn) => {
+                self.state.remove(&crate::ExtensionScope::Turn(
+                    context.session_id.clone(),
+                    context.thread_id.clone(),
+                    turn.clone(),
+                ))
+            }
+            _ => {}
+        }
+
+        for (_, observer) in &self.lifecycle {
             observer.thread_changed(context, event);
         }
         if matches!(
@@ -198,13 +351,13 @@ impl ExtensionRegistry {
                 | ThreadLifecycle::TurnFailed(_)
                 | ThreadLifecycle::TurnInterrupted(_)
         ) {
-            for contributor in &self.idle {
+            for (_, contributor) in &self.idle {
                 contributor.contribute(context);
             }
         }
     }
     pub fn config_changed(&self, generation: u64) {
-        for observer in &self.lifecycle {
+        for (_, observer) in &self.lifecycle {
             observer.config_changed(generation);
         }
     }
@@ -214,7 +367,7 @@ impl ExtensionRegistry {
     ) -> Result<Vec<extension_items::ExtensionItem>, ExtensionError> {
         let mut items = Vec::new();
         let mut identities = BTreeSet::new();
-        for contributor in &self.items {
+        for (_, contributor) in &self.items {
             let contributed = contributor.contribute(context)?;
             if items.len() + contributed.len() > 128 {
                 return Err(ExtensionError::new("too many extension items"));
@@ -314,5 +467,17 @@ impl ExtensionRegistry {
             })?);
         }
         Ok(fragments)
+    }
+}
+
+fn register<T: ?Sized>(
+    entries: &mut Vec<(&'static str, Arc<T>)>,
+    name: &'static str,
+    contributor: Arc<T>,
+) {
+    if let Some((_, current)) = entries.iter_mut().find(|(id, _)| *id == name) {
+        *current = contributor;
+    } else {
+        entries.push((name, contributor));
     }
 }

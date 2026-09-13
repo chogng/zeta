@@ -44,3 +44,7 @@ pub use status::{
 };
 pub use updates::McpCatalogUpdateSubscription;
 pub use updates::McpCatalogUpdates;
+
+mod marketplace;
+pub use marketplace::MarketplaceConnectorCatalog;
+pub use marketplace::combined_provider;

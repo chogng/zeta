@@ -11,6 +11,7 @@ use crate::tool::WebSearchTool;
 
 struct WebSearchExtension {
     backend: Arc<dyn WebSearchBackend>,
+    items: Arc<zeta_extension_api::ExtensionItemStore>,
 }
 
 impl CapabilityToolContributor for WebSearchExtension {
@@ -22,7 +23,10 @@ impl CapabilityToolContributor for WebSearchExtension {
             ));
         }
         Ok(vec![CapabilityToolContribution::new(
-            Arc::new(WebSearchTool::new(Arc::clone(&self.backend))),
+            Arc::new(WebSearchTool::new(
+                Arc::clone(&self.backend),
+                self.items.clone(),
+            )),
             ExtensionToolAuthority::ExternalRead {
                 service: self.backend.service_name().to_owned(),
                 network_scopes,
@@ -34,5 +38,11 @@ impl CapabilityToolContributor for WebSearchExtension {
 
 /// Installs Web Search into the capability-bearing extension registry.
 pub fn install(builder: &mut ExtensionRegistryBuilder, backend: Arc<dyn WebSearchBackend>) {
-    builder.capability_tool_contributor("web-search", Arc::new(WebSearchExtension { backend }));
+    builder.capability_tool_contributor(
+        "web-search",
+        Arc::new(WebSearchExtension {
+            backend,
+            items: Arc::new(zeta_extension_api::ExtensionItemStore::new(builder.state())),
+        }),
+    );
 }

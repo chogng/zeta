@@ -1,10 +1,17 @@
 [workspace]
 exclude = ["zeta-rs/vendor/mxc"]
 members = [
+    "zeta-rs/ext/clock",
+    "zeta-rs/ext/git-attribution",
+    "zeta-rs/ext/image-generation",
+    "zeta-rs/ext/history-notes",
+    "zeta-rs/ext/goal",
+    "zeta-rs/ext/agent",
+    "zeta-rs/ext/guardian-v2",
     "zeta-rs/memories",
     "zeta-rs/ext/items",
     "zeta-rs/ext/memories",
-    "zeta-rs/queue",
+    "zeta-rs/ext/queue",
     "zeta-rs/analytics",
     "zeta-rs/diagnostics",
     "zeta-rs/feedback",
@@ -36,7 +43,7 @@ members = [
     "zeta-rs/chatgpt",
     "zeta-rs/apply-patch",
     "zeta-rs/async-utils",
-    "zeta-rs/auto-review",
+    "zeta-rs/ext/guardian-reviewer",
     "zeta-rs/automation",
     "zeta-rs/memory-diagnostics",
     "zeta-rs/bwrap",
@@ -166,7 +173,14 @@ members = [
     "app/workbench",
     "app/zui",
 ]
-default-members = ["app"]
+default-members = [
+    "zeta-rs/ext/clock",
+    "zeta-rs/ext/git-attribution",
+    "zeta-rs/ext/image-generation",
+    "zeta-rs/ext/history-notes",
+    "zeta-rs/ext/goal",
+    "zeta-rs/ext/agent",
+    "zeta-rs/ext/guardian-v2","app"]
 resolver = "3"
 
 [workspace.package]
@@ -176,10 +190,17 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
+clock = { package = "zeta-clock", path = "zeta-rs/ext/clock" }
+git-attribution = { package = "zeta-git-attribution", path = "zeta-rs/ext/git-attribution" }
+image-generation = { package = "zeta-image-generation", path = "zeta-rs/ext/image-generation" }
+history-notes = { package = "zeta-history-notes", path = "zeta-rs/ext/history-notes" }
+goal = { package = "zeta-goal", path = "zeta-rs/ext/goal" }
+agent = { package = "zeta-agent", path = "zeta-rs/ext/agent" }
+guardian-v2 = { package = "zeta-guardian-v2", path = "zeta-rs/ext/guardian-v2" }
 memories = { package = "zeta-memories", path = "zeta-rs/memories" }
 memories-extension = { package = "zeta-memories-extension", path = "zeta-rs/ext/memories" }
 extension-items = { package = "zeta-extension-items", path = "zeta-rs/ext/items" }
-queue = { package = "zeta-queue", path = "zeta-rs/queue" }
+queue = { package = "zeta-queue", path = "zeta-rs/ext/queue" }
 analytics = { package = "zeta-analytics", path = "zeta-rs/analytics" }
 diagnostics = { package = "zeta-diagnostics", path = "zeta-rs/diagnostics" }
 feedback = { package = "zeta-feedback", path = "zeta-rs/feedback" }
@@ -353,7 +374,7 @@ zeta-v8-poc = { path = "zeta-rs/v8-poc" }
 zeta-chatgpt = { path = "zeta-rs/chatgpt" }
 zeta-apply-patch = { path = "zeta-rs/apply-patch" }
 zeta-async-utils = { path = "zeta-rs/async-utils" }
-zeta-auto-review = { path = "zeta-rs/auto-review" }
+guardian-reviewer = { package = "zeta-guardian-reviewer", path = "zeta-rs/ext/guardian-reviewer" }
 zeta-api = { path = "zeta-rs/zeta-api" }
 zeta-client = { path = "zeta-rs/zeta-client" }
 zeta-otel = { path = "zeta-rs/otel" }

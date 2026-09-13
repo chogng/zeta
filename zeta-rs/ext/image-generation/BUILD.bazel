@@ -1,0 +1,2 @@
+load("//:defs.bzl", "zeta_rust_crate")
+zeta_rust_crate(name = "image-generation", crate_name = "zeta_image_generation")

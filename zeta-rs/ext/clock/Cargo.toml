@@ -1,0 +1,23 @@
+[package]
+name = "zeta-clock"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+serde_json = { workspace = true }
+async-utils = { package = "zeta-async-utils", path = "../../async-utils" }
+extension-api = { package = "zeta-extension-api", path = "../extension-api" }
+tools = { package = "zeta-tools", path = "../../tools" }
+extension-items = { workspace = true }
+
+[dev-dependencies]
+protocol = { package = "zeta-protocol", path = "../../protocol" }
+pollster = { workspace = true }
+
+[lints]
+workspace = true

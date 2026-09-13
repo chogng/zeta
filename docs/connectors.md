@@ -72,7 +72,7 @@ Connector；Plugin 或 User/Directory 也可以独立声明 MCP server。只有�
 
 ### 1.1 关系是组合，不是运行时包含
 
-- Marketplace bundle 可以同时携带 Connector 和被它引用的 MCP capability；Manager 只拥有 package、artifact 与 lease，App Server adapter 负责 exact binding。
+- Marketplace bundle 可以同时携带 Connector 和被它引用的 MCP capability；Manager 只拥有 package、artifact 与 lease，`ext/mcp` 负责 exact binding。
 - Legacy Plugin 包可以声明 `ConnectorContribution` 与 `McpServerContribution`，但兼容 authority 只负责本地 enable/grant 与 immutable activation。
 - Connector runtime 消费 Connector declaration 并发布连接状态；OAuth/API-key 交互由认证 adapter 执行，secret bytes 由 Secrets owner 保存。
 - Ready binding 只是“已可以 materialize 哪个 runtime”的 generation-bound 描述，不是 live MCP session 或 Tool binding。
@@ -96,7 +96,7 @@ adapter；不得成为 `ConnectorId`、connection generation 或本地 runtime r
 
 当前 API-token 路径为：
 
-1. Marketplace 路径由 Manager 返回同一 digest 内的 exact Connector/MCP capabilities；legacy 路径由 `PluginActivationSnapshot::resolve` 固定不可变激活快照。两者在 App Server 转为带 package digest 的 `ConnectorDefinition`。
+1. Marketplace 路径由 Manager 返回同一 digest 内的 exact Connector/MCP capabilities；legacy 路径由 `PluginActivationSnapshot::resolve` 固定不可变激活快照。两者在扩展内转为带 package digest 的 `ConnectorDefinition`。
 2. App Server 通过 `connector/list` 返回不含 credential reference 的状态；`connector/connect/apiToken` 接收一次性 secret DTO。
 3. `ConnectorCredentialService` 先提交 `Connecting`，再把 token 写入 `SecretStore`，最后向 `ConnectorAuthority` 提交只含 account 与 opaque reference 的 `Connected`。
 4. SQLite authority 在一个事务中追加状态事件与 retry receipt；重复 command ID 只重放完全相同的请求。

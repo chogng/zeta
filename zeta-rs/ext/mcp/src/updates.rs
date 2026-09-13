@@ -31,9 +31,30 @@ where
 #[derive(Clone, Default)]
 pub struct McpCatalogUpdates {
     subscribers: Arc<Mutex<Vec<mpsc::Sender<()>>>>,
+    extensions: Arc<Mutex<Option<Arc<extension_api::ExtensionRegistry>>>>,
 }
 
 impl McpCatalogUpdates {
+    /// Binds catalog notifications to the current immutable extension registry.
+    pub fn bind_extensions(&self, extensions: Arc<extension_api::ExtensionRegistry>) {
+        let previous = self
+            .extensions
+            .lock()
+            .expect("MCP extension binding lock")
+            .replace(extensions);
+        drop(previous);
+    }
+    pub(crate) fn lifecycle(&self, event: extension_api::McpLifecycle) {
+        let registry = self
+            .extensions
+            .lock()
+            .expect("MCP extension binding lock")
+            .clone();
+        if let Some(registry) = registry {
+            registry.mcp_changed(&event);
+        }
+    }
+
     /// Subscribes to future tool-catalog invalidations.
     pub fn subscribe(&self) -> McpCatalogUpdateSubscription {
         let (sender, receiver) = mpsc::channel();
@@ -51,6 +72,7 @@ impl McpCatalogUpdates {
     }
 
     fn publish(&self) {
+        self.lifecycle(extension_api::McpLifecycle::ToolsChanged);
         self.subscribers
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)

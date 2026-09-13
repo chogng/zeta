@@ -821,7 +821,7 @@ impl AppServer {
             );
             if result_goal.goal.status == zeta_protocol::ThreadGoalStatus::Active {
                 self.turn_executor_snapshot()
-                    .resume_goal_continuation(&params.thread_id)
+                    .resume_extension_continuation(&params.thread_id)
                     .map_err(core_error)?;
             }
         }

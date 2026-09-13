@@ -24,13 +24,18 @@ pub const WEB_SEARCH_TOOL_NAME: &str = "web_search";
 
 pub(crate) struct WebSearchTool {
     backend: Arc<dyn WebSearchBackend>,
+    items: Arc<zeta_extension_api::ExtensionItemStore>,
     definition: ToolDefinition,
 }
 
 impl WebSearchTool {
-    pub(crate) fn new(backend: Arc<dyn WebSearchBackend>) -> Self {
+    pub(crate) fn new(
+        backend: Arc<dyn WebSearchBackend>,
+        items: Arc<zeta_extension_api::ExtensionItemStore>,
+    ) -> Self {
         Self {
             backend,
+            items,
             definition: definition(),
         }
     }
@@ -63,18 +68,56 @@ impl ToolExecutor for WebSearchTool {
             if let Err(error) = request.validate() {
                 return ToolExecutionOutcome::NotStarted(ToolStartFailure::new(error.to_string()));
             }
+            let (Some(session), Some(thread)) = (
+                invocation.context().session_id(),
+                invocation.context().thread_id(),
+            ) else {
+                return ToolExecutionOutcome::NotStarted(ToolStartFailure::new(
+                    "Search requires a bound Session and Thread",
+                ));
+            };
             match self
                 .backend
                 .search(&request, invocation.context().cancellation())
             {
-                Ok(response) => match serde_json::to_string(&response) {
-                    Ok(response) => ToolExecutionOutcome::Returned(ToolOutput::success(vec![
-                        ToolContent::Text(response),
-                    ])),
-                    Err(error) => {
-                        ToolExecutionOutcome::NotStarted(ToolStartFailure::new(error.to_string()))
+                Ok(response) => {
+                    let item = extension_items::ExtensionItem {
+                        extension: "web-search".into(),
+                        id: invocation.call_id().as_str().into(),
+                        title: "Web search".into(),
+                        body: request
+                            .search_query
+                            .iter()
+                            .map(|q| q.q.as_str())
+                            .collect::<Vec<_>>()
+                            .join("\n"),
+                        status: extension_items::ExtensionItemStatus::Completed,
+                        content: extension_items::ExtensionItemContent::WebSearch {
+                            queries: request.search_query.iter().map(|q| q.q.clone()).collect(),
+                            sources: response
+                                .results
+                                .iter()
+                                .map(|result| extension_items::SearchSource {
+                                    title: result.title.clone(),
+                                    url: result.url.clone(),
+                                })
+                                .collect(),
+                        },
+                    };
+                    if let Err(error) = self.items.publish(session, thread, item) {
+                        return ToolExecutionOutcome::Returned(ToolOutput::error(vec![
+                            ToolContent::Text(error.to_string()),
+                        ]));
                     }
-                },
+                    match serde_json::to_string(&response) {
+                        Ok(response) => ToolExecutionOutcome::Returned(ToolOutput::success(vec![
+                            ToolContent::Text(response),
+                        ])),
+                        Err(error) => ToolExecutionOutcome::NotStarted(ToolStartFailure::new(
+                            error.to_string(),
+                        )),
+                    }
+                }
                 Err(error) => {
                     ToolExecutionOutcome::Returned(ToolOutput::error(vec![ToolContent::Text(
                         error.to_string(),

@@ -2459,6 +2459,46 @@ impl ThreadController {
             capture.commit();
         }
         for stored in &batch.events {
+            let context = zeta_extension_api::ThreadContext {
+                session_id: &batch.catalog.session_id,
+                thread_id: &batch.thread_id,
+                sequence: stored.sequence,
+            };
+            match &stored.event {
+                ThreadEvent::ToolExecutionStarted {
+                    turn_id,
+                    tool_call_id,
+                    action_digest,
+                    policy_revision,
+                    ..
+                } => extensions.tool_changed(
+                    context,
+                    turn_id,
+                    &zeta_extension_api::ToolLifecycle::Started {
+                        call_id: tool_call_id.clone(),
+                        action_digest: action_digest.clone(),
+                        policy_revision: policy_revision.clone(),
+                    },
+                ),
+                ThreadEvent::ItemCompleted {
+                    turn_id,
+                    item:
+                        ThreadItem::ToolResult {
+                            tool_call_id,
+                            is_error,
+                            ..
+                        },
+                    ..
+                } => extensions.tool_changed(
+                    context,
+                    turn_id,
+                    &zeta_extension_api::ToolLifecycle::Completed {
+                        call_id: tool_call_id.clone(),
+                        is_error: *is_error,
+                    },
+                ),
+                _ => {}
+            }
             use zeta_extension_api::ThreadLifecycle;
             let lifecycle = match &stored.event {
                 ThreadEvent::ThreadCreated { .. } => ThreadLifecycle::Created,

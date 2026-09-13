@@ -270,6 +270,7 @@ export type { ExtensionHostRegistrationDescriptorDto } from './ExtensionHostRegi
 export type { ExtensionHostRegistrationKindDto } from './ExtensionHostRegistrationKindDto.js';
 export type { ExtensionHostSnapshotDto } from './ExtensionHostSnapshotDto.js';
 export type { ExtensionItem } from './ExtensionItem.js';
+export type { ExtensionItemContent } from './ExtensionItemContent.js';
 export type { ExtensionItemStatus } from './ExtensionItemStatus.js';
 export type { ExtensionItemsParams } from './ExtensionItemsParams.js';
 export type { ExtensionItemsResult } from './ExtensionItemsResult.js';
@@ -697,6 +698,7 @@ export type { ResourceReleaseParams } from './ResourceReleaseParams.js';
 export type { ReviewTarget } from './ReviewTarget.js';
 export type { SandboxDenialOutput } from './SandboxDenialOutput.js';
 export type { SchemaHash } from './SchemaHash.js';
+export type { SearchSource } from './SearchSource.js';
 export type { ServerCapabilities } from './ServerCapabilities.js';
 export type { ServerInfo } from './ServerInfo.js';
 export type { Session } from './Session.js';

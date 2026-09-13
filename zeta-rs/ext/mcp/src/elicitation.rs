@@ -83,8 +83,11 @@ impl FormRequest {
             .flatten()
             .filter_map(Value::as_str)
             .collect::<BTreeSet<_>>();
+        // Dependency features must not change the order of user-visible fields.
         let fields = properties
             .iter()
+            .collect::<BTreeMap<_, _>>()
+            .into_iter()
             .map(|(id, schema)| FormField::from_schema(id, schema, required.contains(id.as_str())))
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self { message, fields })

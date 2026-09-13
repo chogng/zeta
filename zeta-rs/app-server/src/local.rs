@@ -108,6 +108,8 @@ pub struct LocalAppServerOptions {
     agent_model_service: Option<Arc<dyn ModelService>>,
     model_operation_client: Option<Arc<dyn OperationClient>>,
     web_search_backend: Option<Arc<dyn zeta_web_search_extension::WebSearchBackend>>,
+    image_generation_backend: Option<Arc<dyn image_generation::ImageGenerationBackend>>,
+    git_attribution: Option<Arc<dyn git_attribution::GitAttributionPolicySource>>,
     connector_runtime: Option<LocalConnectorRuntime>,
     mcp_oauth_providers: Vec<(McpServerId, Arc<dyn McpOAuthProvider>)>,
     plugin_package_service: Option<Arc<dyn zeta_core_plugins::PluginPackageService>>,
@@ -126,6 +128,21 @@ enum InitialDirPermissions {
 }
 
 impl LocalAppServerOptions {
+    pub fn with_image_generation_backend(
+        mut self,
+        backend: Arc<dyn image_generation::ImageGenerationBackend>,
+    ) -> Self {
+        self.image_generation_backend = Some(backend);
+        self
+    }
+    pub fn with_git_attribution(
+        mut self,
+        source: Arc<dyn git_attribution::GitAttributionPolicySource>,
+    ) -> Self {
+        self.git_attribution = Some(source);
+        self
+    }
+
     pub fn new(profile_root: impl Into<PathBuf>) -> Self {
         Self {
             profile_root: profile_root.into(),
@@ -139,6 +156,8 @@ impl LocalAppServerOptions {
             agent_model_service: None,
             model_operation_client: None,
             web_search_backend: None,
+            image_generation_backend: None,
+            git_attribution: None,
             connector_runtime: None,
             mcp_oauth_providers: Vec::new(),
             plugin_package_service: None,
@@ -353,6 +372,11 @@ impl fmt::Debug for LocalAppServerOptions {
                 "connector_runtime_injected",
                 &self.connector_runtime.is_some(),
             )
+            .field(
+                "image_generation_backend_injected",
+                &self.image_generation_backend.is_some(),
+            )
+            .field("git_attribution_injected", &self.git_attribution.is_some())
             .field("mcp_oauth_provider_count", &self.mcp_oauth_providers.len())
             .field(
                 "plugin_package_service_injected",
@@ -397,6 +421,19 @@ impl PartialEq for LocalAppServerOptions {
             }
             && match (&self.web_search_backend, &other.web_search_backend) {
                 (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+                (None, None) => true,
+                _ => false,
+            }
+            && match (
+                &self.image_generation_backend,
+                &other.image_generation_backend,
+            ) {
+                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                (None, None) => true,
+                _ => false,
+            }
+            && match (&self.git_attribution, &other.git_attribution) {
+                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
                 (None, None) => true,
                 _ => false,
             }
@@ -612,15 +649,13 @@ impl LocalConnectorRuntime {
         let mut definitions = self.base_definitions.clone();
         self.mcp = Arc::clone(&self.base_mcp);
         if let Some(manager) = &self.plugins_manager {
-            let projection =
-                crate::marketplace_connector_runtime::MarketplaceConnectorProjection::from_manager(
-                    Arc::clone(manager),
-                )
-                .map_err(OpenAppServerError)?;
-            definitions.extend(projection.definitions().iter().cloned());
-            self.mcp = crate::marketplace_connector_runtime::combined_provider(
+            let catalog =
+                zeta_mcp_extension::MarketplaceConnectorCatalog::from_manager(Arc::clone(manager))
+                    .map_err(OpenAppServerError)?;
+            definitions.extend(catalog.definitions().iter().cloned());
+            self.mcp = zeta_mcp_extension::combined_provider(
                 Arc::clone(&self.base_mcp),
-                projection.provider(),
+                catalog.provider(),
             );
         }
         self.service
@@ -1059,6 +1094,57 @@ pub fn open_local_app_server_with_codebase_providers(
     if let Some(runtime) = &marketplace_language_runtime {
         options.language_server_providers = runtime.providers().map_err(OpenAppServerError)?;
     }
+    if let Some(services) = &product_services {
+        if let Some(image) = &services.image_generation {
+            if options.image_generation_backend.is_some() {
+                return Err(OpenAppServerError(
+                    "image backend is configured twice".into(),
+                ));
+            }
+            let mut headers = Vec::new();
+            if let Some(reference) = &image.credential_reference {
+                let key = zeta_secrets::SecretKey::new(reference).map_err(open_error)?;
+                let secret = profile_secrets
+                    .load(&key)
+                    .map_err(open_error)?
+                    .ok_or_else(|| {
+                        OpenAppServerError("configured image service credential is missing".into())
+                    })?;
+                let token = std::str::from_utf8(secret.expose()).map_err(|_| {
+                    OpenAppServerError("image service credential must be UTF-8".into())
+                })?;
+                if token.is_empty() || token.chars().any(char::is_control) {
+                    return Err(OpenAppServerError(
+                        "image service credential is invalid".into(),
+                    ));
+                }
+                headers.push(zeta_http_client::HttpHeader::new(
+                    "authorization",
+                    format!("Bearer {token}"),
+                ));
+            }
+            let http = Arc::new(zeta_http_client::UreqHttpClient::new().map_err(open_error)?);
+            let client = Arc::new(zeta_client::ZetaClient::new(http));
+            options.image_generation_backend = Some(Arc::new(
+                image_generation::JsonImageGenerationBackend::new(
+                    image.service_name.clone(),
+                    image.endpoint.clone(),
+                    image.credential_reference.clone(),
+                    headers,
+                    client,
+                )
+                .map_err(OpenAppServerError)?,
+            ));
+        }
+        if let Some(policy) = &services.git_attribution {
+            if options.git_attribution.is_some() {
+                return Err(OpenAppServerError(
+                    "Git attribution is configured twice".into(),
+                ));
+            }
+            options.git_attribution = Some(Arc::new(policy.policy()));
+        }
+    }
     if let (Some(runtime), Some(services)) = (&mut connector_runtime, product_services) {
         configure_product_connector_oauth(runtime, services.connector_oauth)?;
     }
@@ -1271,6 +1357,23 @@ pub fn open_local_app_server_with_codebase_providers(
         )
         .map_err(OpenAppServerError)?;
     server = server
+        .with_agent_capabilities(
+            Arc::new(
+                match options.session_state_mode {
+                    SessionStateMode::Durable => history_notes::NotesStore::open(&database_path),
+                    SessionStateMode::Ephemeral => history_notes::NotesStore::in_memory(),
+                }
+                .map_err(OpenAppServerError)?,
+            ),
+            options.image_generation_backend.take(),
+            &options.profile_root.join("generated-images"),
+            options
+                .git_attribution
+                .clone()
+                .unwrap_or_else(|| Arc::new(git_attribution::GitAttributionPolicy::Disabled)),
+        )
+        .map_err(OpenAppServerError)?;
+    server = server
         .with_local_projects(&database_path)
         .map_err(OpenAppServerError)?;
     server = server
@@ -1300,6 +1403,7 @@ pub fn open_local_app_server_with_codebase_providers(
         server = server.with_plugin_package_service(client);
     }
     let mcp_updates = McpCatalogUpdates::default();
+    mcp_updates.bind_extensions(server.agent_extension_registry());
     let mcp_changes = mcp_updates.subscribe();
     let mcp_runtime_intents = server.mcp_runtime_intents.clone();
     let mcp_runtime_intent_changes = mcp_runtime_intents.subscribe();
@@ -1379,7 +1483,7 @@ pub fn open_local_app_server_with_codebase_providers(
         .resume_recovered_tool_continuations()
         .map_err(open_error)?;
     server
-        .resume_recovered_goal_continuations()
+        .resume_recovered_extension_turns()
         .map_err(open_error)?;
     let env_tools = server
         .local_env_tool_ports()

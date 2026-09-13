@@ -11,6 +11,9 @@ name = "zeta_mcp_extension"
 path = "src/lib.rs"
 
 [dependencies]
+extension-api = { package = "zeta-extension-api", path = "../extension-api" }
+file-system = { package = "zeta-file-system", path = "../../file-system" }
+file-access = { package = "zeta-file-access", path = "../../file-access" }
 base64 = { workspace = true }
 getrandom = { workspace = true }
 serde = { workspace = true }

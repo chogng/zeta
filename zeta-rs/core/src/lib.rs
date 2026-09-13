@@ -196,3 +196,6 @@ pub use capabilities::ElementTarget;
 pub use capabilities::MediaResource;
 pub use capabilities::TextInputTarget;
 pub use capabilities::UnsupportedBrowserCapability;
+
+mod approval_mode;
+pub use approval_mode::ApprovalModeActionPolicyService;

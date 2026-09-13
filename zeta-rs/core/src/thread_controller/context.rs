@@ -313,26 +313,6 @@ impl ThreadController {
             }
             instruction_fragments
                 .extend(request.harness_context.instructions().context_fragments());
-            if let Some(goal) = loaded.snapshot.goal.as_ref().filter(|goal| {
-                turn.kind != zeta_protocol::TurnKind::Review && goal.status.is_active()
-            }) {
-                let prompt = crate::context::render_goal_instructions(
-                    &goal.objective,
-                    goal.token_budget,
-                    goal.tokens_used,
-                )
-                .map_err(|error| CoreError::Context(error.to_string()))?;
-                instruction_fragments.push(crate::context::InstructionFragment::new(
-                    crate::context::InstructionSource::new(
-                        prompt.source().owner(),
-                        prompt.source().id(),
-                        prompt.source().revision(),
-                    ),
-                    crate::context::InstructionLayer::Product,
-                    crate::context::InstructionRetention::Required,
-                    prompt.body(),
-                ));
-            }
             instruction_fragments.extend(crate::multi_agent::agent_context_fragments(
                 &loaded.snapshot,
             ));

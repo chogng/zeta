@@ -233,7 +233,7 @@ Core 的 `ToolService` 是 consumer-owned port；它可以由外层 `ToolRegistr
 - `zeta-apply-patch → zeta-tools + zeta-sandboxing`；
 - `zeta-action-policy → zeta-execpolicy + zeta-sandboxing`；
 - `zeta-execpolicy` 不依赖 sandbox、Core、Tool 或配置 I/O；
-- `zeta-auto-review → zeta-action-policy + zeta-sandboxing`；
+- `zeta-guardian-reviewer → zeta-action-policy + zeta-sandboxing`；
 - 本地进程执行器只依赖 `zeta-sandboxing` 契约；产品组合注入 `mxc-sandbox`，平台细节留在适配器；
 - `zeta-api → zeta-tools + zeta-protocol`；
 - App Server 组合 Tool registry、source runtime、policy 和 Core port。
@@ -1619,3 +1619,5 @@ ranking 只证明 gate、document embedding、cosine ranking 和 hybrid merge �
 - 新 public trait 必须带角色和实现约束 doc comment；
 - 新 API 不使用让调用方写出 `foo(false)` / `bar(None)` 的含糊参数；
 - 模块默认 private，`lib.rs` 精确导出，implementation tests 放 sibling 文件。
+
+新增的 Goal、Agent、历史笔记、图片和等待工具，以及对应扩展职责见 [Agent 扩展](../zeta-rs/docs/extensions.md)。

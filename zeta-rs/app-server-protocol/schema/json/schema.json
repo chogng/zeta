@@ -15693,6 +15693,9 @@
           "maxLength": 131072,
           "type": "string"
         },
+        "content": {
+          "$ref": "#/$defs/ExtensionItemContent"
+        },
         "extension": {
           "maxLength": 128,
           "minLength": 1,
@@ -15717,9 +15720,91 @@
         "id",
         "title",
         "body",
-        "status"
+        "status",
+        "content"
       ],
       "type": "object"
+    },
+    "ExtensionItemContent": {
+      "description": "Structured results retain a readable title and body for all clients.",
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "text",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "queries": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "sources": {
+              "items": {
+                "$ref": "#/$defs/SearchSource"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "webSearch",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "queries",
+            "sources"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "mimeType": {
+              "type": "string"
+            },
+            "savedPath": {
+              "type": "string"
+            },
+            "type": {
+              "const": "image",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "mimeType",
+            "savedPath"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "durationMs": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": {
+              "const": "sleep",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "durationMs"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "ExtensionItemStatus": {
       "enum": [
@@ -26324,6 +26409,22 @@
     },
     "SchemaHash": {
       "type": "string"
+    },
+    "SearchSource": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "url"
+      ],
+      "type": "object"
     },
     "ServerCapabilities": {
       "properties": {

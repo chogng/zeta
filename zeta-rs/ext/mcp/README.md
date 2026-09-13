@@ -170,3 +170,6 @@ Plugin authority、runtime generation、并发 elicitation task-local 隔离和 
 - URL elicitation、数组/多选和完整 JSON Schema format validation 尚未支持。
 - stdio 仍需要更完整的 sandbox/process-tree supervisor。
 - progress 可以在低层接收，但尚未投影为产品级 durable/transient update。
+
+- Marketplace Connector/MCP 绑定与 invocation lease 由本 crate 的 `marketplace` 模块持有；声明读取委托 `connectors`。
+- 启动、目录变化和关闭会进入扩展 MCP 生命周期接口。

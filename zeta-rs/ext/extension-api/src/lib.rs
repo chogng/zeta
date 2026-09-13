@@ -33,3 +33,32 @@ pub use registry::ExtensionRegistryBuilder;
 #[cfg(test)]
 #[path = "registry_tests.rs"]
 mod tests;
+
+pub use lifecycle::ContinuationContributor;
+pub use lifecycle::ExtensionTurn;
+
+mod items;
+mod state;
+pub use items::ExtensionItemStore;
+pub use state::ExtensionScope;
+pub use state::ExtensionState;
+
+pub use lifecycle::ApprovalReviewContributor;
+pub use lifecycle::McpLifecycle;
+pub use lifecycle::McpLifecycleContributor;
+pub use lifecycle::ToolLifecycle;
+pub use lifecycle::ToolLifecycleContributor;
+
+#[cfg(test)]
+#[path = "state_tests.rs"]
+mod state_tests;
+
+/// Immutable reviewer selection frozen with an execution policy revision.
+#[derive(Clone)]
+pub enum ApprovalReviewer {
+    Unavailable,
+    Configured {
+        identity: String,
+        registry: std::sync::Arc<ExtensionRegistry>,
+    },
+}

@@ -1,4 +1,4 @@
-use super::agent_selection::resolve_agent_selection;
+use agent::resolve_agent_selection;
 use agent_roles::AgentRoleCatalog;
 use std::hint::black_box;
 use std::time::Instant;

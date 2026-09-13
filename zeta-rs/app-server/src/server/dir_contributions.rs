@@ -449,3 +449,15 @@ fn content_revision(kind: &str, content: &str) -> String {
 #[cfg(test)]
 #[path = "dir_contributions_tests.rs"]
 mod tests;
+
+impl agent::AgentCatalogProvider for DirContributions {
+    fn agent_snapshots_for(&self, session: &SessionId) -> Vec<Arc<AgentRoleCatalogSnapshot>> {
+        self.agent_snapshots_for(session)
+    }
+    fn instruction_snapshots_for(
+        &self,
+        session: &SessionId,
+    ) -> Vec<Arc<InstructionCatalogSnapshot>> {
+        self.instruction_snapshots_for(session)
+    }
+}

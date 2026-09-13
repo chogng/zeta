@@ -28,6 +28,8 @@ const MAX_PRODUCT_SERVICES_BYTES: u64 = 1024 * 1024;
 pub struct LocalProductServicesConfig {
     pub(crate) marketplaces: BTreeMap<MarketplaceName, zeta_core_plugins::RemoteMarketplaceConfig>,
     pub(crate) connector_oauth: Vec<ProductConnectorOAuthConfig>,
+    pub(crate) image_generation: Option<ProductImageGenerationConfig>,
+    pub(crate) git_attribution: Option<ProductGitAttributionConfig>,
     authority_identity: [u8; 32],
 }
 
@@ -89,7 +91,28 @@ impl LocalProductServicesConfig {
             .map(ProductConnectorOAuthConfig::try_from)
             .collect::<Result<Vec<_>, _>>()?;
         validate_unique_configuration(&connector_oauth)?;
+        if let Some(image) = &document.image_generation {
+            let endpoint = Url::parse(&image.endpoint).map_err(product_config_error)?;
+            if endpoint.scheme() != "https"
+                || !endpoint.username().is_empty()
+                || endpoint.password().is_some()
+                || endpoint.fragment().is_some()
+                || endpoint.host_str().is_none()
+                || image.service_name.trim().is_empty()
+                || image.service_name.len() > 256
+            {
+                return Err(product_config_error(()));
+            }
+            if let Some(reference) = &image.credential_reference {
+                zeta_secrets::SecretKey::new(reference).map_err(product_config_error)?;
+            }
+        }
+        if let Some(policy) = &document.git_attribution {
+            policy.policy().validate().map_err(product_config_error)?;
+        }
         Ok(Self {
+            image_generation: document.image_generation,
+            git_attribution: document.git_attribution,
             marketplaces,
             connector_oauth,
             authority_identity: authority_identity.finalize().into(),
@@ -149,6 +172,10 @@ struct ProductServicesDocument {
     marketplaces: Vec<ProductMarketplaceDocument>,
     #[serde(default)]
     connector_oauth: Vec<ProductConnectorOAuthDocument>,
+    #[serde(default)]
+    image_generation: Option<ProductImageGenerationConfig>,
+    #[serde(default)]
+    git_attribution: Option<ProductGitAttributionConfig>,
 }
 
 #[derive(Deserialize)]
@@ -258,3 +285,25 @@ fn product_config_error(_: impl Sized) -> OpenAppServerError {
 #[cfg(test)]
 #[path = "product_services_tests.rs"]
 mod tests;
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ProductImageGenerationConfig {
+    pub service_name: String,
+    pub endpoint: String,
+    pub credential_reference: Option<String>,
+}
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ProductGitAttributionConfig {
+    pub co_author: String,
+    pub pull_request_notice: String,
+}
+impl ProductGitAttributionConfig {
+    pub fn policy(&self) -> git_attribution::GitAttributionPolicy {
+        git_attribution::GitAttributionPolicy::Enabled {
+            co_author: self.co_author.clone(),
+            pull_request_notice: self.pull_request_notice.clone(),
+        }
+    }
+}

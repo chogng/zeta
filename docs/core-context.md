@@ -239,7 +239,7 @@ ContextManager/Planner 完成。
 
 ### 5.5 提示词所有权与组装
 
-提示词按功能归属：`zeta-models-manager` 拥有所选模型的基础 instructions，Core Goal 和动态 context fragment 留在对应生命周期模块，`zeta-auto-review` 拥有与动作授权 response schema 绑定的审查提示词，Skill、扩展和工具描述由各能力 crate 拥有。[`zeta-prompts`](../zeta-rs/prompts/README.md) 提供统一资产和冻结契约，并拥有 context compaction、通用代码 review 这类共享产品提示词。
+提示词按功能归属：`zeta-models-manager` 拥有所选模型的基础 instructions，Goal 提示归 `ext/goal`，动态上下文由对应贡献者提供，`zeta-guardian-reviewer` 拥有与动作授权 response schema 绑定的审查提示词，Skill、扩展和工具描述由各能力 crate 拥有。[`zeta-prompts`](../zeta-rs/prompts/README.md) 提供统一资产和冻结契约，并拥有 context compaction、通用代码 review 这类共享产品提示词。
 
 App Server 在接受普通 Turn 前把 `zeta-models-manager` 的基础 instructions 冻结为 durable `TurnInstructions`，review Turn 则冻结共享 review rubric 并标记 `TurnKind::Review`。Core 不在 invocation 时重新读取模型配置；它把 Turn 快照连同 Directory、Goal、Skill 与扩展 fragment 按 instruction layer、precedence、budget 和 provenance 组装成最终 request。Review Turn 跳过 active Goal 注入与 Goal continuation。历史旧 Turn 可以读取为缺少快照，但不能以临时查询或默认文本继续执行。
 

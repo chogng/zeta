@@ -128,6 +128,13 @@ pub trait ReadOnlyToolContributor: Send + Sync {
 /// Exact authority declared by a capability-bearing extension tool.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ExtensionToolAuthority {
+    /// A reviewed remote mutation with writes restricted to an extension artifact directory.
+    ExternalWrite {
+        service: String,
+        network_scopes: Vec<String>,
+        credential_reference: Option<String>,
+        artifact_root: String,
+    },
     /// Writes only extension-owned state through a domain API that atomically enforces user consent.
     /// This never grants filesystem, process, credential, or network authority.
     ManagedStateWrite { resource: String },

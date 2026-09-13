@@ -340,7 +340,7 @@ fn start_mcp_tools_with_updates(
         .with_startup_policy(McpStartupPolicy::RequireAll)
         .with_catalog_generation(catalog_generation)
         .with_first_connection_generation(catalog_generation);
-    if let Some(updates) = updates {
+    if let Some(updates) = &updates {
         options = options
             .with_client_host(updates.client_host())
             .with_form_elicitation();
@@ -362,7 +362,19 @@ fn start_mcp_tools_with_updates(
         .collect();
     Ok(McpToolComposition {
         status: owner.status().clone(),
-        tools: Arc::new(McpToolService { owner, authorities }),
+        tools: Arc::new(McpToolService {
+            owner,
+            authorities,
+            _catalog_lifetime: updates.map(|updates| {
+                updates.lifecycle(extension_api::McpLifecycle::Started {
+                    generation: catalog_generation,
+                });
+                CatalogLifetime {
+                    updates,
+                    generation: catalog_generation,
+                }
+            }),
+        }),
         policy: Arc::new(McpApprovalPolicy { capabilities }),
     })
 }
@@ -507,9 +519,23 @@ fn canonical_executable(
     Ok(canonical)
 }
 
+struct CatalogLifetime {
+    updates: McpCatalogUpdates,
+    generation: u64,
+}
+impl Drop for CatalogLifetime {
+    fn drop(&mut self) {
+        self.updates
+            .lifecycle(extension_api::McpLifecycle::Stopped {
+                generation: self.generation,
+            });
+    }
+}
+
 struct McpToolService {
     owner: Arc<McpRuntimeOwner>,
     authorities: BTreeMap<McpServerId, McpInvocationAuthority>,
+    _catalog_lifetime: Option<CatalogLifetime>,
 }
 
 impl McpToolService {

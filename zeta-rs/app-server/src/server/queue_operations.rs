@@ -85,12 +85,9 @@ impl AppServer {
         store: Arc<queue::QueueStore>,
         directory: Option<String>,
     ) -> Result<Self, String> {
-        let extension = Arc::new(super::runtime_extensions::QueueExtension(store.clone()));
         let mut builder =
             zeta_extension_api::ExtensionRegistryBuilder::from_registry(&self.agent_extensions);
-        builder
-            .idle_contributor(extension.clone())
-            .item_contributor(extension);
+        queue::install(&mut builder, store.clone());
         self.agent_extensions = Arc::new(builder.build());
         self.threads
             .install_extensions(self.agent_extensions.clone())
