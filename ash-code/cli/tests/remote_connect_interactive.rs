@@ -21,8 +21,8 @@ use portable_pty::CommandBuilder;
 use portable_pty::ExitStatus;
 use portable_pty::PtySize;
 use portable_pty::native_pty_system;
-use zeta_terminal::GridSize;
-use zeta_terminal::TerminalCore;
+use ash_terminal::GridSize;
+use ash_terminal::TerminalCore;
 
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(30);
 const STATE_TIMEOUT: Duration = Duration::from_secs(30);

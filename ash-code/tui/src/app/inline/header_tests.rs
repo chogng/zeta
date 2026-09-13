@@ -56,7 +56,7 @@ fn wide_header_keeps_pet_and_identity_information_together() {
     assert_eq!(buffer[(4, 2)].symbol(), "▛");
     assert_eq!(buffer[(4, 2)].fg, Color::Rgb(0x40, 0x85, 0xac));
     assert_eq!(buffer[(4, 2)].bg, Color::Rgb(0, 0, 0));
-    assert_eq!(buffer[(13, 1)].symbol(), "Z");
+    assert_eq!(buffer[(13, 1)].symbol(), "A");
     assert!(buffer[(13, 1)].modifier.contains(Modifier::BOLD));
     crate::tui_assert_snapshot!("welcome_pet_identity_header", rendered);
 }

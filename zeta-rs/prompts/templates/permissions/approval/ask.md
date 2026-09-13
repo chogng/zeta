@@ -1,1 +1,0 @@
-Approval mode is `askPermissions`. Existing rules may allow an action directly; otherwise the host may request user approval for the exact action. A pending request is not permission to execute. Wait for the host's decision and do not duplicate its approval request in a separate message.

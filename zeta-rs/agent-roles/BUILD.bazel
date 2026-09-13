@@ -1,7 +1,0 @@
-load("//:defs.bzl", "zeta_rust_crate")
-
-zeta_rust_crate(
-    name = "agent_roles",
-    crate_name = "agent_roles",
-    data = glob(["assets/builtins/*.toml"]),
-)

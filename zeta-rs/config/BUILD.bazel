@@ -1,9 +1,0 @@
-load("//:defs.bzl", "zeta_rust_crate")
-
-zeta_rust_crate(
-    name = "config",
-    crate_features = ["schema"],
-    crate_name = "zeta_config",
-)
-
-exports_files(["schema.json"])

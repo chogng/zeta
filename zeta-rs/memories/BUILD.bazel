@@ -1,3 +1,0 @@
-load("//build:rust.bzl", "zeta_rust_crate")
-
-zeta_rust_crate(name = "memories", crate_name = "zeta_memories")

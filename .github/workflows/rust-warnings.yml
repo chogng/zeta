@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - "**/*.rs"
-      - "zeta-code/**/*.snap"
+      - "ash-code/**/*.snap"
       - "**/Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
@@ -15,7 +15,7 @@ on:
   pull_request:
     paths:
       - "**/*.rs"
-      - "zeta-code/**/*.snap"
+      - "ash-code/**/*.snap"
       - "**/Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
@@ -78,7 +78,7 @@ jobs:
       - name: Test TUI interactions
         if: runner.os == 'Linux'
         shell: bash
-        run: just test zeta-tui
+        run: just test ash-tui
 
       - name: Test real TUI terminal scenarios
         if: runner.os == 'Linux'
@@ -88,4 +88,4 @@ jobs:
       - name: Test remote TUI reconnect
         if: runner.os == 'Linux'
         shell: bash
-        run: just test zeta-cli interactive_remote_tui_preserves_home_draft_after_transport_loss
+        run: just test ash-cli interactive_remote_tui_preserves_home_draft_after_transport_loss

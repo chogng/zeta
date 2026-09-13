@@ -5,7 +5,7 @@ expression: text(&buffer)
   .                        [Dashboard]  
                                         
   ╭──────────────────────────────────╮  
-  │  Ash Code v0.1.0                │  
+  │  Ash Code v0.1.0                 │  
   │> Quit                            │  
   ╰──────────────────────────────────╯  
   ⏸ ask permissions on                  

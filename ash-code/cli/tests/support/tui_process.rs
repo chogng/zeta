@@ -751,13 +751,13 @@ fn snapshot_normalization_replaces_fixture_paths_and_generated_thread_ids() {
 
 #[test]
 fn snapshot_normalization_prefers_the_longest_path_and_short_clipped_prefix() {
-    let private = "/private/var/folders/account/T/zeta-fixture";
+    let private = "/private/var/folders/account/T/ash-fixture";
     let visible = "/private/var/fold";
     let padding = " ".repeat(visible.chars().count() - "<FIXTURE…>".chars().count());
     assert_eq!(
         normalize_snapshot(
             format!("{private}/workspace\n{visible}…"),
-            &["/var/folders/account/T/zeta-fixture".into(), private.into(),],
+            &["/var/folders/account/T/ash-fixture".into(), private.into(),],
         ),
         format!("<FIXTURE>/workspace\n<FIXTURE…>{padding}…")
     );

@@ -6,7 +6,7 @@ expression: screen
 
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
   │                                                                                              │
-  │    ▄  ▄      Ash Code v0.1.0                                                                │
+  │    ▄  ▄      Ash Code v0.1.0                                                                 │
   │  ▗█▛██▜█▖                                                                                    │
   │  ▝▜████▛▘    Start a task below, or continue a previous session.                             │
   │    ▝  ▘                                                                                      │
@@ -31,6 +31,6 @@ expression: screen
   ⏸ ask permissions on                       Type a task to begin, or use Tab to choose an action.
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
   │ >                                                                                            │
-  ╰───────────────────────────────────────────────────────────────────────── ash-real-scenario ─╯
+  ╰────────────────────────────────────────────────────────────────────────── ash-real-scenario ─╯
 
   Enter send  ·  Tab actions  ·  / commands
